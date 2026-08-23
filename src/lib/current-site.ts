@@ -21,11 +21,12 @@ export type CurrentSite = {
   fuseau: string;
 };
 
-// Fallback statique utilisé tant que la migration 0043 n'a pas été jouée
-// (la table `site` n'existe pas encore) OU si la requête échoue pour tout
-// autre motif. Bloc à supprimer après plusieurs semaines en prod avec la
-// 0043 appliquée : à ce moment-là, un throw est préférable à un fallback
-// silencieux.
+// Fallback statique réservé au SEUL cas « schéma pré-0043 » : la table
+// `site` n'existe pas encore (code Postgres 42P01). Dans tous les autres
+// cas (erreur réseau/transitoire, site introuvable), on NE retombe PLUS
+// en silence sur Lebignon : en multi-site, cela afficherait ses données
+// à l'utilisateur d'un autre site. On lève alors une erreur franche —
+// une page en erreur est préférable à des données du mauvais site.
 const FALLBACK_LEBIGNON: CurrentSite = {
   id: SITE_LEBIGNON_ID,
   slug: "lebignon",
@@ -58,18 +59,27 @@ export const getCurrentSite = cache(async function getCurrentSite(): Promise<Cur
   //    domaine seront actifs.
   const id = siteId ?? SITE_LEBIGNON_ID;
 
-  try {
-    const supabase = getAdminClient();
-    const { data, error } = await supabase
-      .from("site")
-      .select("id, slug, nom, statut, fuseau")
-      .eq("id", id)
-      .single<CurrentSite>();
-    if (error || !data) return FALLBACK_LEBIGNON;
-    return data;
-  } catch {
-    // Table `site` inexistante (pré-0043) ou erreur réseau : on donne le
-    // fallback pour ne pas bloquer l'app.
-    return FALLBACK_LEBIGNON;
+  const supabase = getAdminClient();
+  const { data, error } = await supabase
+    .from("site")
+    .select("id, slug, nom, statut, fuseau")
+    .eq("id", id)
+    .single<CurrentSite>();
+
+  if (error) {
+    // Schéma pré-0043 : la table `site` n'existe pas encore (undefined_table).
+    // Seul cas où le fallback historique reste toléré.
+    if (error.code === "42P01") return FALLBACK_LEBIGNON;
+    // Toute autre erreur (réseau, transitoire, permission) : on refuse de
+    // retomber en silence sur Lebignon. En multi-site, cela montrerait ses
+    // données à l'utilisateur d'un autre site. Erreur franche => la page
+    // échoue plutôt que d'afficher le mauvais site.
+    throw new Error(
+      `getCurrentSite: lecture du site ${id} impossible (${error.code ?? "?"}: ${error.message})`
+    );
   }
+  if (!data) {
+    throw new Error(`getCurrentSite: site ${id} introuvable`);
+  }
+  return data;
 });

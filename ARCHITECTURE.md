@@ -43,11 +43,15 @@ placement journalier, habilitations, affichage couloir, bilans).
   lue/écrite**), `poste_quart` (activation poste×quart, défaut actif : ne stocke que les
   désactivations), `jour_quart`, `ouverture_quart`, `horaire_poste` (poste × quart × jour,
   = horaire *standard* affiché à la TV et proposé par défaut dans la pendule du planning).
-- **Personnel** : `personne` (équipe, atelier, statut ACTIF/PARTI, type_contrat, sexe,
-  `numero_badge`, `date_livret_accueil`, temps partiel `tp_config` jsonb ;
-  **`date_depart_prevu` / `motif_depart`** — départ prévu, informatif, ne bascule
-  pas `statut` automatiquement ; champs RGPD `anonymise`/`anonymise_at`),
-  `contrat_periode`.
+- **Personnel** : `personne` (équipe, atelier, type_contrat, sexe, `numero_badge`,
+  `date_livret_accueil`, temps partiel `tp_config` jsonb ; champs RGPD
+  `anonymise`/`anonymise_at`) ; `contrat_periode` (source de vérité du cycle de vie).
+  ⚠️ **`personne.statut` (`A_VENIR` / `ACTIF` / `PARTI`) est un cache calculé
+  automatiquement** par trigger DB à partir des contrats (migrations 0049 + 0050) —
+  plus de saisie manuelle. Arrivée = `MIN(contrat_periode.date_debut)` ; départ prévu =
+  `MAX(date_fin)` si aucun contrat ouvert ; motif de départ = `motif_fin` du dernier
+  contrat. Les anciens champs `personne.date_arrivee` / `date_depart_prevu` /
+  `motif_depart` ont été **supprimés en 0050**.
 - **Matrice** : `matrice` (niveau actuel/cible par personne×poste, valeur spéciale
   « restriction »), `competence_niveau_libelle` (échelle paramétrable).
 - **Habilitations** : `competence` (`a_recycler`, `duree_validite_mois`, `categorie`,
@@ -68,6 +72,15 @@ Deux couches, à ne pas confondre :
 
 `canWriteModule()` renvoie toujours `false` pour `chef_equipe` : même si le module est en
 `write`, le chef n'obtient jamais le client admin et reste borné à son équipe par la RLS.
+
+**Rôles personnalisés** (migration 0042) : en plus des rôles intégrés, des rôles sur mesure
+(`role_custom`) sont créés depuis l'écran Utilisateurs. Un rôle personnalisé naît **sans
+aucun droit** ; la matrice décide seule (aucun nom de rôle en dur côté serveur).
+
+**Multi-site** (migrations 0043 → 0054) : l'application est **multi-tenant** — une seule
+base, un `site_id` sur chaque table métier, isolation par RLS. Chaque site a ses propres
+référentiels (droits, rôles, motifs, contrats, compétences, quarts). Détail complet du
+chantier : `ARCHITECTURE-MULTISITE.md` et `tasks/multi-site.md`.
 
 Écriture en base :
 - Référentiel, équipes, compétences, motifs, objectifs, personnel : **admin**.
@@ -90,9 +103,9 @@ Le journal (`/journal`) affiche qui / valeur avant / valeur après / date-heure,
 les champs techniques et en résolvant les clés étrangères en libellés.
 
 ## Migrations
-Fichiers SQL ordonnés dans `supabase/migrations/` (**0001 → 0039**), **exécutés
-manuellement** par l'utilisateur dans le SQL Editor Supabase (`SUPABASE_DB_URL` est vide ;
-`npm run db:migrate` ne fonctionne que s'il est défini).
+Fichiers SQL ordonnés dans `supabase/migrations/` (**0001 → 0054**, dernière appliquée :
+**0054**), **exécutés manuellement** par l'utilisateur dans le SQL Editor Supabase
+(`SUPABASE_DB_URL` est vide ; `npm run db:migrate` ne fonctionne que s'il est défini).
 
 Depuis la **0037**, trois séquences délicates passent par des **fonctions SQL** appelées
 en RPC : `set_rotation_reference`, `creer_absence`, `maj_absence`. Elles s'exécutent dans
@@ -109,6 +122,20 @@ application, cf. `lessons.md` L23) ; la **0042** ouvre les **rôles personnalis�
 (`role_custom`) et retire le CHECK sur `app_user.role` (validation côté application :
 intégrés + `role_custom`).
 
+**Chantier multi-site (0043 → 0054)** — cf. `tasks/multi-site.md` pour le détail :
+- **0043–0048** — socle multi-tenant : table `site`, `site_id` sur les tables métier,
+  RLS d'isolation, `est_super_admin`, FKs simplifiées pour PostgREST, impersonation
+  par header (`x-impersonate-site`, honoré uniquement pour un super_admin).
+- **0049–0050** — cycle de vie du personnel : `personne.statut` devient un cache calculé
+  par trigger, `contrat_periode` devient la source de vérité (champs de départ supprimés).
+- **0051** — `parametre_affichage` multi-site ; **0052** — périodes de temps partiel
+  (`tp_periode`).
+- **0053** — **séparation totale des référentiels par site** : `motif_absence`,
+  `type_contrat`, `role_custom`, `role_permission`, `competence`,
+  `competence_niveau_libelle`, `quart` passent tous en `site_id NOT NULL` (chaque site a
+  sa propre matrice des droits, ses rôles, motifs, contrats, compétences et quarts).
+- **0054** — commentaire libre sur `personne_competence`.
+
 ## Sitemap (principales routes)
 - `/` accueil (logo + titre « planning »), `/planning`, `/placement` (saisie par
   glisser-déposer, cf. CLAUDE.md), `/ordonnancement`
@@ -121,3 +148,5 @@ intégrés + `role_custom`).
   `/journal`.
 - Public : `/affichage`, `/affichage/atelier/[atelier]` (écran TV, refresh 5 min,
   fenêtre glissante paramétrable dans Param. RH — cf. `getFenetreAffichage()`).
+- Super_admin (multi-site) : `/platform` (back-office : lister / créer / suspendre un
+  site, impersonation tracée).
