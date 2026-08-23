@@ -53,3 +53,11 @@ create policy audit_log_select on public.audit_log for select to authenticated
     public.can_read_audit()
     and site_id = public.current_site_id()
   );
+
+-- Nettoyage : une version antérieure de cette migration créait une fonction
+-- `is_impersonating()` (approche « borner seulement pendant l'impersonation »),
+-- finalement abandonnée au profit du scope strict ci-dessus. On la supprime
+-- si elle traîne. À FAIRE EN DERNIER : les policies recréées plus haut ne la
+-- référencent plus, donc le drop ne bute sur aucune dépendance. `if exists`
+-- => sans effet sur une base qui n'a jamais eu l'ancienne version.
+drop function if exists public.is_impersonating();
