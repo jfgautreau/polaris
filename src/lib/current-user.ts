@@ -32,6 +32,17 @@ export const getCurrentProfile = cache(async function getCurrentProfile(): Promi
   const userId = claimsData?.claims?.sub as string | undefined;
   if (!userId) return null;
 
+  // ⚠️ Lecture du profil via getAdminClient (service_role), PAS getServerClient.
+  // C'est la ligne de l'appelant (clé user_id) : aucune escalade possible, et
+  // surtout ça DÉCOUPLE la résolution du profil de la RLS site-scopée.
+  // Sinon, pendant une impersonation, getServerClient propage x-impersonate-site,
+  // current_site_id() renvoie le site cible, et la policy app_user (0055, sans
+  // passe-droit is_super_admin) masque la propre ligne du super_admin (rattaché
+  // à un autre site) → getCurrentProfile = null → boucle /login ↔ / (prod HS
+  // le 2026-08-23). getCurrentProfile doit toujours voir SA ligne, quel que soit
+  // le site consulté. current-user.ts est whitelisté (admin-client / isolation).
+  const admin = getAdminClient();
+
   const modernSel = "email, name, role, is_active, site_id, est_super_admin";
   const legacySel = "email, name, role, is_active";
 
@@ -46,7 +57,7 @@ export const getCurrentProfile = cache(async function getCurrentProfile(): Promi
   let row: Row | null = null;
 
   {
-    const { data, error } = await supabase
+    const { data, error } = await admin
       .from("app_user")
       .select(modernSel)
       .eq("user_id", userId)
@@ -54,7 +65,7 @@ export const getCurrentProfile = cache(async function getCurrentProfile(): Promi
     if (error) {
       // Colonnes site_id / est_super_admin absentes (pré-0043) : on
       // retente avec l'ancien SELECT et on comble par les défauts V1a.
-      const legacy = await supabase
+      const legacy = await admin
         .from("app_user")
         .select(legacySel)
         .eq("user_id", userId)
@@ -83,7 +94,7 @@ export const getCurrentProfile = cache(async function getCurrentProfile(): Promi
   // on laisse passer pour ne pas casser en fenêtre pré-0043.
   if (!estSuperAdmin) {
     try {
-      const { data: siteRow } = await getAdminClient()
+      const { data: siteRow } = await admin
         .from("site")
         .select("statut")
         .eq("id", siteId)
