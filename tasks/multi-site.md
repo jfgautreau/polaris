@@ -20,9 +20,24 @@
 | Séparation totale | Les 7 dernières tables partagées passent en `site_id NOT NULL` (voir §3) ; `createSite` copie les référentiels d'un site source | 0053 |
 | Verrouillage | Tests statiques cross-site (`routes-multi-site`, `refdata-cache`, `admin-client`, `isolation-site`) ; `userAdminGuard` borné par site ; `create user` pose `site_id` | — |
 
+**✅ Résolution du site par le compte connecté** (2026-08-23) : le middleware ne
+hardcode plus `lebignon`. `src/proxy.ts` pose `x-site-id` depuis
+`user.app_metadata.site_id` — donc le multi-site est **pleinement fonctionnel sur
+`bigplann.vercel.app`, sans sous-domaine ni DNS**. `app_metadata` (et non
+`user_metadata`) car il n'est modifiable qu'en service_role : un compte ne peut pas
+se re-déclarer sur un autre site pour siphonner ses données via les routes
+`getAdminClient()`. Les deux chemins de création (`/api/users/create`, `/platform`)
+posent désormais `app_metadata.site_id` en plus de `user_metadata.site_id` (ce dernier
+reste lu par le trigger `handle_new_user`). Backfill des comptes historiques :
+`scripts/backfill-app-metadata-site.mjs`.
+
 **⏸️ Reste à faire** (cf. `tasks/todo.md`) :
-- **Sous-domaines par site** — `polaris.app` non acheté ; le middleware hardcode
-  encore `lebignon`. À faire : wildcard DNS + résolution du slug dans `src/proxy.ts`.
+- **`/affichage` (TV, public, sans compte)** — seul flux qui a encore besoin du site
+  dans l'URL. À faire au moment d'ouvrir un 2ᵉ site : slug dans le chemin
+  (`/affichage/<slug>/atelier/[atelier]`).
+- **Sous-domaines par site** (cosmétique) — `polaris.app` non acheté. Plus un blocage :
+  `getCurrentSite()` honore déjà `x-site-id`, il ne resterait qu'à le peupler depuis le
+  slug d'un wildcard DNS. Reporté tant que le plan Vercel gratuit ne le permet pas.
 - **Lenteurs post-0053** à investiguer (index composite, round-trips `getCurrentSite`).
 - **Test d'isolation en base réelle** (deux sites) — les gardes actuelles sont statiques.
 - **Reporting groupe, quotas, custom domains, Stripe** — reporté à V2 (§6).
@@ -57,7 +72,11 @@ site(id uuid pk, slug text unique, nom text, statut text check(actif|suspendu|ar
 ## 2. Contexte site sur chaque requête
 - Résolu **une seule fois** par requête dans `getCurrentSite()` (`src/lib/current-site.ts`),
   dédupliqué par le `cache()` de React. Priorité : header `x-impersonate-site`
-  (impersonation) > header `x-site-id` (sous-domaine, futur) > site historique.
+  (impersonation) > header `x-site-id` > site historique. Le middleware (`src/proxy.ts`)
+  pose `x-site-id` depuis `user.app_metadata.site_id` du compte connecté (gratuit : déjà
+  dans le JWT). `app_metadata` et non `user_metadata` : ce dernier est modifiable par
+  l'utilisateur (`supabase.auth.updateUser`) et falsifierait le site côté
+  `getAdminClient()`. Un futur sous-domaine ne ferait que fournir la même valeur autrement.
   ⚠️ Sur erreur de lecture (hors schéma pré-0043), `getCurrentSite()` **lève** plutôt que
   de retomber en silence sur Lebignon — sinon un incident afficherait le mauvais site.
 - `app_user.site_id NOT NULL` — un compte appartient à un site. `est_super_admin` est un

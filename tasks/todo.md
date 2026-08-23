@@ -10,9 +10,15 @@
 - [ ] **Test d'isolation « en conditions réelles »** — les gardes actuelles sont statiques
       (analyse du source). Un vrai test RLS cross-site (deux sites, une base de test)
       reste à mettre en place quand un environnement de test avec base dédiée existera.
-- [ ] **Domaine `polaris.app` + sous-domaines par site** — non acheté ; le middleware
-      hardcode encore le site historique. À faire : wildcard DNS + résolution du slug
-      dans `src/proxy.ts` (cf. `tasks/multi-site.md`).
+- [x] **Résolution du site par le compte connecté** (2026-08-23) : le middleware pose
+      `x-site-id` depuis `user.app_metadata.site_id` (inviolable). Multi-site fonctionnel
+      sur `bigplann.vercel.app` **sans sous-domaine**. Backfill des comptes historiques :
+      `node scripts/backfill-app-metadata-site.mjs`.
+- [ ] **`/affichage` (TV public) par site** — seul flux sans compte connecté. À faire au
+      2ᵉ site : slug dans le chemin (`/affichage/<slug>/…`).
+- [ ] **Domaine `polaris.app` + sous-domaines par site** — cosmétique désormais (non
+      bloquant) ; `polaris.app` non acheté (plan Vercel gratuit). Le jour venu : wildcard
+      DNS + slug → `x-site-id` dans `src/proxy.ts` (cf. `tasks/multi-site.md`).
 
 ## Chantiers techniques
 - [ ] **Virtualisation des grandes grilles** (Matrice ~22 000 cellules, Habilitations du

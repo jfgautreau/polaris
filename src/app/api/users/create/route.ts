@@ -40,6 +40,12 @@ export async function POST(req: NextRequest) {
   // bon site des la creation. Sans cela, le trigger tombe sur son
   // fallback lebignon — un admin d'un autre site creerait des comptes
   // rattaches a Lebignon en silence.
+  //   - user_metadata.site_id : lu par le trigger handle_new_user.
+  //   - app_metadata.site_id  : source du site courant cote middleware
+  //     (src/proxy.ts). app_metadata n'est modifiable qu'en service_role,
+  //     JAMAIS par l'utilisateur (contrairement a user_metadata via
+  //     supabase.auth.updateUser) : indispensable pour que le header
+  //     x-site-id ne soit pas falsifiable et fasse fuiter un autre site.
   const siteId = garde.profile.siteId;
 
   const { data, error } = await admin.auth.admin.createUser({
@@ -47,6 +53,7 @@ export async function POST(req: NextRequest) {
     password: motDePasseAleatoire(),
     email_confirm: true,
     user_metadata: { name, site_id: siteId },
+    app_metadata: { site_id: siteId },
   });
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 });

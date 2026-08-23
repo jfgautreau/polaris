@@ -1,4 +1,4 @@
-import { createServerClient } from "@supabase/ssr";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { decodeImpersonation, IMPERSONATE_COOKIE, IMPERSONATE_HEADER } from "@/lib/impersonation";
@@ -7,10 +7,21 @@ import { decodeImpersonation, IMPERSONATE_COOKIE, IMPERSONATE_HEADER } from "@/l
 // Rafraichit la session Supabase, resout le site (multi-tenant) et protege
 // les routes non publiques.
 //
-// MULTI-SITE (V1a, cf. tasks/multi-site.md) :
-//   - Domaine unique en V1 (bigplann.vercel.app). Le middleware pose un
-//     `x-site-id` vers le site historique (SITE_LEBIGNON_ID) sans lecture
-//     Supabase — evite un aller-retour DB sur chaque requete.
+// MULTI-SITE (cf. tasks/multi-site.md) :
+//   - Domaine unique (bigplann.vercel.app), PAS de sous-domaine. Le site
+//     courant est deduit du COMPTE CONNECTE : on pose `x-site-id` depuis
+//     `user.app_metadata.site_id`. C'est ce header que getCurrentSite()
+//     (src/lib/current-site.ts) lit pour l'affichage et le bornage des
+//     routes getAdminClient().
+//     ⚠️ On lit app_metadata et NON user_metadata : app_metadata n'est
+//     modifiable qu'en service_role (a la creation du compte), jamais par
+//     l'utilisateur via supabase.auth.updateUser(). Deriver le site de
+//     user_metadata laisserait un compte du site A se declarer site B et
+//     lire/ecrire ses donnees via les routes getAdminClient (qui bornent
+//     par getCurrentSite().id). app_metadata etant deja dans le JWT rendu
+//     par getUser(), la lecture reste gratuite (aucun aller-retour DB).
+//     Repli sur le site historique quand il n'y a pas de compte (routes
+//     publiques) ou tant que le backfill app_metadata n'a pas tourne.
 //   - /platform : back-office super_admin. Protege par verification du
 //     profil (est_super_admin=true), sinon redirection vers /login.
 //   - Impersonation : le super_admin qui a clique « Entrer » sur un site
@@ -18,16 +29,19 @@ import { decodeImpersonation, IMPERSONATE_COOKIE, IMPERSONATE_HEADER } from "@/l
 //     verifie sa signature et son TTL, et on pose un header
 //     `x-impersonate-site` propage vers PostgREST par getServerClient.
 //     `current_site_id()` en SQL n'honore ce header que si l'appelant est
-//     super_admin (defense en profondeur, migration 0048).
+//     super_admin (defense en profondeur, migration 0048). getCurrentSite()
+//     lui donne priorite sur `x-site-id`.
 
 const SITE_LEBIGNON_ID = "00000000-0000-4000-8000-00000000c0de";
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // -------- Résolution du site + header d'impersonation --------
+  // -------- En-tetes propages vers le rendu (site + impersonation) --------
+  // `x-site-id` est pose PLUS BAS, une fois le compte connu (on a besoin de
+  // getUser() pour connaitre son site). Les cookies de session rafraichie
+  // sont captures ici puis reportes sur la reponse construite ensuite.
   const requestHeaders = new Headers(req.headers);
-  requestHeaders.set("x-site-id", SITE_LEBIGNON_ID);
 
   const rawImp = req.cookies.get(IMPERSONATE_COOKIE)?.value;
   const impPayload = decodeImpersonation(rawImp);
@@ -35,8 +49,7 @@ export async function proxy(req: NextRequest) {
     requestHeaders.set(IMPERSONATE_HEADER, impPayload.siteId);
   }
 
-  const res = NextResponse.next({ request: { headers: requestHeaders } });
-
+  let refreshedCookies: { name: string; value: string; options: CookieOptions }[] = [];
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY!,
@@ -46,9 +59,7 @@ export async function proxy(req: NextRequest) {
           return req.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            res.cookies.set(name, value, options)
-          );
+          refreshedCookies = cookiesToSet;
         },
       },
     }
@@ -65,6 +76,16 @@ export async function proxy(req: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  // Site courant = site du compte connecte (app_metadata, inviolable).
+  const siteFromAccount =
+    (user?.app_metadata?.site_id as string | undefined) ?? SITE_LEBIGNON_ID;
+  requestHeaders.set("x-site-id", siteFromAccount);
+
+  const res = NextResponse.next({ request: { headers: requestHeaders } });
+  refreshedCookies.forEach(({ name, value, options }) =>
+    res.cookies.set(name, value, options)
+  );
 
   if (!user && !isPublic) {
     return NextResponse.redirect(new URL("/login", req.url));

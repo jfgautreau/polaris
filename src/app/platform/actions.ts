@@ -73,11 +73,15 @@ export async function createSite(fd: FormData): Promise<void> {
   if (!site) redirect(`/platform/nouveau?err=${encodeURIComponent("Site non créé")}`);
 
   // 2) Crée le compte auth du 1er admin local
+  // user_metadata.site_id : lu par le trigger handle_new_user.
+  // app_metadata.site_id  : source inviolable du site courant cote
+  // middleware (cf. src/proxy.ts) — non modifiable par l'utilisateur.
   const { data: authData, error: authErr } = await admin.auth.admin.createUser({
     email: emailAdmin,
     password: motDePasseAleatoire(),
     email_confirm: true,
     user_metadata: { name: nomAdmin, site_id: site.id },
+    app_metadata: { site_id: site.id },
   });
   if (authErr) {
     // Rollback partiel : on essaie de supprimer le site créé pour ne
