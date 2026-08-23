@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
         }
       }
       if (Object.keys(patch).length === 0) return NextResponse.json({ error: "Rien à modifier" }, { status: 400 });
-      const { error } = await supabase.from("competence").update(patch).eq("id", id);
+      const { error } = await supabase.from("competence").update(patch).eq("id", id).eq("site_id", site_id);
       if (error) throw error;
       return NextResponse.json({ ok: true });
     }
@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
     if (op === "delete") {
       const id = s(body.id);
       if (!id) return NextResponse.json({ error: "id manquant" }, { status: 400 });
-      const { error } = await supabase.from("competence").delete().eq("id", id);
+      const { error } = await supabase.from("competence").delete().eq("id", id).eq("site_id", site_id);
       if (error) throw error;
       return NextResponse.json({ ok: true });
     }

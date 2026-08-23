@@ -41,6 +41,7 @@ export async function POST(req: NextRequest) {
     .from("competence")
     .select("duree_validite_mois, type")
     .eq("id", competence_id)
+    .eq("site_id", profile.siteId)
     .single<{ duree_validite_mois: number | null; type: string }>();
 
   // L'echeance est figee a la saisie (cf. CLAUDE.md) : recalculee ici a partir de
@@ -96,7 +97,8 @@ export async function DELETE(req: NextRequest) {
     .from("personne_competence")
     .delete()
     .eq("personne_id", personne_id)
-    .eq("competence_id", competence_id);
+    .eq("competence_id", competence_id)
+    .eq("site_id", profile.siteId);
   if (error) return NextResponse.json({ error: error.message }, { status: 403 });
 
   revalidatePath("/habilitations");

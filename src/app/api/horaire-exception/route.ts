@@ -29,6 +29,7 @@ export async function POST(req: NextRequest) {
     const { error } = await supabase
       .from("horaire_exception")
       .delete()
+      .eq("site_id", profile.siteId)
       .eq("personne_id", personne_id)
       .eq("jour", jour);
     if (error) return NextResponse.json({ error: error.message }, { status: 403 });
@@ -44,6 +45,7 @@ export async function POST(req: NextRequest) {
       const { error } = await supabase
         .from("horaire_exception")
         .delete()
+        .eq("site_id", profile.siteId)
         .eq("personne_id", personne_id)
         .eq("jour", jour);
       if (error) return NextResponse.json({ error: error.message }, { status: 403 });

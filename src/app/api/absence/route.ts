@@ -116,6 +116,7 @@ export async function POST(req: NextRequest) {
       let q = supabase
         .from("placement")
         .delete()
+        .eq("site_id", profile.siteId)
         .eq("personne_id", personne_id)
         .gte("jour", date_debut)
         .lte("jour", date_fin)
@@ -141,6 +142,7 @@ export async function POST(req: NextRequest) {
       let q = supabase
         .from("placement")
         .select("jour, poste_id, absence_id")
+        .eq("site_id", profile.siteId)
         .eq("personne_id", personne_id)
         .gte("jour", date_debut)
         .lte("jour", date_fin)
@@ -157,7 +159,7 @@ export async function POST(req: NextRequest) {
       const id = s(body.id);
       if (!id) return NextResponse.json({ error: "id manquant" }, { status: 400 });
       // Cascade : les placements lies (absence_id) sont supprimes par la FK.
-      const { error } = await supabase.from("absence").delete().eq("id", id);
+      const { error } = await supabase.from("absence").delete().eq("id", id).eq("site_id", profile.siteId);
       if (error) throw error;
       return NextResponse.json({ ok: true });
     }

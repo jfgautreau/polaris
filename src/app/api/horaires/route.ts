@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
   // et l'horaire restait affiche au rechargement.
   const effacements = await Promise.all(
     dels.map((d) =>
-      supabase.from("horaire_poste").delete().eq("poste_id", d.poste_id).eq("quart_code", d.quart_code).eq("jour", d.jour)
+      supabase.from("horaire_poste").delete().eq("site_id", site_id).eq("poste_id", d.poste_id).eq("quart_code", d.quart_code).eq("jour", d.jour)
     )
   );
   const rate = effacements.find((r) => r.error);

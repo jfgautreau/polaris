@@ -46,6 +46,7 @@ export async function createEquipe(fd: FormData) {
 }
 export async function renameEquipe(fd: FormData) {
   const supabase = await requireEquipesWrite();
+  const profile = await getCurrentProfile();
   const { error } = await supabase
     .from("equipe")
     .update({
@@ -53,15 +54,18 @@ export async function renameEquipe(fd: FormData) {
       couleur: s(fd, "couleur") || "#64748b",
       quart_fixe: s(fd, "quart_fixe") || null,
     })
-    .eq("id", s(fd, "id"));
+    .eq("id", s(fd, "id"))
+    .eq("site_id", profile!.siteId);
   done(error);
 }
 export async function toggleEquipe(fd: FormData) {
   const supabase = await requireEquipesWrite();
+  const profile = await getCurrentProfile();
   const { error } = await supabase
     .from("equipe")
     .update({ actif: fd.get("actif") === "true" })
-    .eq("id", s(fd, "id"));
+    .eq("id", s(fd, "id"))
+    .eq("site_id", profile!.siteId);
   done(error);
 }
 export async function addChef(fd: FormData) {
@@ -75,7 +79,8 @@ export async function addChef(fd: FormData) {
 }
 export async function removeChef(fd: FormData) {
   const supabase = await requireEquipesWrite();
-  const { error } = await supabase.from("equipe_chef").delete().eq("id", s(fd, "id"));
+  const profile = await getCurrentProfile();
+  const { error } = await supabase.from("equipe_chef").delete().eq("id", s(fd, "id")).eq("site_id", profile!.siteId);
   done(error);
 }
 

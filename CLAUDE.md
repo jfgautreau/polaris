@@ -465,15 +465,20 @@ prochain gros chantier, pas une optimisation cosmétique.
   d'autorisation est inchangé). En deux requêtes applicatives, un échec de la seconde
   perdait la donnée en silence — la rotation n'est pas reconstituable. Le même test
   interdit le retour au `delete` + `insert` applicatif sur ces tables.
-- Tests (Vitest, **221** au 2026-08-21) : règles pures + `permissions.test.ts`
+- Tests (Vitest, **223** au 2026-08-23) : règles pures + `permissions.test.ts`
   (droits par défaut, périmètre du chef d'équipe, anti-escalade), `roles.test.ts`
   (slugifyRole), `routes-gardees.test.ts` (inventaire : **toute route API porte
   une garde** — le proxy exclut `api/`, une route nouvelle serait publique — et
-  aucun rôle en dur). **Trois tests statiques multi-site (PR 6)** :
+  aucun rôle en dur). **Quatre tests statiques multi-site** :
   `routes-multi-site.test.ts` interdit un INSERT/UPSERT sur table site-scopée
   sans `site_id` ; `refdata-cache.test.ts` interdit un `unstable_cache` sans
   argument `site` (sinon les entrées de cache seraient partagées entre sites) ;
   `admin-client.test.ts` interdit un fichier utilisant `getAdminClient()` qui
   ne mentionnerait jamais `site_id` (whitelist : `/platform`, `current-*`,
-  `password-link`, `supabase-server`). `vitest.config.ts` résout l'alias `@/`,
+  `password-link`, `supabase-server`) ; **`isolation-site.test.ts`** (Sujet 1,
+  2026-08-23) va plus loin : dans un fichier admin-client, **chaque
+  `.select`/`.update`/`.delete` sur une table site-scopée doit être borné par
+  `.eq("site_id", …)`** dans la même chaîne — ferme le trou « lecture/écriture
+  par `id` nu » que les deux précédents laissaient passer (même classe de faille
+  que `userAdminGuard`). `vitest.config.ts` résout l'alias `@/`,
   sans quoi le socle n'est pas testable.

@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true, row: data });
       }
       case "update-atelier": {
-        const { error } = await supabase.from("atelier").update({ nom: s(body.nom) }).eq("id", s(body.id));
+        const { error } = await supabase.from("atelier").update({ nom: s(body.nom) }).eq("id", s(body.id)).eq("site_id", site_id);
         if (error) throw error;
         return NextResponse.json({ ok: true });
       }
@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
         if (body.nom !== undefined) patch.nom = s(body.nom);
         if (body.ordre_affichage !== undefined) patch.ordre_affichage = Math.max(0, Math.floor(Number(body.ordre_affichage) || 0));
         if (Object.keys(patch).length === 0) return NextResponse.json({ error: "Rien à modifier" }, { status: 400 });
-        const { error } = await supabase.from("ligne").update(patch).eq("id", s(body.id));
+        const { error } = await supabase.from("ligne").update(patch).eq("id", s(body.id)).eq("site_id", site_id);
         if (error) throw error;
         return NextResponse.json({ ok: true });
       }
@@ -125,7 +125,7 @@ export async function POST(req: NextRequest) {
           if (v !== undefined) patch[k] = v;
         }
         if (Object.keys(patch).length === 0) return NextResponse.json({ error: "Rien à modifier" }, { status: 400 });
-        const { error } = await supabase.from("poste").update(patch).eq("id", s(body.id));
+        const { error } = await supabase.from("poste").update(patch).eq("id", s(body.id)).eq("site_id", site_id);
         if (error) throw error;
         return NextResponse.json({ ok: true });
       }
@@ -141,7 +141,8 @@ export async function POST(req: NextRequest) {
             .from("poste_quart")
             .delete()
             .eq("poste_id", poste_id)
-            .eq("quart_code", quart_code);
+            .eq("quart_code", quart_code)
+            .eq("site_id", site_id);
           if (error) throw error;
         } else {
           const { error } = await supabase
@@ -167,7 +168,8 @@ export async function POST(req: NextRequest) {
             .from("poste_competence_requise")
             .delete()
             .eq("poste_id", poste_id)
-            .eq("competence_id", competence_id);
+            .eq("competence_id", competence_id)
+            .eq("site_id", site_id);
           if (error) throw error;
         }
         return NextResponse.json({ ok: true });
@@ -179,7 +181,8 @@ export async function POST(req: NextRequest) {
         const { error } = await supabase
           .from(entity)
           .update({ actif: body.actif === true || body.actif === "true" })
-          .eq("id", s(body.id));
+          .eq("id", s(body.id))
+          .eq("site_id", site_id);
         if (error) throw error;
         return NextResponse.json({ ok: true });
       }

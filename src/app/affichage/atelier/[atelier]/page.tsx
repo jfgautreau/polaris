@@ -80,6 +80,7 @@ export default async function AffichageAtelier({
   const { data: lignesD } = await admin
     .from("ligne")
     .select("id, nom, ordre_affichage, poste(id, nom, ordre_affichage, actif)")
+    .eq("site_id", site.id)
     .eq("atelier_id", atelier.id)
     .eq("actif", true)
     .returns<Ligne[]>();
@@ -130,6 +131,7 @@ export default async function AffichageAtelier({
         admin
           .from("placement")
           .select("poste_id, jour, quart_code, personne_id, personne:personne_id(nom, prenom, type_contrat)")
+          .eq("site_id", site.id)
           .in("jour", isos)
           .in("poste_id", posteIds)
           .order("id")
@@ -139,6 +141,7 @@ export default async function AffichageAtelier({
         admin
           .from("horaire_poste")
           .select("poste_id, quart_code, jour, debut, fin")
+          .eq("site_id", site.id)
           .in("poste_id", posteIds)
           .order("poste_id").order("quart_code").order("jour")
           .returns<HoraireRow[]>()
@@ -319,6 +322,7 @@ export default async function AffichageAtelier({
       const { data: tpP } = await admin
         .from("personne")
         .select("id, nom, prenom, type_contrat, atelier_id")
+        .eq("site_id", site.id)
         .in("id", missing)
         .eq("atelier_id", atelier.id)
         .returns<{ id: string; nom: string; prenom: string; type_contrat: string; atelier_id: string | null }[]>();

@@ -66,6 +66,7 @@ type PeriodeRow = {
 async function syncPersonneFromPeriodes(
   supabase: SupabaseClient,
   personne_id: string,
+  siteId: string,
 ): Promise<{
   type_contrat: string;
   agence_interim: string | null;
@@ -80,6 +81,7 @@ async function syncPersonneFromPeriodes(
       .from("contrat_periode")
       .select("type_contrat, agence_interim, date_debut, date_fin, created_at")
       .eq("personne_id", personne_id)
+      .eq("site_id", siteId)
       .returns<PeriodeRow[]>();
     const periods = data ?? [];
     if (periods.length === 0) return null;
@@ -96,7 +98,7 @@ async function syncPersonneFromPeriodes(
       date_debut: latest.date_debut,
       date_fin: latest.date_fin,
     };
-    const { error: refletErr } = await supabase.from("personne").update(reflet).eq("id", personne_id);
+    const { error: refletErr } = await supabase.from("personne").update(reflet).eq("id", personne_id).eq("site_id", siteId);
     if (refletErr) throw refletErr;
     // Debut du contrat le PLUS ANCIEN = date d'arrivee.
     const debuts = periods.map((p) => p.date_debut).filter((d): d is string => !!d).sort();
@@ -119,20 +121,21 @@ async function syncPersonneFromPeriodes(
 
 // Synchronise personne.temps_partiel + tp_config avec la période TP active
 // (courante ou prochaine future). Appelé après chaque CRUD sur tp_periode.
-async function syncPersonneTP(supabase: SupabaseClient, personne_id: string) {
+async function syncPersonneTP(supabase: SupabaseClient, personne_id: string, siteId: string) {
   const today = new Date().toISOString().slice(0, 10);
   // Période courante : date_debut ≤ today AND (date_fin IS NULL OR date_fin ≥ today).
   const { data: courant } = await supabase
     .from("tp_periode")
     .select("tp_config")
     .eq("personne_id", personne_id)
+    .eq("site_id", siteId)
     .lte("date_debut", today)
     .or(`date_fin.is.null,date_fin.gte.${today}`)
     .order("date_debut", { ascending: false })
     .limit(1)
     .single();
   if (courant) {
-    const { error } = await supabase.from("personne").update({ temps_partiel: true, tp_config: courant.tp_config }).eq("id", personne_id);
+    const { error } = await supabase.from("personne").update({ temps_partiel: true, tp_config: courant.tp_config }).eq("id", personne_id).eq("site_id", siteId);
     if (error) throw error;
   } else {
     // Pas de période courante : vérifier s'il y a une période future.
@@ -140,11 +143,12 @@ async function syncPersonneTP(supabase: SupabaseClient, personne_id: string) {
       .from("tp_periode")
       .select("id")
       .eq("personne_id", personne_id)
+      .eq("site_id", siteId)
       .gt("date_debut", today)
       .limit(1);
     if (!future?.length) {
       // Aucune période courante ni future → temps plein.
-      const { error } = await supabase.from("personne").update({ temps_partiel: false, tp_config: null }).eq("id", personne_id);
+      const { error } = await supabase.from("personne").update({ temps_partiel: false, tp_config: null }).eq("id", personne_id).eq("site_id", siteId);
       if (error) throw error;
     }
     // Si période future seulement, on laisse le flag actuel (la personne est
@@ -278,7 +282,7 @@ export async function POST(req: NextRequest) {
         }
       }
       if (Object.keys(patch).length === 0) return NextResponse.json({ error: "Rien à modifier" }, { status: 400 });
-      const { error } = await supabase.from("personne").update(patch).eq("id", id);
+      const { error } = await supabase.from("personne").update(patch).eq("id", id).eq("site_id", site_id);
       if (error) throw error;
       return NextResponse.json({ ok: true });
     }
@@ -347,6 +351,7 @@ export async function POST(req: NextRequest) {
         .from("contrat_periode")
         .select(PERIODE_COLS)
         .eq("personne_id", personne_id)
+        .eq("site_id", site_id)
         // Les periodes sans date de debut (celles qu'on vient de creer et qui
         // restent a remplir) passent en tete, la ou le bouton Ajouter les depose.
         .order("date_debut", { ascending: false, nullsFirst: true })
@@ -375,7 +380,7 @@ export async function POST(req: NextRequest) {
         .select(PERIODE_COLS)
         .single();
       if (error) throw error;
-      const reflet1 = await syncPersonneFromPeriodes(supabase, personne_id);
+      const reflet1 = await syncPersonneFromPeriodes(supabase, personne_id, site_id);
       return NextResponse.json({ ok: true, row: data, personne: reflet1 });
     }
 
@@ -407,9 +412,9 @@ export async function POST(req: NextRequest) {
         }
       }
       if (Object.keys(patch).length === 0) return NextResponse.json({ error: "Rien à modifier" }, { status: 400 });
-      const { error } = await supabase.from("contrat_periode").update(patch).eq("id", id);
+      const { error } = await supabase.from("contrat_periode").update(patch).eq("id", id).eq("site_id", site_id);
       if (error) throw error;
-      const reflet = await syncPersonneFromPeriodes(supabase, personne_id);
+      const reflet = await syncPersonneFromPeriodes(supabase, personne_id, site_id);
       return NextResponse.json({ ok: true, personne: reflet });
     }
 
@@ -417,9 +422,9 @@ export async function POST(req: NextRequest) {
       const id = s(body.id);
       const personne_id = s(body.personne_id);
       if (!id || !personne_id) return NextResponse.json({ error: "id manquant" }, { status: 400 });
-      const { error } = await supabase.from("contrat_periode").delete().eq("id", id);
+      const { error } = await supabase.from("contrat_periode").delete().eq("id", id).eq("site_id", site_id);
       if (error) throw error;
-      const reflet = await syncPersonneFromPeriodes(supabase, personne_id);
+      const reflet = await syncPersonneFromPeriodes(supabase, personne_id, site_id);
       return NextResponse.json({ ok: true, personne: reflet });
     }
 
@@ -430,7 +435,7 @@ export async function POST(req: NextRequest) {
       const tt = s(body.tp_type);
       const tp_type = enabled && (tt === "JOURS" || tt === "HORAIRES") ? tt : null;
       const tp_config = enabled ? (body.tp_config ?? {}) : null;
-      const { error } = await supabase.from("personne").update({ temps_partiel: enabled, tp_type, tp_config }).eq("id", id);
+      const { error } = await supabase.from("personne").update({ temps_partiel: enabled, tp_type, tp_config }).eq("id", id).eq("site_id", site_id);
       if (error) throw error;
       return NextResponse.json({ ok: true });
     }
@@ -444,6 +449,7 @@ export async function POST(req: NextRequest) {
         .from("tp_periode")
         .select("id, personne_id, date_debut, date_fin, tp_config, created_at")
         .eq("personne_id", personne_id)
+        .eq("site_id", site_id)
         .order("date_debut", { ascending: false });
       if (error) throw error;
       return NextResponse.json({ periodes: data ?? [] });
@@ -460,7 +466,8 @@ export async function POST(req: NextRequest) {
       const { data: existing } = await supabase
         .from("tp_periode")
         .select("id, date_debut, date_fin")
-        .eq("personne_id", personne_id);
+        .eq("personne_id", personne_id)
+        .eq("site_id", site_id);
       const overlap = (existing ?? []).some((p) => {
         const pFin = p.date_fin ?? "9999-12-31";
         const nFin = date_fin ?? "9999-12-31";
@@ -475,7 +482,7 @@ export async function POST(req: NextRequest) {
         .single();
       if (error) throw error;
       // Mettre à jour le flag personne.temps_partiel si nécessaire.
-      await syncPersonneTP(supabase, personne_id);
+      await syncPersonneTP(supabase, personne_id, site_id);
       return NextResponse.json({ periode: data });
     }
 
@@ -492,7 +499,7 @@ export async function POST(req: NextRequest) {
       const newDebut = updates.date_debut ? String(updates.date_debut) : undefined;
       const newFin = updates.date_fin !== undefined ? (updates.date_fin ? String(updates.date_fin) : null) : undefined;
       if (newDebut !== undefined || newFin !== undefined) {
-        const { data: cur } = await supabase.from("tp_periode").select("date_debut, date_fin, personne_id").eq("id", id).single();
+        const { data: cur } = await supabase.from("tp_periode").select("date_debut, date_fin, personne_id").eq("id", id).eq("site_id", site_id).single();
         if (cur) {
           const d = newDebut ?? cur.date_debut;
           const f = newFin !== undefined ? newFin : cur.date_fin;
@@ -501,6 +508,7 @@ export async function POST(req: NextRequest) {
             .from("tp_periode")
             .select("id, date_debut, date_fin")
             .eq("personne_id", pid)
+            .eq("site_id", site_id)
             .neq("id", id);
           const overlap = (others ?? []).some((p) => {
             const pFin = p.date_fin ?? "9999-12-31";
@@ -514,10 +522,11 @@ export async function POST(req: NextRequest) {
         .from("tp_periode")
         .update(updates)
         .eq("id", id)
+        .eq("site_id", site_id)
         .select("id, personne_id, date_debut, date_fin, tp_config, created_at")
         .single();
       if (error) throw error;
-      if (data) await syncPersonneTP(supabase, data.personne_id);
+      if (data) await syncPersonneTP(supabase, data.personne_id, site_id);
       return NextResponse.json({ periode: data });
     }
 
@@ -525,10 +534,10 @@ export async function POST(req: NextRequest) {
       const id = s(body.id);
       if (!id) return NextResponse.json({ error: "id manquant" }, { status: 400 });
       // Récupérer l'id de la personne avant suppression.
-      const { data: before } = await supabase.from("tp_periode").select("personne_id").eq("id", id).single();
-      const { error } = await supabase.from("tp_periode").delete().eq("id", id);
+      const { data: before } = await supabase.from("tp_periode").select("personne_id").eq("id", id).eq("site_id", site_id).single();
+      const { error } = await supabase.from("tp_periode").delete().eq("id", id).eq("site_id", site_id);
       if (error) throw error;
-      if (before) await syncPersonneTP(supabase, before.personne_id);
+      if (before) await syncPersonneTP(supabase, before.personne_id, site_id);
       return NextResponse.json({ ok: true });
     }
 

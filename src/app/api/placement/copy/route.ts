@@ -41,6 +41,7 @@ export async function POST(req: NextRequest) {
   const { data: src, error: e1 } = await supabase
     .from("placement")
     .select("personne_id, poste_id, equipe_id, quart_code, numero_rotation")
+    .eq("site_id", profile.siteId)
     .eq("jour", source)
     .not("poste_id", "is", null)
     .returns<{ personne_id: string; poste_id: string; equipe_id: string | null; quart_code: string | null; numero_rotation: string | null }[]>();
@@ -53,6 +54,7 @@ export async function POST(req: NextRequest) {
     const { data: cbl, error: e0 } = await supabase
       .from("placement")
       .select("personne_id")
+      .eq("site_id", profile.siteId)
       .eq("jour", cible)
       .returns<{ personne_id: string }[]>();
     if (e0) return NextResponse.json({ error: e0.message }, { status: 403 });

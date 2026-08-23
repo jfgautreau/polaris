@@ -96,10 +96,10 @@ export async function POST(req: NextRequest) {
       patch.tp_type = D.tp_type;
       patch.tp_config = D.tp_config;
     }
-    if (Object.keys(patch).length) await sb.from("personne").update(patch).eq("id", keep);
+    if (Object.keys(patch).length) await sb.from("personne").update(patch).eq("id", keep).eq("site_id", profile.siteId);
 
     // Supprime le doublon (ses rattachements ont ete deplaces).
-    const { error } = await sb.from("personne").delete().eq("id", dup);
+    const { error } = await sb.from("personne").delete().eq("id", dup).eq("site_id", profile.siteId);
     if (error) throw error;
 
     return NextResponse.json({ ok: true, moved });

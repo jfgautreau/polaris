@@ -11,11 +11,12 @@ type SupabaseClient = Awaited<ReturnType<typeof getServerClient>>;
 
 // Habilitations exigees par le poste que la personne n'a pas (ou plus). Recalcule
 // ici plutot que de croire le client : le drapeau de forcage sert de trace d'audit.
-async function habManquantes(supabase: SupabaseClient, personne_id: string, poste_id: string): Promise<string[]> {
+async function habManquantes(supabase: SupabaseClient, personne_id: string, poste_id: string, siteId: string): Promise<string[]> {
   const { data: reqs } = await supabase
     .from("poste_competence_requise")
     .select("competence_id, competence:competence_id(nom, duree_validite_mois)")
     .eq("poste_id", poste_id)
+    .eq("site_id", siteId)
     .returns<{ competence_id: string; competence: { nom: string; duree_validite_mois: number | null } | null }[]>();
   if (!reqs?.length) return [];
 
@@ -23,6 +24,7 @@ async function habManquantes(supabase: SupabaseClient, personne_id: string, post
     .from("personne_competence")
     .select("competence_id, date_obtention, date_expiration")
     .eq("personne_id", personne_id)
+    .eq("site_id", siteId)
     .in("competence_id", reqs.map((r) => r.competence_id))
     .returns<{ competence_id: string; date_obtention: string | null; date_expiration: string | null }[]>();
 
@@ -48,12 +50,14 @@ async function premierNumeroLibre(
   jour: string,
   quart_code: string | null,
   personne_id: string,
-  quarts: QuartRef[]
+  quarts: QuartRef[],
+  siteId: string
 ): Promise<string | null> {
   const { data: poste } = await supabase
     .from("poste")
     .select("numero_rotation")
     .eq("id", poste_id)
+    .eq("site_id", siteId)
     .maybeSingle<{ numero_rotation: string | null }>();
   const numeros = parseNumeros(poste?.numero_rotation);
   if (!numeros.length) return null;
@@ -63,6 +67,7 @@ async function premierNumeroLibre(
     .select("personne_id, numero_rotation, quart_code")
     .eq("jour", jour)
     .eq("poste_id", poste_id)
+    .eq("site_id", siteId)
     .returns<{ personne_id: string; numero_rotation: string | null; quart_code: string | null }[]>();
 
   // Meme quart uniquement (le repli des placements sans `quart_code` est commun a
@@ -113,6 +118,7 @@ export async function POST(req: NextRequest) {
     const { error } = await supabase
       .from("placement")
       .delete()
+      .eq("site_id", profile.siteId)
       .eq("personne_id", personne_id)
       .eq("jour", jour);
     if (error) return NextResponse.json({ error: error.message }, { status: 403 });
@@ -138,7 +144,7 @@ export async function POST(req: NextRequest) {
   // non la faussete distingue les deux : sinon un depot volontaire hors numero se
   // verrait attribuer une place automatiquement.
   if (poste_id && body?.numero === undefined) {
-    numero_rotation = await premierNumeroLibre(supabase, poste_id, jour, quart_code, personne_id, quarts);
+    numero_rotation = await premierNumeroLibre(supabase, poste_id, jour, quart_code, personne_id, quarts, profile.siteId);
   }
 
   // Une personne placee sur un poste un quart ne peut pas etre placee sur un
@@ -149,6 +155,7 @@ export async function POST(req: NextRequest) {
       .select("poste_id, quart_code")
       .eq("personne_id", personne_id)
       .eq("jour", jour)
+      .eq("site_id", profile.siteId)
       .maybeSingle<{ poste_id: string | null; quart_code: string | null }>();
     if (existing?.poste_id) {
       const exQ = quartOuDefaut(existing.quart_code, quarts);
@@ -164,7 +171,7 @@ export async function POST(req: NextRequest) {
 
   // Habilitations exigees par le poste. Sans confirmation explicite du client, on
   // refuse et on renvoie ce qui manque : c'est ce qui alimente la modale de forcage.
-  const manquantes = poste_id ? await habManquantes(supabase, personne_id, poste_id) : [];
+  const manquantes = poste_id ? await habManquantes(supabase, personne_id, poste_id, profile.siteId) : [];
   const forcer = body?.forcer === true;
   if (manquantes.length && !forcer) {
     return NextResponse.json({ error: "Habilitation manquante", manquantes }, { status: 428 });
