@@ -322,11 +322,13 @@ Bug corrigé en 0044 pour les 3 fonctions SQL `creer_absence` / `maj_absence`
 pour `/api/ordonnancement/reset-week` + `/api/ordonnancement/quart`
 (rows portent `site_id: garde.profile.siteId` explicite, DELETE filtré
 sur `site_id`).
-**Règle** : audit périodique — `grep -rn "getAdminClient\|moduleWriteGuard" src/app/api/` puis
-vérifier que **chaque insert/upsert** sur une table locale porte
-`site_id: profile.siteId`. Ne pas se fier au trigger fallback : en V2
-multi-site il disparaît (§9 multi-site.md), et un site ≠ Lebignon
-révèlerait le bug immédiatement.
+**Règle** : ne pas se fier au trigger fallback. La règle a été **étendue aux lectures
+et modifications** (2026-08-23, « Sujet 1 ») : dans tout fichier utilisant
+`getAdminClient()`, chaque `.select`/`.update`/`.delete` sur une table site-scopée doit
+être borné par `.eq("site_id", …)` — sinon, sous service_role, il agit sur la ligne de
+n'importe quel site (même classe de faille que `userAdminGuard`). Verrouillé par
+`src/lib/isolation-site.test.ts`, qui complète `routes-multi-site` (INSERT/UPSERT) et
+`admin-client` (présence de site_id).
 
 ## L25 — Composite FKs incompatibles avec les embeds PostgREST
 

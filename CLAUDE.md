@@ -4,8 +4,9 @@ App web de gestion des plannings d'une usine agroalimentaire. **Réponds en fran
 
 Ce fichier est le seul chargé automatiquement : il doit suffire pour 90 % des tâches.
 Docs plus profondes (à lire **seulement si besoin**) : `ARCHITECTURE.md` (modèle de
-données, RLS), `tasks/handoff.md` (détail métier & patterns), `tasks/lessons.md`
-(pièges déjà rencontrés), `INSTALL.md` / `OPERATIONS.md`.
+données, RLS), `tasks/handoff.md` (détail écran par écran), `tasks/lessons.md`
+(pièges déjà rencontrés), `tasks/multi-site.md` (chantier multi-tenant),
+`tasks/todo.md` (reste à faire), `INSTALL.md` / `OPERATIONS.md`.
 
 ## Stack & emplacements
 - `C:\dev\planning-usine` · remote `github.com/jfgautreau/polaris` · branche **main**.
@@ -455,7 +456,7 @@ prochain gros chantier, pas une optimisation cosmétique.
   (motif via palette, période au calendrier 2 mois, commentaire), crayon + corbeille,
   vérification de conflit avant écrasement. Popovers en `position: fixed` (piège
   `overflow: auto` de la carte modale, cf. patterns UI).
-- Migrations : `supabase/migrations/0001..0042`.
+- Migrations : `supabase/migrations/0001..0054` (dernière appliquée : 0054).
 - **Écritures : lire l'erreur, toujours.** `messageErreur()` (`src/lib/erreurs.ts`) traduit
   les codes Postgres ; les server actions repassent le message par l'URL
   (`urlAvecErreur` → `?err=`) et la page l'affiche via `<BandeauErreur>`. Un test

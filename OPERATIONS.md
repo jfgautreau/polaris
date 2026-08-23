@@ -58,8 +58,17 @@
   (**fenêtre glissante** autour d'aujourd'hui, refresh **5 min**, bouton Imprimer/PDF).
 - **Fenêtre paramétrable** dans `/admin/motifs` (section « Fenêtre d'affichage du
   planning ») : nombre de jours avant J et après J, auto-sauvegardés (défaut J-1 / J+4).
-  Migration `0040` — table `parametre_affichage` (singleton `id=1`).
+  Table `parametre_affichage`, une ligne **par site** depuis la migration `0051`.
 - Restreindre l'accès réseau en production (cf. INSTALL.md §7).
+
+## Plateforme multi-site (`/platform`)
+- Réservé aux comptes `est_super_admin`. Permet de **lister / créer / suspendre /
+  archiver** les sites, et d'**entrer dans un site** (impersonation tracée, bandeau
+  rouge permanent, journal `audit_impersonation`).
+- Un nouveau site démarre en **dupliquant les référentiels** d'un site source choisi
+  au formulaire (motifs, contrats, agences, compétences, échelle, quarts, rôles,
+  matrice des droits). Chaque site est ensuite totalement indépendant.
+- Détail complet : `tasks/multi-site.md`.
 
 ## Dépannage
 - « Could not find the table ... in the schema cache » : cache PostgREST pas à jour

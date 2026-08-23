@@ -80,7 +80,7 @@ aucun droit** ; la matrice décide seule (aucun nom de rôle en dur côté serve
 **Multi-site** (migrations 0043 → 0054) : l'application est **multi-tenant** — une seule
 base, un `site_id` sur chaque table métier, isolation par RLS. Chaque site a ses propres
 référentiels (droits, rôles, motifs, contrats, compétences, quarts). Détail complet du
-chantier : `ARCHITECTURE-MULTISITE.md` et `tasks/multi-site.md`.
+chantier : `tasks/multi-site.md`.
 
 Écriture en base :
 - Référentiel, équipes, compétences, motifs, objectifs, personnel : **admin**.
