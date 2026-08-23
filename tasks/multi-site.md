@@ -134,7 +134,10 @@ Réservé aux `est_super_admin` (layout dédié, défense en profondeur middlewa
 `0046` FKs simples restaurées · `0047` composite FKs `(id, site_id)` retirées ·
 `0048` `current_site_id()` lit `x-impersonate-site` · `0049`–`0050` cycle de vie personnel ·
 `0051` `parametre_affichage` par site · `0052` `tp_periode` · `0053` séparation totale des
-référentiels (7 tables) + composite FK sur `quart` · `0054` commentaire `personne_competence`.
+référentiels (7 tables) + composite FK sur `quart` · `0054` commentaire `personne_competence` ·
+`0055` **l'impersonation borne le super_admin au site cible** (`is_impersonating()` ; retire le
+passe-droit `OR is_super_admin()` de `app_user` et `audit_log` pendant l'impersonation).
+⚠️ **0055 écrite mais PAS ENCORE APPLIQUÉE** — à exécuter dans le SQL Editor.
 
 ## 6. Points ouverts / V2
 - **Sous-domaines** — wildcard DNS `*.polaris.app` + slug lu dans `src/proxy.ts`.
@@ -147,6 +150,12 @@ référentiels (7 tables) + composite FK sur `quart` · `0054` commentaire `pers
 ## 7. Risques identifiés
 - **Fuite RLS** — une policy oubliée ou un `getAdminClient()` non borné exposerait un autre
   site. Défense : `.eq("site_id", …)` partout + les 4 tests statiques.
+  ⚠️ **Piège vécu (0055)** : un passe-droit `OR is_super_admin()` dans une policy RLS
+  **court-circuite le filtre de site pendant l'impersonation** — le super_admin qui « entre »
+  dans un site continuait à voir les `app_user` et `audit_log` de TOUS les sites. Règle : une
+  policy d'écran applicatif normal ne doit accorder l'accès cross-site du super_admin que
+  **hors impersonation** → `OR (is_super_admin() AND NOT is_impersonating())`. Réservé au
+  back-office `/platform` (qui passe en service_role de toute façon).
 - **Migration irréversible** — pas de retour arrière propre après 0043 ; `pg_dump`
   **obligatoire** avant toute migration multi-site.
 - **Composite FKs vs embeds PostgREST** — ne jamais mélanger FK composite et simple sur la
