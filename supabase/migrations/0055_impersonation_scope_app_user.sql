@@ -1,116 +1,55 @@
 -- =====================================================================
--- Migration 0055 - L'impersonation borne le super_admin au site cible
+-- Migration 0055 - app_user / audit_log strictement scopés au site courant
 --
--- CONSTAT (bug vécu 2026-08-23)
--- Un super_admin qui « Entre dans le site » LVC via /platform voyait
--- quand même TOUS les comptes de TOUS les sites sur l'écran Utilisateurs
--- (et le Journal). Cause : les policies RLS de `app_user` (et
--- `audit_log`) portent un passe-droit `OR is_super_admin()` :
+-- OBJECTIF (demandé 2026-08-23)
+-- L'écran Utilisateurs (et le Journal) doit TOUJOURS montrer le site
+-- courant, y compris pour le super_admin :
+--   - super_admin connecté normalement sur Le Bignon  -> comptes Le Bignon
+--   - super_admin « Entre dans le site » LVC (impersonation) -> comptes LVC
 --
---     using ( site_id = current_site_id() OR is_super_admin() )
---
--- Pendant l'impersonation, `current_site_id()` renvoie bien le site cible
--- (LVC, cf. 0048) — mais `OR is_super_admin()` court-circuite ce filtre :
--- le super_admin reste super_admin, donc voit tout. L'impersonation n'est
--- alors PAS étanche : elle affiche les données d'un autre site.
---
--- MODÈLE VOULU
--- « Entrer dans un site » = agir COMME un admin local, borné à ce site.
--- Le pouvoir cross-site du super_admin ne doit s'exercer que HORS
--- impersonation (et /platform, qui passe de toute façon en service_role
--- et bypass la RLS).
+-- CONSTAT (bug vécu)
+-- Les policies RLS de `app_user` et `audit_log` portaient un passe-droit
+-- `OR is_super_admin()` : le super_admin voyait TOUS les comptes de TOUS
+-- les sites, même en impersonation. `current_site_id()` renvoie pourtant
+-- déjà le bon site (le site cible en impersonation, cf. 0048) — c'est le
+-- `OR is_super_admin()` qui court-circuitait le filtre.
 --
 -- CORRECTIF
---   1. `is_impersonating()` : vrai quand un header x-impersonate-site
---      valide est présent ET honoré (appelant super_admin) — exactement
---      la condition sous laquelle current_site_id() renvoie le site cible.
---   2. Les policies `app_user` et `audit_log` remplacent
---      `OR is_super_admin()` par `OR (is_super_admin() AND NOT
---      is_impersonating())`.
+-- On retire purement le passe-droit : les deux policies se scopent sur
+-- `current_site_id()`. Le pouvoir cross-site du super_admin passe
+-- exclusivement par le back-office `/platform`, qui accède en service_role
+-- (bypass RLS) — donc AUCUNE perte de capacité de gestion.
 --
 -- EFFET
---   - Super_admin impersonant LVC : is_impersonating() = true → le
---     passe-droit tombe → filtre `site_id = current_site_id()` (= LVC).
---     Il ne voit et ne modifie QUE les comptes/journaux de LVC. Il peut
---     tout de même agir en local car `is_admin()` reste vrai sur sa
---     propre ligne (admin d'un site actif).
---   - Super_admin HORS impersonation : is_impersonating() = false →
---     comportement inchangé (accès cross-site conservé).
+--   - Hors impersonation : chaque compte (super_admin inclus) ne voit que
+--     les app_user / audit_log de SON site.
+--   - En impersonation : current_site_id() = site cible -> le super_admin
+--     ne voit que ce site. Il peut toujours y AGIR comme admin local, car
+--     is_admin() reste vrai sur sa propre ligne (admin d'un site actif).
+--   - /platform (liste tous les sites, compteurs) : inchangé, service_role.
 --
--- NON TRAITÉ ICI (volontaire)
---   - `audit_impersonation` : journal de gouvernance de la plateforme,
---     propriété du super_admin ; sa visibilité globale est assumée.
+-- NOTE : les référentiels (competence, quart, role_permission, motifs…)
+-- sont déjà scopés sans passe-droit depuis 0053. app_user et audit_log
+-- étaient les deux dernières policies d'écran applicatif à fuir.
 --
 -- À exécuter dans le SQL Editor APRÈS 0054.
 -- =====================================================================
 
--- 1) Détecte une session d'impersonation effective.
-create or replace function public.is_impersonating()
-returns boolean
-language plpgsql
-stable
-security definer
-set search_path = public
-as $$
-declare
-  v_txt  text;
-  v_uuid uuid;
-begin
-  begin
-    v_txt := current_setting('request.headers', true)::json->>'x-impersonate-site';
-  exception when others then
-    v_txt := null;
-  end;
-
-  if v_txt is null or v_txt = '' then
-    return false;
-  end if;
-
-  begin
-    v_uuid := v_txt::uuid;
-  exception when others then
-    return false;
-  end;
-
-  -- Honoré uniquement si l'appelant est réellement super_admin — même
-  -- garde que current_site_id() (0048). Un header forcé sur une session
-  -- normale ne « déclenche » pas l'impersonation.
-  return exists (
-    select 1 from public.app_user
-    where user_id = auth.uid() and est_super_admin = true and is_active = true
-  );
-end;
-$$;
-
--- 2) app_user : chaque site voit/gère SES comptes ; le super_admin garde
---    l'accès cross-site SAUF quand il impersonne (il est alors borné au
---    site cible).
+-- app_user : chaque site voit / gère STRICTEMENT ses comptes.
 drop policy if exists app_user_select on public.app_user;
 create policy app_user_select on public.app_user for select to authenticated
-  using (
-    site_id = public.current_site_id()
-    or (public.is_super_admin() and not public.is_impersonating())
-  );
+  using (site_id = public.current_site_id());
 
 drop policy if exists app_user_modify on public.app_user;
 create policy app_user_modify on public.app_user for all to authenticated
-  using (
-    (site_id = public.current_site_id() and public.is_admin())
-    or (public.is_super_admin() and not public.is_impersonating())
-  )
-  with check (
-    (site_id = public.current_site_id() and public.is_admin())
-    or (public.is_super_admin() and not public.is_impersonating())
-  );
+  using (site_id = public.current_site_id() and public.is_admin())
+  with check (site_id = public.current_site_id() and public.is_admin());
 
--- 3) audit_log (écran Journal) : même correction — pas de fuite du journal
---    d'un autre site pendant l'impersonation.
+-- audit_log (écran Journal) : lecture selon can_read_audit(), scopée au
+-- site courant, sans passe-droit super_admin.
 drop policy if exists audit_log_select on public.audit_log;
 create policy audit_log_select on public.audit_log for select to authenticated
   using (
     public.can_read_audit()
-    and (
-      site_id = public.current_site_id()
-      or (public.is_super_admin() and not public.is_impersonating())
-    )
+    and site_id = public.current_site_id()
   );
