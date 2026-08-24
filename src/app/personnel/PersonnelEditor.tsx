@@ -209,7 +209,17 @@ export default function PersonnelEditor({
   const [badge, setBadge] = useState("");
   const [eq, setEq] = useState("");
   const [at, setAt] = useState("");
-  const [contrat, setContrat] = useState("INTERIM");
+  // Defaut du menu Contrat de la creation. ⚠️ Ne JAMAIS coder un code de contrat
+  // en dur ici : selon le site, le code « Interim » varie (« INTERIM » a Lebignon,
+  // « INTÉRIM » accentue a LVC apres duplication des referentiels). Un defaut absent
+  // des options laisse le <select> AFFICHER sa 1re option (« CDI ») tout en gardant
+  // l'ancienne valeur dans l'etat -> on enregistrait « INTERIM » alors que l'ecran
+  // montrait « CDI ». On derive donc un code qui existe reellement dans `types` :
+  // Interim s'il est present (intention metier : embauche interim par defaut),
+  // sinon le 1er type disponible.
+  const normCode = (c: string) => c.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase();
+  const codeDefautContrat = types.find((t) => normCode(t.code) === "INTERIM")?.code ?? types[0]?.code ?? "";
+  const [contrat, setContrat] = useState(codeDefautContrat);
   const [livret, setLivret] = useState("");
   const [pointure, setPointure] = useState("");
   // Date d'arrivee saisie a la creation. Defaut = aujourd'hui, editable pour
@@ -356,7 +366,7 @@ export default function PersonnelEditor({
       };
       setRows((rs) => [...rs, created].sort(sortRows));
       setNom(""); setPrenom(""); setSexe(""); setMatricule(""); setBadge("");
-      setEq(""); setAt(""); setContrat("INTERIM"); setLivret(""); setPointure(""); setDateArrivee(todayStr());
+      setEq(""); setAt(""); setContrat(codeDefautContrat); setLivret(""); setPointure(""); setDateArrivee(todayStr());
       setShowCreate(false);
       // Purge du cache RSC : sans ca, une navigation puis un retour sur
       // /personnel repartait des donnees serveur mises en cache et le nouveau
