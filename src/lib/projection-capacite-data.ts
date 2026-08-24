@@ -235,6 +235,14 @@ export async function chargerProjection(
       supabase.from("placement").select("personne_id, jour, motif_absence_id").in("jour", horizonIsos).order("id").returns<{ personne_id: string; jour: string; motif_absence_id: string | null }[]>()
     );
     for (const r of abs) if (r.motif_absence_id) (absSet.get(r.jour) ?? absSet.set(r.jour, new Set()).get(r.jour)!).add(r.personne_id);
+    // Filet de sécurité : périodes de la table `absence` (tous motifs : congés,
+    // maladie, formation…) éventuellement PAS matérialisées jour par jour dans
+    // `placement`. On marque absents tous les jours de l'horizon couverts par la
+    // période (date_fin null = absence ouverte, couvre tout ce qui suit).
+    const { data: absPer } = await supabase.from("absence").select("personne_id, date_debut, date_fin").lte("date_debut", lastIso).or(`date_fin.is.null,date_fin.gte.${firstIso}`).returns<{ personne_id: string; date_debut: string; date_fin: string | null }[]>();
+    for (const a of absPer ?? [])
+      for (const iso of horizonIsos)
+        if (iso >= a.date_debut && (!a.date_fin || iso <= a.date_fin)) (absSet.get(iso) ?? absSet.set(iso, new Set()).get(iso)!).add(a.personne_id);
     // Temps partiel : periodes datees (tp_periode) + repli personne.tp_config.
     const { data: tpP } = await supabase.from("tp_periode").select("personne_id, date_debut, date_fin, tp_config").lte("date_debut", lastIso).or(`date_fin.is.null,date_fin.gte.${firstIso}`).returns<TpRow[]>();
     for (const r of tpP ?? []) (tpPeriodes.get(r.personne_id) ?? tpPeriodes.set(r.personne_id, []).get(r.personne_id)!).push(r);
