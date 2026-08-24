@@ -18,6 +18,22 @@
 
 export type QuartRef = { code: string; ordre?: number };
 
+// Code technique d'un quart, derive de son libelle : minuscules, sans accents,
+// mots relies par « _ ». Sert de cle (code, site_id) et de valeur stockee dans
+// les 10 tables enfants. « Apres-midi » -> « apres_midi », « Journée » ->
+// « journee ». Un libelle « Matin » redonne « matin », le quart prefere par
+// defaut (cf. quartParDefaut) — la convention reste donc atteignable sans code
+// en dur. Renvoie "" si le libelle ne contient aucune lettre ni chiffre.
+export function slugifyQuart(libelle: string): string {
+  return libelle
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "") // accents
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 40);
+}
+
 // Quart affiche a l'ouverture d'un ecran.
 //
 // Regle : « matin » s'il existe, sinon le premier dans l'ordre d'affichage.

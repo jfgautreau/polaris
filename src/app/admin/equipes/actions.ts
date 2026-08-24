@@ -6,6 +6,7 @@ import { getCurrentProfile } from "@/lib/current-user";
 import { getAdminClient } from "@/lib/supabase-server";
 import { canWriteModule } from "@/lib/permissions";
 import { ROTATION_TAG } from "@/lib/refdata";
+import { slugifyQuart } from "@/lib/quarts";
 import { parseMonday, isoDate } from "@/lib/week";
 import { messageErreur, urlAvecErreur, type ErreurPg } from "@/lib/erreurs";
 
@@ -105,6 +106,39 @@ async function codesQuarts(
     .order("ordre")
     .returns<{ code: string }[]>();
   return (data ?? []).map((q) => q.code);
+}
+
+// Cree un quart pour le site courant. Le code (cle technique, immuable ensuite
+// car reference par 10 tables enfants) est derive du libelle ; l'ordre
+// d'affichage vaut le dernier + 1. site_id explicite : getAdminClient est en
+// service_role, le trigger set_site_id_from_context retomberait sinon sur le
+// fallback lebignon. Un doublon de code sur le site remonte via quart_pkey
+// (cf. messageErreur).
+export async function createQuart(fd: FormData) {
+  const supabase = await requireOrdoWrite();
+  const profile = await getCurrentProfile();
+  const siteId = profile!.siteId;
+
+  const libelle = s(fd, "libelle");
+  if (!libelle) done({ message: "Le libellé du quart est obligatoire." });
+  const code = slugifyQuart(libelle);
+  if (!code) done({ message: "Le libellé doit contenir au moins une lettre ou un chiffre." });
+  const debut = s(fd, "debut") || null;
+  const fin = s(fd, "fin") || null;
+
+  const { data: last } = await supabase
+    .from("quart")
+    .select("ordre")
+    .eq("site_id", siteId)
+    .order("ordre", { ascending: false })
+    .limit(1)
+    .maybeSingle<{ ordre: number }>();
+  const ordre = (last?.ordre ?? 0) + 1;
+
+  const { error } = await supabase
+    .from("quart")
+    .insert({ code, libelle, ordre, debut, fin, site_id: siteId });
+  done(error);
 }
 
 // Horaires des quarts (libelle + debut/fin).

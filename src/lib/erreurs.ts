@@ -23,6 +23,7 @@ const PAR_CONTRAINTE: Record<string, string> = {
   personne_competence_personne_id_competence_id_key: "Cette habilitation est déjà enregistrée pour cette personne.",
   placement_personne_id_jour_key: "Cette personne a déjà une affectation ce jour-là.",
   horaire_exception_personne_id_jour_key: "Cette personne a déjà un horaire spécifique ce jour-là.",
+  quart_pkey: "Un quart avec ce libellé existe déjà pour ce site (choisissez un libellé différent).",
 };
 
 export function messageErreur(e: ErreurPg): string | null {

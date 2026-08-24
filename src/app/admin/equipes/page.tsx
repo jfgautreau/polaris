@@ -12,6 +12,7 @@ import {
   toggleEquipe,
   addChef,
   removeChef,
+  createQuart,
   saveQuartHoraires,
   saveRotationReference,
   deleteRotationReference,
@@ -200,6 +201,33 @@ export default async function EquipesPage({
             {/* Horaires des quarts */}
             <div className="card section">
               <h2 style={{ marginTop: 0 }}>Horaires des quarts</h2>
+
+              {/* Ajout d'un quart : le code technique est derive du libelle. */}
+              <form
+                action={createQuart}
+                autoComplete="off"
+                className="toolbar"
+                style={{ flexWrap: "wrap", alignItems: "flex-end", marginBottom: 16, paddingBottom: 16, borderBottom: "1px solid var(--border)" }}
+              >
+                <div className="field">
+                  <span>Nouveau quart (libellé)</span>
+                  <input name="libelle" placeholder="Ex. Matin, Nuit, Journée…" required />
+                </div>
+                <div className="field">
+                  <span>Début</span>
+                  <input name="debut" type="time" />
+                </div>
+                <div className="field">
+                  <span>Fin</span>
+                  <input name="fin" type="time" />
+                </div>
+                <button type="submit" style={{ width: "auto", padding: "9px 20px" }}>Ajouter le quart</button>
+              </form>
+
+              {quarts.length === 0 && (
+                <p className="muted">Aucun quart pour ce site. Ajoutez-en un ci-dessus.</p>
+              )}
+
               <form action={saveQuartHoraires} autoComplete="off">
                 {quarts.map((q) => (
                   <div key={q.code} className="toolbar">
