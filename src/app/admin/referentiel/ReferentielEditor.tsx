@@ -176,7 +176,14 @@ export default function ReferentielEditor({
     schedule(`p:${pid}:${key}`, () => post("update-poste", { id: pid, patch: { [key]: value } }), delay);
   }
   function togglePoste(aid: string, lid: string, pid: string, actif: boolean) {
-    posteField(aid, lid, pid, "actif", actif);
+    // ⚠️ Passe par l'op `toggle` (comme atelier/ligne), PAS par `update-poste` :
+    // le whitelist `posteValue` de la route ignore la colonne `actif`, donc
+    // `posteField(..., "actif", …)` était silencieusement écarté et le poste
+    // restait actif en base — il continuait d'apparaître dans la Matrice et
+    // partout où l'on filtre `poste.actif`. L'op `toggle` gère déjà l'entité
+    // « poste » (et le site_id).
+    setPoste(aid, lid, pid, (p) => ({ ...p, actif }));
+    post("toggle", { entity: "poste", id: pid, actif });
   }
   // Activation poste x quart (coche = actif). Defaut actif : on ne stocke que les off.
   const quartOn = (pid: string, q: string) => !off.has(`${pid}:${q}`);

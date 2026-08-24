@@ -393,3 +393,35 @@ header est ABSENT. La seule source d'impersonation fiable partout est le
 `getCurrentProfile().siteId` (ou `getCurrentSite()` qui en dérive), jamais une
 valeur recalculée à partir du header ou d'un site codé en dur. C'est le pendant
 applicatif exact de `current_site_id()` en SQL.
+
+## L31 — Whitelist de patch : une clé non prévue est écartée EN SILENCE
+
+Incident 2026-08-24. Désactiver un poste dans le Référentiel n'avait aucun effet :
+le poste restait dans la Matrice de polyvalence (et partout où l'on filtre
+`poste.actif`). La bascule cochait/décochait bien à l'écran (état local optimiste)
+puis « revenait » au rechargement.
+
+**Racine** : `togglePoste` (client) postait `update-poste { patch: { actif } }`,
+mais la route `/api/referentiel` normalise chaque clé de patch via un **whitelist**
+(`posteValue`) qui n'avait **pas** de `case "actif"` → `default → undefined` →
+`if (v !== undefined) patch[k] = v` écartait la clé. Le `UPDATE poste` partait
+sans `actif`, sans la moindre erreur (contrairement à L19 où une colonne absente
+faisait *rejeter* toute la requête : ici c'est l'inverse, une clé en trop est
+silencieusement *ignorée*). Le flag `actif` restait `true`, tous les écrans qui
+filtrent `poste.actif` (18 pages : Matrice, Planning, Placement, Ordonnancement,
+Bilans, TV…) continuaient de l'afficher.
+
+**Aggravant** : `toggleAtelier` et `toggleLigne` passaient, eux, par l'op dédiée
+`toggle` (qui gérait déjà l'entité `poste` + `site_id`). Seul `togglePoste` avait
+divergé du motif en réutilisant `posteField`/`update-poste`.
+
+**Fix** : réaligner `togglePoste` sur l'op `toggle` (`post("toggle", { entity:
+"poste", id, actif })`), comme atelier et ligne. Une fois le flag réellement écrit,
+le masquage marche partout — c'est un *soft-hide* (`actif=false`), aucune donnée
+supprimée.
+
+**Règle** : un whitelist de patch qui `return undefined` par défaut masque toute
+faute de frappe/oubli de colonne. Quand une écriture « ne prend pas » sans erreur,
+suspecter d'abord que la clé n'est pas dans le whitelist. Et une action booléenne
+(activer/désactiver) a sa propre op — ne pas la faire transiter par la route
+d'édition des champs texte/nombre.
