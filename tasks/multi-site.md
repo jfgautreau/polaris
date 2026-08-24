@@ -20,24 +20,28 @@
 | Séparation totale | Les 7 dernières tables partagées passent en `site_id NOT NULL` (voir §3) ; `createSite` copie les référentiels d'un site source | 0053 |
 | Verrouillage | Tests statiques cross-site (`routes-multi-site`, `refdata-cache`, `admin-client`, `isolation-site`) ; `userAdminGuard` borné par site ; `create user` pose `site_id` | — |
 
-**✅ Résolution du site par le compte connecté** (2026-08-23) : le middleware ne
-hardcode plus `lebignon`. `src/proxy.ts` pose `x-site-id` depuis
-`user.app_metadata.site_id` — donc le multi-site est **pleinement fonctionnel sur
-`bigplann.vercel.app`, sans sous-domaine ni DNS**. `app_metadata` (et non
-`user_metadata`) car il n'est modifiable qu'en service_role : un compte ne peut pas
-se re-déclarer sur un autre site pour siphonner ses données via les routes
-`getAdminClient()`. Les deux chemins de création (`/api/users/create`, `/platform`)
-posent désormais `app_metadata.site_id` en plus de `user_metadata.site_id` (ce dernier
-reste lu par le trigger `handle_new_user`). Backfill des comptes historiques :
-`scripts/backfill-app-metadata-site.mjs`.
+**✅ Résolution du site par le compte connecté** (2026-08-23) : multi-site
+**pleinement fonctionnel sur `bigplann.vercel.app`, sans sous-domaine ni DNS**. Le
+« site courant » applicatif = `getCurrentProfile().siteId`, **pendant exact de
+`current_site_id()` en SQL** : site impersonné si un super_admin est « entré » dans un
+site (via le **cookie** signé), sinon le `site_id` de rattachement lu dans `app_user`.
+`getCurrentSite()` en dérive ; le middleware ne pose plus de `x-site-id`.
+⚠️ **Le header `x-impersonate-site` est absent sur les routes `/api/`** (exclues du
+matcher middleware) : la source d'impersonation universelle est le **cookie**, lu par
+`getCurrentProfile`, `getServerClient` et donc partout. L'approche `app_metadata` +
+`x-site-id` (proxy) a été **abandonnée** : `proxy.ts` est revenu à sa version d'avant,
+et le backfill `app_metadata` n'est plus nécessaire (le `site_id` vient de la table
+`app_user`, source fiable et non falsifiable par l'utilisateur).
+⚠️ **Incident 2026-08-23** : deux régressions en chaîne, cf. §7 (boucle de redirect au
+chargement du profil ; écritures `site_id: profile.siteId` sur le mauvais site).
 
 **⏸️ Reste à faire** (cf. `tasks/todo.md`) :
 - **`/affichage` (TV, public, sans compte)** — seul flux qui a encore besoin du site
-  dans l'URL. À faire au moment d'ouvrir un 2ᵉ site : slug dans le chemin
-  (`/affichage/<slug>/atelier/[atelier]`).
+  dans l'URL (pas de session → repli lebignon). À faire au moment d'ouvrir un 2ᵉ site :
+  slug dans le chemin (`/affichage/<slug>/atelier/[atelier]`).
 - **Sous-domaines par site** (cosmétique) — `polaris.app` non acheté. Plus un blocage :
-  `getCurrentSite()` honore déjà `x-site-id`, il ne resterait qu'à le peupler depuis le
-  slug d'un wildcard DNS. Reporté tant que le plan Vercel gratuit ne le permet pas.
+  le site vient du compte connecté ; un sous-domaine ne ferait que fournir la même
+  valeur autrement. Reporté tant que le plan Vercel gratuit ne le permet pas.
 - **Lenteurs post-0053** à investiguer (index composite, round-trips `getCurrentSite`).
 - **Test d'isolation en base réelle** (deux sites) — les gardes actuelles sont statiques.
 - **Reporting groupe, quotas, custom domains, Stripe** — reporté à V2 (§6).
@@ -137,8 +141,21 @@ Réservé aux `est_super_admin` (layout dédié, défense en profondeur middlewa
 référentiels (7 tables) + composite FK sur `quart` · `0054` commentaire `personne_competence` ·
 `0055` **`app_user` et `audit_log` strictement scopés au site courant** (retire le passe-droit
 `OR is_super_admin()` : l'écran montre toujours le site courant, super_admin inclus ; le
-cross-site passe par `/platform` en service_role).
-⚠️ **0055 écrite mais PAS ENCORE APPLIQUÉE** — à exécuter dans le SQL Editor.
+cross-site passe par `/platform` en service_role). **Appliquée le 2026-08-23.**
+
+## 5 bis. Incident 2026-08-23 (deux régressions en chaîne après 0055)
+Après application de 0055, prod HS puis écritures sur le mauvais site. À retenir :
+1. **Boucle de redirect** (`ERR_TOO_MANY_REDIRECTS`) : 0055 a retiré `OR is_super_admin()`
+   de `app_user_select`. En impersonation, `current_site_id()` = site cible, donc la propre
+   ligne `app_user` du super_admin (autre site) devenait invisible via `getServerClient` →
+   `getCurrentProfile` null → `/login` ↔ `/`. **Fix** : `getCurrentProfile` lit sa ligne en
+   `getAdminClient` (service_role), découplée de la RLS site-scopée.
+2. **Écritures sur le mauvais site** : ~20 routes écrivent `site_id: profile.siteId`, or
+   `profile.siteId` valait le site d'origine du super_admin, pas le site impersonné (compte
+   + atelier créés sur Le Bignon depuis LVC). **Fix** : `getCurrentProfile().siteId` conscient
+   de l'impersonation via le **cookie** (le header `x-impersonate-site` est absent sur `/api/`,
+   middleware exclu) ; `getServerClient` et `getCurrentSite()` idem. Le « site courant » est
+   désormais résolu en un seul endroit et vaut partout le site consulté.
 
 ## 6. Points ouverts / V2
 - **Sous-domaines** — wildcard DNS `*.polaris.app` + slug lu dans `src/proxy.ts`.
