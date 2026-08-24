@@ -67,8 +67,11 @@ export async function POST(req: NextRequest) {
   try {
     switch (op) {
       case "create-atelier": {
+        // Nom facultatif à la création : le bouton « + Ajouter un atelier »
+        // crée une carte vide (nom = ""), l'utilisateur la renomme en inline
+        // ensuite — même modèle que create-poste. Ne PAS exiger le nom ici,
+        // sinon le bouton répond 400 « Nom requis » (bug vécu 2026-08-23).
         const nom = s(body.nom);
-        if (!nom) return NextResponse.json({ error: "Nom requis" }, { status: 400 });
         const { data, error } = await supabase
           .from("atelier")
           .insert({ nom, site_id })
@@ -78,9 +81,10 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true, row: { ...data, ligne: [] } });
       }
       case "create-ligne": {
+        // Nom facultatif (complété en inline), comme atelier et poste.
         const nom = s(body.nom);
         const atelier_id = s(body.atelier_id);
-        if (!nom || !atelier_id) return NextResponse.json({ error: "Champs requis" }, { status: 400 });
+        if (!atelier_id) return NextResponse.json({ error: "Atelier requis" }, { status: 400 });
         const { data, error } = await supabase
           .from("ligne")
           .insert({ nom, atelier_id, site_id })

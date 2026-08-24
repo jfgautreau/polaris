@@ -246,6 +246,7 @@ export default function ReferentielEditor({
           <div className="toolbar refhead" style={{ alignItems: "center" }}>
             <input
               value={a.nom}
+              placeholder="Nom de l'atelier"
               onChange={(e) => renameAtelier(a.id, e.target.value)}
               style={{ fontSize: 16, fontWeight: 700, width: 260 }}
             />
@@ -261,6 +262,7 @@ export default function ReferentielEditor({
               <div className="toolbar refhead" style={{ alignItems: "center" }}>
                 <input
                   value={l.nom}
+                  placeholder="Nom de la ligne"
                   onChange={(e) => renameLigne(a.id, l.id, e.target.value)}
                   style={{ fontWeight: 600, width: 220 }}
                 />
