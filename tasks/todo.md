@@ -1,7 +1,7 @@
 # Reste à faire — Polaris
 
-> État au 2026-08-23. Migrations appliquées jusqu'à **0055** (**0056** `site_module`
-> écrite, à appliquer). **223** tests Vitest. Historique détaillé : `git log`.
+> État au 2026-08-24. Migrations appliquées jusqu'à **0056**. **223** tests Vitest.
+> Historique détaillé : `git log`.
 
 ## Sécurité / multi-site
 - [x] Isolation multi-tenant : `site_id` + RLS sur toutes les tables métier (0043–0054).
@@ -16,8 +16,8 @@
       `app_metadata`/`x-site-id` (proxy) a été **abandonnée** — le `site_id` vient de la
       table `app_user`. Le script `scripts/backfill-app-metadata-site.mjs` est **obsolète**
       (peut être supprimé). Incident du jour consigné dans `tasks/multi-site.md §5bis`.
-- [x] **Masquage d'éléments par site** (2026-08-23) : `/platform/[id]` → « Éléments visibles ».
-      Table `site_module` (0056, **à appliquer**). Menus = blocage réel (nav + route) ;
+- [x] **Masquage d'éléments par site** (2026-08-24) : `/platform/[id]` → « Éléments visibles ».
+      Table `site_module` (0056, appliquée). Menus = blocage réel (nav + route) ;
       extras hors nav (`MASQUABLES_EXTRA`) = `guide` (lien Guide utilisateur du menu user).
       Helper `src/lib/site-modules.ts`.
 - [ ] **`/affichage` (TV public) par site** — seul flux sans compte connecté. À faire au

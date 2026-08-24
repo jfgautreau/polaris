@@ -21,7 +21,7 @@
 | Verrouillage | Tests statiques cross-site (`routes-multi-site`, `refdata-cache`, `admin-client`, `isolation-site`) ; `userAdminGuard` borné par site ; `create user` pose `site_id` | — |
 | Site courant | « Site courant » = `getCurrentProfile().siteId`, conscient de l'impersonation (cookie) ; `getCurrentSite()` en dérive. Correctif incident (cf. §5bis) | 0055 |
 | Étanchéité écrans | `app_user`/`audit_log` scopés au site courant (retrait `OR is_super_admin()`) | 0055 |
-| Éléments par site | Masquage par site depuis `/platform` (`site_module`) : **menus** (blocage réel nav+route) + **extras hors nav** (`MASQUABLES_EXTRA` : `guide` = lien Guide utilisateur du `UserMenu`). `src/lib/site-modules.ts` | 0056 (à appliquer) |
+| Éléments par site | Masquage par site depuis `/platform` (`site_module`) : **menus** (blocage réel nav+route) + **extras hors nav** (`MASQUABLES_EXTRA` : `guide` = lien Guide utilisateur du `UserMenu`). `src/lib/site-modules.ts` | 0056 |
 
 **✅ Résolution du site par le compte connecté** (2026-08-23) : multi-site
 **pleinement fonctionnel sur `bigplann.vercel.app`, sans sous-domaine ni DNS**. Le
@@ -145,9 +145,10 @@ référentiels (7 tables) + composite FK sur `quart` · `0054` commentaire `pers
 `0055` **`app_user` et `audit_log` strictement scopés au site courant** (retire le passe-droit
 `OR is_super_admin()` : l'écran montre toujours le site courant, super_admin inclus ; le
 cross-site passe par `/platform` en service_role). **Appliquée le 2026-08-23.** ·
-`0056` **`site_module`** : masquage de menus par site depuis `/platform` (présence d'une
-ligne = module masqué ; blocage réel via `requireModule` + nav filtrée dans `AppHeader` ;
-helper `src/lib/site-modules.ts`). ⚠️ **PAS ENCORE APPLIQUÉE** — SQL Editor.
+`0056` **`site_module`** : masquage d'éléments par site depuis `/platform` (présence d'une
+ligne = masqué ; menus → blocage réel via `requireModule` + nav filtrée dans `AppHeader` ;
+extras hors nav via `MASQUABLES_EXTRA`, ex. `guide` ; helper `src/lib/site-modules.ts`).
+**Appliquée le 2026-08-24.**
 
 ## 5 bis. Incident 2026-08-23 (deux régressions en chaîne après 0055)
 Après application de 0055, prod HS puis écritures sur le mauvais site. À retenir :
