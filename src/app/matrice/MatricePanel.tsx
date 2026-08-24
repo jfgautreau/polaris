@@ -10,7 +10,7 @@ import LegendeModal from "./LegendeModal";
 
 type Poste = { id: string; nom: string; objectifActuel?: number; objectifCible?: number };
 type Group = { ligneId: string; ligneNom: string; postes: Poste[] };
-type Personne = { id: string; label: string; editable: boolean; interim?: boolean };
+type Personne = { id: string; label: string; editable: boolean; interim?: boolean; avenir?: boolean };
 type Cell = { a: number; c: number };
 type Opt = { id: string; label: string };
 

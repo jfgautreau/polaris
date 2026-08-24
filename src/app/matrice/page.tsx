@@ -16,7 +16,7 @@ type PosteRow = {
 type LigneRow = { id: string; nom: string; atelier_id: string; ordre_affichage: number; poste: PosteRow[] };
 type Atelier = { id: string; nom: string };
 type Equipe = { id: string; nom: string };
-type Personne = { id: string; nom: string; prenom: string; equipe_id: string | null; atelier_id: string | null; type_contrat: string };
+type Personne = { id: string; nom: string; prenom: string; equipe_id: string | null; atelier_id: string | null; type_contrat: string; statut: string };
 type MatriceRow = {
   personne_id: string;
   poste_id: string;
@@ -50,8 +50,10 @@ export default async function MatricePage({
   // Personnes : filtre equipe ET filtre atelier (affectation par defaut du module personnel).
   let persQ = supabase
     .from("personne")
-    .select("id, nom, prenom, equipe_id, atelier_id, type_contrat")
-    .eq("statut", "ACTIF")
+    .select("id, nom, prenom, equipe_id, atelier_id, type_contrat, statut")
+    // Actifs + personnes À venir (déjà recrutées, pas encore arrivées) : on veut
+    // pouvoir préparer/renseigner leur polyvalence avant l'arrivée.
+    .in("statut", ["ACTIF", "A_VENIR"])
     .order("nom");
   if (sp.equipe) persQ = persQ.eq("equipe_id", sp.equipe);
   if (sp.atelier) persQ = persQ.eq("atelier_id", sp.atelier);
@@ -124,6 +126,7 @@ export default async function MatricePage({
     id: p.id,
     label: `${p.nom} ${p.prenom}`,
     interim: p.type_contrat === "INTERIM",
+    avenir: p.statut === "A_VENIR",
     editable: canEditMatrice || (p.equipe_id != null && chefEquipes.has(p.equipe_id)),
   }));
 
