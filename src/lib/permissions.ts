@@ -300,6 +300,12 @@ export type { Role };
 export async function requireModule(module: string, level: "read" | "write") {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
+  // Masquage par site (0056) : un module désactivé pour ce site est
+  // inaccessible pour TOUT LE MONDE, au-dessus de la matrice de droits.
+  // Blocage réel : on redirige vers l'accueil (jamais vers /planning, qui
+  // peut lui-même être masqué → boucle).
+  const { getModulesMasquesC } = await import("@/lib/site-modules");
+  if ((await getModulesMasquesC()).has(module)) redirect("/");
   const perms = await getPermissions(profile.role);
   const ok = level === "write" ? canWrite(perms, module) : canRead(perms, module);
   if (!ok) redirect("/planning");

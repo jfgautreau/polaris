@@ -141,7 +141,10 @@ Réservé aux `est_super_admin` (layout dédié, défense en profondeur middlewa
 référentiels (7 tables) + composite FK sur `quart` · `0054` commentaire `personne_competence` ·
 `0055` **`app_user` et `audit_log` strictement scopés au site courant** (retire le passe-droit
 `OR is_super_admin()` : l'écran montre toujours le site courant, super_admin inclus ; le
-cross-site passe par `/platform` en service_role). **Appliquée le 2026-08-23.**
+cross-site passe par `/platform` en service_role). **Appliquée le 2026-08-23.** ·
+`0056` **`site_module`** : masquage de menus par site depuis `/platform` (présence d'une
+ligne = module masqué ; blocage réel via `requireModule` + nav filtrée dans `AppHeader` ;
+helper `src/lib/site-modules.ts`). ⚠️ **PAS ENCORE APPLIQUÉE** — SQL Editor.
 
 ## 5 bis. Incident 2026-08-23 (deux régressions en chaîne après 0055)
 Après application de 0055, prod HS puis écritures sur le mauvais site. À retenir :

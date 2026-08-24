@@ -45,6 +45,8 @@ const TABLES_SITE_SCOPEES = new Set<string>([
   "competence", "competence_niveau_libelle", "quart",
   // 0054
   // (personne_competence déjà listée ci-dessus)
+  // 0056
+  "site_module",
 ]);
 
 // Fichiers exclus : gestion cross-site (super_admin) ou déjà encadrée

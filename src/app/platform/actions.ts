@@ -8,6 +8,7 @@ import { getAdminClient } from "@/lib/supabase-server";
 import { setImpersonation, clearImpersonation, getImpersonationPayload } from "@/lib/impersonation";
 import { genererLienMotDePasse, motDePasseAleatoire } from "@/lib/password-link";
 import { messageErreur } from "@/lib/erreurs";
+import { MODULE_KEYS } from "@/lib/permissions";
 
 // Server actions du back-office plateforme. Toutes revérifient que
 // l'appelant est bien super_admin — défense en profondeur en plus du
@@ -18,6 +19,34 @@ async function requireSuperAdmin() {
   if (!profile) throw new Error("Non authentifié");
   if (!profile.estSuperAdmin) throw new Error("Accès refusé");
   return { profile, admin: getAdminClient() };
+}
+
+// -------------------- Masquage de menus par site (0056) --------------------
+// Active/désactive un module (menu) pour un site donné. `masque=true` insère
+// une ligne site_module (= module masqué) ; `masque=false` la retire. Réservé
+// au super_admin ; l'écriture passe par service_role (bypass RLS). S'applique
+// à TOUS les utilisateurs du site, au-dessus de la matrice de droits.
+export async function setModuleMasque(siteId: string, moduleKey: string, masque: boolean) {
+  const { admin } = await requireSuperAdmin();
+  if (!MODULE_KEYS.includes(moduleKey)) throw new Error("Module inconnu");
+
+  if (masque) {
+    const { error } = await admin
+      .from("site_module")
+      .upsert({ site_id: siteId, module_key: moduleKey }, { onConflict: "site_id,module_key" });
+    if (error) throw new Error(messageErreur(error) ?? error.message);
+  } else {
+    const { error } = await admin
+      .from("site_module")
+      .delete()
+      .eq("site_id", siteId)
+      .eq("module_key", moduleKey);
+    if (error) throw new Error(messageErreur(error) ?? error.message);
+  }
+  // getModulesMasques n'est pas caché inter-requête : la bascule se reflète
+  // à la navigation suivante des utilisateurs du site. On rafraîchit juste la
+  // page /platform pour un retour visuel immédiat côté super_admin.
+  revalidatePath(`/platform/${siteId}`);
 }
 
 // Regex slug : lettres minuscules, chiffres, tirets. Blacklist les

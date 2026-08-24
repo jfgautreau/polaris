@@ -2,6 +2,8 @@ import Link from "next/link";
 import { getAdminClient } from "@/lib/supabase-server";
 import { changerStatut, entrerDansLeSite, sortirDuMode } from "../actions";
 import { getImpersonationPayload } from "@/lib/impersonation";
+import { MODULES } from "@/lib/permissions";
+import ModulesMasquesEditor from "./ModulesMasquesEditor";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +42,7 @@ export default async function SiteDetail({
     );
   }
 
-  const [{ data: users }, { data: pers }, { data: audits }] = await Promise.all([
+  const [{ data: users }, { data: pers }, { data: audits }, { data: sm }] = await Promise.all([
     admin.from("app_user").select("email, role, is_active").eq("site_id", id).returns<{ email: string; role: string; is_active: boolean }[]>(),
     admin.from("personne").select("statut").eq("site_id", id).returns<{ statut: string }[]>(),
     admin.from("audit_impersonation")
@@ -49,7 +51,11 @@ export default async function SiteDetail({
       .order("entered_at", { ascending: false })
       .limit(10)
       .returns<AuditRow[]>(),
+    admin.from("site_module").select("module_key").eq("site_id", id).returns<{ module_key: string }[]>(),
   ]);
+
+  const masques = new Set((sm ?? []).map((r) => r.module_key));
+  const modulesToggle = MODULES.map((m) => ({ key: m.key, label: m.label, masque: masques.has(m.key) }));
 
   const impActive = await getImpersonationPayload();
   const impActifSurCeSite = impActive?.siteId === id;
@@ -115,6 +121,16 @@ export default async function SiteDetail({
             <StatutButton id={site.id} target="archive" label="Archiver" color="#64748b" />
           )}
         </div>
+      </section>
+
+      <section style={boxStyle}>
+        <h2 style={h2Style}>Menus visibles pour ce site</h2>
+        <p style={{ margin: "0 0 12px", fontSize: 13, color: "#64748b" }}>
+          Décochez un menu pour le <strong>masquer à tous les utilisateurs</strong> de ce
+          site : il disparaît de la navigation et sa page devient inaccessible (au-dessus
+          de la matrice de droits). Enregistré à chaque clic.
+        </p>
+        <ModulesMasquesEditor siteId={site.id} modules={modulesToggle} />
       </section>
 
       <section style={boxStyle}>

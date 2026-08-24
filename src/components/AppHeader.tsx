@@ -6,6 +6,7 @@ import { getImpersonationPayload } from "@/lib/impersonation";
 import { sortirDuMode } from "@/app/platform/actions";
 import { isoDate, addDays } from "@/lib/week";
 import { MODULES, getPermissions, canRead, canWrite } from "@/lib/permissions";
+import { getModulesMasquesC } from "@/lib/site-modules";
 import SettingsMenu from "@/components/SettingsMenu";
 import UserMenu from "@/components/UserMenu";
 import Logo from "@/components/Logo";
@@ -60,12 +61,23 @@ export default async function AppHeader({
     alertCount = 0;
   }
 
+  // Modules MASQUÉS pour ce site (0056) : pilotés depuis /platform, ils
+  // disparaissent de la navigation pour tout le monde. Un throw ne doit pas
+  // casser l'en-tête (login, /affichage) : ensemble vide en repli.
+  let masques = new Set<string>();
+  try {
+    masques = await getModulesMasquesC();
+  } catch {
+    masques = new Set<string>();
+  }
+
   // Une entree s'affiche des que la page est ACCESSIBLE, donc des la lecture — les
   // ecrans de parametrage s'ouvrent desormais en consultation seule (cf. LectureSeule).
   // Seul Placement fait exception : c'est un ecran de saisie, sa page exige "write"
   // (cf. requireModule), afficher l'entree en lecture menerait a une redirection.
   const visible = (m: (typeof MODULES)[number]) =>
-    m.key === "placement" ? canWrite(perms, m.key) : canRead(perms, m.key);
+    !masques.has(m.key) &&
+    (m.key === "placement" ? canWrite(perms, m.key) : canRead(perms, m.key));
 
   // Navigation principale (ordre impose)
   const mainLinks = MAIN_ORDER.map((k) => MODULES.find((m) => m.key === k))
@@ -181,6 +193,7 @@ export default async function AppHeader({
       </nav>
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
         <SettingsMenu links={configLinks} active={active} />
+        {!masques.has("habilitations") && (
         <Link href="/habilitations" title="Habilitations à recycler" style={{ position: "relative", textDecoration: "none", fontSize: 18, color: "#fff" }}>
           &#128276;
           {alertCount > 0 && (
@@ -201,6 +214,7 @@ export default async function AppHeader({
             </span>
           )}
         </Link>
+        )}
         <UserMenu name={profile?.name ?? ""} email={profile?.email ?? ""} />
       </div>
     </header>

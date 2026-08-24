@@ -42,7 +42,7 @@ const TABLES_SITE_SCOPEES = new Set<string>([
   "rotation_reference", "placement", "absence",
   "contrat_periode", "agence_interim", "parametre_affichage", "tp_periode",
   "motif_absence", "type_contrat", "role_custom", "role_permission",
-  "competence", "competence_niveau_libelle", "quart",
+  "competence", "competence_niveau_libelle", "quart", "site_module",
 ]);
 
 // Accès cross-site LÉGITIMES (identique à admin-client.test.ts).
