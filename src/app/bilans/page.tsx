@@ -102,6 +102,7 @@ export default async function CockpitPage() {
     { href: "/bilans/montee-competence", ic: "📈", t: "Plan de montée en compétence", d: "Actuel vs cible en global, puis qui former sur quel poste, atelier par atelier.", on: true },
     { href: "/bilans/couverture", ic: "🛡️", t: "Adéquation Charge / capacité", d: "Besoin d'après l'ordonnancement vs présents, par quart et par atelier.", on: true },
     { href: "/bilans/anticipation", ic: "🔭", t: "Anticipation", d: "Capacité vs charge à venir, impact des absences et des fins de contrat.", on: true },
+    { href: "/bilans/projection", ic: "🧮", t: "Projection de capacité", d: "Tenue semaine par semaine sur 4/8/12 sem. : une personne polyvalente compte pour une seule place (affectation optimale). Habilitations expirées déduites.", on: true },
   ];
 
   return (
