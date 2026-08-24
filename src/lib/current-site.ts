@@ -1,5 +1,4 @@
 import { cache } from "react";
-import { headers } from "next/headers";
 import { getAdminClient } from "@/lib/supabase-server";
 
 // Contexte multi-site (SaaS multi-tenant). Une seule base Supabase, un
@@ -39,25 +38,18 @@ const FALLBACK_LEBIGNON: CurrentSite = {
 // requête. `cache()` de React déduplique l'appel entre AppHeader, les
 // pages et les server actions.
 export const getCurrentSite = cache(async function getCurrentSite(): Promise<CurrentSite> {
-  // 1) IMPERSONATION prioritaire : si un super_admin est en mode support,
-  //    le middleware pose `x-impersonate-site`. On lit ce header pour que
-  //    tout l'écran (AppHeader, pages, PDF) affiche bien le site cible.
-  //    La validation « seul un super_admin peut poser ce header » est
-  //    faite plus haut par le middleware ET par la fonction SQL
-  //    current_site_id() qui verifie est_super_admin avant d'honorer.
-  let siteId: string | null = null;
-  try {
-    const h = await headers();
-    siteId = h.get("x-impersonate-site")
-      ?? h.get("x-site-id");
-  } catch {
-    siteId = null;
-  }
-
-  // 2) V1a : fallback vers le site historique tant qu'un seul sous-domaine
-  //    est configuré. Retiré en PR suivante quand /platform et le multi-
-  //    domaine seront actifs.
-  const id = siteId ?? SITE_LEBIGNON_ID;
+  // Le site courant = le site du compte connecté (getCurrentProfile.siteId),
+  // qui est DÉJÀ conscient de l'impersonation : site cible quand un super_admin
+  // est « entré » dans un site, sinon son site de rattachement. C'est l'exact
+  // pendant applicatif de current_site_id() en SQL. On ne lit plus de header
+  // x-impersonate-site / x-site-id : le premier est absent sur les routes /api/
+  // (middleware exclu), le second n'était qu'un fallback hardcodé.
+  //   - Import dynamique : évite un cycle de chargement current-site <-> current-user.
+  //   - Repli lebignon quand il n'y a pas de session (routes publiques :
+  //     /login, /affichage) — un seul site en prod aujourd'hui.
+  const { getCurrentProfile } = await import("@/lib/current-user");
+  const profile = await getCurrentProfile();
+  const id = profile?.siteId ?? SITE_LEBIGNON_ID;
 
   const supabase = getAdminClient();
   const { data, error } = await supabase

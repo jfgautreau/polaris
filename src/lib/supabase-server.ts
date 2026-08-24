@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getImpersonatedSiteIdFromHeader, IMPERSONATE_HEADER } from "@/lib/impersonation";
+import { getImpersonatedSiteId, IMPERSONATE_HEADER } from "@/lib/impersonation";
 
 // Client serveur lie aux cookies de la requete (lit la session du user appelant).
 // `cache()` : un seul client instancie par requete, meme si plusieurs couches
@@ -17,7 +17,11 @@ import { getImpersonatedSiteIdFromHeader, IMPERSONATE_HEADER } from "@/lib/imper
 // est super_admin.
 export const getServerClient = cache(async function getServerClient(): Promise<SupabaseClient> {
   const cookieStore = await cookies();
-  const impersonatedSite = await getImpersonatedSiteIdFromHeader();
+  // Impersonation lue depuis le COOKIE signé (et non le header) : le middleware
+  // ne s'exécute pas sur /api/, donc le header x-impersonate-site y est absent.
+  // Le cookie est présent partout. On propage x-impersonate-site vers PostgREST ;
+  // current_site_id() (SQL) ne l'honore que si l'appelant est super_admin.
+  const impersonatedSite = await getImpersonatedSiteId();
   const extraHeaders: Record<string, string> = impersonatedSite
     ? { [IMPERSONATE_HEADER]: impersonatedSite }
     : {};

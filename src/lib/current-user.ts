@@ -83,8 +83,23 @@ export const getCurrentProfile = cache(async function getCurrentProfile(): Promi
   // profil, donc redirection vers /login par requireModule.
   if (!row || !row.is_active) return null;
 
-  const siteId = row.site_id ?? SITE_LEBIGNON_ID;
+  let siteId = row.site_id ?? SITE_LEBIGNON_ID;
   const estSuperAdmin = row.est_super_admin ?? false;
+
+  // IMPERSONATION : un super_admin « entré » dans un site agit DANS ce site.
+  // `siteId` doit alors être le site cible, pas son site d'origine — sinon
+  // toutes les écritures `site_id: profile.siteId` (~20 routes) atterrissent
+  // sur le mauvais site (bug vécu : compte + atelier créés sur Le Bignon
+  // depuis LVC, 2026-08-23). Source = le COOKIE signé et NON le header
+  // x-impersonate-site : le middleware ne s'exécute pas sur les routes /api/
+  // (exclues du matcher), donc le header y est absent — le cookie, lui, est
+  // présent partout. Borné au super_admin (le cookie est en plus HMAC-signé
+  // et n'est délivré qu'aux super_admin par /platform).
+  if (estSuperAdmin) {
+    const { getImpersonatedSiteId } = await import("@/lib/impersonation");
+    const imp = await getImpersonatedSiteId();
+    if (imp) siteId = imp;
+  }
 
   // MULTI-TENANT — refus de session si le site est suspendu ou archivé.
   // Le super_admin conserve l'accès (il est au-dessus du cycle de vie des
