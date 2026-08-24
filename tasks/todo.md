@@ -16,9 +16,10 @@
       `app_metadata`/`x-site-id` (proxy) a été **abandonnée** — le `site_id` vient de la
       table `app_user`. Le script `scripts/backfill-app-metadata-site.mjs` est **obsolète**
       (peut être supprimé). Incident du jour consigné dans `tasks/multi-site.md §5bis`.
-- [x] **Masquage de menus par site** (2026-08-23) : `/platform/[id]` → « Menus visibles ».
-      Table `site_module` (0056, **à appliquer**), blocage réel (nav + route), helper
-      `src/lib/site-modules.ts`.
+- [x] **Masquage d'éléments par site** (2026-08-23) : `/platform/[id]` → « Éléments visibles ».
+      Table `site_module` (0056, **à appliquer**). Menus = blocage réel (nav + route) ;
+      extras hors nav (`MASQUABLES_EXTRA`) = `guide` (lien Guide utilisateur du menu user).
+      Helper `src/lib/site-modules.ts`.
 - [ ] **`/affichage` (TV public) par site** — seul flux sans compte connecté. À faire au
       2ᵉ site : slug dans le chemin (`/affichage/<slug>/…`).
 - [ ] **Domaine `polaris.app` + sous-domaines par site** — cosmétique désormais (non

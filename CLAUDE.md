@@ -469,13 +469,17 @@ prochain gros chantier, pas une optimisation cosmétique.
   vérification de conflit avant écrasement. Popovers en `position: fixed` (piège
   `overflow: auto` de la carte modale, cf. patterns UI).
 - Plateforme (super_admin) : `src/app/platform/*` — back-office multi-site.
-  `/platform/[id]` porte la section **« Menus visibles pour ce site »**
-  (`ModulesMasquesEditor.tsx` + server action `setModuleMasque`) : masquage de
-  menus **par site**, pour tous les users, au-dessus de la matrice. Table
+  `/platform/[id]` porte la section **« Éléments visibles pour ce site »**
+  (`ModulesMasquesEditor.tsx` + server action `setModuleMasque`) : masquage
+  **par site**, pour tous les users, au-dessus de la matrice. Table
   `site_module` (présence = masqué), helper `src/lib/site-modules.ts`
   (`getModulesMasquesC()`, impersonation-aware, `cache()` par requête).
-  Blocage réel : `requireModule` redirige vers `/` si le module est masqué,
-  `AppHeader` filtre la nav.
+  Deux familles d'éléments masquables : les **menus** (clés de `MODULES`) —
+  blocage réel : `requireModule` redirige vers `/` si masqué, `AppHeader`
+  filtre la nav ; et des **extras hors nav** (`MASQUABLES_EXTRA` dans
+  `site-modules.ts`) — aujourd'hui `guide` (lien « Guide utilisateur » du
+  `UserMenu`, affiché si `guideVisible`, passé par `AppHeader`). `setModuleMasque`
+  accepte une clé de `MODULE_KEYS` **ou** de `CLES_MASQUABLES_EXTRA`.
 - Migrations : `supabase/migrations/0001..0056` (dernière **appliquée** : 0055 ;
   `0056` = `site_module`, écrite non encore appliquée).
 - **Écritures : lire l'erreur, toujours.** `messageErreur()` (`src/lib/erreurs.ts`) traduit
