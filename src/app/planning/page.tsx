@@ -35,7 +35,7 @@ type PosteRow = {
 };
 type LigneRow = { id: string; nom: string; ordre_affichage: number; atelier: { id: string; nom: string } | null; poste: PosteRow[] };
 type Equipe = { id: string; nom: string; couleur: string; quart_fixe: string | null };
-type Quart = { code: string; libelle: string; ordre: number };
+type Quart = { code: string; libelle: string; ordre: number; creneau: string | null };
 type Personne = {
   id: string;
   nom: string;
@@ -113,7 +113,7 @@ export default async function PlanningPage({
       .eq("actif", true)
       .order("libelle")
       .returns<Motif[]>(),
-    supabase.from("quart").select("code, libelle, ordre").order("ordre").returns<Quart[]>(),
+    supabase.from("quart").select("code, libelle, ordre, creneau").order("ordre").returns<Quart[]>(),
     supabase.from("personne").select("id, nom, prenom, equipe_id, type_contrat").in("statut", ["ACTIF", "A_VENIR"]).order("nom").returns<Personne[]>(),
     canEditPlanningFull
       ? Promise.resolve({ data: [] as { equipe_id: string }[] })
@@ -418,7 +418,14 @@ export default async function PlanningPage({
     };
     const equipeDe = new Map(allActive.map((p) => [p.id, p.equipe_id]));
     const quartFixe = new Map((equipesD ?? []).map((e) => [e.id, e.quart_fixe]));
-    const creneauDe = (q?: string | null) => (q === "matin" ? "matin" : q === "apres_midi" ? "aprem" : null);
+    // Créneau (demi-journée) d'un quart, désormais explicite en base
+    // (quart.creneau), plus codé en dur sur matin/apres_midi. Un quart sans
+    // créneau (plein : journée, nuit) ne bloque aucun mi-temps de ce chef.
+    const quartCreneau = new Map(quarts.map((q) => [q.code, q.creneau]));
+    const creneauDe = (q?: string | null): "matin" | "aprem" | null => {
+      const c = q ? quartCreneau.get(q) : null;
+      return c === "matin" || c === "aprem" ? c : null;
+    };
 
     // Trouver la config TP applicable pour une personne à un jour donné.
     const configPourJour = (persId: string, iso: string): { off?: Record<string, string[]> } | null => {

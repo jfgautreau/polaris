@@ -250,7 +250,7 @@ async function copierReferentiels(admin: AdminClient, sourceId: string, cibleId:
   {
     const { data } = await admin
       .from("quart")
-      .select("code, libelle, ordre, debut, fin")
+      .select("code, libelle, ordre, debut, fin, rotation, creneau")
       .eq("site_id", sourceId);
     if (data && data.length > 0) {
       const rows = data.map((r) => ({ ...r, site_id: cibleId }));

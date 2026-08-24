@@ -5,7 +5,7 @@ import PersonnelEditor from "./PersonnelEditor";
 import { getRotationRefsC } from "@/lib/refdata";
 
 type Equipe = { id: string; nom: string; couleur: string | null; quart_fixe: string | null };
-type Quart = { code: string; libelle: string };
+type Quart = { code: string; libelle: string; creneau: string | null };
 type Atelier = { id: string; nom: string };
 type Motif = { id: string; code_court: string; libelle: string; couleur: string };
 type Row = {
@@ -79,7 +79,7 @@ export default async function PersonnelPage({
     // (motif_fin du contrat le plus recent). Depuis 0050 ces trois valeurs
     // ne sont plus stockees sur personne.
     supabase.from("contrat_periode").select("personne_id, date_debut, date_fin, motif_fin, created_at").returns<CpRow[]>(),
-    supabase.from("quart").select("code, libelle").order("ordre").returns<Quart[]>(),
+    supabase.from("quart").select("code, libelle, creneau").order("ordre").returns<Quart[]>(),
     getRotationRefsC(),
     // Motifs d absence : alimentent la declaration depuis la modale Absences.
     supabase.from("motif_absence").select("id, code_court, libelle, couleur").eq("actif", true).order("libelle").returns<Motif[]>(),

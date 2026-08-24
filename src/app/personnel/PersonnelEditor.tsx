@@ -163,7 +163,7 @@ export default function PersonnelEditor({
   equipes: Equipe[];
   ateliers: Atelier[];
   canEdit: boolean;
-  quarts?: { code: string; libelle: string }[];
+  quarts?: { code: string; libelle: string; creneau?: string | null }[];
   rotationRefs?: { semaine: string; equipe_id: string; quart_code: string }[];
   motifs?: Motif[];
   types?: TypeContrat[];

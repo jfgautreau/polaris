@@ -35,7 +35,7 @@ données, RLS), `tasks/handoff.md` (détail écran par écran), `tasks/lessons.m
    `supabase/migrations/` et **demande à l'utilisateur de l'exécuter** dans le SQL Editor.
    Pour de la *donnée* seulement, un script Node lisant `SUPABASE_SERVICE_ROLE_KEY`
    de `.env.local` est acceptable.
-   Projet Supabase : ref `stcxlsmmnplxpirrnefm`, eu-west-3. **Dernière migration appliquée : `0055`** (socle multi-site : `0043`–`0048` ; cycle de vie : `0049`–`0050` ; `parametre_affichage` multi-site : `0051` ; TP périodes : `0052` ; séparation totale des référentiels par site — `motif_absence`, `type_contrat`, `role_custom`, `role_permission`, `competence`, `competence_niveau_libelle`, `quart` tous en `site_id NOT NULL` : `0053` ; commentaire libre sur `personne_competence` : `0054` ; `app_user`/`audit_log` strictement scopés au site courant, retrait du passe-droit `OR is_super_admin()` : `0055` ; table `site_module` — masquage d'éléments par site depuis `/platform` : `0056`). Cf. `tasks/multi-site.md` pour l'état complet du chantier multi-site.
+   Projet Supabase : ref `stcxlsmmnplxpirrnefm`, eu-west-3. **Dernière migration appliquée : `0057`** (socle multi-site : `0043`–`0048` ; cycle de vie : `0049`–`0050` ; `parametre_affichage` multi-site : `0051` ; TP périodes : `0052` ; séparation totale des référentiels par site — `motif_absence`, `type_contrat`, `role_custom`, `role_permission`, `competence`, `competence_niveau_libelle`, `quart` tous en `site_id NOT NULL` : `0053` ; commentaire libre sur `personne_competence` : `0054` ; `app_user`/`audit_log` strictement scopés au site courant, retrait du passe-droit `OR is_super_admin()` : `0055` ; table `site_module` — masquage d'éléments par site depuis `/platform` : `0056` ; colonnes `quart.rotation` (quarts composant le cycle de rotation, explicites) + `quart.creneau` (`matin`/`aprem`/null, demi-journée pilotant le TP — fin du matin/apres_midi codé en dur) : `0057`). Cf. `tasks/multi-site.md` pour l'état complet du chantier multi-site.
 6. **PowerShell 5.1** : pour un message de commit multi-lignes, here-string `@'…'@`
    (le `'@` final en colonne 0), ou `git commit -F fichier`. Pas de `"` inline.
 7. ⚠️ **Toute lecture Supabase pouvant dépasser 1000 lignes passe par `fetchAll()`**
@@ -163,6 +163,10 @@ données, RLS), `tasks/handoff.md` (détail écran par écran), `tasks/lessons.m
   rotation. L'ancienne table `equipe_quart_semaine` (saisie semaine-par-semaine) est conservée
   mais **plus lue/écrite**. Défaut planning = `matin`. Sur `/planning`, choisir un quart
   auto-sélectionne l'équipe de la rotation de la semaine (forçage possible via le filtre Équipe).
+  ⚠️ **Quels quarts composent le cycle = colonne `quart.rotation`** (0057), cochée par quart
+  dans « Horaires des quarts » (`/admin/equipes`). Le formulaire *Référence de rotation*
+  ne propose plus que ces quarts (avant : tous, le sous-ensemble matin/après-midi était
+  implicite). Le « quart fixe » d'une équipe, lui, reste choisi parmi **tous** les quarts.
 - **`poste_quart`** : activation poste×quart, **défaut actif** → la table ne stocke que
   les *désactivations*.
 - **Ouverture des lignes** (`jour_quart`, `ouverture_quart`) : décidée dans Ordonnancement.
@@ -233,6 +237,11 @@ données, RLS), `tasks/handoff.md` (détail écran par écran), `tasks/lessons.m
      la semaine où B est l'après-midi, rien — d'où un **TP automatique une
      semaine sur deux**, piloté par la rotation datée. Calcul via
      `rotByWeek[wi]` + `equipe.quart_fixe` éventuel.
+  ⚠️ **La demi-journée d'un quart (matin/aprem) n'est plus codée en dur** (0057) :
+     `creneauDe` (planning) et `postesSemaine` (`TempsPartielModal`) lisent
+     `quart.creneau` (`matin`/`aprem`/null). Un quart sans créneau (journée, nuit)
+     ne bloque aucun mi-temps de ce chef. Réglé par quart dans « Horaires des quarts ».
+     Le seed 0057 pose `matin→matin`, `apres_midi→aprem` : comportement inchangé.
   Un mi-temps sur un seul créneau **hors semaine « équipe au mauvais créneau »**
   n'écrit ni ne bloque rien — la case reste vide et plaçable. L'ancienne flèche
   « → Mat/Apr » (`tpRedirect`) a été **supprimée** : elle noyait l'écran de
@@ -480,8 +489,8 @@ prochain gros chantier, pas une optimisation cosmétique.
   `site-modules.ts`) — aujourd'hui `guide` (lien « Guide utilisateur » du
   `UserMenu`, affiché si `guideVisible`, passé par `AppHeader`). `setModuleMasque`
   accepte une clé de `MODULE_KEYS` **ou** de `CLES_MASQUABLES_EXTRA`.
-- Migrations : `supabase/migrations/0001..0056` (dernière appliquée : **0056**,
-  `site_module`).
+- Migrations : `supabase/migrations/0001..0057` (dernière appliquée : **0057**,
+  `quart.rotation` + `quart.creneau`).
 - **Écritures : lire l'erreur, toujours.** `messageErreur()` (`src/lib/erreurs.ts`) traduit
   les codes Postgres ; les server actions repassent le message par l'URL
   (`urlAvecErreur` → `?err=`) et la page l'affiche via `<BandeauErreur>`. Un test

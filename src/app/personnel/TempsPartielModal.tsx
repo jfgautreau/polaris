@@ -116,7 +116,7 @@ function renderConfigEditor(props: {
   hor: Record<number, { debut: string; fin: string }>; setHor: React.Dispatch<React.SetStateAction<Record<number, { debut: string; fin: string }>>>;
   avance: boolean; setAvance: (v: boolean | ((prev: boolean) => boolean)) => void;
   equipe: { id: string; nom: string; quart_fixe?: string | null } | null;
-  quarts: { code: string; libelle: string }[];
+  quarts: { code: string; libelle: string; creneau?: string | null }[];
   rotationRefs: RotationRef[];
   readOnly: boolean;
 }) {
@@ -150,11 +150,17 @@ function renderConfigEditor(props: {
 
   // Synthèse.
   const ouvres = JOURS.filter((j) => j.dow <= 5);
+  // Créneau (demi-journée) d'un quart : explicite en base (quart.creneau),
+  // plus codé en dur sur matin/apres_midi.
+  const creneauDe = (code: string | null): "matin" | "aprem" | null => {
+    const c = code ? quarts.find((q) => q.code === code)?.creneau : null;
+    return c === "matin" || c === "aprem" ? c : null;
+  };
   const postesSemaine = (quartEquipe: string | null) => {
     if (!offOn) return ouvres.length;
-    const cle = quartEquipe === "matin" ? "matin" : quartEquipe === "apres_midi" ? "aprem" : null;
+    const cle = creneauDe(quartEquipe);
     if (!cle) return ouvres.filter((j) => !(off[j.dow].matin && off[j.dow].aprem)).length;
-    return ouvres.filter((j) => !off[j.dow][cle as "matin" | "aprem"]).length;
+    return ouvres.filter((j) => !off[j.dow][cle]).length;
   };
   const tousMatinsOff = offOn && ouvres.every((j) => off[j.dow].matin);
   const tousApremOff = offOn && ouvres.every((j) => off[j.dow].aprem);
@@ -393,7 +399,7 @@ export default function TempsPartielModal({
 }: {
   personne: Pers;
   equipe?: { id: string; nom: string; quart_fixe?: string | null } | null;
-  quarts?: { code: string; libelle: string }[];
+  quarts?: { code: string; libelle: string; creneau?: string | null }[];
   rotationRefs?: RotationRef[];
   onClose: () => void;
   onSaved: (p: { temps_partiel: boolean; tp_type: string | null; tp_config: TpConfig | null }) => void;

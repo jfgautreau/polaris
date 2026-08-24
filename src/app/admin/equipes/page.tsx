@@ -25,7 +25,7 @@ import BandeauErreur from "@/components/BandeauErreur";
 type Chef = { id: string; app_user_id: string };
 type Equipe = { id: string; nom: string; actif: boolean; couleur: string; quart_fixe: string | null; equipe_chef: Chef[] };
 type AppUser = { user_id: string; name: string; email: string };
-type Quart = { code: string; libelle: string; debut: string | null; fin: string | null };
+type Quart = { code: string; libelle: string; debut: string | null; fin: string | null; rotation: boolean; creneau: string | null };
 
 const NB_APERCU = 8;
 
@@ -59,10 +59,14 @@ export default async function EquipesPage({
       .select("user_id, name, email")
       .order("name")
       .returns<AppUser[]>(),
-    supabase.from("quart").select("code, libelle, debut, fin").order("ordre").returns<Quart[]>(),
+    supabase.from("quart").select("code, libelle, debut, fin, rotation, creneau").order("ordre").returns<Quart[]>(),
     supabase.from("rotation_reference").select("semaine, equipe_id, quart_code").order("semaine").returns<RotationRef[]>(),
   ]);
   const quarts = quartsData ?? [];
+  // Quarts composant le cycle de rotation : seuls ceux-ci sont proposés dans le
+  // formulaire de référence (le « quart fixe » d'une équipe, lui, peut être
+  // n'importe quel quart).
+  const quartsRotation = quarts.filter((q) => q.rotation);
   const quartLib = (code: string) => quarts.find((q) => q.code === code)?.libelle ?? code;
 
   const equipes = equipesData ?? [];
@@ -221,6 +225,18 @@ export default async function EquipesPage({
                   <span>Fin</span>
                   <input name="fin" type="time" />
                 </div>
+                <label className="field" style={{ alignItems: "center" }}>
+                  <span>Rotation</span>
+                  <input type="checkbox" name="rotation" style={{ width: "auto" }} title="Ce quart fait partie du cycle de rotation des équipes tournantes." />
+                </label>
+                <div className="field">
+                  <span>Créneau (TP)</span>
+                  <select name="creneau" defaultValue="" title="Demi-journée du quart, pour le temps partiel « une semaine sur deux ».">
+                    <option value="">Aucun</option>
+                    <option value="matin">Matin</option>
+                    <option value="aprem">Après-midi</option>
+                  </select>
+                </div>
                 <button type="submit" style={{ width: "auto", padding: "9px 20px" }}>Ajouter le quart</button>
               </form>
 
@@ -242,6 +258,18 @@ export default async function EquipesPage({
                     <div className="field">
                       <span>Fin</span>
                       <input name={`fin_${q.code}`} type="time" defaultValue={(q.fin ?? "").slice(0, 5)} />
+                    </div>
+                    <label className="field" style={{ alignItems: "center" }}>
+                      <span>Rotation</span>
+                      <input type="checkbox" name={`rot_${q.code}`} defaultChecked={q.rotation} style={{ width: "auto" }} title="Ce quart fait partie du cycle de rotation des équipes tournantes." />
+                    </label>
+                    <div className="field">
+                      <span>Créneau (TP)</span>
+                      <select name={`creneau_${q.code}`} defaultValue={q.creneau ?? ""} title="Demi-journée du quart, pour le temps partiel « une semaine sur deux ».">
+                        <option value="">Aucun</option>
+                        <option value="matin">Matin</option>
+                        <option value="aprem">Après-midi</option>
+                      </select>
                     </div>
                   </div>
                 ))}
@@ -267,6 +295,11 @@ export default async function EquipesPage({
 
               {tournantes.length === 0 ? (
                 <p className="muted">Aucune équipe tournante (toutes les équipes ont un quart fixe).</p>
+              ) : quartsRotation.length === 0 ? (
+                <p className="muted">
+                  Aucun quart coché « Rotation » ci-dessus. Cochez au moins un quart dans
+                  « Horaires des quarts » pour composer le cycle.
+                </p>
               ) : (
                 <form action={saveRotationReference} autoComplete="off">
                   <div className="toolbar" style={{ flexWrap: "wrap", alignItems: "flex-end" }}>
@@ -279,7 +312,7 @@ export default async function EquipesPage({
                         <span>{e.nom}</span>
                         <select name={`quart_${e.id}`} defaultValue={quartCourant[e.id] ?? ""}>
                           <option value="">—</option>
-                          {quarts.map((q) => (
+                          {quartsRotation.map((q) => (
                             <option key={q.code} value={q.code}>{q.libelle}</option>
                           ))}
                         </select>

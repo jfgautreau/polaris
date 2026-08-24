@@ -125,6 +125,8 @@ export async function createQuart(fd: FormData) {
   if (!code) done({ message: "Le libellé doit contenir au moins une lettre ou un chiffre." });
   const debut = s(fd, "debut") || null;
   const fin = s(fd, "fin") || null;
+  const rotation = fd.get("rotation") === "on";
+  const creneau = normaliserCreneau(s(fd, "creneau"));
 
   const { data: last } = await supabase
     .from("quart")
@@ -137,8 +139,16 @@ export async function createQuart(fd: FormData) {
 
   const { error } = await supabase
     .from("quart")
-    .insert({ code, libelle, ordre, debut, fin, site_id: siteId });
+    .insert({ code, libelle, ordre, debut, fin, rotation, creneau, site_id: siteId });
   done(error);
+}
+
+// Créneau borné à la demi-journée matin/aprem (ou null). Sert le calcul du
+// temps partiel « une semaine sur deux » : un mi-temps est bloqué la semaine
+// où son équipe tourne sur le créneau qu'il ne travaille pas. Toute autre
+// valeur (dont "") est ramenée à null — quart plein, hors demi-journée.
+function normaliserCreneau(v: string): "matin" | "aprem" | null {
+  return v === "matin" || v === "aprem" ? v : null;
 }
 
 // Horaires des quarts (libelle + debut/fin).
@@ -151,10 +161,12 @@ export async function saveQuartHoraires(fd: FormData) {
     const libelle = s(fd, `lib_${code}`);
     const debut = s(fd, `debut_${code}`) || null;
     const fin = s(fd, `fin_${code}`) || null;
+    const rotation = fd.get(`rot_${code}`) === "on";
+    const creneau = normaliserCreneau(s(fd, `creneau_${code}`));
     if (libelle) {
       const { error } = await supabase
         .from("quart")
-        .update({ libelle, debut, fin })
+        .update({ libelle, debut, fin, rotation, creneau })
         .eq("code", code)
         .eq("site_id", siteId);
       if (error) done(error);
