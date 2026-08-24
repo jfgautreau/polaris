@@ -2,6 +2,15 @@ import { cache } from "react";
 import { getAdminClient } from "@/lib/supabase-server";
 import { getCurrentSite } from "@/lib/current-site";
 
+// Éléments masquables par site qui NE sont PAS des modules/menus de MODULES
+// (donc pas de route ni d'entrée de nav) mais pilotés via la même table
+// site_module. Ex. `guide` = affichage du lien « Guide utilisateur » dans le
+// menu utilisateur. Défaut = visible ; une ligne site_module(guide) = masqué.
+export const MASQUABLES_EXTRA = [
+  { key: "guide", label: "Guide utilisateur" },
+] as const;
+export const CLES_MASQUABLES_EXTRA: string[] = MASQUABLES_EXTRA.map((m) => m.key);
+
 // Modules (menus) MASQUÉS pour un site — pilotés depuis /platform par le
 // super_admin (cf. migration 0056). Présence d'une ligne site_module =
 // module masqué ; défaut = visible.

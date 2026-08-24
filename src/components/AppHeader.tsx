@@ -215,7 +215,7 @@ export default async function AppHeader({
           )}
         </Link>
         )}
-        <UserMenu name={profile?.name ?? ""} email={profile?.email ?? ""} />
+        <UserMenu name={profile?.name ?? ""} email={profile?.email ?? ""} guideVisible={!masques.has("guide")} />
       </div>
     </header>
     </>

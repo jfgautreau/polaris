@@ -37,19 +37,7 @@ export default async function PlatformLayout({ children }: { children: React.Rea
           </Link>
           <span style={{ fontSize: 12, opacity: 0.7 }}>{profile.email}</span>
         </div>
-        <div style={{ display: "flex", gap: 16, alignItems: "center", fontSize: 13 }}>
-          {/* Guide utilisateur : document autonome (public/guide.html), ouvert
-              dans un onglet à part. Accessible depuis la plateforme comme depuis
-              le menu utilisateur de l'app. */}
-          <a
-            href="/guide.html"
-            target="_blank"
-            rel="noopener"
-            style={{ color: "#94a3b8", textDecoration: "none" }}
-            title="Ouvrir le guide utilisateur dans un nouvel onglet"
-          >
-            📘 Guide utilisateur ↗
-          </a>
+        <div style={{ display: "flex", gap: 12, alignItems: "center", fontSize: 13 }}>
           <Link href="/" style={{ color: "#94a3b8", textDecoration: "none" }}>← Revenir à l&apos;app site</Link>
         </div>
       </header>

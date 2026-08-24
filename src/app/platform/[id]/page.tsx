@@ -3,6 +3,7 @@ import { getAdminClient } from "@/lib/supabase-server";
 import { changerStatut, entrerDansLeSite, sortirDuMode } from "../actions";
 import { getImpersonationPayload } from "@/lib/impersonation";
 import { MODULES } from "@/lib/permissions";
+import { MASQUABLES_EXTRA } from "@/lib/site-modules";
 import ModulesMasquesEditor from "./ModulesMasquesEditor";
 
 export const dynamic = "force-dynamic";
@@ -55,7 +56,10 @@ export default async function SiteDetail({
   ]);
 
   const masques = new Set((sm ?? []).map((r) => r.module_key));
-  const modulesToggle = MODULES.map((m) => ({ key: m.key, label: m.label, masque: masques.has(m.key) }));
+  const modulesToggle = [
+    ...MODULES.map((m) => ({ key: m.key, label: m.label })),
+    ...MASQUABLES_EXTRA.map((m) => ({ key: m.key, label: m.label })),
+  ].map((m) => ({ key: m.key, label: m.label, masque: masques.has(m.key) }));
 
   const impActive = await getImpersonationPayload();
   const impActifSurCeSite = impActive?.siteId === id;
@@ -124,11 +128,12 @@ export default async function SiteDetail({
       </section>
 
       <section style={boxStyle}>
-        <h2 style={h2Style}>Menus visibles pour ce site</h2>
+        <h2 style={h2Style}>Éléments visibles pour ce site</h2>
         <p style={{ margin: "0 0 12px", fontSize: 13, color: "#64748b" }}>
-          Décochez un menu pour le <strong>masquer à tous les utilisateurs</strong> de ce
-          site : il disparaît de la navigation et sa page devient inaccessible (au-dessus
-          de la matrice de droits). Enregistré à chaque clic.
+          Décochez un élément pour le <strong>masquer à tous les utilisateurs</strong> de ce
+          site. Un <strong>menu</strong> masqué disparaît de la navigation et sa page devient
+          inaccessible (au-dessus de la matrice de droits) ; le <strong>Guide utilisateur</strong>
+          masqué retire son lien du menu utilisateur. Enregistré à chaque clic.
         </p>
         <ModulesMasquesEditor siteId={site.id} modules={modulesToggle} />
       </section>

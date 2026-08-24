@@ -4,7 +4,17 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 // Avatar rond (initiale) + menu : mes informations, mot de passe, deconnexion.
-export default function UserMenu({ name, email }: { name: string; email: string }) {
+// `guideVisible` : le lien « Guide utilisateur » est affiché sauf si le
+// super_admin l'a masqué pour ce site (cf. /platform, site_module clé `guide`).
+export default function UserMenu({
+  name,
+  email,
+  guideVisible = true,
+}: {
+  name: string;
+  email: string;
+  guideVisible?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -86,17 +96,20 @@ export default function UserMenu({ name, email }: { name: string; email: string 
           </Link>
 
           {/* Guide utilisateur : document autonome (public/guide.html), ouvert dans
-              un onglet a part pour ne pas faire perdre une saisie en cours. */}
-          <a
-            href="/guide.html"
-            target="_blank"
-            rel="noopener"
-            onClick={() => setOpen(false)}
-            style={item}
-            title="Ouvrir le guide utilisateur dans un nouvel onglet"
-          >
-            📘&nbsp; Guide utilisateur
-          </a>
+              un onglet a part pour ne pas faire perdre une saisie en cours.
+              Masquable par site depuis /platform (prop guideVisible). */}
+          {guideVisible && (
+            <a
+              href="/guide.html"
+              target="_blank"
+              rel="noopener"
+              onClick={() => setOpen(false)}
+              style={item}
+              title="Ouvrir le guide utilisateur dans un nouvel onglet"
+            >
+              📘&nbsp; Guide utilisateur
+            </a>
+          )}
 
           <div style={{ borderTop: "1px solid var(--border)", margin: "6px 0" }} />
 
