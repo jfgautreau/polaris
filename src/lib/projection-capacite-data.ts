@@ -6,8 +6,9 @@
 // Deux couches (cf. CLAUDE.md, reponse « les deux ») :
 //   • structurelle : qui est dans l'effectif a la date + habilite. Ignore quart
 //     et absence. Montre la capacite de fond.
-//   • reelle       : retire les absences declarees et contraint chaque personne
-//     a son quart de la semaine (rotation datee / quart fixe).
+//   • reelle       : retire les absences declarees et les mi-temps indisponibles
+//     (temps partiel, dont le blocage « une semaine sur deux » est pilote par la
+//     rotation datee). Ne reserve pas une personne a un quart precis (cf. plus bas).
 //
 // ⚠️ RLS : appele avec getServerClient() (bilan en lecture), donc scope au site
 // courant automatiquement — aucun site_id a forcer ici.
@@ -79,6 +80,9 @@ export async function chargerProjection(
       horizonIsos.push(isoDate(dt));
     }
   }
+  const firstIso = horizonIsos[0];
+  const lastIso = horizonIsos[horizonIsos.length - 1];
+
   const [
     { data: lignesD },
     { data: quartsD },
@@ -93,7 +97,7 @@ export async function chargerProjection(
     { data: atD },
   ] = await Promise.all([
     supabase.from("ligne").select("id, nom, atelier_id, poste(id, nom, actif, effectif_requis, niveau_min_requis)").eq("actif", true).returns<LigneRow[]>(),
-    supabase.from("quart").select("code").returns<{ code: string }[]>(),
+    supabase.from("quart").select("code, creneau").returns<{ code: string; creneau: string | null }[]>(),
     supabase.from("jour_quart").select("jour, quart_code, actif").in("jour", horizonIsos).returns<{ jour: string; quart_code: string; actif: boolean }[]>(),
     fetchAll<{ jour: string; ligne_id: string; quart_code: string; ouverte: boolean }>(() =>
       supabase.from("ouverture_quart").select("jour, ligne_id, quart_code, ouverte").in("jour", horizonIsos).order("jour").order("ligne_id").order("quart_code").returns<{ jour: string; ligne_id: string; quart_code: string; ouverte: boolean }[]>()
@@ -202,20 +206,67 @@ export async function chargerProjection(
     return contratCouvreLe(cs, iso);
   };
 
-  // Couche reelle : absences declarees + rotation des quarts.
+  // Couche reelle : absences declarees + temps partiel (piloté par la rotation).
+  // ⚠️ On NE contraint PAS une personne a « son » quart : une personne en journee
+  // couvre matin et apres-midi, les chefs de la rotation sont eparpilles sur des
+  // quarts differents — un filtre d'egalite stricte mettait la couverture a 0. La
+  // projection verifie qu'on a assez de personnes qualifiees ET disponibles ; c'est
+  // l'ordonnancement qui reserve ensuite chacun a un quart precis. La rotation sert
+  // ici a savoir quelle semaine un mi-temps sur un seul creneau tombe off.
   const equipeDe = new Map((persD ?? []).map((p) => [p.id, p.equipe_id]));
   const quartFixe = new Map((equipesD ?? []).map((e) => [e.id, e.quart_fixe]));
+  const quartCreneau = new Map((quartsD ?? []).map((q) => [q.code, q.creneau]));
+  const creneauDe = (q: string | null | undefined): "matin" | "aprem" | null => {
+    const c = q ? quartCreneau.get(q) : null;
+    return c === "matin" || c === "aprem" ? c : null;
+  };
+  const isoDow = (iso: string) => { const d = new Date(iso + "T00:00").getDay(); return d === 0 ? 7 : d; };
+
+  type TpConfig = { off?: Record<string, string[]> } | null;
+  type TpRow = { personne_id: string; date_debut: string; date_fin: string | null; tp_config: TpConfig };
   const rotRefs: RotationRef[] = [];
   let absSet = new Map<string, Set<string>>();
+  const tpPeriodes = new Map<string, TpRow[]>();
+  const tpFallback = new Map<string, TpConfig>();
   if (couche === "reelle") {
     const { data: rr } = await supabase.from("rotation_reference").select("semaine, equipe_id, quart_code").returns<RotationRef[]>();
     for (const r of rr ?? []) rotRefs.push(r);
     const abs = await fetchAll<{ personne_id: string; jour: string; motif_absence_id: string | null }>(() =>
       supabase.from("placement").select("personne_id, jour, motif_absence_id").in("jour", horizonIsos).order("id").returns<{ personne_id: string; jour: string; motif_absence_id: string | null }[]>()
     );
-    absSet = new Map<string, Set<string>>();
     for (const r of abs) if (r.motif_absence_id) (absSet.get(r.jour) ?? absSet.set(r.jour, new Set()).get(r.jour)!).add(r.personne_id);
+    // Temps partiel : periodes datees (tp_periode) + repli personne.tp_config.
+    const { data: tpP } = await supabase.from("tp_periode").select("personne_id, date_debut, date_fin, tp_config").lte("date_debut", lastIso).or(`date_fin.is.null,date_fin.gte.${firstIso}`).returns<TpRow[]>();
+    for (const r of tpP ?? []) (tpPeriodes.get(r.personne_id) ?? tpPeriodes.set(r.personne_id, []).get(r.personne_id)!).push(r);
+    const { data: tpF } = await supabase.from("personne").select("id, tp_config").eq("temps_partiel", true).returns<{ id: string; tp_config: TpConfig }[]>();
+    for (const r of tpF ?? []) if (!tpPeriodes.has(r.id)) tpFallback.set(r.id, r.tp_config);
   }
+
+  // Config TP applicable un jour donne (periode couvrante, sinon repli, sinon aucune).
+  const tpConfigJour = (pid: string, iso: string): TpConfig => {
+    const periodes = tpPeriodes.get(pid);
+    if (periodes) {
+      for (const p of periodes) if (p.date_debut <= iso && (!p.date_fin || p.date_fin >= iso)) return p.tp_config;
+      return null; // jour dans un trou = temps plein
+    }
+    return tpFallback.get(pid) ?? null;
+  };
+  // Vrai si le temps partiel rend la personne indisponible ce jour : journee
+  // entiere off, OU l'equipe travaille le creneau que la personne a off (calcul
+  // pilote par la rotation datee de la semaine).
+  const tpIndisponible = (pid: string, iso: string, rotWeek: Record<string, string>): boolean => {
+    const cfg = tpConfigJour(pid, iso);
+    if (!cfg) return false;
+    const off = cfg.off?.[String(isoDow(iso))] ?? [];
+    if (!off.length) return false;
+    if (off.includes("matin") && off.includes("aprem")) return true;
+    const eq = equipeDe.get(pid);
+    if (eq) {
+      const cr = creneauDe(quartFixe.get(eq) ?? rotWeek[eq] ?? null);
+      if (cr && off.includes(cr)) return true;
+    }
+    return false;
+  };
 
   const allPersonnes = (persD ?? []).map((p) => p.id);
   // Postes qu'une personne pourrait tenir (independant de la date) — reduit le
@@ -234,14 +285,6 @@ export async function chargerProjection(
   const semaines: SemaineDetail[] = [];
   for (const lundi of lundis) {
     const rotWeek = couche === "reelle" ? rotationForWeek(rotRefs, lundi) : {};
-    const quartDePersonne = (pid: string): string | null => {
-      if (couche !== "reelle") return null; // structurel : aucun quart impose
-      const eq = equipeDe.get(pid);
-      if (!eq) return null;
-      const fixe = quartFixe.get(eq);
-      if (fixe) return fixe;
-      return rotWeek[eq] ?? null;
-    };
 
     let besoinSem = 0, couvrableSem = 0;
     const besoinParPoste: Record<string, number> = {};
@@ -262,13 +305,11 @@ export async function chargerProjection(
       const abs = absSet.get(iso);
       for (const pid of allPersonnes) {
         if (!present(pid, iso)) continue;
-        if (couche === "reelle" && abs?.has(pid)) continue;
-        const pq = quartDePersonne(pid);
+        if (couche === "reelle" && (abs?.has(pid) || tpIndisponible(pid, iso, rotWeek))) continue;
         const peutTenir: string[] = [];
         for (const posteId of postesPotentiels.get(pid) ?? []) {
           if (!qualifie(pid, posteId, iso)) continue;
           for (const q of quarts) {
-            if (pq && q !== pq) continue; // couche reelle : seulement son quart
             const cle = `${posteId}:${q}`;
             if (clesOuvertes.has(cle)) peutTenir.push(cle);
           }

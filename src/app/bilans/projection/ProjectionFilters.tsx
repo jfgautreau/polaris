@@ -39,7 +39,7 @@ export default function ProjectionFilters({ horizon, couche }: { horizon: number
           offLabel="Structurelle"
           onLabel="Calendrier réel"
           width={200}
-          title="Structurelle = capacité de fond (qui est habilité et dans l'effectif). Calendrier réel = en retirant absences et en appliquant la rotation des quarts."
+          title="Structurelle = capacité de fond (qui est habilité et dans l'effectif). Calendrier réel = en retirant les absences déclarées et les mi-temps indisponibles (temps partiel, une semaine sur deux selon la rotation)."
         />
       </div>
     </div>

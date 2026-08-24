@@ -201,7 +201,7 @@ export default async function ProjectionPage({ searchParams }: { searchParams: P
                             <td style={{ textAlign: "center" }}><span className="rbadge danger">−{r.manque}</span></td>
                             <td style={{ textAlign: "center" }}>{r.besoin}</td>
                             <td style={{ textAlign: "center" }}><span className={`rbadge ${r.banc <= 1 ? "danger" : r.banc < r.besoin ? "warn" : ""}`}>{r.banc}</span></td>
-                            <td className="muted">{structurel ? "Relève insuffisante (former / recruter)" : couche === "reelle" ? "Indisponibilités (absences, rotation)" : "Habilitations / disponibilité"}</td>
+                            <td className="muted">{structurel ? "Relève insuffisante (former / recruter)" : couche === "reelle" ? "Indisponibilités (absences, temps partiel)" : "Habilitations / disponibilité"}</td>
                           </tr>
                         );
                       })}
@@ -211,7 +211,7 @@ export default async function ProjectionPage({ searchParams }: { searchParams: P
                 {ruptures.length > 60 && <p className="muted" style={{ marginTop: 6 }}>… et {ruptures.length - 60} autres.</p>}
                 <p className="muted" style={{ marginTop: 8 }}>
                   <strong>Relève (matrice)</strong> = personnes distinctes atteignant le niveau requis, habilitations et calendrier mis à part.
-                  {" "}Quand la relève est inférieure au besoin, le manque est <strong>structurel</strong> (banc trop court) ; sinon, le banc existe mais les personnes ne sont pas disponibles cette semaine. Astuce : ce qui reste rouge en vue <strong>Structurelle</strong> relève du banc ou des habilitations ; ce qui n&apos;apparaît qu&apos;en <strong>Calendrier réel</strong> vient des absences et de la rotation.
+                  {" "}Quand la relève est inférieure au besoin, le manque est <strong>structurel</strong> (banc trop court) ; sinon, le banc existe mais les personnes ne sont pas disponibles cette semaine. Astuce : ce qui reste rouge en vue <strong>Structurelle</strong> relève du banc ou des habilitations ; ce qui n&apos;apparaît qu&apos;en <strong>Calendrier réel</strong> vient des absences et du temps partiel.
                 </p>
               </div>
             </div>
