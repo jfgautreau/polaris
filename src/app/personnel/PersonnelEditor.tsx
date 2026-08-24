@@ -403,6 +403,12 @@ export default function PersonnelEditor({
   };
   const searchCols = COLS.filter((c) => c.search);
   const gTerms = gq.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  // Fiche incomplete : aucune periode de contrat dans Cycle de vie (derive serveur).
+  // ⚠️ DOIT etre declare AVANT `filtered` : le callback de `rows.filter` ci-dessous
+  // l'appelle (branche `incompletFilter`). Une fonction flechee `const` n'est pas
+  // hoistee — la definir plus bas jetait un ReferenceError (TDZ) des qu'on activait
+  // le filtre « Incompletes », plantant tout l'ecran.
+  const ficheIncomplete = (r: Row): boolean => !r.hasContrat;
   const filtered = rows.filter((r) => {
     // On compare au statut CALCULE (source de verite), pas au cache : evite
     // toute divergence quand la bascule quotidienne n'a pas encore ete faite.
@@ -436,9 +442,6 @@ export default function PersonnelEditor({
   const typeLabel = (code: string): string =>
     types.find((t) => t.code === code)?.libelle ?? (code === "INTERIM" ? "Intérim" : code);
 
-  // Fiche incomplete : alerte quand une personne n'a aucun contrat dans Cycle
-  // de vie (contrat_periode). Un seul critere, derive cote serveur.
-  const ficheIncomplete = (r: Row): boolean => !r.hasContrat;
   const champId = (id: string, key: string) => `pers-${id}-${key}`;
   // Colonnes Contrat + Statut : chips cliquables qui ouvrent la modale Cycle
   // de vie. Plus de select / toggle direct — les valeurs sont des resultantes.
