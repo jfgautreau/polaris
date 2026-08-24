@@ -3,14 +3,6 @@
 import ModaleDeplacable from "@/components/ModaleDeplacable";
 import { Pie, RestrictionMark } from "./Pie";
 
-const FALLBACK: Record<number, string> = {
-  0: "Non formé.",
-  1: "Comprend et connaît les instructions et règles de sécurité du poste.",
-  2: "+ Garantit le niveau de qualité standard.",
-  3: "+ Garantit les temps standards. Capable d'expliquer et de guider un opérateur de niveau inférieur.",
-  4: "+ A formé avec succès un autre opérateur jusqu'au niveau 3. Maîtrise complète et capacité de transfert.",
-};
-
 export default function LegendeModal({
   niveauLibelles,
   onClose,
@@ -18,7 +10,11 @@ export default function LegendeModal({
   niveauLibelles: { niveau: number; libelle: string }[];
   onClose: () => void;
 }) {
-  const label = (n: number) => niveauLibelles.find((x) => x.niveau === n)?.libelle || FALLBACK[n];
+  // Libellés propres au SITE (competence_niveau_libelle, site-scopé depuis
+  // 0053). Aucun texte codé en dur : un site sans échelle configurée (ex. un
+  // site fraîchement créé) affiche juste « Niveau N » — plutôt que d'emprunter
+  // les définitions d'un autre site. L'échelle se règle dans /admin/competences.
+  const label = (n: number) => niveauLibelles.find((x) => x.niveau === n)?.libelle ?? "";
   return (
     <ModaleDeplacable onClose={onClose} largeur={820}>
         <div className="toolbar mdd-drag" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 6, cursor: "grab" }}>
@@ -29,7 +25,7 @@ export default function LegendeModal({
           {[0, 1, 2, 3, 4].map((n) => (
             <li key={n} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
               <span style={{ flexShrink: 0 }}><Pie level={n} /></span>
-              <span><strong>Niveau {n}</strong> — {label(n)}</span>
+              <span><strong>Niveau {n}</strong>{label(n) ? ` — ${label(n)}` : ""}</span>
             </li>
           ))}
           <li style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
