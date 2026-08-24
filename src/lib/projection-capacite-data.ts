@@ -40,6 +40,11 @@ export type ProjectionResult = {
   postes: PosteMeta[];
   couche: Couche;
   nbSemaines: number;
+  // Releve « de fond » par poste : nombre de personnes distinctes atteignant le
+  // niveau requis dans la matrice (habilitations et calendrier mis a part). C'est
+  // le banc theorique — utile pour distinguer une rupture structurelle (banc trop
+  // court) d'une rupture d'exploitation (absences, rotation).
+  bancPoste: Record<string, number>;
 };
 
 type LigneRow = {
@@ -215,11 +220,14 @@ export async function chargerProjection(
   const allPersonnes = (persD ?? []).map((p) => p.id);
   // Postes qu'une personne pourrait tenir (independant de la date) — reduit le
   // balayage : on ne teste la qualification datee que sur ce sous-ensemble.
+  // Au passage, banc de fond par poste (personnes distinctes au niveau requis).
   const postesPotentiels = new Map<string, string[]>();
+  const bancPoste: Record<string, number> = {};
   for (const r of matD) {
     if (!posteActif.has(r.poste_id)) continue;
     if (r.niveau_actuel < (posteMin.get(r.poste_id) ?? 0)) continue;
     (postesPotentiels.get(r.personne_id) ?? postesPotentiels.set(r.personne_id, []).get(r.personne_id)!).push(r.poste_id);
+    bancPoste[r.poste_id] = (bancPoste[r.poste_id] ?? 0) + 1;
   }
 
   // Boucle principale : par semaine, par jour ouvre.
@@ -289,9 +297,5 @@ export async function chargerProjection(
     });
   }
 
-  return { semaines, postes, couche, nbSemaines };
+  return { semaines, postes, couche, nbSemaines, bancPoste };
 }
-
-// Cause dominante d'une rupture de poste sur une semaine (heuristique, pour
-// l'affichage du detail). Non implementee ici : etape 5.
-export type CauseRupture = "banc" | "absence" | "depart" | "habilitation";

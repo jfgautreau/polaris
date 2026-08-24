@@ -23,7 +23,8 @@ export default async function ProjectionPage({ searchParams }: { searchParams: P
     supabase.from("atelier").select("id, nom").eq("actif", true).order("nom").returns<{ id: string; nom: string }[]>(),
     chargerProjection(supabase, { lundiDepart, nbSemaines: horizon, atelier, couche }),
   ]);
-  const { semaines, postes } = projection;
+  const { semaines, postes, bancPoste } = projection;
+  const posteNom = new Map(postes.map((p) => [p.id, { nom: p.nom, atelier: p.atelierNom }]));
 
   // Libelle court d'une semaine : « S38 » + date du lundi.
   const semLabel = (iso: string) => {
@@ -40,6 +41,22 @@ export default async function ProjectionPage({ searchParams }: { searchParams: P
     ? Math.round((semAvecBesoin.reduce((a, s) => a + s.taux, 0) / semAvecBesoin.length) * 100)
     : 100;
   const auMoinsUnBesoin = semaines.some((s) => s.besoin > 0);
+
+  // Liste des ruptures : une ligne par (semaine, poste) non tenu.
+  const ruptures = semaines.flatMap((s) => {
+    const l = semLabel(s.semaine);
+    return Object.entries(s.ruptureParPoste)
+      .filter(([, manque]) => manque > 0)
+      .map(([posteId, manque]) => ({
+        semaine: s.semaine,
+        semLabel: `${l.s} (${l.j})`,
+        poste: posteNom.get(posteId)?.nom ?? "?",
+        atelier: posteNom.get(posteId)?.atelier ?? "—",
+        besoin: s.besoinParPoste[posteId] ?? 0,
+        manque,
+        banc: bancPoste[posteId] ?? 0,
+      }));
+  });
 
   // Postes qui ont du besoin quelque part sur l'horizon, groupes par atelier.
   const posteAUnBesoin = (id: string) => semaines.some((s) => (s.besoinParPoste[id] ?? 0) > 0);
@@ -151,6 +168,51 @@ export default async function ProjectionPage({ searchParams }: { searchParams: P
                     );
                   })}
                 </svg>
+              </div>
+            </div>
+
+            {/* Ruptures detaillees */}
+            <div className="report-section">
+              <h2>Ruptures détaillées</h2>
+              <div className="card">
+                {ruptures.length === 0 ? (
+                  <p className="muted">Aucune rupture sur l&apos;horizon : le besoin est tenu chaque semaine.</p>
+                ) : (
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Semaine</th><th>Atelier</th><th>Poste</th>
+                        <th style={{ textAlign: "center" }}>Manque</th>
+                        <th style={{ textAlign: "center" }}>Besoin</th>
+                        <th style={{ textAlign: "center" }}>Relève (matrice)</th>
+                        <th>Nature</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ruptures.slice(0, 60).map((r, i) => {
+                        // Banc de fond insuffisant => probleme structurel ; sinon, le
+                        // banc existe mais les personnes ne sont pas disponibles.
+                        const structurel = r.banc < r.besoin;
+                        return (
+                          <tr key={i}>
+                            <td>{r.semLabel}</td>
+                            <td className="muted">{r.atelier}</td>
+                            <td><strong>{r.poste}</strong></td>
+                            <td style={{ textAlign: "center" }}><span className="rbadge danger">−{r.manque}</span></td>
+                            <td style={{ textAlign: "center" }}>{r.besoin}</td>
+                            <td style={{ textAlign: "center" }}><span className={`rbadge ${r.banc <= 1 ? "danger" : r.banc < r.besoin ? "warn" : ""}`}>{r.banc}</span></td>
+                            <td className="muted">{structurel ? "Relève insuffisante (former / recruter)" : couche === "reelle" ? "Indisponibilités (absences, rotation)" : "Habilitations / disponibilité"}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+                {ruptures.length > 60 && <p className="muted" style={{ marginTop: 6 }}>… et {ruptures.length - 60} autres.</p>}
+                <p className="muted" style={{ marginTop: 8 }}>
+                  <strong>Relève (matrice)</strong> = personnes distinctes atteignant le niveau requis, habilitations et calendrier mis à part.
+                  {" "}Quand la relève est inférieure au besoin, le manque est <strong>structurel</strong> (banc trop court) ; sinon, le banc existe mais les personnes ne sont pas disponibles cette semaine. Astuce : ce qui reste rouge en vue <strong>Structurelle</strong> relève du banc ou des habilitations ; ce qui n&apos;apparaît qu&apos;en <strong>Calendrier réel</strong> vient des absences et de la rotation.
+                </p>
               </div>
             </div>
 
