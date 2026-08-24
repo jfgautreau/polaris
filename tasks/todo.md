@@ -1,7 +1,7 @@
 # Reste à faire — Polaris
 
-> État au 2026-08-23. Migrations appliquées jusqu'à **0054**. **223** tests Vitest.
-> Historique détaillé des sessions : `git log`.
+> État au 2026-08-23. Migrations appliquées jusqu'à **0055** (**0056** `site_module`
+> écrite, à appliquer). **223** tests Vitest. Historique détaillé : `git log`.
 
 ## Sécurité / multi-site
 - [x] Isolation multi-tenant : `site_id` + RLS sur toutes les tables métier (0043–0054).
@@ -10,10 +10,15 @@
 - [ ] **Test d'isolation « en conditions réelles »** — les gardes actuelles sont statiques
       (analyse du source). Un vrai test RLS cross-site (deux sites, une base de test)
       reste à mettre en place quand un environnement de test avec base dédiée existera.
-- [x] **Résolution du site par le compte connecté** (2026-08-23) : le middleware pose
-      `x-site-id` depuis `user.app_metadata.site_id` (inviolable). Multi-site fonctionnel
-      sur `bigplann.vercel.app` **sans sous-domaine**. Backfill des comptes historiques :
-      `node scripts/backfill-app-metadata-site.mjs`.
+- [x] **Résolution du site par le compte connecté** (2026-08-23) : « site courant » =
+      `getCurrentProfile().siteId`, conscient de l'impersonation (cookie). Multi-site
+      fonctionnel sur `bigplann.vercel.app` **sans sous-domaine**. ⚠️ L'approche
+      `app_metadata`/`x-site-id` (proxy) a été **abandonnée** — le `site_id` vient de la
+      table `app_user`. Le script `scripts/backfill-app-metadata-site.mjs` est **obsolète**
+      (peut être supprimé). Incident du jour consigné dans `tasks/multi-site.md §5bis`.
+- [x] **Masquage de menus par site** (2026-08-23) : `/platform/[id]` → « Menus visibles ».
+      Table `site_module` (0056, **à appliquer**), blocage réel (nav + route), helper
+      `src/lib/site-modules.ts`.
 - [ ] **`/affichage` (TV public) par site** — seul flux sans compte connecté. À faire au
       2ᵉ site : slug dans le chemin (`/affichage/<slug>/…`).
 - [ ] **Domaine `polaris.app` + sous-domaines par site** — cosmétique désormais (non

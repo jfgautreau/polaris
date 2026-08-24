@@ -35,7 +35,7 @@ données, RLS), `tasks/handoff.md` (détail écran par écran), `tasks/lessons.m
    `supabase/migrations/` et **demande à l'utilisateur de l'exécuter** dans le SQL Editor.
    Pour de la *donnée* seulement, un script Node lisant `SUPABASE_SERVICE_ROLE_KEY`
    de `.env.local` est acceptable.
-   Projet Supabase : ref `stcxlsmmnplxpirrnefm`, eu-west-3. **Dernière migration appliquée : `0054`** (socle multi-site : `0043`–`0048` ; cycle de vie : `0049`–`0050` ; `parametre_affichage` multi-site : `0051` ; TP périodes : `0052` ; séparation totale des référentiels par site — `motif_absence`, `type_contrat`, `role_custom`, `role_permission`, `competence`, `competence_niveau_libelle`, `quart` tous en `site_id NOT NULL` : `0053` ; commentaire libre sur `personne_competence` : `0054`). Cf. `tasks/multi-site.md` pour l'état complet du chantier multi-site.
+   Projet Supabase : ref `stcxlsmmnplxpirrnefm`, eu-west-3. **Dernière migration appliquée : `0055`** (socle multi-site : `0043`–`0048` ; cycle de vie : `0049`–`0050` ; `parametre_affichage` multi-site : `0051` ; TP périodes : `0052` ; séparation totale des référentiels par site — `motif_absence`, `type_contrat`, `role_custom`, `role_permission`, `competence`, `competence_niveau_libelle`, `quart` tous en `site_id NOT NULL` : `0053` ; commentaire libre sur `personne_competence` : `0054` ; `app_user`/`audit_log` strictement scopés au site courant, retrait du passe-droit `OR is_super_admin()` : `0055`). **`0056` écrite mais PAS ENCORE APPLIQUÉE** (table `site_module` : masquage de menus par site depuis `/platform`). Cf. `tasks/multi-site.md` pour l'état complet du chantier multi-site.
 6. **PowerShell 5.1** : pour un message de commit multi-lignes, here-string `@'…'@`
    (le `'@` final en colonne 0), ou `git commit -F fichier`. Pas de `"` inline.
 7. ⚠️ **Toute lecture Supabase pouvant dépasser 1000 lignes passe par `fetchAll()`**
@@ -91,6 +91,18 @@ données, RLS), `tasks/handoff.md` (détail écran par écran), `tasks/lessons.m
   `user_metadata.site_id` sur `auth.admin.createUser()` : sans ça, le trigger
   `handle_new_user` retombait sur son fallback lebignon codé en dur et un
   admin d'un autre site créait ses utilisateurs chez Lebignon en silence.
+- ⚠️ **« Site courant » = `getCurrentProfile().siteId`, conscient de l'impersonation**
+  (pendant applicatif de `current_site_id()` SQL) : site cible quand un super_admin
+  est « entré » dans un site (via le **cookie** signé), sinon le `site_id` de rattachement
+  lu dans `app_user`. `getCurrentSite()` en dérive. **Toute écriture site-scopée utilise
+  ce `siteId`** — jamais le site d'origine du super_admin. ⚠️ Le header `x-impersonate-site`
+  est **absent sur `/api/`** (middleware exclu du matcher) → la source universelle est le
+  cookie (`getImpersonatedSiteId`), lu par `getCurrentProfile` **et** `getServerClient`.
+  Incident 2026-08-23 (cf. `tasks/multi-site.md §5bis`) : (1) `getCurrentProfile` doit lire
+  sa propre ligne en **`getAdminClient`** (service_role), sinon en impersonation la RLS 0055
+  masque la ligne du super_admin → profil null → **boucle `/login ↔ /`** ; (2) `site_id:
+  profile.siteId` écrivait sur le mauvais site tant que `profile.siteId` n'était pas
+  impersonation-aware.
 - **`/api/droits` (matrice des droits)** obéit à `verifierChangementDroit()`, testée,
   avec trois verrous et **aucun rôle littéral** :
   1. **anti-verrou** — on ne modifie pas les droits de **son propre** rôle (sinon on se
@@ -392,7 +404,7 @@ et l'hydratation devient très lourde. Les habilitations sont dans le même ordr
 prochain gros chantier, pas une optimisation cosmétique.
 
 ## Carte des fichiers
-- Socle : `src/lib/{permissions,roles,roles-server,current-user,week,refdata,parametres,habilitations,supabase-server,fetch-all,numeros-rotation,password-link,rotation,password,erreurs,absence,absences-periodes,calendrier,quarts,semaine-type,interim,noms}.ts`, `src/proxy.ts`.
+- Socle : `src/lib/{permissions,roles,roles-server,current-user,current-site,site-modules,week,refdata,parametres,habilitations,supabase-server,fetch-all,numeros-rotation,password-link,rotation,password,erreurs,absence,absences-periodes,calendrier,quarts,semaine-type,interim,noms}.ts`, `src/proxy.ts`.
 - Nav : `src/components/{AppHeader,SettingsMenu,UserMenu,NavIcons}.tsx`.
   Logo → `/` (page d'accueil : logo centré + titre « planning »).
   `UserMenu` porte aussi le lien vers le **guide utilisateur** (`public/guide.html`,
@@ -456,7 +468,16 @@ prochain gros chantier, pas une optimisation cosmétique.
   (motif via palette, période au calendrier 2 mois, commentaire), crayon + corbeille,
   vérification de conflit avant écrasement. Popovers en `position: fixed` (piège
   `overflow: auto` de la carte modale, cf. patterns UI).
-- Migrations : `supabase/migrations/0001..0054` (dernière appliquée : 0054).
+- Plateforme (super_admin) : `src/app/platform/*` — back-office multi-site.
+  `/platform/[id]` porte la section **« Menus visibles pour ce site »**
+  (`ModulesMasquesEditor.tsx` + server action `setModuleMasque`) : masquage de
+  menus **par site**, pour tous les users, au-dessus de la matrice. Table
+  `site_module` (présence = masqué), helper `src/lib/site-modules.ts`
+  (`getModulesMasquesC()`, impersonation-aware, `cache()` par requête).
+  Blocage réel : `requireModule` redirige vers `/` si le module est masqué,
+  `AppHeader` filtre la nav.
+- Migrations : `supabase/migrations/0001..0056` (dernière **appliquée** : 0055 ;
+  `0056` = `site_module`, écrite non encore appliquée).
 - **Écritures : lire l'erreur, toujours.** `messageErreur()` (`src/lib/erreurs.ts`) traduit
   les codes Postgres ; les server actions repassent le message par l'URL
   (`urlAvecErreur` → `?err=`) et la page l'affiche via `<BandeauErreur>`. Un test

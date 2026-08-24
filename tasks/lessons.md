@@ -358,3 +358,38 @@ remontait.
 - Pour un jour remettre les composite FKs (V2 multi-sites), il faudra
   ajouter des hints explicites partout : `.select("ligne!ligne_atelier_id_fkey(...)")`.
   Documenté dans `tasks/multi-site.md §3.4`.
+
+## L30 — Impersonation : le « site courant » n'est PAS le site du super_admin, et le header manque sur `/api/`
+
+Incident 2026-08-23 (après application de 0055). Deux régressions en chaîne,
+même racine : confondre « qui je suis » (`profile.siteId` = site d'origine) et
+« quel site je regarde » (site impersonné).
+
+1. **Boucle `/login ↔ /`** : 0055 a retiré `OR is_super_admin()` de la policy
+   `app_user_select`. En impersonation, `current_site_id()` renvoie le site
+   cible, donc via `getServerClient` (RLS) la propre ligne `app_user` du
+   super_admin (rattachée à un AUTRE site) devient invisible →
+   `getCurrentProfile()` null → la page redirige `/login`, le middleware voit un
+   user connecté sur `/login` et redirige `/` → boucle infinie. **Fix** :
+   `getCurrentProfile` lit sa ligne (clé `user_id`) en **`getAdminClient`**
+   (service_role), découplée de la RLS site-scopée. Le profil de l'appelant ne
+   doit jamais dépendre du site qu'il consulte.
+
+2. **Écritures sur le mauvais site** : ~20 routes écrivent `site_id:
+   profile.siteId`. En impersonation, `profile.siteId` valait le site d'origine
+   du super_admin → compte et atelier créés sur Le Bignon depuis LVC. **Fix** :
+   rendre `getCurrentProfile().siteId` conscient de l'impersonation, à la source,
+   pour réparer les ~20 routes d'un coup. `getServerClient` et `getCurrentSite()`
+   suivent.
+
+⚠️ **Piège transverse** : le header `x-impersonate-site` est posé par le
+middleware, or **le matcher du middleware exclut `/api/`** → sur une route API le
+header est ABSENT. La seule source d'impersonation fiable partout est le
+**cookie signé** (`getImpersonatedSiteId()`), pas le header
+(`getImpersonatedSiteIdFromHeader()`). Depuis, `getCurrentProfile` et
+`getServerClient` lisent le cookie.
+
+**Règle** : pour toute opération site-scopée, « site courant » =
+`getCurrentProfile().siteId` (ou `getCurrentSite()` qui en dérive), jamais une
+valeur recalculée à partir du header ou d'un site codé en dur. C'est le pendant
+applicatif exact de `current_site_id()` en SQL.
