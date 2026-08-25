@@ -4,15 +4,16 @@ import { getCurrentProfile } from "@/lib/current-user";
 import { canWriteModule } from "@/lib/permissions";
 
 // GET /api/personnel/[id]/export
-// Export RGPD des donnees d'une personne (JSON). Droit « personnel: write ».
+// Export RGPD des donnees d'une personne (JSON). Droit « rgpd: write » — meme
+// droit que l'anonymisation et la suppression, distinct de l'edition du personnel.
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const profile = await getCurrentProfile();
   if (!profile) return NextResponse.json({ error: "Non authentifie" }, { status: 401 });
-  // La matrice decide : admin ou droit « personnel: write », comme le reste de l'ecran.
-  if (!(await canWriteModule(profile.role, "personnel"))) {
+  // La matrice decide : admin ou droit « rgpd: write ».
+  if (!(await canWriteModule(profile.role, "rgpd"))) {
     return NextResponse.json({ error: "Acces refuse" }, { status: 403 });
   }
 

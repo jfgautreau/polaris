@@ -27,8 +27,10 @@ function done(err: ErreurPg = null): never {
 // (depuis PersonnelEditor).
 
 // RGPD : anonymisation (conserve l'historique de placement, retire l'identite).
+// Droit « rgpd: write » — distinct de l'edition du personnel : anonymiser est une
+// operation sensible, elle a son propre droit dans la matrice.
 export async function anonymiserPersonne(fd: FormData) {
-  const supabase = await requireModuleWrite("personnel");
+  const supabase = await requireModuleWrite("rgpd");
   const id = s(fd, "id");
   if (!id) done();
   const { data: p } = await supabase
@@ -51,9 +53,9 @@ export async function anonymiserPersonne(fd: FormData) {
   done(error);
 }
 
-// RGPD : droit a l'oubli (suppression definitive + cascade).
+// RGPD : droit a l'oubli (suppression definitive + cascade). Droit « rgpd: write ».
 export async function supprimerPersonne(fd: FormData) {
-  const supabase = await requireModuleWrite("personnel");
+  const supabase = await requireModuleWrite("rgpd");
   const id = s(fd, "id");
   if (!id) done();
   const { error } = await supabase.from("personne").delete().eq("id", id);

@@ -153,6 +153,7 @@ export default function PersonnelEditor({
   equipes,
   ateliers,
   canEdit,
+  canRgpd,
   quarts = [],
   rotationRefs = [],
   motifs = [],
@@ -163,6 +164,10 @@ export default function PersonnelEditor({
   equipes: Equipe[];
   ateliers: Atelier[];
   canEdit: boolean;
+  // Droit RGPD (write) : gouverne le bouton roue crantée (export / anonymiser /
+  // supprimer), indépendamment de canEdit. Une opération RGPD est bien plus
+  // sensible qu'une simple édition de fiche — elle a son propre droit.
+  canRgpd: boolean;
   quarts?: { code: string; libelle: string; creneau?: string | null }[];
   rotationRefs?: { semaine: string; equipe_id: string; quart_code: string }[];
   motifs?: Motif[];
@@ -433,7 +438,7 @@ export default function PersonnelEditor({
   const Cols = () => (
     <colgroup>
       {COLS.map((c) => <col key={c.key} style={{ width: `${c.w}%` }} />)}
-      {canEdit && <col style={{ width: "5.5%" }} />}
+      {(canEdit || canRgpd) && <col style={{ width: "5.5%" }} />}
     </colgroup>
   );
   const tableStyle: React.CSSProperties = { width: "100%", tableLayout: "fixed", margin: 0, borderCollapse: "collapse" };
@@ -634,7 +639,7 @@ export default function PersonnelEditor({
           <thead>
             <tr>
               {COLS.map((c) => <th key={c.key} style={{ whiteSpace: "nowrap" }}>{c.label}</th>)}
-              {canEdit && <th />}
+              {(canEdit || canRgpd) && <th />}
             </tr>
           </thead>
         </table>
@@ -694,7 +699,7 @@ export default function PersonnelEditor({
                       <td style={{ whiteSpace: "nowrap", textAlign: "center" }}>
                         <input type="checkbox" checked={sel.has(r.id)} onChange={() => toggleSel(r.id)} disabled={!sel.has(r.id) && sel.size >= 2} title="Sélectionner pour fusionner (2 max)" style={{ width: "auto", marginRight: 6, verticalAlign: "middle" }} />
                         <button type="button" className="iconbtn" title="Informations (commentaire)" onClick={() => setInfoFor(r)}><InfoIcon /></button>
-                        <button type="button" className="iconbtn" title="RGPD (export / anonymiser / supprimer)" onClick={() => setRgpdFor(r)}><GearIcon /></button>
+                        {canRgpd && <button type="button" className="iconbtn" title="RGPD (export / anonymiser / supprimer)" onClick={() => setRgpdFor(r)}><GearIcon /></button>}
                       </td>
                     </>
                   ) : (
@@ -730,13 +735,19 @@ export default function PersonnelEditor({
                       <td style={{ textAlign: "center" }}>{r.pointure || "-"}</td>
                       <td style={{ textAlign: "center" }}>{r.temps_partiel ? <span className="sexe-pill" style={{ background: "#e0e7ff", color: "#3730a3" }}>TP</span> : <span className="muted">—</span>}</td>
                       <td style={{ textAlign: "center" }}>{statutChip(r)}</td>
+                      {/* Vue lecture seule mais droit RGPD : seule action offerte, la roue crantée. */}
+                      {canRgpd && (
+                        <td style={{ textAlign: "center" }}>
+                          <button type="button" className="iconbtn" title="RGPD (export / anonymiser / supprimer)" onClick={() => setRgpdFor(r)}><GearIcon /></button>
+                        </td>
+                      )}
                     </>
                   )}
                 </tr>
               );
             })}
             {filtered.length === 0 && (
-              <tr><td colSpan={canEdit ? COLS.length + 1 : COLS.length} className="muted" style={{ padding: 10 }}>Aucun résultat.</td></tr>
+              <tr><td colSpan={(canEdit || canRgpd) ? COLS.length + 1 : COLS.length} className="muted" style={{ padding: 10 }}>Aucun résultat.</td></tr>
             )}
           </tbody>
         </table>

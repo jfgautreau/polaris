@@ -52,6 +52,10 @@ export default async function PersonnelPage({
   const sp = await searchParams;
   const { profile, perms } = await requireModule("personnel", "read");
   const canEdit = canWrite(perms, "personnel");
+  // RGPD (export / anonymiser / supprimer) : droit dédié, distinct de l'édition
+  // du personnel. Sans lui, la roue crantée n'apparaît pas — cf. les gardes des
+  // trois actions (actions.ts, api/personnel/[id]/export).
+  const canRgpd = canWrite(perms, "rgpd");
 
   const supabase = await getServerClient();
   // Tout en parallele (une seule vague). Les colonnes etendues (atelier_id, sexe,
@@ -149,6 +153,7 @@ export default async function PersonnelPage({
           equipes={equipesData ?? []}
           ateliers={ateliersData ?? []}
           canEdit={canEdit}
+          canRgpd={canRgpd}
           erreur={sp.err}
           quarts={quartsData ?? []}
           rotationRefs={rotationRefs}
