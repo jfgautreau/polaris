@@ -471,3 +471,28 @@ en `width:100%`. Chaque champ dispose de la place pour HH:MM.
 complet ; rogné, il paraît fonctionner mais renvoie du vide. Un champ « qui ne sauve
 pas » alors que le back est symétrique → suspecter la **saisissabilité** du widget avant
 de fouiller l'API.
+
+## L34 — PowerShell 5.1 `Set-Content -Encoding utf8` corrompt les fichiers UTF-8 (mojibake + BOM)
+
+Incident 2026-08-25. Pour swapper deux lignes (`requireModule` → `requireRapportBilan`)
+dans 9 pages de Bilans, un remplacement en masse via
+`(Get-Content $p -Raw) -replace ... | Set-Content $p -Encoding utf8` a **corrompu tous les
+accents** des fichiers (`é` → `Ã©`, `→` → `â†’`, `—` → `â€”`) et ajouté un **BOM** en tête.
+Le `npm run build` est passé (le mojibake reste du TS syntaxiquement valide, dans des
+chaînes/commentaires), donc le piège survit à la compilation et n'aurait été vu qu'à
+l'affichage utilisateur — repéré ici à la relecture du `git diff`.
+
+**Racine** : sous PowerShell 5.1, `Get-Content` lit un fichier UTF-8 en le **réinterprétant
+selon l'encodage ANSI par défaut** (les octets multi-octets UTF-8 deviennent des caractères
+Latin-1), puis `Set-Content -Encoding utf8` **ré-encode ce texte déjà faux** en UTF-8 —
+double-encodage — et pose en plus le BOM que Chrome/Next affiche comme `ï»¿`.
+
+**Fix** : restauration depuis HEAD (`git checkout HEAD -- <fichiers>`, après avoir confirmé
+via `git diff HEAD` qu'aucune modif sémantique pré-existante ne serait perdue), puis
+remplacement refait via un **script Node** (`fs.readFileSync(p,"utf8")` / `writeFileSync` —
+UTF-8 par défaut, sans BOM).
+
+**Règle** : pour éditer un fichier source (UTF-8) sous Windows, **ne jamais** passer par
+`Get-Content`/`Set-Content`/`Out-File` de PowerShell 5.1 sur du texte accentué. Utiliser
+l'outil **Edit** (préserve l'encodage) ou un **script Node**. Et comme le mojibake ne casse
+pas le build, **toujours relire le `git diff`** d'un remplacement en masse avant de commit.
