@@ -9,7 +9,7 @@ import { isoDate, addDays } from "@/lib/week";
 import { fetchAll } from "@/lib/fetch-all";
 
 type Named = { id: string; nom: string; prenom?: string };
-type LigneRow = { id: string; nom: string; atelier_id: string | null; poste: { id: string; nom: string; actif: boolean; categorie: string | null }[] };
+type LigneRow = { id: string; nom: string; atelier_id: string | null; poste: { id: string; nom: string; actif: boolean; categorie: string | null; remplacable: boolean }[] };
 const CATS = [
   { key: "manager", label: "Managers" },
   { key: "conducteur", label: "Conducteurs" },
@@ -33,7 +33,7 @@ export default async function PolyvalenceReport({ searchParams }: { searchParams
   const supabase = await getServerClient();
   const [{ data: persD }, { data: lignesD }, matD, { data: compD }, pcD, { data: atD }] = await Promise.all([
     supabase.from("personne").select("id, nom, prenom").eq("statut", "ACTIF").returns<Named[]>(),
-    supabase.from("ligne").select("id, nom, atelier_id, poste(id, nom, actif, categorie)").eq("actif", true).order("nom").returns<LigneRow[]>(),
+    supabase.from("ligne").select("id, nom, atelier_id, poste(id, nom, actif, categorie, remplacable)").eq("actif", true).order("nom").returns<LigneRow[]>(),
     fetchAll<Mat>(() =>
       supabase.from("matrice").select("personne_id, poste_id, niveau_actuel, niveau_cible").order("id").returns<Mat[]>()
     ),
@@ -54,8 +54,13 @@ export default async function PolyvalenceReport({ searchParams }: { searchParams
   // Postes du perimetre (filtre atelier via ligne.atelier_id).
   const lignesScoped = (lignesD ?? []).filter((l) => !atelier || l.atelier_id === atelier);
   const postes = lignesScoped.flatMap((l) =>
-    (l.poste ?? []).filter((p) => p.actif).map((p) => ({ id: p.id, nom: p.nom, ligne: l.nom, categorie: p.categorie ?? "operateur", atelierId: l.atelier_id }))
+    (l.poste ?? []).filter((p) => p.actif).map((p) => ({ id: p.id, nom: p.nom, ligne: l.nom, categorie: p.categorie ?? "operateur", atelierId: l.atelier_id, remplacable: p.remplacable !== false }))
   );
+  // PTNR (non remplaçable) : exclus des analyses de fragilité / relève / écart-cible
+  // — un seul titulaire par conception n'est pas une anomalie. Ils restent suivis,
+  // isolés, dans le rapport Compétences critiques (départs / expirations).
+  const postesRempl = postes.filter((p) => p.remplacable);
+  const nbPtnr = postes.length - postesRempl.length;
   const posteNom = new Map(postes.map((p) => [p.id, p]));
   const scopedPosteIds = new Set(postes.map((p) => p.id));
 
@@ -102,12 +107,14 @@ export default async function PolyvalenceReport({ searchParams }: { searchParams
   for (const r of mat) {
     if (r.niveau_actuel >= SEUIL) (compByPoste.get(r.poste_id) ?? compByPoste.set(r.poste_id, []).get(r.poste_id)!).push(persNom(r.personne_id));
   }
-  const postesEval = postes.map((p) => ({ ...p, noms: compByPoste.get(p.id) ?? [] }));
+  // Fragilité évaluée sur les seuls postes remplaçables (PTR).
+  const postesEval = postesRempl.map((p) => ({ ...p, noms: compByPoste.get(p.id) ?? [] }));
   const fragiles = postesEval.filter((p) => p.noms.length <= 1).sort((a, b) => a.noms.length - b.noms.length);
   const sansReleve = fragiles.filter((p) => p.noms.length === 0).length;
 
   // ---- 2.2 Ecart actuel -> cible (par poste) ----
-  const ecarts = postes
+  // PTNR exclus : leur cible de relève est 1 par conception, pas un écart à combler.
+  const ecarts = postesRempl
     .map((p) => {
       const rows = mat.filter((r) => r.poste_id === p.id);
       const actuel = rows.filter((r) => r.niveau_actuel >= SEUIL).length;
@@ -205,8 +212,13 @@ export default async function PolyvalenceReport({ searchParams }: { searchParams
         {/* 2.1 Postes fragiles */}
         <div className="report-section">
           <h2>Postes fragiles (risque mono-compétence)</h2>
+          {nbPtnr > 0 && (
+            <p className="muted" style={{ marginTop: -4, fontSize: 12 }}>
+              {nbPtnr} poste{nbPtnr > 1 ? "s" : ""} PTNR (non remplaçable{nbPtnr > 1 ? "s" : ""}) exclu{nbPtnr > 1 ? "s" : ""} de cette analyse — voir <Link href="/bilans/competences-critiques" className="navlink">Compétences critiques</Link>.
+            </p>
+          )}
           {fragiles.length === 0 ? (
-            <p className="muted">Aucun poste fragile : chaque poste a au moins 2 personnes compétentes.</p>
+            <p className="muted">Aucun poste fragile : chaque poste remplaçable a au moins 2 personnes compétentes.</p>
           ) : (
             <div className="card">
               <table>

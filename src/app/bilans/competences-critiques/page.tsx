@@ -16,7 +16,7 @@ import { deriverArriveeDepart, type Periode } from "@/lib/personne-statut";
 // perdre et les personnes irremplaçables sur le point de partir.
 
 type Named = { id: string; nom: string; prenom: string; type_contrat: string; equipe_id: string | null };
-type LigneRow = { id: string; nom: string; atelier_id: string | null; poste: { id: string; nom: string; actif: boolean; niveau_min_requis: number; categorie: string | null }[] };
+type LigneRow = { id: string; nom: string; atelier_id: string | null; poste: { id: string; nom: string; actif: boolean; niveau_min_requis: number; categorie: string | null; remplacable: boolean }[] };
 type Mat = { personne_id: string; poste_id: string; niveau_actuel: number };
 type Pcr = { poste_id: string; competence_id: string; competence: { nom: string; duree_validite_mois: number | null } | null };
 type Pc = { personne_id: string; competence_id: string; date_obtention: string | null; date_expiration: string | null };
@@ -38,7 +38,7 @@ export default async function CompetencesCritiquesReport({ searchParams }: { sea
   const supabase = await getServerClient();
   const [{ data: persD }, { data: lignesD }, matD, { data: pcrD }, { data: atD }, contratD] = await Promise.all([
     supabase.from("personne").select("id, nom, prenom, type_contrat, equipe_id").eq("statut", "ACTIF").returns<Named[]>(),
-    supabase.from("ligne").select("id, nom, atelier_id, poste(id, nom, actif, niveau_min_requis, categorie)").eq("actif", true).order("nom").returns<LigneRow[]>(),
+    supabase.from("ligne").select("id, nom, atelier_id, poste(id, nom, actif, niveau_min_requis, categorie, remplacable)").eq("actif", true).order("nom").returns<LigneRow[]>(),
     fetchAll<Mat>(() => supabase.from("matrice").select("personne_id, poste_id, niveau_actuel").order("id").returns<Mat[]>()),
     supabase.from("poste_competence_requise").select("poste_id, competence_id, competence:competence_id(nom, duree_validite_mois)").returns<Pcr[]>(),
     supabase.from("atelier").select("id, nom").eq("actif", true).order("nom").returns<{ id: string; nom: string }[]>(),
@@ -81,7 +81,7 @@ export default async function CompetencesCritiquesReport({ searchParams }: { sea
 
   // Postes du périmètre.
   const lignes = (lignesD ?? []).filter((l) => !atelier || l.atelier_id === atelier);
-  const postes = lignes.flatMap((l) => (l.poste ?? []).filter((p) => p.actif).map((p) => ({ id: p.id, nom: p.nom, min: p.niveau_min_requis ?? 0, atelierId: l.atelier_id, atelierNom: l.atelier_id ? atelierNom.get(l.atelier_id) ?? "—" : "—", ligne: l.nom })));
+  const postes = lignes.flatMap((l) => (l.poste ?? []).filter((p) => p.actif).map((p) => ({ id: p.id, nom: p.nom, min: p.niveau_min_requis ?? 0, atelierId: l.atelier_id, atelierNom: l.atelier_id ? atelierNom.get(l.atelier_id) ?? "—" : "—", ligne: l.nom, remplacable: p.remplacable !== false })));
 
   // Habilitation détenue et valide aujourd'hui ?
   const habOkAujourdhui = (pid: string, cid: string) => {
@@ -121,12 +121,27 @@ export default async function CompetencesCritiquesReport({ searchParams }: { sea
     return { ...p, releve, sure, verdict };
   });
 
-  const critiques = analyse.filter((a) => a.verdict !== "ok").sort((a, b) => (a.verdict === b.verdict ? a.releve.length - b.releve.length : a.verdict === "critique" ? -1 : 1));
-  const sansReleve = analyse.filter((a) => a.releve.length === 0).length;
-  const nbCritiques = analyse.filter((a) => a.verdict === "critique").length;
-  const nbFragiles = analyse.filter((a) => a.verdict === "fragile").length;
+  // Nettoyer + isoler : les postes PTNR (non remplaçables) ne sont pas une
+  // fragilité — ils n'ont qu'un titulaire par conception. On les SORT de l'analyse
+  // générique (critiques / fragiles / KPIs) et on les traite dans leur propre
+  // section : là, le vrai risque est qu'un titulaire irremplaçable s'en aille.
+  const analyseRempl = analyse.filter((a) => a.remplacable);
+  const analysePtnr = analyse.filter((a) => !a.remplacable);
 
-  // Personnes clés : seule relève d'au moins un poste.
+  const critiques = analyseRempl.filter((a) => a.verdict !== "ok").sort((a, b) => (a.verdict === b.verdict ? a.releve.length - b.releve.length : a.verdict === "critique" ? -1 : 1));
+  const sansReleve = analyseRempl.filter((a) => a.releve.length === 0).length;
+  const nbCritiques = analyseRempl.filter((a) => a.verdict === "critique").length;
+  const nbFragiles = analyseRempl.filter((a) => a.verdict === "fragile").length;
+
+  // PTNR : un poste est « à risque » si son (ses) titulaire(s) portent un risque
+  // imminent, ou s'il est carrément vacant (aucun titulaire habilité aujourd'hui).
+  const ptnr = analysePtnr
+    .map((a) => ({ ...a, vacant: a.releve.length === 0, aRisque: a.releve.length === 0 || a.releve.some((m) => m.risque) }))
+    .sort((a, b) => Number(b.aRisque) - Number(a.aRisque) || a.nom.localeCompare(b.nom));
+  const nbPtnrRisque = ptnr.filter((p) => p.aRisque).length;
+
+  // Personnes clés : seule relève d'au moins un poste (PTNR compris — un titulaire
+  // PTNR sur le départ est le cas le plus critique de perte de savoir).
   const soloDe = new Map<string, string[]>(); // pid -> postes dont il est seule relève
   for (const a of analyse) if (a.releve.length === 1) (soloDe.get(a.releve[0].id) ?? soloDe.set(a.releve[0].id, []).get(a.releve[0].id)!).push(a.nom);
   const clesARisque = [...soloDe.entries()]
@@ -157,6 +172,9 @@ export default async function CompetencesCritiquesReport({ searchParams }: { sea
           <div className={`kpi ${nbCritiques > 0 ? "danger" : "ok"}`}><div className="v">{nbCritiques}</div><div className="l">Postes critiques</div><div className="s">0 relève sûre à {H_DEPART} j</div></div>
           <div className={`kpi ${nbFragiles > 0 ? "warn" : "ok"}`}><div className="v">{nbFragiles}</div><div className="l">Postes fragiles</div><div className="s">1 seule relève sûre</div></div>
           <div className={`kpi ${nbClesPartantes > 0 ? "danger" : "ok"}`}><div className="v">{nbClesPartantes}</div><div className="l">Personnes clés partantes</div><div className="s">seule relève d&apos;un poste</div></div>
+          {ptnr.length > 0 && (
+            <div className={`kpi ${nbPtnrRisque > 0 ? "danger" : "ok"}`}><div className="v">{nbPtnrRisque}</div><div className="l">PTNR à risque</div><div className="s">titulaire partant ou vacant</div></div>
+          )}
         </div>
 
         {/* Postes critiques & fragiles */}
@@ -192,6 +210,41 @@ export default async function CompetencesCritiquesReport({ searchParams }: { sea
             </p>
           </div>
         </div>
+
+        {/* Irremplaçables par nature (PTNR) — isolés, pas noyés dans le générique. */}
+        {ptnr.length > 0 && (
+          <div className="report-section">
+            <h2>Irremplaçables par nature (PTNR)</h2>
+            <div className="card" style={{ overflowX: "auto" }}>
+              <table>
+                <thead><tr><th>Poste</th><th>Atelier</th><th>Titulaire(s)</th><th style={{ textAlign: "right" }}>État</th></tr></thead>
+                <tbody>
+                  {ptnr.map((a) => (
+                    <tr key={a.id}>
+                      <td><strong>{a.nom}</strong><br /><span className="muted" style={{ fontSize: 11 }}>{a.ligne}</span></td>
+                      <td className="muted">{a.atelierNom}</td>
+                      <td>
+                        {a.releve.length === 0 ? <span className="muted">—</span> : a.releve.map((m) => (
+                          <span key={m.id} style={{ marginRight: 8, whiteSpace: "nowrap" }}>
+                            {m.nom}{m.risque ? <span className="rbadge danger" style={{ marginLeft: 4 }}>{m.risque}</span> : null}
+                          </span>
+                        ))}
+                      </td>
+                      <td style={{ textAlign: "right" }}>
+                        {a.vacant ? <span className="rbadge danger">poste vacant</span>
+                          : a.aRisque ? <span className="rbadge danger">titulaire sur le départ</span>
+                          : <span className="rbadge">tenu</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="muted" style={{ marginTop: 8, fontSize: 12 }}>
+                Ces postes n&apos;ont <strong>qu&apos;un titulaire par conception</strong> (marqués PTNR au Référentiel) : ils sont exclus des indicateurs de fragilité ci-dessus, où ils fausseraient le compte. Le vrai risque ici est le <strong>départ du titulaire</strong> (fin de contrat, retraite) ou une <strong>habilitation qui expire</strong> — à anticiper par un transfert de savoir, pas par une simple relève.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Personnes clés à risque */}
         <div className="report-section">

@@ -16,6 +16,7 @@ type Poste = {
   niveau_min_requis: number;
   ordre_affichage: number;
   numero_rotation: string | null;
+  remplacable: boolean;
   actif: boolean;
 };
 type Ligne = { id: string; nom: string; actif: boolean; ordre_affichage: number; poste: Poste[] };
@@ -31,7 +32,7 @@ export default async function ReferentielPage() {
     supabase
       .from("atelier")
       .select(
-        "id, nom, actif, ligne(id, nom, actif, ordre_affichage, poste(id, nom, nom_court, categorie, effectif_requis, difficulte_formation, niveau_min_requis, ordre_affichage, numero_rotation, actif))"
+        "id, nom, actif, ligne(id, nom, actif, ordre_affichage, poste(id, nom, nom_court, categorie, effectif_requis, difficulte_formation, niveau_min_requis, ordre_affichage, numero_rotation, remplacable, actif))"
       )
       .order("nom")
       .returns<Atelier[]>(),
@@ -72,7 +73,10 @@ export default async function ReferentielPage() {
         <p className="muted" style={{ marginBottom: 16 }}>
           Saisie directe : modifiez un champ, il s&apos;enregistre tout seul (aucun bouton
           à valider). Cochez « Actif » pour activer/désactiver. La <strong>catégorie</strong>{" "}
-          (Manager / Conducteur / Opérateur) sert aux bilans. Les colonnes de quart cochent
+          (Manager / Conducteur / Opérateur) sert aux bilans. <strong>Rempl.</strong>{" "}
+          marque un poste <strong>PTNR</strong> (non remplaçable, un seul titulaire par
+          conception) : il est alors exclu des rapports de fragilité/relève et isolé dans les
+          compétences critiques. Les colonnes de quart cochent
           sur quels quarts le poste tourne (tout coché par défaut). Le <strong>N° Rot</strong>{" "}
           est libre : un poste à plusieurs positions porte plusieurs numéros (« 12, 13 »).
           Les <strong>habilitations requises</strong>{" "}

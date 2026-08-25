@@ -14,6 +14,7 @@ type Poste = {
   niveau_min_requis: number;
   ordre_affichage: number;
   numero_rotation: string | null;
+  remplacable: boolean;
   actif: boolean;
 };
 type Ligne = { id: string; nom: string; actif: boolean; ordre_affichage: number; poste: Poste[] };
@@ -302,6 +303,7 @@ export default function ReferentielEditor({
                   <col style={{ width: 92 }} />{/* Code */}
                   <col style={{ width: 76 }} />{/* Effectif */}
                   <col style={{ width: 118 }} />{/* Categorie */}
+                  <col style={{ width: 80 }} />{/* Rempl. (PTR/PTNR) */}
                   <col style={{ width: 62 }} />{/* Diff. */}
                   <col style={{ width: 74 }} />{/* Niv. min */}
                   <col style={{ width: 72 }} />{/* N° aff. */}
@@ -318,6 +320,7 @@ export default function ReferentielEditor({
                     <th>Code</th>
                     <th>Effectif</th>
                     <th>Catégorie</th>
+                    <th title="PTR = remplaçable. PTNR = Position de Travail Non Remplaçable (un seul titulaire par conception). Un PTNR est exclu des rapports de fragilité/relève et isolé dans les compétences critiques.">Rempl.</th>
                     <th>Diff.</th>
                     <th>Niv. min</th>
                     <th title="N° d'affichage du poste sur les TV / PDF (croissant)">N° aff.</th>
@@ -363,6 +366,17 @@ export default function ReferentielEditor({
                           {CATEGORIES.map((c) => (
                             <option key={c.value} value={c.value}>{c.label}</option>
                           ))}
+                        </select>
+                      </td>
+                      <td>
+                        <select
+                          value={p.remplacable ? "1" : "0"}
+                          onChange={(e) => posteField(a.id, l.id, p.id, "remplacable", e.target.value === "1")}
+                          title={p.remplacable ? "Remplaçable (compté dans les rapports de relève)" : "Non remplaçable : exclu des rapports de fragilité, isolé dans les compétences critiques"}
+                          style={{ color: p.remplacable ? undefined : "#b45309", fontWeight: p.remplacable ? 400 : 600 }}
+                        >
+                          <option value="1">PTR</option>
+                          <option value="0">PTNR</option>
                         </select>
                       </td>
                       <td>
@@ -444,7 +458,7 @@ export default function ReferentielEditor({
                   ))}
                   {l.poste.length === 0 && (
                     <tr>
-                      <td colSpan={10 + quarts.length} className="muted">Aucun poste.</td>
+                      <td colSpan={11 + quarts.length} className="muted">Aucun poste.</td>
                     </tr>
                   )}
                 </tbody>
