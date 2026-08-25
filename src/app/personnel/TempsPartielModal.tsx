@@ -682,7 +682,11 @@ export default function TempsPartielModal({
                   type="date"
                   value={editing.dateDebut}
                   onChange={(e) => setEditing({ ...editing, dateDebut: e.target.value })}
-                  disabled={editing.statut === "current" || editing.statut === "past"}
+                  // Verrou seulement sur une période EXISTANTE déjà commencée (en
+                  // cours) ou terminée : son passé est déjà appliqué. À la création,
+                  // la date de début reste libre — on peut la poser dans le futur
+                  // pour anticiper un changement de rythme.
+                  disabled={editing.mode === "edit" && (editing.statut === "current" || editing.statut === "past")}
                   style={{ fontSize: 14, padding: "5px 8px" }}
                 />
               </label>
@@ -697,7 +701,7 @@ export default function TempsPartielModal({
                 />
               </label>
             </div>
-            {editing.statut === "current" && (
+            {editing.mode === "edit" && editing.statut === "current" && (
               <p className="muted" style={{ fontSize: 12, margin: "8px 0 0" }}>
                 Période en cours : la date de début n&apos;est plus modifiable.
               </p>

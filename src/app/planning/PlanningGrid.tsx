@@ -832,9 +832,19 @@ export default function PlanningGrid({
                               {stdTxt && (
                                 <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>Par défaut : {stdTxt}</div>
                               )}
-                              <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
-                                <input type="time" value={draft.debut} onChange={(ev) => setDraft((s) => ({ ...s, debut: ev.target.value }))} style={{ fontSize: 12, padding: "2px 3px" }} />
-                                <input type="time" value={draft.fin} onChange={(ev) => setDraft((s) => ({ ...s, fin: ev.target.value }))} style={{ fontSize: 12, padding: "2px 3px" }} />
+                              {/* Deux colonnes étiquetées : à 168 px, les deux
+                                  champs `time` se chevauchaient et le champ Fin,
+                                  rogné, restait souvent incomplet (heure sans
+                                  minutes) — donc vide, donc non enregistré. */}
+                              <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+                                <label style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2, fontSize: 10, color: "var(--muted)" }}>
+                                  Début
+                                  <input type="time" value={draft.debut} onChange={(ev) => setDraft((s) => ({ ...s, debut: ev.target.value }))} style={{ fontSize: 12, padding: "2px 3px", width: "100%" }} />
+                                </label>
+                                <label style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2, fontSize: 10, color: "var(--muted)" }}>
+                                  Fin
+                                  <input type="time" value={draft.fin} onChange={(ev) => setDraft((s) => ({ ...s, fin: ev.target.value }))} style={{ fontSize: 12, padding: "2px 3px", width: "100%" }} />
+                                </label>
                               </div>
                               <input
                                 placeholder="commentaire (affiché à la TV)"

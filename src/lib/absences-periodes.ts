@@ -62,12 +62,21 @@ export function grouperAbsences(jours: JourAbsence[], ecartTolere = 3): PeriodeA
   const out: PeriodeAbsence[] = [];
   let cur: PeriodeAbsence | null = null;
   let dernier = "";
+  // Id de l'absence déclarée qui ancre le groupe courant (première rencontrée).
+  let curDecl: string | null = null;
 
   for (const j of tri) {
     const memeMotif = cur && cur.motif_absence_id === j.motif_absence_id;
     const contigu = cur && ecartJours(dernier, j.jour) <= ecartTolere;
+    // Deux périodes DÉCLARÉES distinctes ne se fondent jamais, même contiguës et
+    // de même motif : deux arrêts maladie saisis séparément gardent leur détail
+    // (et leur absence_id, donc restent éditables via maj_absence — sans quoi
+    // « réduire » l'un rematérialisait tout et laissait la queue de l'autre).
+    // On ne coupe que si les DEUX côtés sont déclarés avec des id différents ;
+    // un jour saisi au planning (absence_id null) rejoint le groupe comme avant.
+    const frontiereDeclaree = !!j.absence_id && !!curDecl && j.absence_id !== curDecl;
 
-    if (cur && memeMotif && contigu) {
+    if (cur && memeMotif && contigu && !frontiereDeclaree) {
       // Un même jour répété (deux lignes) ne compte qu'une fois.
       if (j.jour !== dernier) {
         cur.jours += 1;
@@ -76,6 +85,7 @@ export function grouperAbsences(jours: JourAbsence[], ecartTolere = 3): PeriodeA
       cur.declaree = cur.declaree || !!j.absence_id;
       // Absence_id partagé : reste éditable ; sinon on invalide (hétérogène).
       if (cur.absence_id !== (j.absence_id ?? null)) cur.absence_id = null;
+      if (j.absence_id && !curDecl) curDecl = j.absence_id;
     } else {
       cur = {
         motif_absence_id: j.motif_absence_id,
@@ -86,6 +96,7 @@ export function grouperAbsences(jours: JourAbsence[], ecartTolere = 3): PeriodeA
         absence_id: j.absence_id ?? null,
       };
       out.push(cur);
+      curDecl = j.absence_id ?? null;
     }
     dernier = j.jour;
   }

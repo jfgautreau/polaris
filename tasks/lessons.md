@@ -425,3 +425,49 @@ faute de frappe/oubli de colonne. Quand une écriture « ne prend pas » sans er
 suspecter d'abord que la clé n'est pas dans le whitelist. Et une action booléenne
 (activer/désactiver) a sa propre op — ne pas la faire transiter par la route
 d'édition des champs texte/nombre.
+
+## L32 — Regroupement par jours : deux périodes DÉCLARÉES distinctes se fondaient
+
+Incident 2026-08-25. Deux arrêts maladie saisis séparément (01→10 puis 11→30 juillet)
+s'affichaient comme UNE période 01→30 dans la modale Absences. Pire, la « réduction »
+d'une de ces périodes était impossible.
+
+**Racine** : `grouperAbsences` (`src/lib/absences-periodes.ts`) part des JOURS (401/421
+jours d'absence n'ont pas de période déclarée) et fusionne les jours consécutifs de
+même motif à ≤ 3 jours d'écart. Deux absences déclarées contiguës (écart 10→11 = 1 jour)
+et de même motif tombaient dans la même période, dont l'`absence_id` passait à `null`
+(hétérogène). Conséquence en cascade : la modale, voyant `absence_id` null, traitait
+l'édition comme une **re-déclaration** (`creer_absence`) au lieu d'un `update`
+(`maj_absence`). Réduire 01→30 en 01→20 créait une nouvelle absence 01→20 mais laissait
+la **queue** (21→30) de l'autre absence en place → « impossible de réduire ».
+
+**Fix** : ne jamais fusionner deux jours issus de deux `absence_id` **déclarés
+différents** (frontière `!!j.absence_id && !!curDecl && j.absence_id !== curDecl`). Un
+jour saisi au planning (`absence_id` null) continue de rejoindre la période voisine.
+Chaque période déclarée garde ainsi son `absence_id` → reste éditable via `maj_absence`,
+qui supprime puis réinsère la plage réduite proprement.
+
+**Règle** : quand un regroupement d'affichage part des lignes-filles (jours) et non des
+entités-mères (périodes déclarées), il doit préserver les **frontières d'entité** — sinon
+il perd le détail ET casse l'édition, qui s'appuie sur l'identité de l'entité.
+
+## L33 — `<input type="time">` trop étroit : valeur incomplète = valeur vide
+
+Incident 2026-08-25. Dans le popover « horaire spécifique » du Planning (petite pendule),
+l'heure de **fin** « ne s'enregistrait pas », l'heure de début oui — alors que le code
+front, l'API et la colonne DB traitent les deux de façon strictement symétrique.
+
+**Racine** : le popover `.exc-pop` faisait 168 px pour DEUX `<input type="time">` côte à
+côte (≈ 95 px chacun requis en Chrome). Le second champ (fin) était rogné, ses minutes
+inaccessibles. Or un `<input type="time">` dont l'heure est saisie mais **pas** les
+minutes renvoie `""` — pas une valeur partielle. Donc `draft.fin` restait vide et
+partait `null`. Symptôme trompeur : « la fin ne s'enregistre pas », qui pointe vers le
+back alors que le coupable est la **largeur** du contrôle.
+
+**Fix** : popover élargi à 220 px, deux colonnes `flex:1` étiquetées Début/Fin, inputs
+en `width:100%`. Chaque champ dispose de la place pour HH:MM.
+
+**Règle** : un `<input type="time">`/`date` doit avoir la largeur d'afficher son masque
+complet ; rogné, il paraît fonctionner mais renvoie du vide. Un champ « qui ne sauve
+pas » alors que le back est symétrique → suspecter la **saisissabilité** du widget avant
+de fouiller l'API.

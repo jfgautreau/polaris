@@ -65,6 +65,28 @@ describe("grouperAbsences — jours consecutifs", () => {
     expect(grouperAbsences([j("2026-09-07")])[0].declaree).toBe(false);
   });
 
+  it("ne fusionne pas deux periodes DECLAREES distinctes, meme contigues", () => {
+    // Bug reel : deux arrets maladie saisis separement (01-10 puis 11-30) etaient
+    // affiches comme une seule periode 01-30 (detail perdu, absence_id null donc
+    // reduction impossible). On garde deux lignes editables.
+    const jours = [
+      ...["01", "02", "03"].map((d) => j(`2026-07-${d}`, "maladie", "abs-A")),
+      ...["04", "05", "06"].map((d) => j(`2026-07-${d}`, "maladie", "abs-B")),
+    ];
+    const p = grouperAbsences(jours);
+    expect(p).toHaveLength(2);
+    expect(p.map((x) => x.absence_id)).toEqual(["abs-B", "abs-A"]); // recent d'abord
+    expect(p.find((x) => x.absence_id === "abs-A")).toMatchObject({ debut: "2026-07-01", fin: "2026-07-03" });
+    expect(p.find((x) => x.absence_id === "abs-B")).toMatchObject({ debut: "2026-07-04", fin: "2026-07-06" });
+  });
+
+  it("un jour saisi au planning rejoint quand meme la periode declaree voisine", () => {
+    // Frontiere seulement entre deux DECLAREES : un jour null reste absorbe.
+    const p = grouperAbsences([j("2026-09-07", "cp", "abs-1"), j("2026-09-08", "cp"), j("2026-09-09", "cp", "abs-1")]);
+    expect(p).toHaveLength(1);
+    expect(p[0]).toMatchObject({ debut: "2026-09-07", fin: "2026-09-09", jours: 3 });
+  });
+
   it("ne compte pas deux fois un jour en double", () => {
     const p = grouperAbsences([j("2026-09-07"), j("2026-09-07"), j("2026-09-08")]);
     expect(p[0].jours).toBe(2);
