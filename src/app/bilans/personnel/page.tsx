@@ -170,7 +170,7 @@ export default async function PersonnelReport({ searchParams }: { searchParams: 
 
         {/* 1.2 Absentéisme */}
         <div className="report-section">
-          <h2>Absentéisme · {monthLabel(year, month0)}</h2>
+          <h2>Absentéisme · {monthLabel(year, month0)} <Link href="/bilans/absenteisme" className="navlink" style={{ fontSize: 13, fontWeight: 400 }}>Analyse 12 mois &amp; Bradford &rarr;</Link></h2>
           <div className="kpi-grid">
             <div className={`kpi ${taux >= 10 ? "danger" : taux >= 5 ? "warn" : "ok"}`}>
               <div className="v">{taux}<small> %</small></div>

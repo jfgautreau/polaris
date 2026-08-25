@@ -99,6 +99,7 @@ export default async function CockpitPage() {
   const categories = [
     { href: "/bilans/syntheses", ic: "📋", t: "Synthèses hebdomadaires", d: "Absences de la semaine (hors intérim) et planning prévisionnel des intérimaires par agence — exports PDF.", on: true },
     { href: "/bilans/personnel", ic: "👥", t: "Personnel", d: "Effectif, contrats, absentéisme, mouvements.", on: true },
+    { href: "/bilans/absenteisme", ic: "🌡️", t: "Absentéisme", d: "Tendance 12 mois planifié / non planifié, facteur de Bradford (absences courtes répétées), taux par équipe.", on: true },
     { href: "/bilans/polyvalence", ic: "🎯", t: "Polyvalence & compétences", d: "Compétence moyenne par atelier, postes fragiles, écarts cible, habilitations.", on: true },
     { href: "/bilans/montee-competence", ic: "📈", t: "Plan de montée en compétence", d: "Actuel vs cible en global, puis qui former sur quel poste, atelier par atelier.", on: true },
     { href: "/bilans/couverture", ic: "🛡️", t: "Adéquation Charge / capacité", d: "Besoin d'après l'ordonnancement vs présents, par quart et par atelier.", on: true },
