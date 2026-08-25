@@ -4,15 +4,15 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 // Bouton « Pré-remplir postes fixes » : place chaque personne à poste fixe sur son
-// poste, pour la semaine affichée (lundi→vendredi) et le quart affiché, sans
+// poste, pour les 3 semaines affichées (lundi→vendredi) et le quart affiché, sans
 // écraser les cases déjà remplies. Écrit via /api/placement/prefill puis rafraîchit.
 export default function PrefillButton({
-  semaine,
+  semaines,
   quart,
   quartLabel,
   weekLabel,
 }: {
-  semaine: string;
+  semaines: string[];
   quart: string;
   quartLabel: string;
   weekLabel: string;
@@ -23,14 +23,14 @@ export default function PrefillButton({
 
   const lancer = async () => {
     if (busy) return;
-    if (!confirm(`Pré-remplir les postes fixes de la semaine ${weekLabel} sur le quart « ${quartLabel} » ?\n\nLes cases déjà remplies (absence, autre poste) ne sont pas touchées.`)) return;
+    if (!confirm(`Pré-remplir les postes fixes des 3 semaines affichées (${weekLabel}) sur le quart « ${quartLabel} » ?\n\nLes cases déjà remplies (absence, autre poste) ne sont pas touchées.`)) return;
     setBusy(true);
     setMsg(null);
     try {
       const r = await fetch("/api/placement/prefill", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ semaine, quart }),
+        body: JSON.stringify({ semaines, quart }),
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) {

@@ -173,7 +173,7 @@ export default async function CompetencesCritiquesReport({ searchParams }: { sea
           <div className={`kpi ${nbFragiles > 0 ? "warn" : "ok"}`}><div className="v">{nbFragiles}</div><div className="l">Postes fragiles</div><div className="s">1 seule relève sûre</div></div>
           <div className={`kpi ${nbClesPartantes > 0 ? "danger" : "ok"}`}><div className="v">{nbClesPartantes}</div><div className="l">Personnes clés partantes</div><div className="s">seule relève d&apos;un poste</div></div>
           {ptnr.length > 0 && (
-            <div className={`kpi ${nbPtnrRisque > 0 ? "danger" : "ok"}`}><div className="v">{nbPtnrRisque}</div><div className="l">PTNR à risque</div><div className="s">titulaire partant ou vacant</div></div>
+            <div className={`kpi ${nbPtnrRisque > 0 ? "danger" : "ok"}`}><div className="v">{nbPtnrRisque}</div><div className="l">Titulaire à risque</div><div className="s">poste à titulaire unique</div></div>
           )}
         </div>
 
@@ -211,10 +211,10 @@ export default async function CompetencesCritiquesReport({ searchParams }: { sea
           </div>
         </div>
 
-        {/* Irremplaçables par nature (PTNR) — isolés, pas noyés dans le générique. */}
+        {/* Postes à titulaire unique (PTNR) — isolés, pas noyés dans le générique. */}
         {ptnr.length > 0 && (
           <div className="report-section">
-            <h2>Irremplaçables par nature (PTNR)</h2>
+            <h2>Postes à titulaire unique (PTNR)</h2>
             <div className="card" style={{ overflowX: "auto" }}>
               <table>
                 <thead><tr><th>Poste</th><th>Atelier</th><th>Titulaire(s)</th><th style={{ textAlign: "right" }}>État</th></tr></thead>

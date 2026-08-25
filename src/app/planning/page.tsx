@@ -607,10 +607,10 @@ export default async function PlanningPage({
           <div style={{ display: "flex", flexDirection: "column", gap: 8, alignSelf: "stretch" }}>
             {canEditPlanningFull && (
               <PrefillButton
-                semaine={centerIso}
+                semaines={weekMondays.map((wm) => isoDate(wm))}
                 quart={quart}
                 quartLabel={(quarts.find((q) => q.code === quart)?.libelle) ?? quart}
-                weekLabel={`S${isoWeekNumber(center)}`}
+                weekLabel={`S${isoWeekNumber(weekMondays[0])} → S${isoWeekNumber(weekMondays[2])}`}
               />
             )}
             <Link href="/horaires-specifiques" className="navlink" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 600, padding: "0 16px", border: "1px solid var(--border)", borderRadius: 10, whiteSpace: "nowrap" }}>

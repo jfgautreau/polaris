@@ -7,11 +7,12 @@ import { quartParDefaut } from "@/lib/quarts";
 import { parseMonday, weekDays, dowMon } from "@/lib/week";
 import { contratCouvreLe, type Periode } from "@/lib/personne-statut";
 
-// POST /api/placement/prefill { semaine, quart }
+// POST /api/placement/prefill { semaines?: string[], semaine?: string, quart }
 // Pré-remplit le planning : place chaque personne à POSTE FIXE (personne.poste_fixe_id)
-// sur son poste, pour les jours ouvrés (lundi→vendredi) de la semaine et le quart
-// affiché, SANS écraser une case déjà remplie (absence, non-travaillé, autre poste)
-// ni placer une personne hors de son effectif (contrat ne couvrant pas le jour).
+// sur son poste, pour les jours ouvrés (lundi→vendredi) des semaines demandées (les 3
+// semaines affichées à l'écran) et le quart affiché, SANS écraser une case déjà remplie
+// (absence, non-travaillé, autre poste) ni placer une personne hors de son effectif
+// (contrat ne couvrant pas le jour). `semaine` (singulier) reste accepté pour compat.
 //
 // Le placement est unique par (personne, jour) : « déjà rempli » = toute ligne
 // existante ce jour-là. On insère donc en `ignoreDuplicates` — jamais d'écrasement.
@@ -25,15 +26,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
   }
 
-  const body = (await req.json().catch(() => null)) as { semaine?: string; quart?: string } | null;
+  const body = (await req.json().catch(() => null)) as { semaines?: unknown; semaine?: string; quart?: string } | null;
   const siteId = profile.siteId;
   const supabase = getAdminClient();
 
-  const monday = parseMonday(body?.semaine);
-  // Jours ouvrés lundi→vendredi : les postes fixes (direction, maintenance…) ne
-  // travaillent pas le week-end. On ne présume pas de l'ouverture des lignes en
-  // Ordonnancement : ces postes en sont souvent indépendants.
-  const isos = weekDays(monday).filter((j) => dowMon(j.iso) <= 4).map((j) => j.iso);
+  // Lundis demandés : soit la liste `semaines` (les 3 semaines affichées), soit le
+  // singulier `semaine` (compat). On ne garde que des dates ISO valides.
+  const brutes = Array.isArray(body?.semaines) && body.semaines.length ? body.semaines : [body?.semaine];
+  const mondays = brutes.filter((x): x is string => typeof x === "string" && /^\d{4}-\d{2}-\d{2}$/.test(x));
+  // Jours ouvrés lundi→vendredi de chaque semaine : les postes fixes (direction,
+  // maintenance…) ne travaillent pas le week-end. On ne présume pas de l'ouverture
+  // des lignes en Ordonnancement : ces postes en sont souvent indépendants.
+  const isos = [...new Set(mondays.flatMap((m) => weekDays(parseMonday(m)).filter((j) => dowMon(j.iso) <= 4).map((j) => j.iso)))];
+  if (!isos.length) return NextResponse.json({ ok: true, crees: 0 });
 
   const quarts = await getQuartsC();
   const quart = body?.quart && quarts.some((q) => q.code === body.quart) ? body.quart : quartParDefaut(quarts);
