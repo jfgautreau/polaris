@@ -16,6 +16,7 @@ import { requireModule, canWrite } from "@/lib/permissions";
 import PlanningFilters from "./PlanningFilters";
 import AtelierFilter from "./AtelierFilter";
 import QuartSelector from "./QuartSelector";
+import PrefillButton from "./PrefillButton";
 import PlanningGrid from "./PlanningGrid";
 import { getRotationRefsC } from "@/lib/refdata";
 import { rotationForWeek } from "@/lib/rotation";
@@ -604,6 +605,14 @@ export default async function PlanningPage({
           </div>
           {/* Partie droite : liens (occupent la hauteur des 3 lignes de filtres) */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8, alignSelf: "stretch" }}>
+            {canEditPlanningFull && (
+              <PrefillButton
+                semaine={centerIso}
+                quart={quart}
+                quartLabel={(quarts.find((q) => q.code === quart)?.libelle) ?? quart}
+                weekLabel={`S${isoWeekNumber(center)}`}
+              />
+            )}
             <Link href="/horaires-specifiques" className="navlink" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 600, padding: "0 16px", border: "1px solid var(--border)", borderRadius: 10, whiteSpace: "nowrap" }}>
               🕐 Horaires spécifiques
             </Link>

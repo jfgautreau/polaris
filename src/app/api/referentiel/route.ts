@@ -181,6 +181,32 @@ export async function POST(req: NextRequest) {
         }
         return NextResponse.json({ ok: true });
       }
+      case "set-titulaire": {
+        // Titulaire (poste fixe) d'un poste, vu côté Référentiel. Même donnée que
+        // le sélecteur « Poste fixe » de la fiche Personnel : personne.poste_fixe_id.
+        // Sémantique « un titulaire » depuis cette vue : on détache d'abord toute
+        // personne pointant sur ce poste, puis on rattache la personne choisie
+        // (dont le poste fixe précédent est de fait remplacé, la colonne étant
+        // mono-valuée). Pour plusieurs titulaires, passer par l'écran Personnel.
+        const poste_id = s(body.poste_id);
+        const personne_id = s(body.personne_id); // "" = aucun (détache tout le monde)
+        if (!poste_id) return NextResponse.json({ error: "Poste requis" }, { status: 400 });
+        const { error: clrErr } = await supabase
+          .from("personne")
+          .update({ poste_fixe_id: null })
+          .eq("poste_fixe_id", poste_id)
+          .eq("site_id", site_id);
+        if (clrErr) throw clrErr;
+        if (personne_id) {
+          const { error } = await supabase
+            .from("personne")
+            .update({ poste_fixe_id: poste_id })
+            .eq("id", personne_id)
+            .eq("site_id", site_id);
+          if (error) throw error;
+        }
+        return NextResponse.json({ ok: true });
+      }
       case "toggle": {
         const entity = s(body.entity);
         if (!["atelier", "ligne", "poste"].includes(entity))

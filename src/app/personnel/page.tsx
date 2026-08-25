@@ -36,13 +36,14 @@ type Row = {
   temps_partiel: boolean;
   tp_type: string | null;
   tp_config: TpConfig | null;
+  poste_fixe_id: string | null;
 };
 type HMap = Record<string, { debut: string; fin: string }>;
 type TpConfig = { demi?: { mode: string; source: string; matin?: HMap; aprem?: HMap }; off?: Record<string, string[]>; horaires?: HMap };
 
 const COLS_PERSONNE =
   "id, matricule, nom, prenom, equipe_id, atelier_id, sexe, numero_badge, date_livret_accueil, " +
-  "type_contrat, date_debut, date_fin, pointure, commentaire, statut, temps_partiel, tp_type, tp_config";
+  "type_contrat, date_debut, date_fin, pointure, commentaire, statut, temps_partiel, tp_type, tp_config, poste_fixe_id";
 
 export default async function PersonnelPage({
   searchParams,
@@ -69,6 +70,7 @@ export default async function PersonnelPage({
     { data: equipesData },
     { data: ateliersData },
     { data: rowsData },
+    { data: lignesPostesData },
     { data: cpData },
     { data: quartsData },
     rotationRefs,
@@ -78,6 +80,8 @@ export default async function PersonnelPage({
     supabase.from("equipe").select("id, nom, couleur, quart_fixe").order("nom").returns<Equipe[]>(),
     supabase.from("atelier").select("id, nom").eq("actif", true).order("nom").returns<Atelier[]>(),
     supabase.from("personne").select(COLS_PERSONNE).order("nom").returns<BaseRow[]>(),
+    // Postes actifs (pour le sélecteur « Poste fixe »), avec leur atelier.
+    supabase.from("ligne").select("nom, atelier:atelier_id(nom), poste(id, nom, actif)").eq("actif", true).returns<{ nom: string; atelier: { nom: string } | null; poste: { id: string; nom: string; actif: boolean }[] }[]>(),
     // Toutes les periodes : sert a DERIVER date_arrivee (MIN date_debut),
     // date_depart_prevu (MAX date_fin si aucun contrat ouvert), motif_depart
     // (motif_fin du contrat le plus recent). Depuis 0050 ces trois valeurs
@@ -94,6 +98,11 @@ export default async function PersonnelPage({
   const types = typesR.data && typesR.data.length > 0
     ? typesR.data
     : [{ code: "CDI", libelle: "CDI" }, { code: "CDD", libelle: "CDD" }, { code: "INTERIM", libelle: "Intérim" }];
+
+  // Postes actifs pour le sélecteur « Poste fixe » (modale Informations).
+  const postesOpts = (lignesPostesData ?? [])
+    .flatMap((l) => (l.poste ?? []).filter((p) => p.actif).map((p) => ({ id: p.id, nom: p.nom, atelierNom: l.atelier?.nom ?? "—" })))
+    .sort((a, b) => a.nom.localeCompare(b.nom));
 
   // Agregation des contrats par personne, pour deriver arrivee / depart / motif.
   const periodesParPersonne = new Map<string, CpRow[]>();
@@ -152,6 +161,7 @@ export default async function PersonnelPage({
           initial={rows}
           equipes={equipesData ?? []}
           ateliers={ateliersData ?? []}
+          postes={postesOpts}
           canEdit={canEdit}
           canRgpd={canRgpd}
           erreur={sp.err}

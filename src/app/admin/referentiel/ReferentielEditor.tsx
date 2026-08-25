@@ -81,20 +81,32 @@ const REQ_TAG: React.CSSProperties = {
   lineHeight: 1.35,
 };
 
+type Titulaire = { id: string; label: string };
+
 export default function ReferentielEditor({
   initial,
   quarts = [],
   pqOff = [],
   comps = [],
   pcr = [],
+  persons = [],
+  titulaires = {},
 }: {
   initial: Atelier[];
   quarts?: Quart[];
   pqOff?: string[];
   comps?: Comp[];
   pcr?: string[];
+  persons?: Titulaire[];
+  titulaires?: Record<string, Titulaire[]>;
 }) {
   const [tree, setTree] = useState<Atelier[]>(initial);
+  // Titulaire(s) par poste (poste fixe). Modifiable ici comme dans la fiche
+  // Personnel — même donnée (personne.poste_fixe_id).
+  const [titu, setTitu] = useState<Record<string, Titulaire[]>>(titulaires);
+  // Poste dont on édite le titulaire (une seule liste <select> montée à la fois
+  // → DOM léger même avec des centaines de personnes).
+  const [tituEdit, setTituEdit] = useState<string | null>(null);
   // Desactivations poste x quart (cle `${poste}:${quart}`). Absent = actif.
   const [off, setOff] = useState<Set<string>>(new Set(pqOff));
   // Habilitations requises (cle `${poste}:${competence}`). Presente = exigee.
@@ -137,6 +149,24 @@ export default function ReferentielEditor({
     setAtelier(aid, (a) => ({ ...a, ligne: a.ligne.map((l) => (l.id === lid ? fn(l) : l)) }));
   const setPoste = (aid: string, lid: string, pid: string, fn: (p: Poste) => Poste) =>
     setLigne(aid, lid, (l) => ({ ...l, poste: l.poste.map((p) => (p.id === pid ? fn(p) : p)) }));
+
+  // -- Titulaire (poste fixe) --
+  function setTitulaire(posteId: string, personneId: string) {
+    setTituEdit(null);
+    const pers = personneId ? persons.find((p) => p.id === personneId) : null;
+    setTitu((t) => {
+      const next: Record<string, Titulaire[]> = {};
+      // Une personne n'a qu'UN poste fixe : on la retire de tout autre poste.
+      for (const [pid, list] of Object.entries(t)) {
+        const filtered = personneId ? list.filter((x) => x.id !== personneId) : list;
+        if (pid !== posteId && filtered.length) next[pid] = filtered;
+      }
+      // Ce poste n'a qu'un titulaire depuis cette vue (cf. commentaire de l'op).
+      next[posteId] = pers ? [pers] : [];
+      return next;
+    });
+    post("set-titulaire", { poste_id: posteId, personne_id: personneId });
+  }
 
   // -- Atelier --
   function renameAtelier(aid: string, nom: string) {
@@ -309,6 +339,7 @@ export default function ReferentielEditor({
                   <col style={{ width: 72 }} />{/* N° aff. */}
                   <col style={{ width: 86 }} />{/* N° Rot */}
                   <col style={{ width: 200 }} />{/* Habil. requises */}
+                  <col style={{ width: 150 }} />{/* Titulaire */}
                   {quarts.map((q) => (
                     <col key={q.code} style={{ width: 52 }} />
                   ))}
@@ -326,6 +357,7 @@ export default function ReferentielEditor({
                     <th title="N° d'affichage du poste sur les TV / PDF (croissant)">N° aff.</th>
                     <th title="N° de rotation, libre. Un poste à plusieurs positions porte plusieurs numéros (ex. « 12, 13 »).">N° Rot</th>
                     <th title="Habilitations exigées pour tenir ce poste">Habil. requises</th>
+                    <th title="Titulaire du poste (poste fixe). Même donnée que le sélecteur « Poste fixe » de la fiche Personnel : la personne est pré-remplie sur ce poste dans le planning.">Titulaire</th>
                     {quarts.map((q) => (
                       <th key={q.code} title={`Tourne en ${q.libelle}`} style={{ fontSize: 11 }}>
                         {q.libelle.slice(0, 4)}
@@ -435,6 +467,37 @@ export default function ReferentielEditor({
                           )}
                         </button>
                       </td>
+                      <td>
+                        {tituEdit === p.id ? (
+                          <select
+                            autoFocus
+                            defaultValue={titu[p.id]?.[0]?.id ?? ""}
+                            onChange={(e) => setTitulaire(p.id, e.target.value)}
+                            onBlur={() => setTituEdit(null)}
+                            style={{ width: "100%", minWidth: 0 }}
+                          >
+                            <option value="">— Aucun</option>
+                            {persons.map((pp) => (
+                              <option key={pp.id} value={pp.id}>{pp.label}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setTituEdit(p.id)}
+                            title="Définir le titulaire (poste fixe) de ce poste"
+                            style={{ ...REQ_BTN, minHeight: 26 }}
+                          >
+                            {(titu[p.id]?.length ?? 0) === 0 ? (
+                              <span className="muted" style={{ fontWeight: 500 }}>＋ définir</span>
+                            ) : (
+                              titu[p.id].map((t) => (
+                                <span key={t.id} style={{ ...REQ_TAG, background: "#ede9fe", color: "#5b21b6" }}>{t.label}</span>
+                              ))
+                            )}
+                          </button>
+                        )}
+                      </td>
                       {quarts.map((q) => (
                         <td key={q.code} style={{ textAlign: "center" }}>
                           <input
@@ -458,7 +521,7 @@ export default function ReferentielEditor({
                   ))}
                   {l.poste.length === 0 && (
                     <tr>
-                      <td colSpan={11 + quarts.length} className="muted">Aucun poste.</td>
+                      <td colSpan={12 + quarts.length} className="muted">Aucun poste.</td>
                     </tr>
                   )}
                 </tbody>

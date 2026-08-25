@@ -257,6 +257,7 @@ export async function POST(req: NextRequest) {
             break;
           case "equipe_id":
           case "atelier_id":
+          case "poste_fixe_id":
             patch[k] = orNull(s(v));
             break;
           case "sexe": {

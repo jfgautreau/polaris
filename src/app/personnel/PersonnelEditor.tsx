@@ -42,9 +42,11 @@ type Row = {
   tp_config: TpConfig | null;
   date_depart_prevu: string | null;
   motif_depart: string | null;
+  poste_fixe_id: string | null;
 };
 type Equipe = { id: string; nom: string; couleur?: string | null; quart_fixe?: string | null };
 type Atelier = { id: string; nom: string };
+type PosteOpt = { id: string; nom: string; atelierNom: string };
 type Motif = { id: string; code_court: string; libelle: string; couleur: string };
 
 type TypeContrat = { code: string; libelle: string };
@@ -152,6 +154,7 @@ export default function PersonnelEditor({
   initial,
   equipes,
   ateliers,
+  postes = [],
   canEdit,
   canRgpd,
   quarts = [],
@@ -163,6 +166,7 @@ export default function PersonnelEditor({
   initial: Row[];
   equipes: Equipe[];
   ateliers: Atelier[];
+  postes?: PosteOpt[];
   canEdit: boolean;
   // Droit RGPD (write) : gouverne le bouton roue crantée (export / anonymiser /
   // supprimer), indépendamment de canEdit. Une opération RGPD est bien plus
@@ -698,7 +702,7 @@ export default function PersonnelEditor({
                       <td style={{ textAlign: "center" }}>{statutChip(r)}</td>
                       <td style={{ whiteSpace: "nowrap", textAlign: "center" }}>
                         <input type="checkbox" checked={sel.has(r.id)} onChange={() => toggleSel(r.id)} disabled={!sel.has(r.id) && sel.size >= 2} title="Sélectionner pour fusionner (2 max)" style={{ width: "auto", marginRight: 6, verticalAlign: "middle" }} />
-                        <button type="button" className="iconbtn" title="Informations (commentaire)" onClick={() => setInfoFor(r)}><InfoIcon /></button>
+                        <button type="button" className="iconbtn" title={`Informations (commentaire, poste fixe)${r.poste_fixe_id ? " · poste fixe défini 📌" : ""}`} onClick={() => setInfoFor(r)} style={r.poste_fixe_id ? { boxShadow: "inset 0 0 0 2px #6366f1" } : undefined}><InfoIcon /></button>
                         {canRgpd && <button type="button" className="iconbtn" title="RGPD (export / anonymiser / supprimer)" onClick={() => setRgpdFor(r)}><GearIcon /></button>}
                       </td>
                     </>
@@ -814,6 +818,24 @@ export default function PersonnelEditor({
               <h2 style={{ margin: 0, fontSize: 19 }}>Informations — {infoFor.nom} {infoFor.prenom}</h2>
               <button type="button" onClick={() => setInfoFor(null)} title="Fermer" style={{ width: "auto", margin: 0, padding: "2px 10px", fontSize: 16 }}>✕</button>
             </div>
+            <label htmlFor="pers-poste-fixe" style={{ fontWeight: 600 }}>Poste fixe</label>
+            <select
+              id="pers-poste-fixe"
+              value={rows.find((r) => r.id === infoFor.id)?.poste_fixe_id ?? ""}
+              onChange={(e) => field(infoFor.id, "poste_fixe_id", e.target.value, true)}
+              disabled={!canEdit}
+              style={{ width: "100%", fontSize: 13, padding: "6px 8px", marginTop: 4 }}
+            >
+              <option value="">— Aucun (pas de poste fixe)</option>
+              {postes.map((p) => (
+                <option key={p.id} value={p.id}>{p.nom} · {p.atelierNom}</option>
+              ))}
+            </select>
+            <p className="muted" style={{ marginTop: 6, marginBottom: 14, fontSize: 12 }}>
+              Si renseigné, la personne est placée par défaut sur ce poste via le bouton
+              « Pré-remplir postes fixes » du planning (sauf absence).
+            </p>
+
             <label htmlFor="pers-commentaire" style={{ fontWeight: 600 }}>Commentaire</label>
             <textarea
               id="pers-commentaire"

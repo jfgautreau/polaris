@@ -28,7 +28,7 @@ export default async function ReferentielPage() {
   const { profile, perms } = await requireModule("referentiel", "read");
 
   const supabase = await getServerClient();
-  const [{ data }, { data: quartsD }, { data: pqD }, { data: compsD }, pcrD] = await Promise.all([
+  const [{ data }, { data: quartsD }, { data: pqD }, { data: compsD }, pcrD, { data: persD }] = await Promise.all([
     supabase
       .from("atelier")
       .select(
@@ -51,6 +51,9 @@ export default async function ReferentielPage() {
         .order("competence_id")
         .returns<{ poste_id: string; competence_id: string }[]>()
     ),
+    // Personnes (pour le sélecteur « Titulaire » du poste) : non parties, plus
+    // le poste fixe courant pour afficher le titulaire en face de chaque poste.
+    supabase.from("personne").select("id, nom, prenom, poste_fixe_id, statut").neq("statut", "PARTI").order("nom").returns<{ id: string; nom: string; prenom: string; poste_fixe_id: string | null; statut: string }[]>(),
   ]);
 
   const ateliers = (data ?? []).map((a) => ({
@@ -64,6 +67,14 @@ export default async function ReferentielPage() {
   }));
   const pqOff = (pqD ?? []).map((r) => `${r.poste_id}:${r.quart_code}`);
   const pcr = pcrD.map((r) => `${r.poste_id}:${r.competence_id}`);
+
+  // Titulaire(s) par poste (poste fixe des personnes) + liste pour le sélecteur.
+  const persons = (persD ?? []).map((p) => ({ id: p.id, label: `${p.nom} ${p.prenom}`.trim() }));
+  const titulaires: Record<string, { id: string; label: string }[]> = {};
+  for (const p of persD ?? []) {
+    if (!p.poste_fixe_id) continue;
+    (titulaires[p.poste_fixe_id] ??= []).push({ id: p.id, label: `${p.nom} ${p.prenom}`.trim() });
+  }
 
   return (
     <>
@@ -81,11 +92,13 @@ export default async function ReferentielPage() {
           est libre : un poste à plusieurs positions porte plusieurs numéros (« 12, 13 »).
           Les <strong>habilitations requises</strong>{" "}
           déclenchent une demande de confirmation au placement d&apos;une personne qui ne
-          les a pas (ou plus).
+          les a pas (ou plus). Le <strong>Titulaire</strong> désigne la personne à
+          <strong> poste fixe</strong> : elle est pré-remplie sur ce poste dans le planning
+          (même donnée que le sélecteur de la fiche Personnel).
         </p>
 
         <LectureSeule actif={!canWrite(perms, "referentiel")}>
-          <ReferentielEditor initial={ateliers} quarts={quartsD ?? []} pqOff={pqOff} comps={compsD ?? []} pcr={pcr} />
+          <ReferentielEditor initial={ateliers} quarts={quartsD ?? []} pqOff={pqOff} comps={compsD ?? []} pcr={pcr} persons={persons} titulaires={titulaires} />
         </LectureSeule>
       </div>
     </>
