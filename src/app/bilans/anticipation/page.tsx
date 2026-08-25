@@ -7,6 +7,7 @@ import OrdoMonthNav from "@/app/ordonnancement/OrdoMonthNav";
 import { requireModule } from "@/lib/permissions";
 import { fetchAll } from "@/lib/fetch-all";
 import { isoDate, isoWeekNumber, parseMois, monthDays, monthLabel } from "@/lib/week";
+import { buildJourFlow, type BesoinPoste, type PersonneDispo } from "@/lib/projection-capacite";
 
 type LigneRow = { id: string; nom: string; atelier_id: string | null; poste: { id: string; nom: string; actif: boolean; effectif_requis: number; categorie: string }[] };
 
@@ -94,7 +95,6 @@ export default async function AnticipationReport({ searchParams }: { searchParam
 
   // Competences explicites (niveau >= SEUIL) par personne : ensemble des categories
   // qu'elle peut tenir (un poste actif de la categorie suffit).
-  const CAT_ORDER = ["manager", "conducteur", "operateur"] as const; // priorite hierarchique
   const compCats = new Map<string, Set<string>>();
   for (const r of matD) {
     if (!activeIds.has(r.personne_id) || !scopedPosteIds.has(r.poste_id)) continue;
@@ -122,40 +122,36 @@ export default async function AnticipationReport({ searchParams }: { searchParam
   };
   const besoinTotJour = (iso: string) => CATS.reduce((s, c) => s + besoinCat(c.key, iso), 0);
 
-  // Disponibilite par categorie SANS double comptage : chaque personne disponible est
-  // affectee a une seule categorie. On couvre d'abord les besoins par ordre de priorite
-  // (Manager > Conducteur > Operateur), en consommant les moins polyvalents d'abord
-  // (pour laisser les polyvalents aux categories inferieures qui en ont besoin) ; le
-  // surplus est rattache a la categorie la plus prioritaire de la personne.
+  // Couvrable par categorie SANS double comptage, par AFFECTATION OPTIMALE
+  // (max-flow), comme l'ecran Projection de capacite : chaque personne est une
+  // place unique (capacite 1) reliee aux categories qu'elle peut tenir. Le flot
+  // maximum donne le nombre de besoins reellement pourvoyables ; une personne
+  // polyvalente ne couvre qu'une categorie, jamais plusieurs. Remplace l'ancien
+  // glouton (sous-optimal et divergent de la Projection).
   const allocCache = new Map<string, Record<string, number>>();
   const getDispo = (iso: string): Record<string, number> => {
     const cached = allocCache.get(iso);
     if (cached) return cached;
     const abs = absSet.get(iso);
-    const pool = new Set<string>();
-    for (const id of competentPeople) {
-      if (abs?.has(id)) continue;
-      const fin = finMap.get(id);
-      if (fin && fin < iso) continue;
-      pool.add(id);
+    const besoins: BesoinPoste[] = CATS
+      .map((c) => ({ cle: c.key, posteId: c.key, quart: "", effectifRequis: besoinCat(c.key, iso) }))
+      .filter((b) => b.effectifRequis > 0);
+    const out: Record<string, number> = { manager: 0, conducteur: 0, operateur: 0 };
+    for (const b of besoins) out[b.posteId] = b.effectifRequis; // couvrable = besoin - rupture
+    if (besoins.length) {
+      const dispoPeople: PersonneDispo[] = [];
+      for (const id of competentPeople) {
+        if (abs?.has(id)) continue;
+        const fin = finMap.get(id);
+        if (fin && fin < iso) continue;
+        const cats = [...compCats.get(id)!].filter((c) => besoins.some((b) => b.posteId === c));
+        if (cats.length) dispoPeople.push({ id, peutTenir: cats });
+      }
+      const flow = buildJourFlow(dispoPeople, besoins);
+      for (const r of flow.ruptures) out[r.posteId] -= r.manque;
     }
-    const dispo: Record<string, number> = { manager: 0, conducteur: 0, operateur: 0 };
-    // Pass 1 : couvrir les besoins par priorite, specialistes d'abord.
-    CAT_ORDER.forEach((cat, i) => {
-      const need = besoinCat(cat, iso);
-      if (need <= 0) return;
-      const lower = CAT_ORDER.slice(i + 1);
-      const flex = (id: string) => lower.reduce((n, lc) => n + (compCats.get(id)!.has(lc) ? 1 : 0), 0);
-      const cands = [...pool].filter((id) => compCats.get(id)!.has(cat)).sort((a, b) => flex(a) - flex(b));
-      for (const id of cands.slice(0, need)) { pool.delete(id); dispo[cat]++; }
-    });
-    // Pass 2 : surplus -> categorie la plus prioritaire de la personne.
-    for (const id of pool) {
-      const cat = CAT_ORDER.find((c) => compCats.get(id)!.has(c));
-      if (cat) dispo[cat]++;
-    }
-    allocCache.set(iso, dispo);
-    return dispo;
+    allocCache.set(iso, out);
+    return out;
   };
   const dispoCat = (cat: string, iso: string) => getDispo(iso)[cat] ?? 0;
 
@@ -269,8 +265,8 @@ export default async function AnticipationReport({ searchParams }: { searchParam
               </table>
             )}
             <p className="muted" style={{ marginTop: 8 }}>
-              <strong>Disponibles / besoin</strong> par catégorie et par jour. Disponibles = personnes actives compétentes (niveau ≥ {SEUIL}) non absentes (motif saisi) et hors fin de contrat. <strong>Une personne polyvalente n&apos;est comptée qu&apos;une seule fois</strong> : elle est affectée en priorité au besoin le plus haut (Manager &gt; Conducteur &gt; Opérateur), le surplus étant rattaché à sa catégorie la plus élevée. Besoin = ordonnancement. En{" "}
-              <span style={{ color: "#7f1d1d", background: "#fee2e2", padding: "0 4px" }}>rouge</span> quand les disponibles ne couvrent pas le besoin.
+              <strong>Couvrable / besoin</strong> par catégorie et par jour. Couvrable = besoins réellement pourvoyables par <strong>affectation optimale</strong> (max-flow), à partir des personnes actives compétentes (niveau ≥ {SEUIL}) non absentes (motif saisi) et hors fin de contrat. <strong>Une personne polyvalente n&apos;est comptée qu&apos;une seule fois</strong> — même moteur que l&apos;écran Projection de capacité. Besoin = ordonnancement. En{" "}
+              <span style={{ color: "#7f1d1d", background: "#fee2e2", padding: "0 4px" }}>rouge</span> quand les compétences disponibles ne couvrent pas le besoin.
             </p>
           </div>
         </div>

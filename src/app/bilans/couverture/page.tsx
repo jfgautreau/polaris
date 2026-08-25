@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { getServerClient } from "@/lib/supabase-server";
 import AppHeader from "@/components/AppHeader";
 import OrdoMonthNav from "@/app/ordonnancement/OrdoMonthNav";
@@ -183,9 +182,7 @@ export default async function CouvertureReport({ searchParams }: { searchParams:
             <h1>Adéquation Charge / capacité</h1>
             <div className="sub">{monthLabel(year, month0)} · besoin d&apos;après l&apos;ordonnancement, présents d&apos;après les placements</div>
           </div>
-          <ReportActions>
-            <Link href="/bilans/competences" className="navlink">Compétences disponibles</Link>
-          </ReportActions>
+          <ReportActions />
         </div>
 
         <ReportAtelierFilter ateliers={ateliers} atelier={atelier} avecTous={false} />
