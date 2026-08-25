@@ -13,7 +13,7 @@ import { estNonPlanifie, bradford, palierBradford, type PalierBradford } from "@
 // (le non planifié — maladie, AT, injustifié — est le vrai risque ligne),
 // facteur de Bradford par personne, et vue par équipe.
 
-type Motif = { id: string; code_court: string | null; libelle: string | null; couleur: string | null };
+type Motif = { id: string; code_court: string | null; libelle: string | null; couleur: string | null; non_planifie?: boolean | null };
 type Placement = { personne_id: string; jour: string; poste_id: string | null; motif_absence_id: string | null };
 type Personne = { id: string; nom: string; prenom: string; statut: string; equipe_id: string | null; atelier_id: string | null };
 
@@ -42,13 +42,20 @@ export default async function AbsenteismeReport({ searchParams }: { searchParams
   const lastIso = isoDate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
 
   const supabase = await getServerClient();
-  const [{ data: motD }, { data: persD }, { data: eqD }, { data: atD }, plD] = await Promise.all([
-    supabase.from("motif_absence").select("id, code_court, libelle, couleur").returns<Motif[]>(),
+  const [motifsR, { data: persD }, { data: eqD }, { data: atD }, plD] = await Promise.all([
+    supabase.from("motif_absence").select("id, code_court, libelle, couleur, non_planifie").returns<Motif[]>(),
     supabase.from("personne").select("id, nom, prenom, statut, equipe_id, atelier_id").returns<Personne[]>(),
     supabase.from("equipe").select("id, nom").returns<{ id: string; nom: string }[]>(),
     supabase.from("atelier").select("id, nom").eq("actif", true).order("nom").returns<{ id: string; nom: string }[]>(),
     fetchAll<Placement>(() => supabase.from("placement").select("personne_id, jour, poste_id, motif_absence_id").gte("jour", firstIso).lte("jour", lastIso).order("id").returns<Placement[]>()),
   ]);
+  // Repli sur l'heuristique de libellé tant que la migration 0060 (colonne
+  // non_planifie) n'est pas jouée : on relit les motifs sans la colonne.
+  let motD = motifsR.data;
+  if (motifsR.error) {
+    const { data } = await supabase.from("motif_absence").select("id, code_court, libelle, couleur").returns<Motif[]>();
+    motD = data;
+  }
 
   const persById = new Map((persD ?? []).map((p) => [p.id, p]));
   const eqNom = (id: string | null) => (id ? (eqD ?? []).find((e) => e.id === id)?.nom ?? "—" : "Sans équipe");

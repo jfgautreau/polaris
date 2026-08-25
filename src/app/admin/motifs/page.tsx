@@ -5,7 +5,7 @@ import { requireModule, canWrite } from "@/lib/permissions";
 import LectureSeule from "@/components/LectureSeule";
 import ActifCheckbox from "@/components/ActifCheckbox";
 import {
-  createMotif, updateMotif, toggleMotif,
+  createMotif, updateMotif, toggleMotif, toggleNonPlanifie,
   createAgence, updateAgence, toggleAgence,
   createTypeContrat, updateTypeContrat, toggleTypeContrat,
 } from "./actions";
@@ -14,7 +14,7 @@ import BandeauErreur from "@/components/BandeauErreur";
 import FenetreAffichageInline from "./FenetreAffichageInline";
 import { CheckIcon, EditIcon } from "@/components/icons";
 
-type Motif = { id: string; libelle: string; code_court: string; couleur: string; actif: boolean };
+type Motif = { id: string; libelle: string; code_court: string; couleur: string; actif: boolean; non_planifie: boolean };
 type Agence = { id: string; nom: string; actif: boolean };
 type TypeContrat = { code: string; libelle: string; actif: boolean; ordre: number };
 type FenetreAffichage = { jours_avant: number; jours_apres: number };
@@ -37,13 +37,19 @@ export default async function MotifsPage({
 
   const sp = await searchParams;
   const supabase = await getServerClient();
-  const [{ data }, agencesR, typesR, fenR] = await Promise.all([
-    supabase.from("motif_absence").select("id, libelle, code_court, couleur, actif").order("libelle").returns<Motif[]>(),
+  const [motifsR, agencesR, typesR, fenR] = await Promise.all([
+    supabase.from("motif_absence").select("id, libelle, code_court, couleur, actif, non_planifie").order("libelle").returns<Motif[]>(),
     supabase.from("agence_interim").select("id, nom, actif").order("nom").returns<Agence[]>(),
     supabase.from("type_contrat").select("code, libelle, actif, ordre").order("ordre").returns<TypeContrat[]>(),
     supabase.from("parametre_affichage").select("jours_avant, jours_apres").maybeSingle<FenetreAffichage>(),
   ]);
-  const motifs = data ?? [];
+  // Repli tant que la migration 0060 (colonne non_planifie) n'est pas jouée.
+  const npDispo = !motifsR.error;
+  let motifs = motifsR.data ?? [];
+  if (motifsR.error) {
+    const { data } = await supabase.from("motif_absence").select("id, libelle, code_court, couleur, actif").order("libelle").returns<Omit<Motif, "non_planifie">[]>();
+    motifs = (data ?? []).map((m) => ({ ...m, non_planifie: false }));
+  }
   const agences = agencesR.data ?? [];
   const agencesIndispo = !!agencesR.error;
   const types = typesR.data ?? [];
@@ -62,8 +68,14 @@ export default async function MotifsPage({
         {/* ---------------- Motifs d'absence ---------------- */}
         <h2 style={{ marginBottom: 4 }}>Motifs d&apos;absence</h2>
         <p className="muted" style={{ marginBottom: 16 }}>
-          Ces motifs apparaissent dans les listes du planning. Le comptage en
-          rapports sera ajouté ultérieurement.
+          Ces motifs apparaissent dans les listes du planning. Cochez{" "}
+          <strong>Non planifié</strong> pour les absences subies (maladie, accident,
+          injustifié) : elles sont isolées dans le rapport Absentéisme (taux non
+          planifié, Bradford), le vrai risque ligne. Non coché = planifié (CP, RTT,
+          formation…).
+          {!npDispo && (
+            <> <strong style={{ color: "var(--danger)" }}>Exécutez la migration 0060</strong> dans le SQL Editor pour activer cette colonne.</>
+          )}
         </p>
 
         <AjoutModal libelle="Ajouter un motif" titre="Ajouter un motif d'absence">
@@ -91,6 +103,7 @@ export default async function MotifsPage({
                 <th>Couleur</th>
                 <th>Libellé</th>
                 <th>Code</th>
+                <th style={{ width: 90, textAlign: "center" }}>Non planifié</th>
                 <th style={{ width: 90 }}></th>
                 <th style={{ width: 60, textAlign: "center" }}>Actif</th>
               </tr>
@@ -110,6 +123,7 @@ export default async function MotifsPage({
                     </td>
                     <td><input form={`ed-motif-${m.id}`} name="libelle" defaultValue={m.libelle} autoFocus required style={{ width: "100%" }} /></td>
                     <td><input form={`ed-motif-${m.id}`} name="code_court" defaultValue={m.code_court} maxLength={6} required style={{ width: 90 }} /></td>
+                    <td style={{ textAlign: "center" }}><ActifCheckbox id={m.id} actif={m.non_planifie} action={toggleNonPlanifie} title={m.non_planifie ? "Repasser en planifié" : "Marquer non planifié"} /></td>
                     <td style={{ whiteSpace: "nowrap", textAlign: "center" }}>
                       <button form={`ed-motif-${m.id}`} type="submit" title="Valider" className="iconbtn ok"><CheckIcon /></button>
                       <Link href="/admin/motifs" className="iconbtn ghost" scroll={false} title="Annuler">✕</Link>
@@ -121,6 +135,9 @@ export default async function MotifsPage({
                     <td><span style={{ display: "inline-block", width: 20, height: 14, borderRadius: 3, background: m.couleur, border: "1px solid #cbd5e1" }} /></td>
                     <td>{m.libelle}</td>
                     <td><strong>{m.code_court}</strong></td>
+                    <td style={{ textAlign: "center" }}>
+                      <ActifCheckbox id={m.id} actif={m.non_planifie} action={toggleNonPlanifie} title={m.non_planifie ? "Non planifié — repasser en planifié" : "Planifié — marquer non planifié"} />
+                    </td>
                     <td style={{ whiteSpace: "nowrap", textAlign: "center" }}>
                       <Link href={`/admin/motifs?edit=motif:${m.id}`} className="iconbtn edit" scroll={false} prefetch={false} title="Modifier"><EditIcon /></Link>
                     </td>
@@ -130,7 +147,7 @@ export default async function MotifsPage({
                   </tr>
                 )
               )}
-              {motifs.length === 0 && (<tr><td colSpan={5} className="muted">Aucun motif.</td></tr>)}
+              {motifs.length === 0 && (<tr><td colSpan={6} className="muted">Aucun motif.</td></tr>)}
             </tbody>
           </table>
         </div>

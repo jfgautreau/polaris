@@ -60,6 +60,18 @@ export async function toggleMotif(fd: FormData) {
   done(error);
 }
 
+// Classification planifié / non planifié (colonne non_planifie, migration 0060).
+// Le champ posté par ActifCheckbox s'appelle `actif` mais porte ici le NOUVEL
+// état de non_planifie (coché = absence non planifiée : maladie, AT, injustifié).
+export async function toggleNonPlanifie(fd: FormData) {
+  const supabase = await requireModuleWrite("motifs");
+  const { error } = await supabase
+    .from("motif_absence")
+    .update({ non_planifie: fd.get("actif") === "true" })
+    .eq("id", s(fd, "id"));
+  done(error);
+}
+
 // ----- Agences d'interim -----
 // Liste fermee alimentant le menu deroulant « Agence » des periodes de contrat
 // (cf. src/app/personnel/PeriodesEditor.tsx). Desactiver plutot que supprimer :

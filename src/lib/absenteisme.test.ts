@@ -15,6 +15,12 @@ describe("estNonPlanifie", () => {
     expect(estNonPlanifie({ libelle: "Compte Epargne Temps" })).toBe(false);
     expect(estNonPlanifie({ libelle: "Journée Non Travaillée" })).toBe(false);
   });
+  it("le flag explicite (migration 0060) l'emporte sur l'heuristique", () => {
+    // Libellé « maladie » mais marqué planifié à la main -> planifié.
+    expect(estNonPlanifie({ libelle: "Absence Maladie", non_planifie: false })).toBe(false);
+    // Libellé neutre mais marqué non planifié -> non planifié.
+    expect(estNonPlanifie({ libelle: "Convenance personnelle", non_planifie: true })).toBe(true);
+  });
 });
 
 describe("bradford", () => {

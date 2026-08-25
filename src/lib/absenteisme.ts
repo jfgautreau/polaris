@@ -3,15 +3,18 @@
 // évoluer — notamment le jour où un vrai flag `motif_absence.non_planifie`
 // existera en base (il suffira de remplacer estNonPlanifie par la lecture du flag).
 
-export type MotifLite = { code_court?: string | null; libelle?: string | null };
+export type MotifLite = { code_court?: string | null; libelle?: string | null; non_planifie?: boolean | null };
 
-// Heuristique de classification. Non planifié = absences subies (maladie,
-// accident du travail, absence injustifiée) — celles qui cassent la ligne et
-// qu'on ne peut pas anticiper. Tout le reste (CP, RTT, CET, formation,
+// Classification planifié / non planifié. Non planifié = absences subies
+// (maladie, accident du travail, absence injustifiée) — celles qui cassent la
+// ligne et qu'on ne peut pas anticiper. Tout le reste (CP, RTT, CET, formation,
 // délégation, événement familial, convenance, récup, JNT…) est planifié.
-// ⚠️ Faute de flag en base, on se base sur le libellé/code ; à basculer vers un
-// paramètre dès qu'il existera.
+//
+// Source de vérité = le flag `motif_absence.non_planifie` (coché dans
+// /admin/motifs, migration 0060). Tant qu'il n'est pas renseigné (colonne
+// absente, migration pas jouée), on retombe sur l'heuristique de libellé/code.
 export function estNonPlanifie(m: MotifLite): boolean {
+  if (typeof m.non_planifie === "boolean") return m.non_planifie;
   const s = `${m.code_court ?? ""} ${m.libelle ?? ""}`.toLowerCase();
   return /maladie|accident|injustif|\bat\b/.test(s);
 }
