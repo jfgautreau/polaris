@@ -106,18 +106,21 @@ export default async function AffichageAtelier({
   const posteInfo = new Map<string, { nom: string; ligneId: string; atelierId: string; actif: boolean }>();
   for (const l of lignesSite ?? []) for (const p of l.poste ?? []) posteInfo.set(p.id, { nom: p.nom, ligneId: l.id, atelierId: l.atelier_id, actif: p.actif });
 
-  // ROSTER : les personnes dont l'atelier D'AFFECTATION est celui-ci. C'est la
-  // liste des lignes de l'écran — une personne n'apparaît que sur SON atelier,
-  // même les jours où elle est placée ailleurs (annotés en cellule). Les
-  // personnes d'un autre atelier prêtées ici n'apparaissent donc PAS ici.
+  // ROSTER de base : personnes dont l'atelier D'AFFECTATION est celui-ci. Une
+  // personne rattachée n'apparaît que sur SON atelier, une seule fois, même les
+  // jours de prêt (annotés en cellule). Les personnes d'un AUTRE atelier prêtées
+  // ici n'y figurent pas — SAUF les personnes SANS atelier d'affectation
+  // (`atelier_id` null), qui n'ont pas d'écran maison : elles restent sur leur
+  // atelier de PLACEMENT (ajoutées dans le bloc ci-dessous depuis les placements
+  // sur les postes de cet atelier).
   const { data: rosterD } = await admin
     .from("personne")
     .select("id, nom, prenom, type_contrat")
     .eq("site_id", site.id)
     .eq("atelier_id", atelier.id)
     .returns<(Personne & { id: string })[]>();
-  const rosterById = new Map((rosterD ?? []).map((p) => [p.id, { nom: p.nom, prenom: p.prenom, type_contrat: p.type_contrat }]));
-  const rosterIds = [...rosterById.keys()];
+  const displayById = new Map<string, Personne>();
+  for (const p of rosterD ?? []) displayById.set(p.id, { nom: p.nom, prenom: p.prenom, type_contrat: p.type_contrat });
 
   const horMap = new Map<string, { debut: string | null; fin: string | null }>(); // `${poste}:${quart}:${dow}`
   const excMap = new Map<string, { debut: string | null; fin: string | null; motif: string | null }>(); // `${personne}:${iso}` (horaire specifique + commentaire)
@@ -130,22 +133,46 @@ export default async function AffichageAtelier({
   const openDays = new Set<string>();   // jours (iso) ouverts par l Ordonnancement
   const tpSet = new Set<string>();      // `${personne_id}:${iso}` bloque par temps partiel
 
-  if (posteIds.length && rosterIds.length) {
-    // Placements des personnes de CET atelier, tous postes confondus (y compris
-    // ceux d'un autre atelier — le prêt). Bornée aux `rosterIds`, donc petite.
-    // fetchAll + `.order("id")` : un historique de plusieurs jours peut dépasser
-    // le plafond des 1000 lignes que PostgREST applique SANS erreur (cf. L8).
-    const pl = await fetchAll<PlacementRow>(() =>
+  if (posteIds.length) {
+    // Personnes SANS atelier d'affectation placées ICI : pas d'écran maison, on
+    // les garde sur leur atelier de placement. On lit les placements sur les
+    // postes de CET atelier et on retient celles dont personne.atelier_id est null.
+    type PlHere = { personne_id: string; personne: { atelier_id: string | null; nom: string; prenom: string; type_contrat: string } | null };
+    const plHere = await fetchAll<PlHere>(() =>
       admin
         .from("placement")
-        .select("poste_id, jour, quart_code, personne_id")
+        .select("personne_id, personne:personne_id(atelier_id, nom, prenom, type_contrat)")
         .eq("site_id", site.id)
         .in("jour", isos)
-        .in("personne_id", rosterIds)
+        .in("poste_id", posteIds)
         .not("poste_id", "is", null)
         .order("id")
-        .returns<PlacementRow[]>()
+        .returns<PlHere[]>()
     );
+    for (const r of plHere) {
+      const p = r.personne;
+      if (p && p.atelier_id === null && !displayById.has(r.personne_id)) {
+        displayById.set(r.personne_id, { nom: p.nom, prenom: p.prenom, type_contrat: p.type_contrat });
+      }
+    }
+    const displayIds = [...displayById.keys()];
+
+    // Placements des personnes affichées, TOUS postes confondus (y compris ceux
+    // d'un autre atelier — le prêt). Borné aux `displayIds`, donc petit. fetchAll
+    // + `.order("id")` : L8 (troncature silencieuse au-delà de 1000 lignes).
+    const pl = displayIds.length
+      ? await fetchAll<PlacementRow>(() =>
+          admin
+            .from("placement")
+            .select("poste_id, jour, quart_code, personne_id")
+            .eq("site_id", site.id)
+            .in("jour", isos)
+            .in("personne_id", displayIds)
+            .not("poste_id", "is", null)
+            .order("id")
+            .returns<PlacementRow[]>()
+        )
+      : [];
     // Postes concernés par les horaires : ceux de l'atelier + ceux où quelqu'un
     // est prêté. On ne charge les horaires standards que pour ceux-là.
     const involved = new Set<string>(posteIds);
@@ -299,18 +326,20 @@ export default async function AffichageAtelier({
     }
   }
 
-  // Absences (tous motifs) des personnes DE CET atelier -> une simple mention
-  // "Absence" (pas de detail du motif). fetchAll : c'est la lecture la plus large
-  // (tout le site sur la fenetre), premiere a atteindre le plafond des 1000 lignes.
+  // Personnes affichées, orphelins compris (découverts dans le bloc ci-dessus).
+  const personIds = [...displayById.keys()];
+
+  // Absences (tous motifs) des personnes affichées -> une simple mention "Absence"
+  // (pas de detail du motif). fetchAll : L8 (troncature silencieuse > 1000 lignes).
   const absByPerson = new Map<string, Set<string>>(); // personne_id -> jours (iso) absents
-  if (rosterIds.length) {
+  if (personIds.length) {
     const absPl = await fetchAll<{ personne_id: string; jour: string }>(() =>
       admin
         .from("placement")
         .select("personne_id, jour")
         .eq("site_id", site.id)
         .in("jour", isos)
-        .in("personne_id", rosterIds)
+        .in("personne_id", personIds)
         .not("motif_absence_id", "is", null)
         .order("id")
         .returns<{ personne_id: string; jour: string }[]>()
@@ -402,9 +431,13 @@ export default async function AffichageAtelier({
     });
   };
 
-  // Colonnes affichees : les jours OUVERTS par l Ordonnancement, meme si aucune
-  // affectation n y figure encore. Une journee ouverte et vide doit se voir.
-  const shownDays = days.filter((d) => openDays.has(d.iso));
+  // Colonnes affichees : les jours OUVERTS par l'Ordonnancement (même vides — une
+  // journée ouverte doit se voir), PLUS les jours où au moins une personne
+  // affichée est placée. Ce second terme fait apparaître la feuille même quand
+  // l'atelier maison est FERMÉ ce jour-là mais que des gens sont prêtés ailleurs.
+  const placementDays = new Set<string>();
+  for (const k of byPerson.keys()) placementDays.add(k.slice(k.indexOf(":") + 1));
+  const shownDays = days.filter((d) => openDays.has(d.iso) || placementDays.has(d.iso));
   const noWork = shownDays.length === 0;
 
   // Liste des lignes : personnes de l'atelier ayant une activité sur les jours
@@ -417,9 +450,9 @@ export default async function AffichageAtelier({
   const absentToutePeriode = (id: string) =>
     !noWork && !aUnPlacement(id) && shownDays.every((d) => absByPerson.get(id)?.has(d.iso));
 
-  const personList = rosterIds
+  const personList = personIds
     .filter((id) => (aUnPlacement(id) || aUneAbsence(id) || aUnTp(id)) && !absentToutePeriode(id))
-    .map((id) => ({ id, ...rosterById.get(id)! }))
+    .map((id) => ({ id, ...displayById.get(id)! }))
     .sort((a, b) => (a.nom + a.prenom).localeCompare(b.nom + b.prenom));
 
   return (

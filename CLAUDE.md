@@ -468,10 +468,16 @@ prochain gros chantier, pas une optimisation cosmétique.
   = cet atelier), **une seule fois**, même les jours où elle est prêtée ailleurs.
   Un placement sur un poste d'un **autre** atelier est annoté « (Atelier X) » sous
   le nom du poste (carte globale `posteInfo` = tous les postes du site → nom + atelier).
-  Les personnes d'un autre atelier prêtées ici n'y figurent donc PAS. Allègement :
-  une personne **absente sur TOUTE la période affichée** est retirée (les absences
-  partielles restent, avec « Absence » sur les jours concernés). Colonnes = jours
-  ouverts de CET atelier (`openDays`).
+  Les personnes d'un autre atelier prêtées ici n'y figurent PAS — **sauf** les
+  personnes **sans atelier d'affectation** (`atelier_id` null) : pas d'écran maison,
+  donc elles restent sur leur atelier de **placement** (découvertes via `plHere`,
+  les placements sur les postes de cet atelier dont `personne.atelier_id` est null).
+  Allègement : une personne **absente sur TOUTE la période affichée** est retirée
+  (les absences partielles restent, avec « Absence » sur les jours concernés).
+  Colonnes (`shownDays`) = jours **ouverts** de CET atelier (`openDays`) **∪** jours
+  où au moins une personne affichée est **placée** (`placementDays`) : ce second
+  terme fait apparaître la feuille même quand l'atelier maison est fermé ce jour-là
+  mais que des gens sont **prêtés** ailleurs.
 - Param. RH (clé de droit toujours `motifs`, route toujours `/admin/motifs`) :
   `src/app/admin/motifs/{page,actions,FenetreAffichageInline}.tsx(ts)`. L'écran regroupe
   désormais **quatre sections** : Motifs d'absence, Agences d'intérim (menu Agence de
