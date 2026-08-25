@@ -89,20 +89,20 @@ type ColKey =
 // ne pas deborder d'une colonne etroite (en-tetes en `nowrap`).
 const COLS: { key: ColKey; label: string; w: number; search?: boolean }[] = [
   { key: "type_contrat", label: "Contrat", w: 5, search: true },
-  { key: "matricule", label: "Matricule", w: 6.5, search: true },
-  { key: "numero_badge", label: "Badge", w: 5, search: true },
+  { key: "matricule", label: "Matricule", w: 6, search: true },
+  { key: "numero_badge", label: "Badge", w: 4, search: true },
   { key: "nom", label: "Nom", w: 11, search: true },
   { key: "prenom", label: "Prénom", w: 10, search: true },
   { key: "sexe", label: "H/F", w: 3, search: true },
   { key: "equipe", label: "Équipe", w: 5, search: true },
-  { key: "atelier", label: "Atelier", w: 5, search: true },
+  { key: "atelier", label: "Atelier", w: 4, search: true },
   { key: "date_livret_accueil", label: "Livret", w: 7 },
   { key: "absences", label: "Abs.", w: 4 },
   { key: "alerte", label: "⚠ 18m", w: 5.5 },
   { key: "pointure", label: "Point.", w: 4, search: true },
   { key: "tp", label: "TP", w: 3.5 },
   { key: "statut", label: "Statut", w: 5, search: true },
-  { key: "commentaire", label: "Commentaire", w: 15, search: true },
+  { key: "commentaire", label: "Commentaire", w: 17.5, search: true },
 ];
 // Colonnes dont le contenu est centre (Commentaire reste aligne a gauche).
 const CENTER = new Set<ColKey>(["type_contrat", "matricule", "numero_badge", "sexe", "equipe", "atelier", "tp", "pointure", "absences"]);
@@ -841,6 +841,19 @@ export default function PersonnelEditor({
               <button type="button" onClick={() => setDetailFor(null)} title="Fermer" style={{ width: "auto", margin: 0, padding: "2px 10px", fontSize: 16 }}>✕</button>
             </div>
 
+            <label htmlFor="pers-commentaire" style={{ fontWeight: 600 }}>Commentaire</label>
+            <textarea
+              id="pers-commentaire"
+              value={rows.find((r) => r.id === detailFor.id)?.commentaire ?? ""}
+              onChange={(e) => field(detailFor.id, "commentaire", e.target.value)}
+              readOnly={!canEdit}
+              rows={4}
+              style={{ width: "100%", fontSize: 13, padding: "6px 8px", marginTop: 4 }}
+            />
+            <p className="muted" style={{ marginTop: 6, marginBottom: 14, fontSize: 12 }}>
+              Ne pas saisir d&apos;information médicale. Enregistrement automatique.
+            </p>
+
             <label htmlFor="pers-poste-fixe" style={{ fontWeight: 600 }}>Poste fixe</label>
             <select
               id="pers-poste-fixe"
@@ -854,22 +867,9 @@ export default function PersonnelEditor({
                 <option key={p.id} value={p.id}>{p.nom} · {p.atelierNom}</option>
               ))}
             </select>
-            <p className="muted" style={{ marginTop: 6, marginBottom: 14, fontSize: 12 }}>
+            <p className="muted" style={{ marginTop: 6, fontSize: 12 }}>
               Si renseigné, la personne est placée par défaut sur ce poste via le bouton
               « Pré-remplir postes fixes » du planning (sauf absence).
-            </p>
-
-            <label htmlFor="pers-commentaire" style={{ fontWeight: 600 }}>Commentaire</label>
-            <textarea
-              id="pers-commentaire"
-              value={rows.find((r) => r.id === detailFor.id)?.commentaire ?? ""}
-              onChange={(e) => field(detailFor.id, "commentaire", e.target.value)}
-              readOnly={!canEdit}
-              rows={4}
-              style={{ width: "100%", fontSize: 13, padding: "6px 8px", marginTop: 4 }}
-            />
-            <p className="muted" style={{ marginTop: 6, fontSize: 12 }}>
-              Ne pas saisir d&apos;information médicale. Enregistrement automatique.
             </p>
 
             {canRgpd && (
