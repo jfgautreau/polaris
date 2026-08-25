@@ -608,8 +608,6 @@ export default async function PlanningPage({
             {canEditPlanningFull && (
               <PrefillButton
                 semaines={weekMondays.map((wm) => isoDate(wm))}
-                quart={quart}
-                quartLabel={(quarts.find((q) => q.code === quart)?.libelle) ?? quart}
                 weekLabel={`S${isoWeekNumber(weekMondays[0])} → S${isoWeekNumber(weekMondays[2])}`}
               />
             )}

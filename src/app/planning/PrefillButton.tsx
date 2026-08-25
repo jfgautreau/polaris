@@ -1,48 +1,52 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 
 // Bouton « Pré-remplir postes fixes » : place chaque personne à poste fixe sur son
-// poste, pour les 3 semaines affichées (lundi→vendredi) et le quart affiché, sans
-// écraser les cases déjà remplies. Écrit via /api/placement/prefill puis rafraîchit.
+// poste, pour les 3 semaines affichées (lundi→vendredi), sur le quart de son équipe
+// (quart fixe ou rotation de la semaine) — indépendamment du quart affiché — sans
+// écraser les cases déjà remplies. Écrit via /api/placement/prefill.
 export default function PrefillButton({
   semaines,
-  quart,
-  quartLabel,
   weekLabel,
 }: {
   semaines: string[];
-  quart: string;
-  quartLabel: string;
   weekLabel: string;
 }) {
-  const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
   const lancer = async () => {
     if (busy) return;
-    if (!confirm(`Pré-remplir les postes fixes des 3 semaines affichées (${weekLabel}) sur le quart « ${quartLabel} » ?\n\nLes cases déjà remplies (absence, autre poste) ne sont pas touchées.`)) return;
+    if (!confirm(`Pré-remplir les postes fixes des 3 semaines affichées (${weekLabel}) ?\n\nChaque personne est placée sur son poste, au quart de son équipe (tous quarts confondus). Les cases déjà remplies (absence, autre poste) ne sont pas touchées.`)) return;
     setBusy(true);
     setMsg(null);
     try {
       const r = await fetch("/api/placement/prefill", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ semaines, quart }),
+        body: JSON.stringify({ semaines }),
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) {
         setMsg(j?.error || "Échec du pré-remplissage.");
-      } else {
-        const n = j?.crees ?? 0;
-        setMsg(n === 0 ? "Rien à pré-remplir (tout est déjà rempli)." : `${n} case${n > 1 ? "s" : ""} pré-remplie${n > 1 ? "s" : ""} ✓`);
-        router.refresh();
+        setBusy(false);
+        setTimeout(() => setMsg(null), 4000);
+        return;
       }
+      const n = j?.crees ?? 0;
+      if (n === 0) {
+        setMsg("Rien à pré-remplir (tout est déjà rempli).");
+        setBusy(false);
+        setTimeout(() => setMsg(null), 4000);
+        return;
+      }
+      // La grille garde son état local (useState initialisé une fois) : router.refresh()
+      // ne la met pas à jour. On recharge la vue pour afficher les nouvelles cases.
+      setMsg(`${n} case${n > 1 ? "s" : ""} pré-remplie${n > 1 ? "s" : ""} ✓ — actualisation…`);
+      setTimeout(() => window.location.reload(), 650);
     } catch {
       setMsg("Erreur réseau.");
-    } finally {
       setBusy(false);
       setTimeout(() => setMsg(null), 4000);
     }
@@ -54,7 +58,7 @@ export default function PrefillButton({
         type="button"
         onClick={lancer}
         disabled={busy}
-        title="Placer les personnes à poste fixe sur leur poste, pour cette semaine et ce quart (sans écraser les cases remplies)"
+        title="Placer les personnes à poste fixe sur leur poste, sur les 3 semaines affichées et au quart de leur équipe (sans écraser les cases remplies)"
         className="navlink"
         style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: 15, fontWeight: 600, padding: "0 16px", border: "1px solid var(--border)", borderRadius: 10, whiteSpace: "nowrap", background: "#fff", color: "var(--text)", cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1 }}
       >
