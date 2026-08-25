@@ -96,13 +96,13 @@ const COLS: { key: ColKey; label: string; w: number; search?: boolean }[] = [
   { key: "sexe", label: "H/F", w: 3, search: true },
   { key: "equipe", label: "Équipe", w: 5, search: true },
   { key: "atelier", label: "Atelier", w: 5, search: true },
-  { key: "date_livret_accueil", label: "Livret", w: 8 },
+  { key: "date_livret_accueil", label: "Livret", w: 7 },
   { key: "absences", label: "Abs.", w: 4 },
   { key: "alerte", label: "⚠ 18m", w: 5.5 },
   { key: "pointure", label: "Point.", w: 4, search: true },
   { key: "tp", label: "TP", w: 3.5 },
   { key: "statut", label: "Statut", w: 5, search: true },
-  { key: "commentaire", label: "Commentaire", w: 14, search: true },
+  { key: "commentaire", label: "Commentaire", w: 15, search: true },
 ];
 // Colonnes dont le contenu est centre (Commentaire reste aligne a gauche).
 const CENTER = new Set<ColKey>(["type_contrat", "matricule", "numero_badge", "sexe", "equipe", "atelier", "tp", "pointure", "absences"]);
