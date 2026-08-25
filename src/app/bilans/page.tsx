@@ -97,6 +97,7 @@ export default async function CockpitPage() {
   const eqNom = (id: string | null) => (id ? (eqD ?? []).find((e) => e.id === id)?.nom ?? "—" : "—");
 
   const categories = [
+    { href: "/bilans/syntheses", ic: "📋", t: "Synthèses hebdomadaires", d: "Absences de la semaine (hors intérim) et planning prévisionnel des intérimaires par agence — exports PDF.", on: true },
     { href: "/bilans/personnel", ic: "👥", t: "Personnel", d: "Effectif, contrats, absentéisme, mouvements.", on: true },
     { href: "/bilans/polyvalence", ic: "🎯", t: "Polyvalence & compétences", d: "Compétence moyenne par atelier, postes fragiles, écarts cible, habilitations.", on: true },
     { href: "/bilans/montee-competence", ic: "📈", t: "Plan de montée en compétence", d: "Actuel vs cible en global, puis qui former sur quel poste, atelier par atelier.", on: true },

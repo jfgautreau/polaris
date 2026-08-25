@@ -4,6 +4,7 @@ import { fetchAll } from "@/lib/fetch-all";
 import { getQuartsC, getRotationRefsC } from "@/lib/refdata";
 import { rotationForWeek } from "@/lib/rotation";
 import { quartOuDefaut } from "@/lib/quarts";
+import { horaireTxt as horaireTxtShared, type MapsHoraire } from "@/lib/horaires";
 import { INTERIM_BG } from "@/lib/interim";
 import { isoDate, joursAutour, parseJour, mondayOf } from "@/lib/week";
 import { getFenetreAffichage } from "@/lib/parametres";
@@ -22,7 +23,6 @@ type PlacementRow = {
 };
 type HoraireRow = { poste_id: string; quart_code: string; jour: number; debut: string | null; fin: string | null };
 
-const dow = (iso: string) => (new Date(iso + "T00:00").getDay() + 6) % 7;
 const isoDow = (iso: string) => {
   const d = new Date(iso + "T00:00").getDay();
   return d === 0 ? 7 : d; // 1=lundi .. 7=dimanche (cle tp_config)
@@ -349,42 +349,11 @@ export default async function AffichageAtelier({
     }
   }
 
-  const horaireTxt = (personId: string, posteId: string, quartCode: string | null, iso: string) => {
-    const q = quartOuDefaut(quartCode, quarts);
-    const std = horMap.get(`${posteId}:${q}:${dow(iso)}`);
-    const ex = excMap.get(`${personId}:${iso}`);
-    // Temps partiel : demi-journee a horaires saisis (selon le quart du placement),
-    // sinon horaires "journee entiere". Par jour de semaine (1=lundi..7=dimanche).
-    const cfg = tpCfgMap.get(personId);
-    let tpHor: { debut?: string; fin?: string } | undefined;
-    if (cfg) {
-      const d = String(isoDow(iso));
-      // ⚠️ Couplage assume : `tp_config` stocke ses demi-journees sous les clefs
-      // « matin » / « aprem », qui se trouvent porter les memes noms que deux
-      // codes de quart. Ce n'est PAS le meme vocabulaire (un creneau de
-      // demi-journee n'est pas un quart), mais la correspondance est ecrite ici
-      // en dur. Un site dont les quarts porteraient d'autres codes n'aurait pas
-      // d'horaires de temps partiel par demi-journee — repli silencieux, sans
-      // casse. A traiter avec le modele de `tp_config`, pas avec les quarts.
-      if (cfg.demi?.source === "horaires") {
-        if (q === "matin") tpHor = cfg.demi.matin?.[d];
-        else if (q === "apres_midi") tpHor = cfg.demi.aprem?.[d];
-      }
-      if (!tpHor && cfg.horaires) tpHor = cfg.horaires[d];
-    }
-    // Priorite : exception ponctuelle > horaires TP > horaire standard du poste.
-    // ⚠️ La priorite porte sur la SOURCE, pas sur chaque borne prise a part.
-    // Resoudre `debut` et `fin` independamment recomposait un horaire qui n'a
-    // jamais ete saisi nulle part : une exception renseignee cote debut seul
-    // donnait « debut de l'exception – fin du poste ». On choisit la premiere
-    // source qui dit quelque chose, puis on lui prend ses deux bornes.
-    const renseigne = (h?: { debut?: string | null; fin?: string | null } | null) => !!(h && (h.debut || h.fin));
-    const source = renseigne(ex) ? ex : renseigne(tpHor) ? tpHor : std;
-    const debut = source?.debut || null;
-    const fin = source?.fin || null;
-    if (!debut && !fin) return "";
-    return `${debut ?? "?"}-${fin ?? "?"}`;
-  };
+  // Resolution de l'horaire affiche : logique partagee avec la synthese interim
+  // (`src/lib/horaires.ts`), pour que les deux ecrans ne divergent pas.
+  const mapsHoraire: MapsHoraire = { horMap, excMap, tpCfgMap };
+  const horaireTxt = (personId: string, posteId: string, quartCode: string | null, iso: string) =>
+    horaireTxtShared(mapsHoraire, quarts, personId, posteId, quartCode, iso);
 
   // Commentaire de l'horaire specifique (saisi dans le planning), affiche sous l'horaire.
   const commentTxt = (personId: string, iso: string) => (excMap.get(`${personId}:${iso}`)?.motif || "").trim();

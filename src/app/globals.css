@@ -148,6 +148,17 @@ body {
     display: block;
     padding: 0;
   }
+  /* Synthese interim : une agence par page a l'impression complete, et
+     `.print-hidden` (pose en JS par « PDF agence ») retire les autres. */
+  .agence-print {
+    break-inside: avoid;
+  }
+  .agence-print + .agence-print {
+    break-before: page;
+  }
+  .print-hidden {
+    display: none !important;
+  }
 }
 
 h1 {
