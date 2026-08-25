@@ -707,7 +707,7 @@ export default function PersonnelEditor({
                         {r.temps_partiel ? (
                           <span className="sexe-pill" style={{ background: "#e0e7ff", color: "#3730a3", cursor: "pointer" }} onClick={() => setTpFor(r)} title="Configurer le temps partiel">TP</span>
                         ) : (
-                          <button type="button" className="btn-sm btn-ghost" onClick={() => setTpFor(r)} style={{ padding: "2px 6px" }} title="Activer le temps partiel">TP…</button>
+                          <button type="button" className="btn-sm btn-ghost" onClick={() => setTpFor(r)} style={{ padding: "2px 6px" }} title="Activer le temps partiel">TP</button>
                         )}
                       </td>
                       <td style={{ textAlign: "center", ...tightPad }}>{statutChip(r)}</td>
