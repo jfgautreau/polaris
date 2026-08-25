@@ -4,7 +4,7 @@ import AppHeader from "@/components/AppHeader";
 import ReportActions from "@/app/bilans/ReportActions";
 import ReportAtelierFilter from "@/app/bilans/ReportAtelierFilter";
 import OrdoMonthNav from "@/app/ordonnancement/OrdoMonthNav";
-import { requireModule } from "@/lib/permissions";
+import { requireRapportBilan } from "@/lib/permissions";
 import { fetchAll } from "@/lib/fetch-all";
 import { isoDate, isoWeekNumber, parseMois, monthDays, monthLabel } from "@/lib/week";
 import { buildJourFlow, type BesoinPoste, type PersonneDispo } from "@/lib/projection-capacite";
@@ -25,7 +25,7 @@ const SEUIL = 2;
 const fmtDate = (d: string) => d.split("-").reverse().join("/");
 
 export default async function AnticipationReport({ searchParams }: { searchParams: Promise<{ atelier?: string; mois?: string }> }) {
-  const { profile } = await requireModule("bilans", "read");
+  const { profile } = await requireRapportBilan("anticipation");
   const sp = await searchParams;
   const atelier = sp.atelier ?? "";
   const { year, month0 } = parseMois(sp.mois);

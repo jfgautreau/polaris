@@ -3,7 +3,7 @@ import AppHeader from "@/components/AppHeader";
 import PageTitle from "@/components/PageTitle";
 import ReportActions from "@/app/bilans/ReportActions";
 import ReportAtelierFilter from "@/app/bilans/ReportAtelierFilter";
-import { requireModule } from "@/lib/permissions";
+import { requireRapportBilan } from "@/lib/permissions";
 import { fetchAll } from "@/lib/fetch-all";
 import { isoDate, addDays } from "@/lib/week";
 import { addMonthsIso, habValable } from "@/lib/habilitations";
@@ -28,7 +28,7 @@ const fmt = (d: string | null) => (d ? d.split("-").reverse().join("/") : "—")
 const estRetraite = (m: string | null) => !!m && /retrait/i.test(m);
 
 export default async function CompetencesCritiquesReport({ searchParams }: { searchParams: Promise<{ atelier?: string }> }) {
-  const { profile } = await requireModule("bilans", "read");
+  const { profile } = await requireRapportBilan("competences-critiques");
   const sp = await searchParams;
   const atelier = sp.atelier ?? "";
   const todayIso = isoDate(new Date());

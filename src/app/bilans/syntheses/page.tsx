@@ -2,7 +2,7 @@ import { getServerClient } from "@/lib/supabase-server";
 import AppHeader from "@/components/AppHeader";
 import PageTitle from "@/components/PageTitle";
 import ReportActions from "@/app/bilans/ReportActions";
-import { requireModule } from "@/lib/permissions";
+import { requireRapportBilan } from "@/lib/permissions";
 import { getQuartsC } from "@/lib/refdata";
 import { parseMonday, weekDays, isoWeekNumber, isoDate } from "@/lib/week";
 import { chargerAbsencesSemaine, chargerHorairesInterim, type LigneAbsence } from "@/lib/synthese-data";
@@ -25,7 +25,7 @@ export default async function SynthesesPage({
 }: {
   searchParams: Promise<{ vue?: string; sem?: string; atelier?: string; motif?: string }>;
 }) {
-  const { profile } = await requireModule("bilans", "read");
+  const { profile } = await requireRapportBilan("syntheses");
   const sp = await searchParams;
   const vue: "absences" | "interim" = sp.vue === "interim" ? "interim" : "absences";
   const atelier = sp.atelier ?? "";

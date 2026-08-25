@@ -4,6 +4,7 @@ import { changerStatut, entrerDansLeSite, sortirDuMode } from "../actions";
 import { getImpersonationPayload } from "@/lib/impersonation";
 import { MODULES } from "@/lib/permissions";
 import { MASQUABLES_EXTRA } from "@/lib/site-modules";
+import { RAPPORTS_BILAN } from "@/lib/bilans-rapports";
 import ModulesMasquesEditor from "./ModulesMasquesEditor";
 
 export const dynamic = "force-dynamic";
@@ -60,6 +61,7 @@ export default async function SiteDetail({
     ...MODULES.map((m) => ({ key: m.key, label: m.label })),
     ...MASQUABLES_EXTRA.map((m) => ({ key: m.key, label: m.label })),
   ].map((m) => ({ key: m.key, label: m.label, masque: masques.has(m.key) }));
+  const rapportsToggle = RAPPORTS_BILAN.map((r) => ({ key: r.key, label: r.t, masque: masques.has(r.key) }));
 
   const impActive = await getImpersonationPayload();
   const impActifSurCeSite = impActive?.siteId === id;
@@ -136,6 +138,17 @@ export default async function SiteDetail({
           masqué retire son lien du menu utilisateur. Enregistré à chaque clic.
         </p>
         <ModulesMasquesEditor siteId={site.id} modules={modulesToggle} />
+      </section>
+
+      <section style={boxStyle}>
+        <h2 style={h2Style}>Rapports détaillés (Bilans)</h2>
+        <p style={{ margin: "0 0 12px", fontSize: 13, color: "#64748b" }}>
+          Décochez un rapport pour le <strong>masquer à tous les utilisateurs</strong> de ce
+          site : sa carte disparaît du Cockpit et sa page devient inaccessible. Réglage
+          indépendant du menu <strong>Bilans</strong> ci-dessus (masquer le menu masque
+          l&apos;ensemble). Enregistré à chaque clic.
+        </p>
+        <ModulesMasquesEditor siteId={site.id} modules={rapportsToggle} />
       </section>
 
       <section style={boxStyle}>

@@ -4,7 +4,7 @@ import AppHeader from "@/components/AppHeader";
 import ReportActions from "@/app/bilans/ReportActions";
 import Bars from "@/app/bilans/Bars";
 import ReportAtelierFilter from "@/app/bilans/ReportAtelierFilter";
-import { requireModule } from "@/lib/permissions";
+import { requireRapportBilan } from "@/lib/permissions";
 import { isoDate, addDays } from "@/lib/week";
 import { fetchAll } from "@/lib/fetch-all";
 
@@ -23,7 +23,7 @@ const SEUIL = 2;
 const fmtDate = (d: string | null) => (d ? d.split("-").reverse().join("/") : "—");
 
 export default async function PolyvalenceReport({ searchParams }: { searchParams: Promise<{ atelier?: string }> }) {
-  const { profile } = await requireModule("matrice", "read");
+  const { profile } = await requireRapportBilan("polyvalence");
   const sp = await searchParams;
   const atelier = sp.atelier ?? "";
   const todayIso = isoDate(new Date());

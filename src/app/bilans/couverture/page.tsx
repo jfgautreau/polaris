@@ -3,7 +3,7 @@ import AppHeader from "@/components/AppHeader";
 import OrdoMonthNav from "@/app/ordonnancement/OrdoMonthNav";
 import ReportAtelierFilter from "@/app/bilans/ReportAtelierFilter";
 import ReportActions from "@/app/bilans/ReportActions";
-import { requireModule } from "@/lib/permissions";
+import { requireRapportBilan } from "@/lib/permissions";
 import { fetchAll } from "@/lib/fetch-all";
 import { quartOuDefaut } from "@/lib/quarts";
 import { parseMois, monthDays, monthLabel } from "@/lib/week";
@@ -16,7 +16,7 @@ const dow = (iso: string) => new Date(iso + "T00:00").getDay(); // 0 dim .. 6 sa
 const isWeekend = (iso: string) => dow(iso) === 0 || dow(iso) === 6;
 
 export default async function CouvertureReport({ searchParams }: { searchParams: Promise<{ mois?: string; atelier?: string }> }) {
-  const { profile } = await requireModule("bilans", "read");
+  const { profile } = await requireRapportBilan("couverture");
   const sp = await searchParams;
   const atelierDemande = sp.atelier ?? "";
   const { year, month0 } = parseMois(sp.mois);

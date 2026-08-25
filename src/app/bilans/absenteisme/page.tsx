@@ -3,7 +3,7 @@ import AppHeader from "@/components/AppHeader";
 import PageTitle from "@/components/PageTitle";
 import ReportActions from "@/app/bilans/ReportActions";
 import ReportAtelierFilter from "@/app/bilans/ReportAtelierFilter";
-import { requireModule } from "@/lib/permissions";
+import { requireRapportBilan } from "@/lib/permissions";
 import { fetchAll } from "@/lib/fetch-all";
 import { isoDate, monthLabel } from "@/lib/week";
 import { grouperAbsences } from "@/lib/absences-periodes";
@@ -27,7 +27,7 @@ function joursOuvres(y: number, m0: number): number {
 }
 
 export default async function AbsenteismeReport({ searchParams }: { searchParams: Promise<{ atelier?: string }> }) {
-  const { profile } = await requireModule("bilans", "read");
+  const { profile } = await requireRapportBilan("absenteisme");
   const sp = await searchParams;
   const atelier = sp.atelier ?? "";
 

@@ -3,7 +3,7 @@ import AppHeader from "@/components/AppHeader";
 import ReportActions from "@/app/bilans/ReportActions";
 import Bars from "@/app/bilans/Bars";
 import ReportAtelierFilter from "@/app/bilans/ReportAtelierFilter";
-import { requireModule } from "@/lib/permissions";
+import { requireRapportBilan } from "@/lib/permissions";
 import { fetchAll } from "@/lib/fetch-all";
 
 type Named = { id: string; nom: string; prenom?: string };
@@ -31,7 +31,7 @@ export default async function MonteeCompetenceReport({
 }: {
   searchParams: Promise<{ atelier?: string }>;
 }) {
-  const { profile } = await requireModule("matrice", "read");
+  const { profile } = await requireRapportBilan("montee-competence");
   const sp = await searchParams;
   const atelier = sp.atelier ?? "";
 

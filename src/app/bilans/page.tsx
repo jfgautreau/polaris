@@ -4,6 +4,8 @@ import AppHeader from "@/components/AppHeader";
 import PageTitle from "@/components/PageTitle";
 import PrintButton from "@/components/PrintButton";
 import { requireModule } from "@/lib/permissions";
+import { getModulesMasquesC } from "@/lib/site-modules";
+import { RAPPORTS_BILAN } from "@/lib/bilans-rapports";
 import { fetchAll } from "@/lib/fetch-all";
 import { isoDate, addDays, monthDays, monthLabel } from "@/lib/week";
 
@@ -98,17 +100,16 @@ export default async function CockpitPage() {
 
   const eqNom = (id: string | null) => (id ? (eqD ?? []).find((e) => e.id === id)?.nom ?? "—" : "—");
 
-  const categories = [
-    { href: "/bilans/syntheses", ic: "📋", t: "Synthèses hebdomadaires", d: "Absences de la semaine (hors intérim) et planning prévisionnel des intérimaires par agence — exports PDF.", on: true },
-    { href: "/bilans/personnel", ic: "👥", t: "Personnel", d: "Effectif, contrats, absentéisme, mouvements.", on: true },
-    { href: "/bilans/absenteisme", ic: "🌡️", t: "Absentéisme", d: "Tendance 12 mois planifié / non planifié, facteur de Bradford (absences courtes répétées), taux par équipe.", on: true },
-    { href: "/bilans/polyvalence", ic: "🎯", t: "Polyvalence & compétences", d: "Compétence moyenne par atelier, postes fragiles, écarts cible, habilitations.", on: true },
-    { href: "/bilans/montee-competence", ic: "📈", t: "Plan de montée en compétence", d: "Actuel vs cible en global, puis qui former sur quel poste, atelier par atelier.", on: true },
-    { href: "/bilans/couverture", ic: "🛡️", t: "Adéquation Charge / capacité", d: "Besoin d'après l'ordonnancement vs présents, par quart et par atelier.", on: true },
-    { href: "/bilans/anticipation", ic: "🔭", t: "Anticipation", d: "Capacité vs charge à venir, impact des absences et des fins de contrat.", on: true },
-    { href: "/bilans/projection", ic: "🧮", t: "Projection de capacité", d: "Tenue semaine par semaine sur 4/8/12 sem. : une personne polyvalente compte pour une seule place (affectation optimale). Habilitations expirées déduites.", on: true },
-    { href: "/bilans/competences-critiques", ic: "🕳️", t: "Compétences critiques", d: "Postes à relève unique croisés avec les départs, retraites et expirations d'habilitation. Les savoir-faire que vous êtes sur le point de perdre.", on: true },
-  ];
+  // Rapports masqués pour ce site (piloté depuis /platform, même mécanisme que
+  // les menus). Une carte masquée disparaît du Cockpit ; sa page redirige.
+  const masques = await getModulesMasquesC();
+  const categories = RAPPORTS_BILAN.filter((r) => !masques.has(r.key)).map((r) => ({
+    href: r.href,
+    ic: r.ic,
+    t: r.t,
+    d: r.d,
+    on: true,
+  }));
 
   return (
     <>

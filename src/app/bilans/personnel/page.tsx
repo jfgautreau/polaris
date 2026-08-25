@@ -5,7 +5,7 @@ import ReportActions from "@/app/bilans/ReportActions";
 import OrdoMonthNav from "@/app/ordonnancement/OrdoMonthNav";
 import Bars from "@/app/bilans/Bars";
 import ReportAtelierFilter from "@/app/bilans/ReportAtelierFilter";
-import { requireModule } from "@/lib/permissions";
+import { requireRapportBilan } from "@/lib/permissions";
 import { fetchAll } from "@/lib/fetch-all";
 import { parseMois, monthDays, monthLabel, isoDate, addDays } from "@/lib/week";
 
@@ -27,7 +27,7 @@ type Placement = { personne_id: string; poste_id: string | null; motif_absence_i
 const fmtDate = (d: string | null) => (d ? d.split("-").reverse().join("/") : "—");
 
 export default async function PersonnelReport({ searchParams }: { searchParams: Promise<{ mois?: string; atelier?: string }> }) {
-  const { profile } = await requireModule("bilans", "read");
+  const { profile } = await requireRapportBilan("personnel");
   const sp = await searchParams;
   const atelier = sp.atelier ?? "";
   const { year, month0 } = parseMois(sp.mois);

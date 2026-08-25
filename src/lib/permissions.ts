@@ -311,3 +311,17 @@ export async function requireModule(module: string, level: "read" | "write") {
   if (!ok) redirect("/planning");
   return { profile, perms };
 }
+
+// Garde d'une PAGE-RAPPORT de Bilans. Applique d'abord la garde de module
+// habituelle du rapport (`bilans` ou `matrice`, cf. RAPPORTS_BILAN.garde),
+// puis vérifie le masquage par site du rapport lui-même : un rapport masqué
+// est inaccessible pour tout le monde sur ce site → retour au Cockpit. Couche
+// indépendante du masquage du menu Bilans (qui, lui, redirige vers l'accueil).
+export async function requireRapportBilan(slug: string) {
+  const { RAPPORTS_BILAN, cleRapport } = await import("@/lib/bilans-rapports");
+  const rapport = RAPPORTS_BILAN.find((r) => r.slug === slug);
+  const res = await requireModule(rapport?.garde ?? "bilans", "read");
+  const { getModulesMasquesC } = await import("@/lib/site-modules");
+  if ((await getModulesMasquesC()).has(cleRapport(slug))) redirect("/bilans");
+  return res;
+}

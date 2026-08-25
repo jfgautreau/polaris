@@ -413,7 +413,7 @@ et l'hydratation devient très lourde. Les habilitations sont dans le même ordr
 prochain gros chantier, pas une optimisation cosmétique.
 
 ## Carte des fichiers
-- Socle : `src/lib/{permissions,roles,roles-server,current-user,current-site,site-modules,week,refdata,parametres,habilitations,supabase-server,fetch-all,numeros-rotation,password-link,rotation,password,erreurs,absence,absences-periodes,calendrier,quarts,semaine-type,interim,noms}.ts`, `src/proxy.ts`.
+- Socle : `src/lib/{permissions,roles,roles-server,current-user,current-site,site-modules,week,refdata,parametres,habilitations,supabase-server,fetch-all,numeros-rotation,password-link,rotation,password,erreurs,absence,absences-periodes,calendrier,quarts,semaine-type,interim,noms,bilans-rapports}.ts`, `src/proxy.ts`.
 - Nav : `src/components/{AppHeader,SettingsMenu,UserMenu,NavIcons}.tsx`.
   Logo → `/` (page d'accueil : logo centré + titre « planning »).
   `UserMenu` porte aussi le lien vers le **guide utilisateur** (`public/guide.html`,
@@ -460,7 +460,9 @@ prochain gros chantier, pas une optimisation cosmétique.
   + `/api/roles` (création de rôles personnalisés, garde `utilisateurs: write`).
   Les rôles assignables viennent de `getAllRoles()` (`src/lib/roles-server.ts`) :
   intégrés + `role_custom`. Un rôle personnalisé naît sans droit.
-- Bilans : `src/app/bilans/*` (Cockpit + 4 catégories, impression PDF via `@media print`).
+- Bilans : `src/app/bilans/*` (Cockpit + 9 rapports détaillés, impression PDF via
+  `@media print`). Liste des rapports centralisée dans `src/lib/bilans-rapports.ts`
+  (partagée Cockpit ↔ `/platform` pour le masquage par site, cf. Plateforme).
 - Affichage TV : `src/app/affichage/atelier/[atelier]/page.tsx` (public, refresh 5 min,
   **vue par nom uniquement**). ⚠️ Depuis 2026-08-25, l'écran est rattaché à
   l'**atelier d'affectation** (`personne.atelier_id`), pas à l'atelier de placement :
@@ -498,12 +500,20 @@ prochain gros chantier, pas une optimisation cosmétique.
   **par site**, pour tous les users, au-dessus de la matrice. Table
   `site_module` (présence = masqué), helper `src/lib/site-modules.ts`
   (`getModulesMasquesC()`, impersonation-aware, `cache()` par requête).
-  Deux familles d'éléments masquables : les **menus** (clés de `MODULES`) —
+  Trois familles d'éléments masquables : les **menus** (clés de `MODULES`) —
   blocage réel : `requireModule` redirige vers `/` si masqué, `AppHeader`
-  filtre la nav ; et des **extras hors nav** (`MASQUABLES_EXTRA` dans
+  filtre la nav ; des **extras hors nav** (`MASQUABLES_EXTRA` dans
   `site-modules.ts`) — aujourd'hui `guide` (lien « Guide utilisateur » du
-  `UserMenu`, affiché si `guideVisible`, passé par `AppHeader`). `setModuleMasque`
-  accepte une clé de `MODULE_KEYS` **ou** de `CLES_MASQUABLES_EXTRA`.
+  `UserMenu`, affiché si `guideVisible`, passé par `AppHeader`) ; et les
+  **rapports Bilans** — section séparée « Rapports détaillés (Bilans) » sur
+  `/platform/[id]`, clés `bilan:<slug>` de `RAPPORTS_BILAN`
+  (`src/lib/bilans-rapports.ts`, source unique clé/libellé/href/icône/desc +
+  module de garde). Le Cockpit (`/bilans`) filtre ses navcards sur
+  `getModulesMasquesC()` ; chaque page-rapport garde via `requireRapportBilan(slug)`
+  (applique la garde de module `bilans`/`matrice` **puis** redirige vers `/bilans`
+  si le rapport est masqué). Réglage **indépendant** du masquage du menu Bilans.
+  `setModuleMasque` accepte une clé de `MODULE_KEYS`, de `CLES_MASQUABLES_EXTRA`
+  **ou** de `CLES_RAPPORTS_BILAN`.
 - Migrations : `supabase/migrations/0001..0060` (dernière appliquée : **0060**,
   `motif_absence.non_planifie` — classification planifié/non planifié des absences).
 - **Écritures : lire l'erreur, toujours.** `messageErreur()` (`src/lib/erreurs.ts`) traduit

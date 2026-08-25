@@ -4,14 +4,14 @@ import PageTitle from "@/components/PageTitle";
 import ReportActions from "@/app/bilans/ReportActions";
 import ReportAtelierFilter from "@/app/bilans/ReportAtelierFilter";
 import ProjectionFilters from "./ProjectionFilters";
-import { requireModule } from "@/lib/permissions";
+import { requireRapportBilan } from "@/lib/permissions";
 import { isoDate, mondayOf, isoWeekNumber } from "@/lib/week";
 import { chargerProjection, type Couche } from "@/lib/projection-capacite-data";
 
 const HORIZONS = [4, 8, 12];
 
 export default async function ProjectionPage({ searchParams }: { searchParams: Promise<{ h?: string; couche?: string; atelier?: string }> }) {
-  const { profile } = await requireModule("bilans", "read");
+  const { profile } = await requireRapportBilan("projection");
   const sp = await searchParams;
   const horizon = HORIZONS.includes(Number(sp.h)) ? Number(sp.h) : 8;
   const couche: Couche = sp.couche === "reelle" ? "reelle" : "structurelle";

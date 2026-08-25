@@ -10,6 +10,7 @@ import { genererLienMotDePasse, motDePasseAleatoire } from "@/lib/password-link"
 import { messageErreur } from "@/lib/erreurs";
 import { MODULE_KEYS } from "@/lib/permissions";
 import { CLES_MASQUABLES_EXTRA } from "@/lib/site-modules";
+import { CLES_RAPPORTS_BILAN } from "@/lib/bilans-rapports";
 
 // Server actions du back-office plateforme. Toutes revérifient que
 // l'appelant est bien super_admin — défense en profondeur en plus du
@@ -29,7 +30,11 @@ async function requireSuperAdmin() {
 // à TOUS les utilisateurs du site, au-dessus de la matrice de droits.
 export async function setModuleMasque(siteId: string, moduleKey: string, masque: boolean) {
   const { admin } = await requireSuperAdmin();
-  if (!MODULE_KEYS.includes(moduleKey) && !CLES_MASQUABLES_EXTRA.includes(moduleKey)) {
+  if (
+    !MODULE_KEYS.includes(moduleKey) &&
+    !CLES_MASQUABLES_EXTRA.includes(moduleKey) &&
+    !CLES_RAPPORTS_BILAN.includes(moduleKey)
+  ) {
     throw new Error("Élément inconnu");
   }
 
