@@ -12,7 +12,7 @@ import { anonymiserPersonne, supprimerPersonne } from "./actions";
 import BandeauErreur from "@/components/BandeauErreur";
 import { normaliseNom, normalisePrenom } from "@/lib/noms";
 import AbsencesModal from "./AbsencesModal";
-import { AbsenceIcon, InfoIcon, GearIcon } from "@/components/icons";
+import { AbsenceIcon, GearIcon } from "@/components/icons";
 import { etatDepart } from "@/lib/absences-periodes";
 import { statutALaDate, libelleStatut, couleurStatut, type StatutPersonne } from "@/lib/personne-statut";
 
@@ -89,23 +89,27 @@ type ColKey =
 // ne pas deborder d'une colonne etroite (en-tetes en `nowrap`).
 const COLS: { key: ColKey; label: string; w: number; search?: boolean }[] = [
   { key: "type_contrat", label: "Contrat", w: 5, search: true },
-  { key: "matricule", label: "Matr.", w: 5.5, search: true },
+  { key: "matricule", label: "Matricule", w: 6.5, search: true },
   { key: "numero_badge", label: "Badge", w: 5, search: true },
   { key: "nom", label: "Nom", w: 11, search: true },
   { key: "prenom", label: "Prénom", w: 10, search: true },
-  { key: "sexe", label: "H/F", w: 3.5, search: true },
+  { key: "sexe", label: "H/F", w: 3, search: true },
   { key: "equipe", label: "Équipe", w: 5, search: true },
   { key: "atelier", label: "Atelier", w: 5, search: true },
-  { key: "date_livret_accueil", label: "Livret", w: 6 },
-  { key: "absences", label: "Abs.", w: 4.5 },
+  { key: "date_livret_accueil", label: "Livret", w: 8 },
+  { key: "absences", label: "Abs.", w: 4 },
   { key: "alerte", label: "⚠ 18m", w: 5.5 },
   { key: "pointure", label: "Point.", w: 4, search: true },
   { key: "tp", label: "TP", w: 3.5 },
-  { key: "statut", label: "Statut", w: 5.5, search: true },
-  { key: "commentaire", label: "Commentaire", w: 15, search: true },
+  { key: "statut", label: "Statut", w: 5, search: true },
+  { key: "commentaire", label: "Commentaire", w: 14, search: true },
 ];
 // Colonnes dont le contenu est centre (Commentaire reste aligne a gauche).
 const CENTER = new Set<ColKey>(["type_contrat", "matricule", "numero_badge", "sexe", "equipe", "atelier", "tp", "pointure", "absences"]);
+// Colonnes a padding lateral reduit (contenu compact : icone / chip) — resserre
+// l'espace juste avant et apres Abs. et Statut.
+const TIGHT = new Set<ColKey>(["absences", "statut"]);
+const tightPad: React.CSSProperties = { paddingLeft: 1, paddingRight: 1 };
 
 // Bouton « Absences » de la ligne : ouvre l'historique et la déclaration.
 // Le calendrier barré dit « jours non travaillés » ; une pastille signale le
@@ -196,8 +200,9 @@ export default function PersonnelEditor({
   // deux colonnes deviennent des resultantes non editables directement.
   const [cycleFor, setCycleFor] = useState<Row | null>(null);
   const [absFor, setAbsFor] = useState<Row | null>(null);
-  const [infoFor, setInfoFor] = useState<Row | null>(null);
-  const [rgpdFor, setRgpdFor] = useState<Row | null>(null);
+  // Modale unique « fiche » (bouton engrenage) : Informations (commentaire, poste
+  // fixe) + RGPD (export / anonymiser / supprimer), regroupées.
+  const [detailFor, setDetailFor] = useState<Row | null>(null);
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [merge, setMerge] = useState<{ a: Row; b: Row } | null>(null);
   const [keepId, setKeepId] = useState("");
@@ -648,7 +653,7 @@ export default function PersonnelEditor({
           <Cols />
           <thead>
             <tr>
-              {COLS.map((c) => <th key={c.key} style={{ whiteSpace: "nowrap" }}>{c.label}</th>)}
+              {COLS.map((c) => <th key={c.key} style={{ whiteSpace: "nowrap", ...(TIGHT.has(c.key) ? tightPad : {}) }}>{c.label}</th>)}
               {(canEdit || canRgpd) && <th />}
             </tr>
           </thead>
@@ -678,7 +683,7 @@ export default function PersonnelEditor({
                       <td><select id={champId(r.id, "equipe_id")} value={r.equipe_id ?? ""} onChange={(e) => field(r.id, "equipe_id", e.target.value, true)} style={{ ...inp, ...C("equipe"), ...eqStyle(r.equipe_id) }}><option value="">-</option>{equipes.map((x) => (<option key={x.id} value={x.id}>{x.nom}</option>))}</select></td>
                       <td><select id={champId(r.id, "atelier_id")} value={r.atelier_id ?? ""} onChange={(e) => field(r.id, "atelier_id", e.target.value, true)} style={{ ...inp, ...C("atelier") }}><option value="">-</option>{ateliers.map((x) => (<option key={x.id} value={x.id}>{x.nom}</option>))}</select></td>
                       <td><input id={champId(r.id, "date_livret_accueil")} type="date" value={r.date_livret_accueil ?? ""} onChange={(e) => field(r.id, "date_livret_accueil", e.target.value, true)} style={inp} /></td>
-                      <td style={{ textAlign: "center" }}><BoutonAbsences row={r} onOpen={() => setAbsFor(r)} /></td>
+                      <td style={{ textAlign: "center", ...tightPad }}><BoutonAbsences row={r} onOpen={() => setAbsFor(r)} /></td>
                       <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
                         {a18 && (
                           <span
@@ -705,7 +710,7 @@ export default function PersonnelEditor({
                           <button type="button" className="btn-sm btn-ghost" onClick={() => setTpFor(r)} style={{ padding: "2px 6px" }} title="Activer le temps partiel">TP…</button>
                         )}
                       </td>
-                      <td style={{ textAlign: "center" }}>{statutChip(r)}</td>
+                      <td style={{ textAlign: "center", ...tightPad }}>{statutChip(r)}</td>
                       <td>
                         <input
                           value={r.commentaire ?? ""}
@@ -716,9 +721,8 @@ export default function PersonnelEditor({
                         />
                       </td>
                       <td style={{ whiteSpace: "nowrap", textAlign: "center" }}>
-                        <input type="checkbox" checked={sel.has(r.id)} onChange={() => toggleSel(r.id)} disabled={!sel.has(r.id) && sel.size >= 2} title="Sélectionner pour fusionner (2 max)" style={{ width: "auto", marginRight: 6, verticalAlign: "middle" }} />
-                        <button type="button" className="iconbtn" title={`Informations (commentaire, poste fixe)${r.poste_fixe_id ? " · poste fixe défini 📌" : ""}`} onClick={() => setInfoFor(r)} style={r.poste_fixe_id ? { boxShadow: "inset 0 0 0 2px #6366f1" } : undefined}><InfoIcon /></button>
-                        {canRgpd && <button type="button" className="iconbtn" title="RGPD (export / anonymiser / supprimer)" onClick={() => setRgpdFor(r)}><GearIcon /></button>}
+                        <button type="button" className="iconbtn" title={`Fiche : informations, poste fixe${canRgpd ? ", RGPD" : ""}${r.poste_fixe_id ? " · poste fixe défini 📌" : ""}`} onClick={() => setDetailFor(r)} style={r.poste_fixe_id ? { boxShadow: "inset 0 0 0 2px #6366f1" } : undefined}><GearIcon /></button>
+                        <input type="checkbox" checked={sel.has(r.id)} onChange={() => toggleSel(r.id)} disabled={!sel.has(r.id) && sel.size >= 2} title="Sélectionner pour fusionner (2 max)" style={{ width: "auto", marginLeft: 6, verticalAlign: "middle" }} />
                       </td>
                     </>
                   ) : (
@@ -732,7 +736,7 @@ export default function PersonnelEditor({
                       <td style={{ textAlign: "center" }}>{equipeNom(r.equipe_id) || "-"}</td>
                       <td style={{ textAlign: "center" }}>{atelierNom(r.atelier_id) || "-"}</td>
                       <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>{fmtDate(r.date_livret_accueil)}</td>
-                      <td style={{ textAlign: "center" }}><BoutonAbsences row={r} onOpen={() => setAbsFor(r)} /></td>
+                      <td style={{ textAlign: "center", ...tightPad }}><BoutonAbsences row={r} onOpen={() => setAbsFor(r)} /></td>
                       <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
                         {a18 && (
                           <span
@@ -753,14 +757,14 @@ export default function PersonnelEditor({
                       </td>
                       <td style={{ textAlign: "center" }}>{r.pointure || "-"}</td>
                       <td style={{ textAlign: "center" }}>{r.temps_partiel ? <span className="sexe-pill" style={{ background: "#e0e7ff", color: "#3730a3" }}>TP</span> : <span className="muted">—</span>}</td>
-                      <td style={{ textAlign: "center" }}>{statutChip(r)}</td>
+                      <td style={{ textAlign: "center", ...tightPad }}>{statutChip(r)}</td>
                       <td title={r.commentaire || ""} style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 0 }}>
                         {r.commentaire ? r.commentaire : <span className="muted">—</span>}
                       </td>
-                      {/* Vue lecture seule mais droit RGPD : seule action offerte, la roue crantée. */}
+                      {/* Vue lecture seule mais droit RGPD : la roue crantée ouvre la fiche. */}
                       {canRgpd && (
                         <td style={{ textAlign: "center" }}>
-                          <button type="button" className="iconbtn" title="RGPD (export / anonymiser / supprimer)" onClick={() => setRgpdFor(r)}><GearIcon /></button>
+                          <button type="button" className="iconbtn" title="Fiche : informations, poste fixe, RGPD" onClick={() => setDetailFor(r)}><GearIcon /></button>
                         </td>
                       )}
                     </>
@@ -829,18 +833,19 @@ export default function PersonnelEditor({
         />
       )}
 
-      {/* Modale Informations : commentaire (enregistrement auto, reflété sur la ligne). */}
-      {infoFor && (
-        <ModaleDeplacable onClose={() => setInfoFor(null)} largeur={720}>
+      {/* Modale « fiche » unique (bouton engrenage) : Informations + RGPD regroupées. */}
+      {detailFor && (
+        <ModaleDeplacable onClose={() => setDetailFor(null)} largeur={640}>
             <div className="mdd-drag" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, cursor: "grab" }}>
-              <h2 style={{ margin: 0, fontSize: 19 }}>Informations — {infoFor.nom} {infoFor.prenom}</h2>
-              <button type="button" onClick={() => setInfoFor(null)} title="Fermer" style={{ width: "auto", margin: 0, padding: "2px 10px", fontSize: 16 }}>✕</button>
+              <h2 style={{ margin: 0, fontSize: 19 }}>{detailFor.nom} {detailFor.prenom}</h2>
+              <button type="button" onClick={() => setDetailFor(null)} title="Fermer" style={{ width: "auto", margin: 0, padding: "2px 10px", fontSize: 16 }}>✕</button>
             </div>
+
             <label htmlFor="pers-poste-fixe" style={{ fontWeight: 600 }}>Poste fixe</label>
             <select
               id="pers-poste-fixe"
-              value={rows.find((r) => r.id === infoFor.id)?.poste_fixe_id ?? ""}
-              onChange={(e) => field(infoFor.id, "poste_fixe_id", e.target.value, true)}
+              value={rows.find((r) => r.id === detailFor.id)?.poste_fixe_id ?? ""}
+              onChange={(e) => field(detailFor.id, "poste_fixe_id", e.target.value, true)}
               disabled={!canEdit}
               style={{ width: "100%", fontSize: 13, padding: "6px 8px", marginTop: 4 }}
             >
@@ -857,45 +862,42 @@ export default function PersonnelEditor({
             <label htmlFor="pers-commentaire" style={{ fontWeight: 600 }}>Commentaire</label>
             <textarea
               id="pers-commentaire"
-              value={rows.find((r) => r.id === infoFor.id)?.commentaire ?? ""}
-              onChange={(e) => field(infoFor.id, "commentaire", e.target.value)}
+              value={rows.find((r) => r.id === detailFor.id)?.commentaire ?? ""}
+              onChange={(e) => field(detailFor.id, "commentaire", e.target.value)}
+              readOnly={!canEdit}
               rows={4}
               style={{ width: "100%", fontSize: 13, padding: "6px 8px", marginTop: 4 }}
             />
             <p className="muted" style={{ marginTop: 6, fontSize: 12 }}>
               Ne pas saisir d&apos;information médicale. Enregistrement automatique.
             </p>
-        </ModaleDeplacable>
-      )}
 
-      {/* Modale RGPD : export / anonymiser / supprimer (admin). */}
-      {rgpdFor && (
-        <ModaleDeplacable onClose={() => setRgpdFor(null)} largeur={560}>
-            <div className="toolbar mdd-drag" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 6, cursor: "grab" }}>
-              <h2 style={{ margin: 0 }}>RGPD — {rgpdFor.nom} {rgpdFor.prenom}</h2>
-              <button type="button" className="btn-sm btn-ghost" onClick={() => setRgpdFor(null)} style={{ width: "auto" }}>✕</button>
-            </div>
-            <div className="toolbar" style={{ alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <a href={`/api/personnel/${rgpdFor.id}/export`} className="btn-sm btn-ghost" style={{ textDecoration: "none" }}>
-                Exporter les données (JSON)
-              </a>
-              <ConfirmForm
-                action={anonymiserPersonne}
-                hidden={{ id: rgpdFor.id }}
-                label="Anonymiser"
-                confirm="Anonymiser cette personne ? Le nom est remplacé, l'historique de placement est conservé."
-              />
-              <ConfirmForm
-                action={supprimerPersonne}
-                hidden={{ id: rgpdFor.id }}
-                label="Supprimer (droit à l'oubli)"
-                className="btn-sm"
-                confirm="Supprimer DÉFINITIVEMENT cette personne et tout son historique ? Action irréversible."
-              />
-            </div>
-            <p className="muted" style={{ marginTop: 8 }}>
-              Anonymiser conserve l&apos;historique (bilans) en retirant l&apos;identité. Supprimer efface définitivement la personne et ses données liées.
-            </p>
+            {canRgpd && (
+              <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--border)" }}>
+                <h3 style={{ margin: "0 0 8px", fontSize: 15 }}>RGPD</h3>
+                <div className="toolbar" style={{ alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <a href={`/api/personnel/${detailFor.id}/export`} className="btn-sm btn-ghost" style={{ textDecoration: "none" }}>
+                    Exporter les données (JSON)
+                  </a>
+                  <ConfirmForm
+                    action={anonymiserPersonne}
+                    hidden={{ id: detailFor.id }}
+                    label="Anonymiser"
+                    confirm="Anonymiser cette personne ? Le nom est remplacé, l'historique de placement est conservé."
+                  />
+                  <ConfirmForm
+                    action={supprimerPersonne}
+                    hidden={{ id: detailFor.id }}
+                    label="Supprimer (droit à l'oubli)"
+                    className="btn-sm"
+                    confirm="Supprimer DÉFINITIVEMENT cette personne et tout son historique ? Action irréversible."
+                  />
+                </div>
+                <p className="muted" style={{ marginTop: 8 }}>
+                  Anonymiser conserve l&apos;historique (bilans) en retirant l&apos;identité. Supprimer efface définitivement la personne et ses données liées.
+                </p>
+              </div>
+            )}
         </ModaleDeplacable>
       )}
 
