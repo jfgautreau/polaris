@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { getAdminClient } from "@/lib/supabase-server";
 import { getCurrentSite } from "@/lib/current-site";
 import { fetchAll } from "@/lib/fetch-all";
@@ -14,14 +13,12 @@ import AffichageBarre from "./AffichageBarre";
 export const dynamic = "force-dynamic";
 
 type Atelier = { id: string; nom: string };
-type Poste = { id: string; nom: string; ordre_affichage: number };
-type Ligne = { id: string; nom: string; ordre_affichage: number; poste: (Poste & { actif: boolean })[] };
+type Personne = { nom: string; prenom: string; type_contrat: string };
 type PlacementRow = {
   poste_id: string | null;
   jour: string;
   quart_code: string | null;
   personne_id: string;
-  personne: { nom: string; prenom: string; type_contrat: string } | null;
 };
 type HoraireRow = { poste_id: string; quart_code: string; jour: number; debut: string | null; fin: string | null };
 
@@ -76,6 +73,7 @@ export default async function AffichageAtelier({
       </div>
     );
   }
+  const atelierNomById = new Map((ateliers ?? []).map((a) => [a.id, a.nom]));
 
   const { data: lignesD } = await admin
     .from("ligne")
@@ -83,7 +81,7 @@ export default async function AffichageAtelier({
     .eq("site_id", site.id)
     .eq("atelier_id", atelier.id)
     .eq("actif", true)
-    .returns<Ligne[]>();
+    .returns<{ id: string; nom: string; ordre_affichage: number; poste: { id: string; nom: string; ordre_affichage: number; actif: boolean }[] }[]>();
 
   // Ordre d'affichage parametrable (ordre_affichage croissant, puis nom).
   const byOrdre = <T extends { ordre_affichage?: number; nom: string }>(a: T, b: T) =>
@@ -95,10 +93,31 @@ export default async function AffichageAtelier({
     }))
     .filter((l) => l.poste.length > 0)
     .sort(byOrdre);
-  const posteIds = lignes.flatMap((l) => l.poste.map((p) => p.id));
-  const posteLigne = new Map<string, string>();
-  const posteNom = new Map<string, string>();
-  for (const l of lignes) for (const p of l.poste) { posteLigne.set(p.id, l.id); posteNom.set(p.id, p.nom); }
+  const posteIds = lignes.flatMap((l) => l.poste.map((p) => p.id)); // postes de CET atelier
+
+  // Carte GLOBALE poste -> { nom, ligne, atelier } sur tout le site : une personne
+  // de cet atelier peut être prêtée à un poste d'un AUTRE atelier ; on doit alors
+  // savoir le nommer et l'annoter « (Atelier X) ». Bornée au site (service_role).
+  const { data: lignesSite } = await admin
+    .from("ligne")
+    .select("id, atelier_id, poste(id, nom, actif)")
+    .eq("site_id", site.id)
+    .returns<{ id: string; atelier_id: string; poste: { id: string; nom: string; actif: boolean }[] }[]>();
+  const posteInfo = new Map<string, { nom: string; ligneId: string; atelierId: string; actif: boolean }>();
+  for (const l of lignesSite ?? []) for (const p of l.poste ?? []) posteInfo.set(p.id, { nom: p.nom, ligneId: l.id, atelierId: l.atelier_id, actif: p.actif });
+
+  // ROSTER : les personnes dont l'atelier D'AFFECTATION est celui-ci. C'est la
+  // liste des lignes de l'écran — une personne n'apparaît que sur SON atelier,
+  // même les jours où elle est placée ailleurs (annotés en cellule). Les
+  // personnes d'un autre atelier prêtées ici n'apparaissent donc PAS ici.
+  const { data: rosterD } = await admin
+    .from("personne")
+    .select("id, nom, prenom, type_contrat")
+    .eq("site_id", site.id)
+    .eq("atelier_id", atelier.id)
+    .returns<(Personne & { id: string })[]>();
+  const rosterById = new Map((rosterD ?? []).map((p) => [p.id, { nom: p.nom, prenom: p.prenom, type_contrat: p.type_contrat }]));
+  const rosterIds = [...rosterById.keys()];
 
   const horMap = new Map<string, { debut: string | null; fin: string | null }>(); // `${poste}:${quart}:${dow}`
   const excMap = new Map<string, { debut: string | null; fin: string | null; motif: string | null }>(); // `${personne}:${iso}` (horaire specifique + commentaire)
@@ -107,48 +126,48 @@ export default async function AffichageAtelier({
   const tpCfgMap = new Map<string, TpCfg>(); // personne_id -> tp_config (temps partiel)
   const actMap = new Map<string, boolean>(); // `${quart}:${iso}`
   const ouvMap = new Map<string, boolean>(); // `${quart}:${ligne}:${iso}`
-  type Personne = { nom: string; prenom: string; type_contrat: string };
-  const persons = new Map<string, Personne>(); // personne_id -> infos
   const byPerson = new Map<string, PlacementRow[]>(); // `${personne_id}:${iso}`
-  const workedDays = new Set<string>(); // jours (iso) ou au moins une personne travaille
   const openDays = new Set<string>();   // jours (iso) ouverts par l Ordonnancement
   const tpSet = new Set<string>();      // `${personne_id}:${iso}` bloque par temps partiel
 
-  if (posteIds.length) {
-    // Trois de ces lectures couvrent une SEMAINE ENTIERE, tous quarts confondus,
-    // et peuvent depasser le plafond de 1000 lignes que PostgREST applique SANS
-    // erreur (cf. L8). Elles passent donc par fetchAll, avec un `.order()`
-    // deterministe — `horaire_poste` et `ouverture_quart` n'ont pas d'`id`, on
-    // trie sur leur cle composite. Ecran non surveille : une troncature y
-    // afficherait des horaires faux ou des postes manquants sans que personne
-    // ne s'en apercoive.
-    //   - placement       : 6 jours x personnes placees dans l atelier
-    //   - horaire_poste   : postes de l'atelier x 4 quarts x 7 jours
-    //   - ouverture_quart : 6 jours x 4 quarts x lignes (NON filtre par atelier)
-    // `jour_quart` (28 lignes au plus) et `horaire_exception` restent directs.
-    const [pl, hor, { data: jq }, ov, { data: exc }, { data: tpH }] = await Promise.all([
-      fetchAll<PlacementRow>(() =>
-        admin
-          .from("placement")
-          .select("poste_id, jour, quart_code, personne_id, personne:personne_id(nom, prenom, type_contrat)")
-          .eq("site_id", site.id)
-          .in("jour", isos)
-          .in("poste_id", posteIds)
-          .order("id")
-          .returns<PlacementRow[]>()
-      ),
+  if (posteIds.length && rosterIds.length) {
+    // Placements des personnes de CET atelier, tous postes confondus (y compris
+    // ceux d'un autre atelier — le prêt). Bornée aux `rosterIds`, donc petite.
+    // fetchAll + `.order("id")` : un historique de plusieurs jours peut dépasser
+    // le plafond des 1000 lignes que PostgREST applique SANS erreur (cf. L8).
+    const pl = await fetchAll<PlacementRow>(() =>
+      admin
+        .from("placement")
+        .select("poste_id, jour, quart_code, personne_id")
+        .eq("site_id", site.id)
+        .in("jour", isos)
+        .in("personne_id", rosterIds)
+        .not("poste_id", "is", null)
+        .order("id")
+        .returns<PlacementRow[]>()
+    );
+    // Postes concernés par les horaires : ceux de l'atelier + ceux où quelqu'un
+    // est prêté. On ne charge les horaires standards que pour ceux-là.
+    const involved = new Set<string>(posteIds);
+    for (const r of pl) if (r.poste_id) involved.add(r.poste_id);
+
+    // Les autres lectures couvrent une SEMAINE ENTIERE, tous quarts confondus, et
+    // peuvent dépasser 1000 lignes (cf. L8) → fetchAll avec `.order()` déterministe
+    // (`horaire_poste` et `ouverture_quart` n'ont pas d'`id`, on trie sur la clé
+    // composite). Écran non surveillé : une troncature y afficherait des horaires
+    // faux ou des postes manquants sans que personne ne s'en aperçoive.
+    const [hor, { data: jq }, ov, { data: exc }, { data: tpH }] = await Promise.all([
       fetchAll<HoraireRow>(() =>
         admin
           .from("horaire_poste")
           .select("poste_id, quart_code, jour, debut, fin")
           .eq("site_id", site.id)
-          .in("poste_id", posteIds)
+          .in("poste_id", [...involved])
           .order("poste_id").order("quart_code").order("jour")
           .returns<HoraireRow[]>()
       ),
-      // MULTI-SITE : jour_quart, ouverture_quart, horaire_exception et
-      // la liste des personnes TP sont bornés par site_id — le
-      // service_role bypass la RLS.
+      // MULTI-SITE : jour_quart, ouverture_quart, horaire_exception et la liste
+      // des personnes TP sont bornés par site_id — le service_role bypass la RLS.
       admin
         .from("jour_quart")
         .select("jour, quart_code, actif")
@@ -257,10 +276,9 @@ export default async function AffichageAtelier({
     };
 
     // Jours OUVERTS au sens de l'Ordonnancement : au moins une ligne de cet
-    // atelier ouverte sur au moins un quart. C'est desormais ce qui decide des
-    // colonnes affichees — auparavant on ne gardait que les jours ou quelqu'un
-    // etait deja PLACE, si bien qu'une journee ouverte mais pas encore remplie
-    // disparaissait de l'ecran, au lieu d'apparaitre vide et d'appeler la saisie.
+    // atelier ouverte sur au moins un quart. C'est ce qui decide des colonnes
+    // affichees — auparavant on ne gardait que les jours ou quelqu'un etait deja
+    // PLACE, si bien qu'une journee ouverte mais pas encore remplie disparaissait.
     for (const iso of isos) {
       for (const q of quarts) {
         if (lignes.some((l) => isOpen(l.id, q.code, iso))) {
@@ -272,63 +290,33 @@ export default async function AffichageAtelier({
 
     for (const r of pl) {
       if (!r.poste_id) continue;
+      const info = posteInfo.get(r.poste_id);
+      if (info && !info.actif) continue; // poste desactive : ne pas ressortir un placement residuel
       const qc = quartOuDefaut(r.quart_code, quarts);
-      const lid = posteLigne.get(r.poste_id);
-      if (lid && !isOpen(lid, qc, r.jour)) continue; // jour/ligne ferme -> on n'affiche pas
-      workedDays.add(r.jour);
-      if (r.personne) persons.set(r.personne_id, r.personne);
+      if (info && !isOpen(info.ligneId, qc, r.jour)) continue; // jour/ligne ferme -> on n'affiche pas
       const pk = `${r.personne_id}:${r.jour}`;
       (byPerson.get(pk) ?? byPerson.set(pk, []).get(pk)!).push(r);
     }
   }
 
-  // Absences (tous motifs) des personnes rattachees a cet atelier -> vue "par nom".
-  // On affiche un simple "Absence" (pas de detail du motif). Les jours affiches
-  // restent ceux ou au moins une personne travaille (semaine de travail).
+  // Absences (tous motifs) des personnes DE CET atelier -> une simple mention
+  // "Absence" (pas de detail du motif). fetchAll : c'est la lecture la plus large
+  // (tout le site sur la fenetre), premiere a atteindre le plafond des 1000 lignes.
   const absByPerson = new Map<string, Set<string>>(); // personne_id -> jours (iso) absents
-  {
-    type AbsP = { personne_id: string; jour: string; personne: { nom: string; prenom: string; type_contrat: string; atelier_id: string | null } | null };
-    // Lecture de TOUT le site (7 jours x toutes les absences), filtree ensuite
-    // par atelier en memoire : c'est la requete la plus large de la page, et
-    // celle qui atteindra le plafond des 1000 lignes en premier. fetchAll +
-    // `.order("id")` la mettent hors de portee de la troncature silencieuse.
-    const absPl = await fetchAll<AbsP>(() =>
+  if (rosterIds.length) {
+    const absPl = await fetchAll<{ personne_id: string; jour: string }>(() =>
       admin
         .from("placement")
-        .select("personne_id, jour, personne:personne_id(nom, prenom, type_contrat, atelier_id)")
+        .select("personne_id, jour")
         .eq("site_id", site.id)
         .in("jour", isos)
+        .in("personne_id", rosterIds)
         .not("motif_absence_id", "is", null)
         .order("id")
-        .returns<AbsP[]>()
+        .returns<{ personne_id: string; jour: string }[]>()
     );
     for (const r of absPl) {
-      const p = r.personne;
-      if (!p || p.atelier_id !== atelier.id) continue; // seulement les gens de cet atelier
       (absByPerson.get(r.personne_id) ?? absByPerson.set(r.personne_id, new Set()).get(r.personne_id)!).add(r.jour);
-      if (!persons.has(r.personne_id)) persons.set(r.personne_id, { nom: p.nom, prenom: p.prenom, type_contrat: p.type_contrat });
-    }
-  }
-
-  // Personnes TP de cet atelier sans placement ni absence : elles doivent
-  // apparaitre dans la vue "par nom" pour qu'on voie les jours TP.
-  if (tpSet.size > 0) {
-    // Extraire les personne_id distincts du tpSet.
-    const tpPersonIds = new Set<string>();
-    for (const k of tpSet) tpPersonIds.add(k.split(":")[0]);
-    // Ne charger que ceux pas deja dans `persons`.
-    const missing = [...tpPersonIds].filter((id) => !persons.has(id));
-    if (missing.length) {
-      const { data: tpP } = await admin
-        .from("personne")
-        .select("id, nom, prenom, type_contrat, atelier_id")
-        .eq("site_id", site.id)
-        .in("id", missing)
-        .eq("atelier_id", atelier.id)
-        .returns<{ id: string; nom: string; prenom: string; type_contrat: string; atelier_id: string | null }[]>();
-      for (const p of tpP ?? []) {
-        persons.set(p.id, { nom: p.nom, prenom: p.prenom, type_contrat: p.type_contrat });
-      }
     }
   }
 
@@ -379,7 +367,8 @@ export default async function AffichageAtelier({
   const colBg = (iso: string) => (iso === todayIso ? AUJOURDHUI : undefined);
   const cellBorder = "1px solid #d9dce1";
 
-  // Cellule vue "par nom" : sur quel poste cette personne est placee ce jour-la (poste + horaire dessous).
+  // Cellule vue "par nom" : sur quel poste cette personne est placee ce jour-la.
+  // Poste d'un AUTRE atelier -> annotation « (Atelier X) » sous le nom du poste.
   const cellNom = (personId: string, iso: string) => {
     const rows = byPerson.get(`${personId}:${iso}`) ?? [];
     if (!rows.length) {
@@ -394,11 +383,18 @@ export default async function AffichageAtelier({
     }
     return rows.map((r, i) => {
       if (!r.poste_id) return null;
+      const info = posteInfo.get(r.poste_id);
+      const distant = info && info.atelierId !== atelier.id;
       const h = horaireTxt(personId, r.poste_id, r.quart_code, iso);
       const cmt = commentTxt(personId, iso);
       return (
         <div key={i} style={{ lineHeight: 1.2, marginBottom: i < rows.length - 1 ? 6 : 0 }}>
-          <div style={{ fontWeight: 600 }}>{posteNom.get(r.poste_id) ?? "?"}</div>
+          <div style={{ fontWeight: 600 }}>{info?.nom ?? "?"}</div>
+          {distant && (
+            <div style={{ color: "#b45309", fontStyle: "italic", fontSize: 12 }}>
+              (Atelier {atelierNomById.get(info!.atelierId) ?? "?"})
+            </div>
+          )}
           {h && <div style={{ color: "#1d4ed8", fontSize: 13 }}>{h}</div>}
           {cmt && <div style={{ color: "#6b7280", fontStyle: "italic", fontSize: 12 }}>{cmt}</div>}
         </div>
@@ -406,14 +402,25 @@ export default async function AffichageAtelier({
     });
   };
 
-  const personList = [...persons.entries()]
-    .map(([id, p]) => ({ id, ...p }))
-    .sort((a, b) => (a.nom + a.prenom).localeCompare(b.nom + b.prenom));
-
   // Colonnes affichees : les jours OUVERTS par l Ordonnancement, meme si aucune
   // affectation n y figure encore. Une journee ouverte et vide doit se voir.
   const shownDays = days.filter((d) => openDays.has(d.iso));
   const noWork = shownDays.length === 0;
+
+  // Liste des lignes : personnes de l'atelier ayant une activité sur les jours
+  // affichés (placement ici ou ailleurs, absence, ou TP). On ALLÈGE l'écran en
+  // retirant celles absentes sur TOUTE la période — inutile d'occuper une ligne
+  // pour un mur d'« Absence ». Une absence partielle reste visible.
+  const aUnPlacement = (id: string) => shownDays.some((d) => (byPerson.get(`${id}:${d.iso}`)?.length ?? 0) > 0);
+  const aUneAbsence = (id: string) => shownDays.some((d) => absByPerson.get(id)?.has(d.iso));
+  const aUnTp = (id: string) => shownDays.some((d) => tpSet.has(`${id}:${d.iso}`));
+  const absentToutePeriode = (id: string) =>
+    !noWork && !aUnPlacement(id) && shownDays.every((d) => absByPerson.get(id)?.has(d.iso));
+
+  const personList = rosterIds
+    .filter((id) => (aUnPlacement(id) || aUneAbsence(id) || aUnTp(id)) && !absentToutePeriode(id))
+    .map((id) => ({ id, ...rosterById.get(id)! }))
+    .sort((a, b) => (a.nom + a.prenom).localeCompare(b.nom + b.prenom));
 
   return (
     // Deux boites imbriquees pour l'impression : `affichage-feuille` est le cadre,
@@ -489,6 +496,7 @@ export default async function AffichageAtelier({
       <div style={{ marginTop: 14, fontSize: 14, color: "#6b7280" }}>
         Légende : <span style={{ background: INTERIM_BG, padding: "0 6px" }}>Intérimaire</span>{" "}
         · <span style={{ background: AUJOURDHUI, padding: "0 6px" }}>Aujourd&apos;hui</span> · horaires en bleu ·{" "}
+        <span style={{ color: "#b45309", fontStyle: "italic" }}>(Atelier X)</span> = prêté ·{" "}
         <span style={{ color: "#b91c1c" }}>Absence</span>{" "}
         · <span style={{ color: "#3730a3" }}>TP</span> (temps partiel){" "}
         · mise à jour auto toutes les 5 min.

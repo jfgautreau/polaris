@@ -462,7 +462,16 @@ prochain gros chantier, pas une optimisation cosmétique.
   intégrés + `role_custom`. Un rôle personnalisé naît sans droit.
 - Bilans : `src/app/bilans/*` (Cockpit + 4 catégories, impression PDF via `@media print`).
 - Affichage TV : `src/app/affichage/atelier/[atelier]/page.tsx` (public, refresh 5 min,
-  **vue par nom uniquement**).
+  **vue par nom uniquement**). ⚠️ Depuis 2026-08-25, l'écran est rattaché à
+  l'**atelier d'affectation** (`personne.atelier_id`), pas à l'atelier de placement :
+  une personne n'apparaît que sur SON atelier (roster = personnes dont `atelier_id`
+  = cet atelier), **une seule fois**, même les jours où elle est prêtée ailleurs.
+  Un placement sur un poste d'un **autre** atelier est annoté « (Atelier X) » sous
+  le nom du poste (carte globale `posteInfo` = tous les postes du site → nom + atelier).
+  Les personnes d'un autre atelier prêtées ici n'y figurent donc PAS. Allègement :
+  une personne **absente sur TOUTE la période affichée** est retirée (les absences
+  partielles restent, avec « Absence » sur les jours concernés). Colonnes = jours
+  ouverts de CET atelier (`openDays`).
 - Param. RH (clé de droit toujours `motifs`, route toujours `/admin/motifs`) :
   `src/app/admin/motifs/{page,actions,FenetreAffichageInline}.tsx(ts)`. L'écran regroupe
   désormais **quatre sections** : Motifs d'absence, Agences d'intérim (menu Agence de
