@@ -191,6 +191,16 @@ données, RLS), `tasks/handoff.md` (détail écran par écran), `tasks/lessons.m
   `est_conducteur` est **déprécié et n'est plus lu nulle part** (colonne conservée en base,
   mais divergente : 9 postes ont `categorie='conducteur'` et `est_conducteur=false`).
   Un test échoue si une lecture réapparaît.
+- **`poste.remplacable` (PTR / PTNR)** (migration 0059, colonne « Rempl. » du Référentiel) :
+  `false` = **PTNR** (Position de Travail Non Remplaçable — un seul titulaire par
+  conception : directrice, responsable maintenance…). Sert **uniquement aux rapports**
+  (« nettoyer + isoler », cf. Bilans) : aucun impact sur le planning ni le placement.
+  Défaut `true` (PTR) → aucun changement de comportement tant qu'un poste n'est pas marqué.
+- **Poste fixe (`personne.poste_fixe_id`)** (migration 0059) : la personne « appartient »
+  à ce poste et y est **pré-remplie** dans le planning (bouton « Pré-remplir postes fixes »,
+  cf. Planning). Saisi des **deux côtés, même donnée** : sélecteur de la fiche Personnel
+  (modale Informations) **ou** colonne « Titulaire » du Référentiel. **Indépendant** de
+  PTR/PTNR (un PTR peut avoir un titulaire pré-rempli ; un PTNR peut rester vacant).
 - **Quarts : aucun code en dur.** `src/lib/quarts.ts` porte les deux règles qui étaient
   recopiées partout — le **quart par défaut** d'un écran (`matin` s'il existe, sinon le
   premier dans l'ordre) et le **repli des placements historiques** sans `quart_code`.
@@ -416,14 +426,27 @@ et l'hydratation devient très lourde. Les habilitations sont dans le même ordr
 prochain gros chantier, pas une optimisation cosmétique.
 
 ## Carte des fichiers
-- Socle : `src/lib/{permissions,roles,roles-server,current-user,current-site,site-modules,week,refdata,parametres,habilitations,supabase-server,fetch-all,numeros-rotation,password-link,rotation,password,erreurs,absence,absences-periodes,calendrier,quarts,semaine-type,interim,noms,bilans-rapports}.ts`, `src/proxy.ts`.
+- Socle : `src/lib/{permissions,roles,roles-server,current-user,current-site,site-modules,week,refdata,parametres,habilitations,horaires,supabase-server,fetch-all,numeros-rotation,password-link,rotation,password,erreurs,absence,absences-periodes,calendrier,quarts,semaine-type,interim,noms,bilans-rapports,synthese-data}.ts`, `src/proxy.ts`.
+  - `horaires.ts` (testé) : **résolveur unique de l'horaire affiché** d'une personne
+    sur un poste un jour donné — priorité **exception ponctuelle > temps partiel >
+    horaire standard** (la priorité porte sur la SOURCE, pas borne par borne). Partagé
+    entre l'affichage TV et la synthèse intérim (`/bilans/syntheses`) pour ne pas diverger.
 - Nav : `src/components/{AppHeader,SettingsMenu,UserMenu,NavIcons}.tsx`.
   Logo → `/` (page d'accueil : logo centré + titre « planning »).
   `UserMenu` porte aussi le lien vers le **guide utilisateur** (`public/guide.html`,
   document autonome ouvert dans un onglet, mais servi derrière l'authentification).
 - Composants partagés : `src/components/{SlideSwitch,ToggleSwitch,AtelierEquipeFiltres,LectureSeule,PageTitle,PrintButton,AutoRefresh,BandeauErreur,ConfirmForm,DateRangePicker,ActifCheckbox,ModaleDeplacable,InfoBulle,icons,SaveIcon,persongrid.module.css,usePersonGrid.ts}`.
   Icônes toutes centralisées dans `icons.tsx` (`SaveIcon`, `EditIcon`, `CheckIcon`, `TrashIcon`, `PrintIcon`, `AbsenceIcon`, `SearchIcon`, `InfoIcon`, `GearIcon`). `SaveIcon.tsx` reste comme shim d'import historique.
-- Planning : `src/app/planning/{page,PlanningGrid,PlanningFilters,AtelierFilter,QuartSelector}.tsx`.
+- Planning : `src/app/planning/{page,PlanningGrid,PlanningFilters,AtelierFilter,QuartSelector,PrefillButton}.tsx`.
+  ⚠️ **Pré-remplissage « postes fixes »** (`PrefillButton` → `/api/placement/prefill`,
+  droit Planning/Placement complet) : place chaque personne à **poste fixe**
+  (`personne.poste_fixe_id`) sur son poste, pour les **3 semaines affichées**
+  (lundi→vendredi), au **quart de son équipe** (quart fixe, sinon rotation de la semaine,
+  sinon défaut) — indépendamment du quart affiché. `upsert ignoreDuplicates` sur
+  `(personne, jour)` → **n'écrase jamais** une case remplie (absence/affectation) ; saute
+  les jours **hors effectif** (contrat ne couvrant pas le jour). ⚠️ La grille garde son
+  état local (`useState(initial)`) et ignore `router.refresh()` : le bouton **recharge la
+  vue** (`window.location.reload()`) après succès, sinon l'écran ne se met à jour qu'au F5.
 - Placement (saisie glisser-déposer, droit **`placement`**) : `src/app/placement/{page,PlacementBoard,placement.module.css}`.
   Plan par ligne → postes → **cases numérotées** ; bascule **Plan / Absences** (`?vue=absences`,
   absences filtrées par l'atelier affiché) ; copie **écraser / compléter** ; bouton **PDF**
@@ -452,8 +475,23 @@ prochain gros chantier, pas une optimisation cosmétique.
   Flag `hasContrat` calculé serveur (`page.tsx`) et propagé au client. Segment
   de filtre « Fiche · Toutes / ⚠ Incomplètes » + badge d'alerte dans l'en-tête.
   Filtre Statut par défaut = **Actif** (avec segments « À venir / Actif / Parti »).
+  ⚠️ **RGPD (export / anonymiser / supprimer)** : bouton roue crantée gouverné par le
+  droit **`rgpd`** (write), et non plus `personnel: write` — modifier une fiche ne donne
+  plus le droit d'effacer/anonymiser. Les 3 actions (`actions.ts` + `/api/personnel/[id]/export`)
+  passent toutes par `requireModuleWrite("rgpd")` / `canWriteModule(role,"rgpd")`.
+  Le bouton apparaît dès `rgpd: write`, même en vue lecture seule du personnel.
+  **Poste fixe** : sélecteur dans la modale **Informations** (icône i) ; écrit
+  `personne.poste_fixe_id` (clé du pré-remplissage du planning). La ligne porte un liseré
+  indigo + 📌 quand un poste fixe est défini. Même donnée que la colonne « Titulaire » du
+  Référentiel.
 - Référentiel : `src/app/admin/referentiel/*` + `src/app/api/referentiel/route.ts`
-  (colonnes **N° Rot** et **Habil. requises**).
+  (colonnes **N° Rot**, **Habil. requises**, **Rempl.** (PTR/PTNR) et **Titulaire**).
+  ⚠️ **Rempl.** = `poste.remplacable` (PTR remplaçable / **PTNR** non — un seul titulaire
+  par conception). ⚠️ **Titulaire** (op `set-titulaire`) écrit `personne.poste_fixe_id`
+  (même donnée que la fiche Personnel) : sémantique « un titulaire » depuis cette vue
+  (rattacher détache l'ancien, la colonne étant mono-valuée) ; plusieurs titulaires se
+  gèrent côté Personnel. Édition inline (une seule liste `<select>` montée à la fois →
+  DOM léger malgré des centaines de personnes).
 - Habilitations : `src/app/habilitations/{page,HabilitationsList,HabMark,HabLegendeModal,HabMajModal,AutorisationMark}.tsx`
   + `src/app/admin/habilitations-param/*` + `src/app/api/habilitations/route.ts`.
   Saisie **au clic sur une pastille** (modale pré-remplie) ; l'en-tête est rendu par
@@ -466,6 +504,19 @@ prochain gros chantier, pas une optimisation cosmétique.
 - Bilans : `src/app/bilans/*` (Cockpit + 9 rapports détaillés, impression PDF via
   `@media print`). Liste des rapports centralisée dans `src/lib/bilans-rapports.ts`
   (partagée Cockpit ↔ `/platform` pour le masquage par site, cf. Plateforme).
+  - **Synthèses hebdomadaires** (`/bilans/syntheses` + `SyntheseFilters`, `AgencePrintButton`,
+    données dans `src/lib/synthese-data.ts`) : un écran, deux vues (bascule) sur un sélecteur
+    de semaine. **Absences** de la semaine (hors intérim), période **complète** reconstruite
+    via `grouperAbsences`, filtrable atelier/motif, sous-totaux par motif. **Intérim** :
+    planning prévisionnel groupé **par agence** (`contrat_periode.agence_interim`), horaires
+    résolus par `horaires.ts`, **export PDF par agence** (`AgencePrintButton` isole une
+    section à l'impression ; `.print-hidden`/`.agence-print` dans `globals.css`).
+  - ⚠️ **PTR/PTNR dans les rapports** (`poste.remplacable`, migration 0059) : « nettoyer +
+    isoler ». Cockpit & Polyvalence **excluent** les PTNR des « postes fragiles / sans
+    relève / écart-cible » (un titulaire unique par conception n'est pas une anomalie).
+    Compétences critiques les **isole** dans « **Postes à titulaire unique (PTNR)** » + KPI
+    « Titulaire à risque » : le vrai risque n'est pas l'absence de relève mais le **départ
+    du titulaire** (fin de contrat, retraite) ou une **habilitation qui expire**.
 - Affichage TV : `src/app/affichage/atelier/[atelier]/page.tsx` (public, refresh 5 min,
   **vue par nom uniquement**). ⚠️ Depuis 2026-08-25, l'écran est rattaché à
   l'**atelier d'affectation** (`personne.atelier_id`), pas à l'atelier de placement :

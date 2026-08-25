@@ -496,3 +496,28 @@ UTF-8 par défaut, sans BOM).
 `Get-Content`/`Set-Content`/`Out-File` de PowerShell 5.1 sur du texte accentué. Utiliser
 l'outil **Edit** (préserve l'encodage) ou un **script Node**. Et comme le mojibake ne casse
 pas le build, **toujours relire le `git diff`** d'un remplacement en masse avant de commit.
+
+## L35 — Une grille cliente initialisée par `useState(props)` ignore `router.refresh()`
+
+**Symptôme** : après le bouton « Pré-remplir postes fixes » (écriture serveur en masse dans
+`placement`), le message de succès s'affiche mais **le tableau du planning ne bouge pas** ;
+il faut un **F5** pour voir les nouvelles cases.
+
+**Racine** : `PlanningGrid` porte l'état des cellules dans `const [vals] = useState(initial)`.
+Un `useState(x)` ne lit `x` **qu'au montage** : il ignore les rendus suivants. La grille est
+ré-montée **uniquement** via sa `key` (qui n'inclut que les filtres : équipe/atelier/quart/
+semaine). Un `router.refresh()` ré-exécute bien le Server Component et renvoie un `initial`
+frais, mais **la `key` ne change pas** → React réutilise l'instance → `vals` reste **périmé**.
+Le F5 marche parce qu'il **remonte tout**.
+
+**Fix retenu** (action de masse ponctuelle) : après succès, `window.location.reload()` — on
+affiche d'abord le message, puis recharge (`setTimeout(reload, 650)`). Simple et infaillible.
+
+**Alternatives** (non retenues ici) : (a) un `useEffect` qui resynchronise `vals` depuis
+`initial` — mais la grille évite volontairement ce sync pour ne pas écraser les éditions
+optimistes en attente ; (b) glisser un *nonce* dans la `key` de la grille pour forcer le
+remontage. Les deux sont plus intrusifs qu'un reload pour un bouton occasionnel.
+
+**Règle** : quand une écriture serveur doit se refléter dans un composant client dont l'état
+vient de `useState(props)`, `router.refresh()` **ne suffit pas**. Soit remonter le composant
+(changer sa `key`), soit recharger la page, soit resynchroniser explicitement l'état.
