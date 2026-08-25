@@ -475,15 +475,24 @@ prochain gros chantier, pas une optimisation cosmétique.
   Flag `hasContrat` calculé serveur (`page.tsx`) et propagé au client. Segment
   de filtre « Fiche · Toutes / ⚠ Incomplètes » + badge d'alerte dans l'en-tête.
   Filtre Statut par défaut = **Actif** (avec segments « À venir / Actif / Parti »).
-  ⚠️ **RGPD (export / anonymiser / supprimer)** : bouton roue crantée gouverné par le
-  droit **`rgpd`** (write), et non plus `personnel: write` — modifier une fiche ne donne
-  plus le droit d'effacer/anonymiser. Les 3 actions (`actions.ts` + `/api/personnel/[id]/export`)
-  passent toutes par `requireModuleWrite("rgpd")` / `canWriteModule(role,"rgpd")`.
-  Le bouton apparaît dès `rgpd: write`, même en vue lecture seule du personnel.
-  **Poste fixe** : sélecteur dans la modale **Informations** (icône i) ; écrit
-  `personne.poste_fixe_id` (clé du pré-remplissage du planning). La ligne porte un liseré
-  indigo + 📌 quand un poste fixe est défini. Même donnée que la colonne « Titulaire » du
-  Référentiel.
+  **Colonne Commentaire** dans la grille (`personne.commentaire`) : éditée inline en
+  écriture, tronquée + info-bulle en lecture. ⚠️ Largeurs des colonnes resserrées (sauf
+  Nom/Prénom) pour la loger, plusieurs libellés d'en-tête raccourcis (`Matr.` non — libellé
+  complet gardé —, `Livret`, `⚠ 18m`, `Point.`, `Abs.`) ; `Abs.` et `Statut` ont en plus un
+  padding latéral réduit (`tightPad`). `table-layout: fixed` normalise les `%`, c'est le
+  **rapport** entre colonnes qui compte.
+  ⚠️ **Bouton engrenage UNIQUE** (colonne d'actions, avec la case de fusion à sa droite) :
+  ouvre la modale « fiche » regroupant **Commentaire → Poste fixe → RGPD** (les anciens
+  boutons « i » Informations et « engrenage » RGPD ont été fusionnés). Apparaît dès
+  `canEdit` **ou** `canRgpd` ; en lecture seule les champs sont en consultation et la
+  section RGPD ne s'affiche que pour `rgpd: write`.
+  ⚠️ **RGPD (export / anonymiser / supprimer)** : gouverné par le droit **`rgpd`** (write),
+  et non plus `personnel: write` — modifier une fiche ne donne plus le droit d'effacer/
+  anonymiser. Les 3 actions (`actions.ts` + `/api/personnel/[id]/export`) passent toutes par
+  `requireModuleWrite("rgpd")` / `canWriteModule(role,"rgpd")`.
+  **Poste fixe** : sélecteur dans la modale ci-dessus ; écrit `personne.poste_fixe_id`
+  (clé du pré-remplissage du planning). La ligne porte un liseré indigo + 📌 sur l'engrenage
+  quand un poste fixe est défini. Même donnée que la colonne « Titulaire » du Référentiel.
 - Référentiel : `src/app/admin/referentiel/*` + `src/app/api/referentiel/route.ts`
   (colonnes **N° Rot**, **Habil. requises**, **Rempl.** (PTR/PTNR) et **Titulaire**).
   ⚠️ **Rempl.** = `poste.remplacable` (PTR remplaçable / **PTNR** non — un seul titulaire
