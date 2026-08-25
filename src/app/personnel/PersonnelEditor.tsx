@@ -82,24 +82,29 @@ function SexePill({ sexe }: { sexe: string | null }) {
 
 type ColKey =
   | "type_contrat" | "matricule" | "numero_badge" | "nom" | "prenom" | "sexe"
-  | "equipe" | "atelier" | "date_livret_accueil" | "absences" | "alerte" | "pointure" | "tp" | "statut";
+  | "equipe" | "atelier" | "date_livret_accueil" | "absences" | "alerte" | "pointure" | "tp" | "statut" | "commentaire";
+// ⚠️ Largeurs (%) resserrees pour loger la colonne Commentaire : tout est reduit
+// SAUF Nom/Prenom. `table-layout: fixed` normalise les % a la largeur du tableau,
+// c'est donc le rapport entre colonnes qui compte. Libelles longs raccourcis pour
+// ne pas deborder d'une colonne etroite (en-tetes en `nowrap`).
 const COLS: { key: ColKey; label: string; w: number; search?: boolean }[] = [
-  { key: "type_contrat", label: "Contrat", w: 6, search: true },
-  { key: "matricule", label: "Matricule", w: 7, search: true },
-  { key: "numero_badge", label: "Badge", w: 6, search: true },
+  { key: "type_contrat", label: "Contrat", w: 5, search: true },
+  { key: "matricule", label: "Matr.", w: 5.5, search: true },
+  { key: "numero_badge", label: "Badge", w: 5, search: true },
   { key: "nom", label: "Nom", w: 11, search: true },
   { key: "prenom", label: "Prénom", w: 10, search: true },
-  { key: "sexe", label: "H/F", w: 4, search: true },
-  { key: "equipe", label: "Équipe", w: 6, search: true },
-  { key: "atelier", label: "Atelier", w: 6, search: true },
-  { key: "date_livret_accueil", label: "Livret accueil", w: 8.5 },
-  { key: "absences", label: "Absences", w: 6 },
-  { key: "alerte", label: "⚠ 18 mois", w: 8 },
-  { key: "pointure", label: "Pointure", w: 5, search: true },
-  { key: "tp", label: "TP", w: 5 },
-  { key: "statut", label: "Statut", w: 6.5, search: true },
+  { key: "sexe", label: "H/F", w: 3.5, search: true },
+  { key: "equipe", label: "Équipe", w: 5, search: true },
+  { key: "atelier", label: "Atelier", w: 5, search: true },
+  { key: "date_livret_accueil", label: "Livret", w: 6 },
+  { key: "absences", label: "Abs.", w: 4.5 },
+  { key: "alerte", label: "⚠ 18m", w: 5.5 },
+  { key: "pointure", label: "Point.", w: 4, search: true },
+  { key: "tp", label: "TP", w: 3.5 },
+  { key: "statut", label: "Statut", w: 5.5, search: true },
+  { key: "commentaire", label: "Commentaire", w: 15, search: true },
 ];
-// Colonnes dont le contenu est centre.
+// Colonnes dont le contenu est centre (Commentaire reste aligne a gauche).
 const CENTER = new Set<ColKey>(["type_contrat", "matricule", "numero_badge", "sexe", "equipe", "atelier", "tp", "pointure", "absences"]);
 
 // Bouton « Absences » de la ligne : ouvre l'historique et la déclaration.
@@ -403,6 +408,7 @@ export default function PersonnelEditor({
       case "equipe": return equipeNom(r.equipe_id).toLowerCase();
       case "atelier": return atelierNom(r.atelier_id).toLowerCase();
       case "pointure": return (r.pointure ?? "").toLowerCase();
+      case "commentaire": return (r.commentaire ?? "").toLowerCase();
       case "statut": {
         const s = statutALaDate(r, today);
         return s === "ACTIF" ? "actif" : s === "A_VENIR" ? "a venir" : "parti";
@@ -700,6 +706,15 @@ export default function PersonnelEditor({
                         )}
                       </td>
                       <td style={{ textAlign: "center" }}>{statutChip(r)}</td>
+                      <td>
+                        <input
+                          value={r.commentaire ?? ""}
+                          onChange={(e) => field(r.id, "commentaire", e.target.value)}
+                          title={r.commentaire || "Commentaire"}
+                          placeholder="—"
+                          style={{ ...inp, textOverflow: "ellipsis" }}
+                        />
+                      </td>
                       <td style={{ whiteSpace: "nowrap", textAlign: "center" }}>
                         <input type="checkbox" checked={sel.has(r.id)} onChange={() => toggleSel(r.id)} disabled={!sel.has(r.id) && sel.size >= 2} title="Sélectionner pour fusionner (2 max)" style={{ width: "auto", marginRight: 6, verticalAlign: "middle" }} />
                         <button type="button" className="iconbtn" title={`Informations (commentaire, poste fixe)${r.poste_fixe_id ? " · poste fixe défini 📌" : ""}`} onClick={() => setInfoFor(r)} style={r.poste_fixe_id ? { boxShadow: "inset 0 0 0 2px #6366f1" } : undefined}><InfoIcon /></button>
@@ -739,6 +754,9 @@ export default function PersonnelEditor({
                       <td style={{ textAlign: "center" }}>{r.pointure || "-"}</td>
                       <td style={{ textAlign: "center" }}>{r.temps_partiel ? <span className="sexe-pill" style={{ background: "#e0e7ff", color: "#3730a3" }}>TP</span> : <span className="muted">—</span>}</td>
                       <td style={{ textAlign: "center" }}>{statutChip(r)}</td>
+                      <td title={r.commentaire || ""} style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 0 }}>
+                        {r.commentaire ? r.commentaire : <span className="muted">—</span>}
+                      </td>
                       {/* Vue lecture seule mais droit RGPD : seule action offerte, la roue crantée. */}
                       {canRgpd && (
                         <td style={{ textAlign: "center" }}>

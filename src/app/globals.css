@@ -1252,10 +1252,10 @@ select.flat {
   border-bottom: 1px solid var(--border);
 }
 
-/* Personnel : espaces inter-colonnes reduits (tout afficher) */
+/* Personnel : espaces inter-colonnes reduits (loger la colonne Commentaire) */
 .pers-table th,
 .pers-table td {
-  padding: 2px 5px;
+  padding: 2px 3px;
 }
 .pers-table thead th {
   height: 30px;
