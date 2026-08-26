@@ -153,7 +153,11 @@ body {
   .agence-print {
     break-inside: avoid;
   }
-  .agence-print + .agence-print {
+  /* Saut de page seulement entre deux agences REELLEMENT visibles : sinon, a
+     l'export « PDF agence » d'une agence qui n'est pas la premiere, le saut se
+     posait avant elle (son predecesseur etant seulement `display:none`, pas
+     retire du DOM) et sortait une premiere page blanche. */
+  .agence-print:not(.print-hidden) + .agence-print:not(.print-hidden) {
     break-before: page;
   }
   .print-hidden {
@@ -1202,6 +1206,16 @@ select.flat {
   table { font-size: 8.5px; }
   th,
   td { padding: 1.5px 6px !important; }
+
+  /* Colonnes/en-tetes figes : neutralises a l'impression. Chrome insere une
+     page blanche (souvent en tete) des qu'un `position: sticky` subsiste dans un
+     tableau imprime ; le figement ne sert de toute facon qu'au defilement ecran.
+     Les cartes qui portent `overflow-x:auto` deviennent visibles pour ne pas
+     rogner le tableau ni creer de zone defilante a l'impression. */
+  th[style*="sticky"],
+  td[style*="sticky"] { position: static !important; }
+  .report-section .card,
+  .agence-print .card { overflow: visible !important; }
 
   .barrow {
     grid-template-columns: 130px 1fr 40px;
