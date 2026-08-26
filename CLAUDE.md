@@ -523,11 +523,24 @@ prochain gros chantier, pas une optimisation cosmétique.
   (partagée Cockpit ↔ `/platform` pour le masquage par site, cf. Plateforme).
   - **Synthèses hebdomadaires** (`/bilans/syntheses` + `SyntheseFilters`, `AgencePrintButton`,
     données dans `src/lib/synthese-data.ts`) : un écran, deux vues (bascule) sur un sélecteur
-    de semaine. **Absences** de la semaine (hors intérim), période **complète** reconstruite
-    via `grouperAbsences`, filtrable atelier/motif, sous-totaux par motif. **Intérim** :
-    planning prévisionnel groupé **par agence** (`contrat_periode.agence_interim`), horaires
-    résolus par `horaires.ts`, **export PDF par agence** (`AgencePrintButton` isole une
-    section à l'impression ; `.print-hidden`/`.agence-print` dans `globals.css`).
+    de semaine. **Absences** = **mini-calendrier jour par jour sur 4 semaines glissantes**
+    (semaine courante → S+3, le sélecteur décale la fenêtre d'1 semaine), hors intérim, liste
+    **à plat**, **seules les personnes absentes** au moins un jour sur la fenêtre. Chaque case
+    = un jour, teintée de la couleur du motif + **code court** (`abregerMotif`, lisible en N&B)
+    + info-bulle ; colonne « Tot. » et récap **par motif** (personnes distinctes / jours).
+    Filtrable atelier/motif. C'est une **projection** (jours tombant dans la fenêtre), plus le
+    relevé de périodes complètes d'avant. **Intérim** : planning prévisionnel groupé **par
+    agence** (`contrat_periode.agence_interim`), horaires résolus par `horaires.ts` ; chaque
+    bloc agence liste en bas ses **intérimaires non planifiés** (« Pas de besoin cette
+    semaine ») → une agence sans aucun placement **réapparaît** avec cette seule liste.
+    **Export PDF par agence** (`AgencePrintButton` isole une section à l'impression ;
+    `.print-hidden`/`.agence-print` dans `globals.css`).
+    ⚠️ **Impression** (cf. `tasks/lessons.md` L36) : trois pièges de « page blanche » réglés
+    dans le bloc `@media print` — saut de page agence borné aux blocs **réellement visibles**
+    (`.agence-print:not(.print-hidden) + …`), `position: sticky` **neutralisé** dans les
+    tableaux imprimés, et la grille du calendrier porte `print-flow` pour se **scinder**
+    naturellement entre pages (le `break-inside: avoid` global des `.card` sortait une 1re
+    page quasi vide sur un tableau plus haut qu'une page).
   - ⚠️ **PTR/PTNR dans les rapports** (`poste.remplacable`, migration 0059) : « nettoyer +
     isoler ». Cockpit & Polyvalence **excluent** les PTNR des « postes fragiles / sans
     relève / écart-cible » (un titulaire unique par conception n'est pas une anomalie).

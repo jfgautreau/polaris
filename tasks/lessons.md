@@ -521,3 +521,37 @@ remontage. Les deux sont plus intrusifs qu'un reload pour un bouton occasionnel.
 **Règle** : quand une écriture serveur doit se refléter dans un composant client dont l'état
 vient de `useState(props)`, `router.refresh()` **ne suffit pas**. Soit remonter le composant
 (changer sa `key`), soit recharger la page, soit resynchroniser explicitement l'état.
+
+## L36 — Impression PDF : trois causes distinctes de « première page blanche »
+
+**Symptôme** : sur `/bilans/syntheses`, une page blanche à l'impression — au départ sur les
+« PDF agence », puis persistante sur le calendrier des absences.
+
+**Trois racines, à ne pas confondre** (toutes dans le bloc `@media print` de `globals.css`) :
+
+1. **Saut de page posé avant un frère `display:none`.** La règle
+   `.agence-print + .agence-print { break-before: page }` fait un saut avant chaque agence
+   sauf la première. Le bouton « PDF agence » masque les autres en `display:none` — mais
+   **elles restent dans le DOM**, donc le combinateur `+` matche toujours et pose un saut
+   **avant** la seule agence visible dès qu'elle n'est pas la première → page blanche en tête.
+   *Fix* : ne cibler que des frères réellement visibles —
+   `.agence-print:not(.print-hidden) + .agence-print:not(.print-hidden)`.
+
+2. **`position: sticky` résiduel dans un tableau imprimé.** Bug Chrome connu : un `thead`/`td`
+   figé (colonne de noms `sticky left:0`) fait insérer une page blanche. Le figement ne sert
+   qu'au **défilement écran**. *Fix* : `th[style*="sticky"], td[style*="sticky"] { position:
+   static !important }` en impression (le `!important` d'une feuille bat le style inline).
+
+3. **`break-inside: avoid` sur un tableau plus haut qu'une page.** Les `.card`/`.report-section`
+   des rapports Cockpit sont en `break-inside: avoid` (une carte = un bloc, un rapport = une
+   page). Un **grand tableau** (calendrier des absences, ~30 lignes suffisent) dépasse une
+   page : Chrome, ne pouvant pas le garder d'un bloc, le **rejette entièrement** sur la page 2
+   → la page 1 ne garde que le titre (perçue comme blanche). *Fix* : classe `print-flow` sur
+   la section, remettant `break-inside: auto` → scission naturelle, en-tête répété via
+   `thead { display: table-header-group }` (défaut).
+
+**Règle** : un rapport imprimable a deux régimes. Contenu **borné** (KPI, petits tableaux) →
+`break-inside: avoid`, tient sur une page. Contenu **potentiellement long** (grille de N
+personnes) → doit pouvoir **se scinder** ; ne jamais lui laisser `avoid`, et neutraliser tout
+`sticky`. Et un saut de page relatif (`+`, `~`, `:not(:first)`) doit tenir compte des frères
+masqués par `display:none`, qui restent dans l'arbre.
