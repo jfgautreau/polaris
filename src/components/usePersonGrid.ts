@@ -46,7 +46,11 @@ export function usePersonGrid(colHoverClass: string, colHeadRow: number, virt?: 
 
   const rowCount = virt?.rowCount ?? 0;
   const rowH = virt?.rowHeight ?? 32;
-  const overscan = virt?.overscan ?? 8;
+  // Marge de lignes rendues au-dela du viewport. Assez large pour qu'un
+  // defilement rapide ne devoile pas une cale vide avant le re-rendu React
+  // (le flash « lignes qui se chargent »), le surcout de ~16 lignes restant
+  // negligeable face aux milliers de la grille complete.
+  const overscan = virt?.overscan ?? 16;
 
   // Fenetre visible [start, end[. Etat initial deterministe (identique serveur
   // et client -> pas de desynchro d'hydratation) : les INITIAL_ROWS premieres.
