@@ -1,15 +1,16 @@
 // Chargement des donnees des deux syntheses de `/bilans/syntheses` :
-//   - la liste des absences de la semaine (hors interimaires) ;
-//   - le planning previsionnel des interimaires, groupe par agence.
+//   - la vue « 4 semaines » des absences a venir (mini-calendrier jour par jour,
+//     hors interimaires) ;
+//   - le planning previsionnel des interimaires, groupe par agence, avec la liste
+//     des interimaires SANS besoin (non planifies) de chaque agence.
 //
-// Les deux partent de la SEMAINE choisie (lundi -> dimanche). Lecture sous RLS
-// (`getServerClient`) : l'ecran est derriere l'authentification et le site
-// courant borne deja chaque table. On garde donc `getServerClient` plutot que le
-// client admin — pas de `site_id` a poser a la main (cf. isolation-site.test.ts).
+// Lecture sous RLS (`getServerClient`) : l'ecran est derriere l'authentification
+// et le site courant borne deja chaque table. On garde donc `getServerClient`
+// plutot que le client admin — pas de `site_id` a poser a la main (cf.
+// isolation-site.test.ts).
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchAll } from "@/lib/fetch-all";
-import { grouperAbsences, type JourAbsence } from "@/lib/absences-periodes";
 import { horaireTxt, type MapsHoraire, type HM, type TpCfg } from "@/lib/horaires";
 import { estInterim } from "@/lib/interim";
 import type { QuartRef } from "@/lib/quarts";
@@ -17,50 +18,75 @@ import type { QuartRef } from "@/lib/quarts";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type DB = SupabaseClient<any, "public", any>;
 
+// Abreviation courte d'un motif pour la case du mini-calendrier (« Congés payés »
+// -> « CP », « Maladie » -> « MAL »). Sert de repere imprimable, la couleur seule
+// n'etant pas fiable (impression N&B, daltonisme). Le libelle complet reste en
+// info-bulle et dans la legende « Par motif ».
+export function abregerMotif(libelle: string): string {
+  const mots = libelle.trim().split(/\s+/).filter(Boolean);
+  if (mots.length >= 2) return mots.slice(0, 3).map((m) => m[0]).join("").toUpperCase();
+  return libelle.trim().slice(0, 3).toUpperCase();
+}
+
 // ---------------------------------------------------------------------------
-// Absences de la semaine (hors interim)
+// Absences a venir sur 4 semaines (hors interim) — mini-calendrier jour/jour
 // ---------------------------------------------------------------------------
 
-export type LigneAbsence = {
+export type CelluleAbsence = {
+  motifId: string | null;
+  libelle: string;
+  couleur: string | null;
+  abbr: string;
+};
+export type LigneAbsence4 = {
   personneId: string;
   nom: string;
   prenom: string;
   atelierId: string | null;
   atelierNom: string;
-  equipeId: string | null;
   equipeNom: string;
-  motifId: string | null;
-  motifLibelle: string;
-  motifCouleur: string | null;
-  debut: string;
-  fin: string;
-  jours: number;
-  declaree: boolean;
+  jours: Record<string, CelluleAbsence>; // cle = iso (jour ouvre)
+  total: number; // nb de jours absents dans la fenetre affichee
 };
+export type RecapMotif = {
+  motifId: string | null;
+  libelle: string;
+  couleur: string | null;
+  abbr: string;
+  personnes: number;
+  jours: number;
+};
+export type Absences4 = { lignes: LigneAbsence4[]; recap: RecapMotif[] };
 
 /**
- * Absences dont la periode CHEVAUCHE la semaine [lundi, dimanche], pour tout
- * l'effectif hors interim. On montre la periode COMPLETE (une absence qui
- * deborde la semaine garde ses vraies bornes) : on reconstruit donc les periodes
- * a partir de TOUS les jours d'absence des personnes concernees, pas des seuls
- * jours de la semaine.
+ * Absences posees sur les `workdayIsos` (jours ouvres des 4 semaines affichees),
+ * hors interim. On ne garde que les personnes ayant au moins une absence sur la
+ * fenetre. Filtrable par atelier (d'affectation) et par motif.
+ *
+ * Contrairement a la vue d'origine, on ne reconstruit PAS les periodes completes :
+ * le mini-calendrier montre uniquement les jours qui tombent dans la fenetre, jour
+ * par jour — c'est une projection, pas un releve historique.
  */
-export async function chargerAbsencesSemaine(
+export async function chargerAbsences4Semaines(
   supabase: DB,
-  weekIsos: string[]
-): Promise<LigneAbsence[]> {
-  const lundi = weekIsos[0];
-  const dimanche = weekIsos[weekIsos.length - 1];
-
-  // 1) Qui est absent au moins un jour de la semaine ?
-  const { data: touchesD } = await supabase
-    .from("placement")
-    .select("personne_id")
-    .in("jour", weekIsos)
-    .not("motif_absence_id", "is", null)
-    .returns<{ personne_id: string }[]>();
-  const persIds = [...new Set((touchesD ?? []).map((r) => r.personne_id))];
-  if (!persIds.length) return [];
+  workdayIsos: string[],
+  filtreAtelier?: string,
+  filtreMotif?: string
+): Promise<Absences4> {
+  // 1) Jours d'absence tombant dans la fenetre. fetchAll : au-dela de 1000 lignes,
+  //    PostgREST tronque en silence (cf. L8).
+  const jours = await fetchAll<{ personne_id: string; jour: string; motif_absence_id: string | null }>(() =>
+    supabase
+      .from("placement")
+      .select("personne_id, jour, motif_absence_id")
+      .in("jour", workdayIsos)
+      .not("motif_absence_id", "is", null)
+      .order("personne_id")
+      .order("jour")
+      .returns<{ personne_id: string; jour: string; motif_absence_id: string | null }[]>()
+  );
+  const persIds = [...new Set(jours.map((r) => r.personne_id))];
+  if (!persIds.length) return { lignes: [], recap: [] };
 
   // 2) Details des personnes (on ecarte les interimaires) + tables de libelles.
   const [{ data: persD }, { data: atD }, { data: eqD }, { data: motifD }] = await Promise.all([
@@ -74,64 +100,62 @@ export async function chargerAbsencesSemaine(
     supabase.from("motif_absence").select("id, libelle, couleur").returns<{ id: string; libelle: string; couleur: string | null }[]>(),
   ]);
   const persById = new Map((persD ?? []).map((p) => [p.id, p]));
-  const nonInterimIds = (persD ?? []).filter((p) => !estInterim(p.type_contrat)).map((p) => p.id);
-  if (!nonInterimIds.length) return [];
   const atNom = new Map((atD ?? []).map((a) => [a.id, a.nom]));
   const eqNom = new Map((eqD ?? []).map((e) => [e.id, e.nom]));
   const motif = new Map((motifD ?? []).map((m) => [m.id, m]));
 
-  // 3) TOUS les jours d'absence de ces personnes (periodes completes). fetchAll :
-  //    au-dela de 1000 lignes, PostgREST tronque en silence (cf. L8).
-  const jours = await fetchAll<{ personne_id: string; jour: string; motif_absence_id: string | null; absence_id: string | null }>(() =>
-    supabase
-      .from("placement")
-      .select("personne_id, jour, motif_absence_id, absence_id")
-      .in("personne_id", nonInterimIds)
-      .not("motif_absence_id", "is", null)
-      .order("personne_id")
-      .order("jour")
-      .returns<{ personne_id: string; jour: string; motif_absence_id: string | null; absence_id: string | null }[]>()
-  );
-  const parPersonne = new Map<string, JourAbsence[]>();
-  for (const j of jours) {
-    (parPersonne.get(j.personne_id) ?? parPersonne.set(j.personne_id, []).get(j.personne_id)!).push({
-      jour: j.jour,
-      motif_absence_id: j.motif_absence_id,
-      absence_id: j.absence_id,
-    });
+  // 3) Cellules par personne / jour (premier motif rencontre pour un jour donne).
+  const cellsByPerson = new Map<string, Record<string, CelluleAbsence>>();
+  for (const r of jours) {
+    const p = persById.get(r.personne_id);
+    if (!p || estInterim(p.type_contrat)) continue;
+    if (filtreMotif && r.motif_absence_id !== filtreMotif) continue;
+    const cells = cellsByPerson.get(r.personne_id) ?? cellsByPerson.set(r.personne_id, {}).get(r.personne_id)!;
+    if (cells[r.jour]) continue; // un seul motif par case
+    const m = r.motif_absence_id ? motif.get(r.motif_absence_id) : undefined;
+    cells[r.jour] = {
+      motifId: r.motif_absence_id,
+      libelle: m?.libelle ?? "Absence",
+      couleur: m?.couleur ?? null,
+      abbr: abregerMotif(m?.libelle ?? "Absence"),
+    };
   }
 
-  // 4) Regroupement en periodes, puis on ne garde que celles qui chevauchent la
-  //    semaine : debut <= dimanche ET fin >= lundi.
-  const lignes: LigneAbsence[] = [];
-  for (const pid of nonInterimIds) {
+  // 4) Lignes (une par personne conservee) + recap par motif.
+  const lignes: LigneAbsence4[] = [];
+  const recap = new Map<string, { libelle: string; couleur: string | null; abbr: string; pers: Set<string>; jours: number }>();
+  for (const [pid, cells] of cellsByPerson) {
     const p = persById.get(pid);
     if (!p) continue;
-    const periodes = grouperAbsences(parPersonne.get(pid) ?? []);
-    for (const per of periodes) {
-      if (per.debut > dimanche || per.fin < lundi) continue;
-      const m = per.motif_absence_id ? motif.get(per.motif_absence_id) : undefined;
-      lignes.push({
-        personneId: pid,
-        nom: p.nom,
-        prenom: p.prenom,
-        atelierId: p.atelier_id,
-        atelierNom: p.atelier_id ? atNom.get(p.atelier_id) ?? "—" : "—",
-        equipeId: p.equipe_id,
-        equipeNom: p.equipe_id ? eqNom.get(p.equipe_id) ?? "—" : "—",
-        motifId: per.motif_absence_id,
-        motifLibelle: m?.libelle ?? "Absence",
-        motifCouleur: m?.couleur ?? null,
-        debut: per.debut,
-        fin: per.fin,
-        jours: per.jours,
-        declaree: per.declaree,
-      });
+    if (filtreAtelier && p.atelier_id !== filtreAtelier) continue;
+    const isos = Object.keys(cells);
+    if (!isos.length) continue;
+    lignes.push({
+      personneId: pid,
+      nom: p.nom,
+      prenom: p.prenom,
+      atelierId: p.atelier_id,
+      atelierNom: p.atelier_id ? atNom.get(p.atelier_id) ?? "—" : "—",
+      equipeNom: p.equipe_id ? eqNom.get(p.equipe_id) ?? "—" : "—",
+      jours: cells,
+      total: isos.length,
+    });
+    for (const iso of isos) {
+      const c = cells[iso];
+      const key = c.motifId ?? "—";
+      const cur = recap.get(key) ?? { libelle: c.libelle, couleur: c.couleur, abbr: c.abbr, pers: new Set<string>(), jours: 0 };
+      cur.pers.add(pid);
+      cur.jours += 1;
+      recap.set(key, cur);
     }
   }
-  // Tri : par nom, puis date de debut.
-  lignes.sort((a, b) => (a.nom + a.prenom).localeCompare(b.nom + b.prenom) || a.debut.localeCompare(b.debut));
-  return lignes;
+  lignes.sort((a, b) => (a.nom + a.prenom).localeCompare(b.nom + b.prenom));
+
+  const recapArr: RecapMotif[] = [...recap.entries()]
+    .map(([motifId, v]) => ({ motifId: motifId === "—" ? null : motifId, libelle: v.libelle, couleur: v.couleur, abbr: v.abbr, personnes: v.pers.size, jours: v.jours }))
+    .sort((a, b) => b.jours - a.jours);
+
+  return { lignes, recap: recapArr };
 }
 
 // ---------------------------------------------------------------------------
@@ -146,7 +170,8 @@ export type LigneInterim = {
   atelierNom: string; // atelier d'affectation (— si aucun)
   cells: Record<string, CelluleInterim[]>; // cle = iso
 };
-export type GroupeAgence = { agence: string; lignes: LigneInterim[] };
+export type InterimDispo = { personneId: string; nom: string; prenom: string };
+export type GroupeAgence = { agence: string; lignes: LigneInterim[]; sansBesoin: InterimDispo[] };
 
 export async function chargerHorairesInterim(
   supabase: DB,
@@ -232,26 +257,33 @@ export async function chargerHorairesInterim(
     });
   }
 
-  // 4) On ne garde que les interimaires PLACES cette semaine (un previsionnel
-  //    sans affectation n'a rien a envoyer). Groupe par agence.
-  const parAgence = new Map<string, LigneInterim[]>();
+  // 4) Groupe par agence. On garde TOUTES les agences ayant au moins un
+  //    interimaire (non parti) : celles sans aucun placement reapparaissent avec
+  //    leur seule liste « sans besoin », pour communiquer a l'agence qu'aucun de
+  //    ses interimaires n'est requis cette semaine.
+  const parAgence = new Map<string, { lignes: LigneInterim[]; sansBesoin: InterimDispo[] }>();
   for (const p of interims) {
-    const cells = cellsByPerson.get(p.id);
-    if (!cells || Object.keys(cells).length === 0) continue;
     const agence = (p.agence_interim ?? "").trim() || "Agence non renseignée";
-    (parAgence.get(agence) ?? parAgence.set(agence, []).get(agence)!).push({
-      personneId: p.id,
-      nom: p.nom,
-      prenom: p.prenom,
-      atelierNom: p.atelier_id ? atNom.get(p.atelier_id) ?? "—" : "—",
-      cells,
-    });
+    const g = parAgence.get(agence) ?? parAgence.set(agence, { lignes: [], sansBesoin: [] }).get(agence)!;
+    const cells = cellsByPerson.get(p.id);
+    if (cells && Object.keys(cells).length > 0) {
+      g.lignes.push({
+        personneId: p.id,
+        nom: p.nom,
+        prenom: p.prenom,
+        atelierNom: p.atelier_id ? atNom.get(p.atelier_id) ?? "—" : "—",
+        cells,
+      });
+    } else {
+      g.sansBesoin.push({ personneId: p.id, nom: p.nom, prenom: p.prenom });
+    }
   }
 
   const groupes: GroupeAgence[] = [...parAgence.entries()]
-    .map(([agence, lignes]) => ({
+    .map(([agence, g]) => ({
       agence,
-      lignes: lignes.sort((a, b) => (a.nom + a.prenom).localeCompare(b.nom + b.prenom)),
+      lignes: g.lignes.sort((a, b) => (a.nom + a.prenom).localeCompare(b.nom + b.prenom)),
+      sansBesoin: g.sansBesoin.sort((a, b) => (a.nom + a.prenom).localeCompare(b.nom + b.prenom)),
     }))
     .sort((a, b) => a.agence.localeCompare(b.agence));
   return groupes;
