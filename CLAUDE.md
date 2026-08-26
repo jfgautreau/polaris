@@ -456,6 +456,14 @@ prochain gros chantier, pas une optimisation cosmétique.
 - Matrice : `src/app/matrice/{page,MatricePanel,MatrixGrid,Pie,LegendeModal}.tsx` + `matrice.module.css`.
   L'en-tête (titre · recherche · légende · bascule Actuel/Cible · filtres) est dans
   `MatricePanel` ; `MatrixGrid` reçoit `search` en prop.
+  ⚠️ **Pastille orange `!` « sans compétence »** (devant le nom, comme la fiche
+  incomplète du Personnel) : personne **ACTIVE** (les « À venir » sont exclues) sans
+  **aucun** niveau actuel ≥ 1 sur **aucun poste actif, tous ateliers confondus**. Le
+  drapeau `sansCompetence` est calculé **côté serveur** (`page.tsx`) par une requête
+  `matrice` dédiée `.gte("niveau_actuel", 1)` (exclut d'office le blanc **et** la
+  restriction −1 — une restriction n'est pas une compétence), **indépendante du filtre
+  atelier** : sinon une personne toute blanche dans l'atelier affiché mais compétente
+  ailleurs serait signalée à tort.
 - Personnel : `src/app/personnel/*` + `src/app/api/personnel/{route,merge/route,[id]/export/route,[id]/absences/route}.ts`.
   Colonne **Absences** (calendrier barré) : historique regroupé en périodes, déclaration
   d'une absence. Le regroupement vit dans `src/lib/absences-periodes.ts` (testé) : il

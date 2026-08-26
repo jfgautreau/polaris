@@ -14,7 +14,7 @@ const norm = (s2: string) => s2.normalize("NFD").replace(/[̀-ͯ]/g, "").toLower
 
 type Poste = { id: string; nom: string; objectifActuel?: number; objectifCible?: number };
 type Group = { ligneId: string; ligneNom: string; postes: Poste[] };
-type Personne = { id: string; label: string; editable: boolean; interim?: boolean; avenir?: boolean };
+type Personne = { id: string; label: string; editable: boolean; interim?: boolean; avenir?: boolean; sansCompetence?: boolean };
 type Cell = { a: number; c: number };
 // Agregat par poste, calcule en une seule passe sur toutes les personnes.
 type Stat = { lvl: number[]; restrict: number; geA: number; geC: number };
@@ -303,6 +303,29 @@ export default function MatrixGrid({
             {shown.map((pers) => (
               <tr key={pers.id}>
                 <td className={g.nameCell}>
+                  {pers.sansCompetence && (
+                    <span
+                      title="Aucune compétence sur aucun poste (tous ateliers confondus)"
+                      aria-label="Aucune compétence"
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: 16,
+                        height: 16,
+                        margin: "0 6px 0 0",
+                        borderRadius: 999,
+                        background: "#f59e0b",
+                        color: "#fff",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        lineHeight: 1,
+                        verticalAlign: "middle",
+                      }}
+                    >
+                      !
+                    </span>
+                  )}
                   {pers.avenir && (
                     <span title="À venir : recrutée, pas encore arrivée" style={{ background: "#dbeafe", color: "#1d4ed8", borderRadius: 3, padding: "0 4px", fontSize: 10, fontWeight: 700, marginRight: 4 }}>À venir</span>
                   )}

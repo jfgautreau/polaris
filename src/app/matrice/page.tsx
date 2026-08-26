@@ -121,6 +121,26 @@ export default async function MatricePage({
     }
   }
 
+  // Drapeau « sans compétence » — calculé sur TOUS les postes actifs du site,
+  // indépendamment du filtre atelier : une personne peut être toute blanche dans
+  // l'atelier affiché mais compétente ailleurs. On n'alerte que celles qui n'ont
+  // aucun niveau actuel ≥ 1 nulle part. `.gte("niveau_actuel", 1)` exclut d'office
+  // le blanc (0) ET la restriction (−1) : une restriction n'est pas une compétence.
+  const avecCompetence = new Set<string>();
+  if (personnes.length) {
+    const rows = await fetchAll<{ personne_id: string }>(() =>
+      supabase
+        .from("matrice")
+        .select("personne_id, poste!inner(actif)")
+        .eq("poste.actif", true)
+        .gte("niveau_actuel", 1)
+        .in("personne_id", personnes.map((p) => p.id))
+        .order("id")
+        .returns<{ personne_id: string }[]>()
+    );
+    for (const r of rows) avecCompetence.add(r.personne_id);
+  }
+
   // Perimetre d'edition (chefEquipes recupere en vague 1)
   const gridPersonnes = personnes.map((p) => ({
     id: p.id,
@@ -128,6 +148,8 @@ export default async function MatricePage({
     interim: p.type_contrat === "INTERIM",
     avenir: p.statut === "A_VENIR",
     editable: canEditMatrice || (p.equipe_id != null && chefEquipes.has(p.equipe_id)),
+    // Alerte réservée aux ACTIFS : une personne « À venir » sans compétence est normale.
+    sansCompetence: p.statut === "ACTIF" && !avecCompetence.has(p.id),
   }));
 
   return (
