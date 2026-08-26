@@ -185,7 +185,6 @@ export default function HabilitationsList({
   const [maj, setMaj] = useState<{ personneId: string; competenceId: string; dateObtention: string | null; autorisationRemise: boolean; commentaire: string | null } | null>(null);
   const [showLegende, setShowLegende] = useState(false);
   const [showBilan, setShowBilan] = useState(false);
-  const { headCardRef, headTableRef, rowsTableRef, rowsCardProps } = usePersonGrid(g.colHover, 3);
 
   const compById = useMemo(() => new Map(comps.map((c) => [c.id, c])), [comps]);
 
@@ -259,6 +258,13 @@ export default function HabilitationsList({
         const c = compById.get(r.competence_id);
         return p || (c ? compMatch(c) : r.competence ? norm(r.competence.nom).includes(norm(q)) : false);
       });
+
+  // Virtualisation des lignes de la grille (cf. usePersonGrid) : seules les
+  // personnes visibles sont rendues. `rowCount` suit le filtre de recherche.
+  const { headCardRef, headTableRef, rowsTableRef, rowsCardProps, virtual } = usePersonGrid(g.colHover, 3, {
+    rowCount: shownPersonnes.length,
+  });
+  const rowsShownPersonnes = virtual ? shownPersonnes.slice(virtual.start, virtual.end) : shownPersonnes;
 
   // Bandeaux d'en-tete : categories puis groupes. `debutGroupe` marque la premiere
   // colonne de chaque groupe (separateur plus marque, comme la matrice).
@@ -475,7 +481,13 @@ export default function HabilitationsList({
               <table className={`matrix ${g.table} ${g.rowsTable}`} ref={rowsTableRef}>
                 {cols}
                 <tbody>
-                  {shownPersonnes.map((p) => (
+                  {/* Cale haute : reserve la hauteur des lignes non rendues au-dessus. */}
+                  {virtual && virtual.padTop > 0 && (
+                    <tr aria-hidden>
+                      <td colSpan={shownOrdered.length + 1} style={{ height: virtual.padTop, padding: 0, border: 0 }} />
+                    </tr>
+                  )}
+                  {rowsShownPersonnes.map((p) => (
                     <tr key={p.id}>
                       <td className={g.nameCell}>
                         <span style={p.type_contrat === "INTERIM" ? { background: INTERIM_BG, borderRadius: 3, padding: "0 4px" } : undefined}>{p.nom} {p.prenom}</span>
@@ -510,6 +522,12 @@ export default function HabilitationsList({
                       })}
                     </tr>
                   ))}
+                  {/* Cale basse : reserve la hauteur des lignes non rendues en dessous. */}
+                  {virtual && virtual.padBottom > 0 && (
+                    <tr aria-hidden>
+                      <td colSpan={shownOrdered.length + 1} style={{ height: virtual.padBottom, padding: 0, border: 0 }} />
+                    </tr>
+                  )}
                   {shownPersonnes.length === 0 && (
                     <tr>
                       <td colSpan={shownOrdered.length + 1} className="muted" style={{ padding: 10 }}>

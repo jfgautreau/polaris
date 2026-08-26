@@ -52,12 +52,16 @@ export default function MatrixGrid({
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const objTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { headCardRef, headTableRef, rowsTableRef, rowsCardProps } = usePersonGrid(g.colHover, 2);
-
   const allPostes = useMemo(() => groups.flatMap((gr) => gr.postes), [groups]);
   // Filtre de recherche sur le nom (accents ignores). N'affecte que les lignes
   // affichees ; le bilan reste calcule sur l'ensemble.
   const shown = search.trim() ? personnes.filter((p) => norm(p.label).includes(norm(search))) : personnes;
+  // Virtualisation des lignes : seules les personnes visibles sont rendues (cf.
+  // usePersonGrid). `rowCount` suit le filtre de recherche.
+  const { headCardRef, headTableRef, rowsTableRef, rowsCardProps, virtual } = usePersonGrid(g.colHover, 2, {
+    rowCount: shown.length,
+  });
+  const rowsShown = virtual ? shown.slice(virtual.start, virtual.end) : shown;
   const key = (pid: string, poid: string) => `${pid}:${poid}`;
   const get = (k: string): Cell => cells[k] ?? { a: 0, c: 0 };
 
@@ -300,7 +304,13 @@ export default function MatrixGrid({
         <table className={`matrix ${g.table} ${g.rowsTable}`} ref={rowsTableRef}>
           {cols}
           <tbody>
-            {shown.map((pers) => (
+            {/* Cale haute : reserve la hauteur des lignes non rendues au-dessus. */}
+            {virtual && virtual.padTop > 0 && (
+              <tr aria-hidden>
+                <td colSpan={allPostes.length + 1} style={{ height: virtual.padTop, padding: 0, border: 0 }} />
+              </tr>
+            )}
+            {rowsShown.map((pers) => (
               <tr key={pers.id}>
                 <td className={g.nameCell}>
                   {pers.sansCompetence && (
@@ -370,6 +380,12 @@ export default function MatrixGrid({
                 })}
               </tr>
             ))}
+            {/* Cale basse : reserve la hauteur des lignes non rendues en dessous. */}
+            {virtual && virtual.padBottom > 0 && (
+              <tr aria-hidden>
+                <td colSpan={allPostes.length + 1} style={{ height: virtual.padBottom, padding: 0, border: 0 }} />
+              </tr>
+            )}
             {shown.length === 0 && (
               <tr>
                 <td colSpan={allPostes.length + 1} className="muted">
