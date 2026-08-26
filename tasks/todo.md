@@ -1,6 +1,6 @@
 # Reste à faire — Polaris
 
-> État au 2026-08-24. Migrations appliquées jusqu'à **0056**. **223** tests Vitest.
+> État au 2026-08-26. Migrations appliquées jusqu'à **0060**. **252** tests Vitest.
 > Historique détaillé : `git log`.
 
 ## Sécurité / multi-site
@@ -27,8 +27,11 @@
       DNS + slug → `x-site-id` dans `src/proxy.ts` (cf. `tasks/multi-site.md`).
 
 ## Chantiers techniques
-- [ ] **Virtualisation des grandes grilles** (Matrice ~22 000 cellules, Habilitations du
-      même ordre). Plafond structurel connu ; prochain gros chantier (cf. CLAUDE.md § Performance).
+- [x] **Virtualisation des grandes grilles** (2026-08-26) — Matrice + Habilitations ne
+      rendent que les lignes visibles (fenêtre + overscan 16, cales `<tr>` calées sur
+      `--grid-row-h`), via le socle partagé `usePersonGrid`. Colonnes **non** virtualisées
+      (noms figés, en-têtes collants, survol en croix intacts). Allège dessin + hydratation ;
+      **n'accélère pas** la récupération serveur (cf. « Lenteurs post-0053 » ci-dessous).
 - [ ] **Lenteurs post-0053 à investiguer** — chargement perçu plus lent depuis la
       séparation des référentiels. Pistes : index sur composite FK/PK `jour_quart`
       (EXPLAIN planning + placement), round-trip `getCurrentSite()` par appel de
