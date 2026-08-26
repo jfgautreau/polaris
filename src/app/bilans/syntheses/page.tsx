@@ -100,7 +100,7 @@ export default async function SynthesesPage({
               <div className="card"><p className="muted">Aucune absence prévue sur les 4 semaines {rangeLabel}{atelier || motif ? " (avec ces filtres)" : ""}.</p></div>
             ) : (
               <>
-                <div className="report-section">
+                <div className="report-section print-flow">
                   <div className="card" style={{ overflowX: "auto" }}>
                     <table className="matrix" style={{ borderCollapse: "collapse", width: "100%" }}>
                       <thead>

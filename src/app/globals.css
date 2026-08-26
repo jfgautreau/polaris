@@ -1217,6 +1217,15 @@ select.flat {
   .report-section .card,
   .agence-print .card { overflow: visible !important; }
 
+  /* Grilles longues (calendrier des absences) : elles peuvent depasser une page.
+     On les LAISSE se scinder naturellement d'une page a l'autre — sinon le
+     `break-inside: avoid` global des `.card`/`.report-section` rejette tout le
+     tableau (plus haut qu'une page) sur la page suivante et sort une premiere
+     page quasi vide. L'en-tete se repete via `table-header-group` (defaut). */
+  .print-flow,
+  .print-flow .card,
+  .print-flow table { break-inside: auto !important; page-break-inside: auto !important; }
+
   .barrow {
     grid-template-columns: 130px 1fr 40px;
     margin: 2px 0;
