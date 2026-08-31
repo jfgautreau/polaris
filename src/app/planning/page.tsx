@@ -608,10 +608,26 @@ export default async function PlanningPage({
         <div className="planning-top" style={{ justifyContent: "space-between", gap: 28, flexWrap: "wrap", alignItems: "stretch" }}>
           {/* Partie gauche : Annee / Mois / Semaine */}
           <PlanningNav base="/planning" semaine={centerIso} extra={extra} />
-          {/* Partie centrale : Equipe / Atelier / Quart (alignes sur les memes lignes) */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {/* Filtres (Quart / Atelier / Équipe) + boutons icône, dans une GRILLE à
+              deux colonnes qui PARTAGENT les mêmes rangées : chaque bouton est sur
+              la même rangée que son filtre (hauteur commune, bouton centré) ->
+              alignement garanti, et les boutons collent à droite des filtres.
+              La 2e colonne rend toujours 3 cases (span vide si pré-remplir masqué)
+              pour ne pas décaler les rangées. Libellé au survol via title. */}
+          <div style={{ display: "grid", gridTemplateColumns: "auto auto", columnGap: 10, rowGap: 6, alignItems: "center", justifyItems: "start" }}>
             <QuartSelector quarts={quarts} current={quart} semaine={centerIso} atelier={atelier} equipe={spEquipe} search={searchParam} />
+            {canEditPlanningFull ? (
+              <PrefillButton
+                semaines={weekMondays.map((wm) => isoDate(wm))}
+                weekLabel={`S${isoWeekNumber(weekMondays[0])} → S${isoWeekNumber(weekMondays[2])}`}
+              />
+            ) : (
+              <span />
+            )}
             <AtelierFilter ateliers={ateliers} atelier={atelier} equipe={spEquipe} quart={quart} semaine={centerIso} search={searchParam} />
+            <Link href="/horaires-specifiques" className="navlink" title="Horaires spécifiques" aria-label="Horaires spécifiques" style={{ width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}>
+              🕐
+            </Link>
             <PlanningFilters
               equipes={(equipesD ?? []).map((e) => ({ id: e.id, label: e.nom, couleur: e.couleur }))}
               equipe={spEquipe}
@@ -620,32 +636,9 @@ export default async function PlanningPage({
               atelier={atelier}
               search={searchParam}
             />
-          </div>
-          {/* Partie droite : boutons carrés icône seule. La colonne calque
-              EXACTEMENT la colonne de filtres — mêmes rangées `.filterrow`
-              (min-height 30 = hauteur d'un groupe de segments) et même `gap: 6`
-              -> chaque bouton tombe pile en face de sa ligne (Quart / Atelier /
-              Équipe). alignSelf flex-start pour ne pas étirer la colonne.
-              Libellé au survol via title. */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, alignSelf: "flex-start" }}>
-            <div className="filterrow" style={{ minHeight: 30, justifyContent: "flex-end" }}>
-              {canEditPlanningFull && (
-                <PrefillButton
-                  semaines={weekMondays.map((wm) => isoDate(wm))}
-                  weekLabel={`S${isoWeekNumber(weekMondays[0])} → S${isoWeekNumber(weekMondays[2])}`}
-                />
-              )}
-            </div>
-            <div className="filterrow" style={{ minHeight: 30, justifyContent: "flex-end" }}>
-              <Link href="/horaires-specifiques" className="navlink" title="Horaires spécifiques" aria-label="Horaires spécifiques" style={{ width: 30, height: 30, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}>
-                🕐
-              </Link>
-            </div>
-            <div className="filterrow" style={{ minHeight: 30, justifyContent: "flex-end" }}>
-              <Link href="/absences-specifiques" className="navlink" title="Absences spécifiques" aria-label="Absences spécifiques" style={{ width: 30, height: 30, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}>
-                🤒
-              </Link>
-            </div>
+            <Link href="/absences-specifiques" className="navlink" title="Absences spécifiques" aria-label="Absences spécifiques" style={{ width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}>
+              🤒
+            </Link>
           </div>
         </div>
         </div>
