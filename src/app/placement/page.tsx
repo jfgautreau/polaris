@@ -14,7 +14,7 @@ import PlacementBoard from "./PlacementBoard";
 
 type Atelier = { id: string; nom: string };
 type Equipe = { id: string; nom: string; couleur: string | null; quart_fixe?: string | null };
-type Quart = { code: string; libelle: string; ordre: number };
+type Quart = { code: string; libelle: string; ordre: number; creneau: string | null };
 type Personne = { id: string; nom: string; prenom: string; equipe_id: string | null; atelier_id: string | null; type_contrat: string };
 type PosteRow = { id: string; nom: string; nom_court: string | null; actif: boolean; effectif_requis: number; niveau_min_requis: number; ordre_affichage: number; numero_rotation: string | null };
 type LigneRow = { id: string; nom: string; ordre_affichage: number; atelier_id: string; poste: PosteRow[] };
@@ -42,7 +42,7 @@ export default async function PlacementPage({
   const [{ data: ateliersD }, { data: equipesD }, { data: quartsD }, { data: persD }, { data: motifsD }] = await Promise.all([
     supabase.from("atelier").select("id, nom").eq("actif", true).order("nom").returns<Atelier[]>(),
     supabase.from("equipe").select("id, nom, couleur, quart_fixe").eq("actif", true).order("nom").returns<Equipe[]>(),
-    supabase.from("quart").select("code, libelle, ordre").order("ordre").returns<Quart[]>(),
+    supabase.from("quart").select("code, libelle, ordre, creneau").order("ordre").returns<Quart[]>(),
     supabase.from("personne").select("id, nom, prenom, equipe_id, atelier_id, type_contrat").in("statut", ["ACTIF", "A_VENIR"]).order("nom").returns<Personne[]>(),
     supabase.from("motif_absence").select("id, code_court, libelle, couleur").eq("actif", true).order("libelle").returns<Motif[]>(),
   ]);
@@ -247,6 +247,56 @@ export default async function PlacementPage({
   const rotWeek = rotationForWeek(await getRotationRefsC(), isoDate(mondayOf(new Date(jour + "T00:00"))));
   const parQuart = equipesParQuart(equipes, rotWeek);
 
+  // Temps partiel du jour (mêmes règles métier que le Planning et l'affichage TV,
+  // cf. src/app/planning/page.tsx) : une personne est « TP » (indisponible ce
+  // jour) si sa journée est entièrement off, ou si son équipe travaille ce jour-là
+  // le créneau qu'elle NE fait PAS (mi-temps une semaine sur deux, piloté par la
+  // rotation datée + quart.creneau). Sert à la colonne « Absents / TP » du PDF.
+  const isoDow = (iso: string) => { const d = new Date(iso + "T00:00").getDay(); return d === 0 ? 7 : d; };
+  type TpConf = { off?: Record<string, string[]> } | null;
+  const cfgTpByPers = new Map<string, TpConf>();
+  {
+    const { data: tpP } = await supabase
+      .from("tp_periode")
+      .select("personne_id, date_debut, date_fin, tp_config")
+      .lte("date_debut", jour)
+      .or(`date_fin.is.null,date_fin.gte.${jour}`)
+      .returns<{ personne_id: string; date_debut: string; date_fin: string | null; tp_config: TpConf }[]>();
+    const avecPeriode = new Set<string>();
+    for (const r of tpP ?? []) {
+      avecPeriode.add(r.personne_id);
+      if (r.date_debut <= jour && (!r.date_fin || r.date_fin >= jour)) cfgTpByPers.set(r.personne_id, r.tp_config);
+    }
+    // Repli personne.tp_config (temps_partiel=true sans période datée).
+    const { data: tpFb } = await supabase
+      .from("personne")
+      .select("id, tp_config")
+      .eq("temps_partiel", true)
+      .returns<{ id: string; tp_config: TpConf }[]>();
+    for (const r of tpFb ?? []) if (!avecPeriode.has(r.id)) cfgTpByPers.set(r.id, r.tp_config);
+  }
+  const quartFixe = new Map(equipes.map((e) => [e.id, e.quart_fixe ?? null]));
+  const quartCreneau = new Map(quarts.map((q) => [q.code, q.creneau]));
+  const creneauDe = (q: string | null | undefined): "matin" | "aprem" | null => {
+    const c = q ? quartCreneau.get(q) : null;
+    return c === "matin" || c === "aprem" ? c : null;
+  };
+  const dowJour = String(isoDow(jour));
+  const tpIds: string[] = [];
+  for (const p of personnes) {
+    const cfg = cfgTpByPers.get(p.id);
+    if (!cfg) continue;
+    const off = cfg.off?.[dowJour] ?? [];
+    if (!off.length) continue;
+    const journee = off.includes("matin") && off.includes("aprem");
+    let eqCr = false;
+    if (p.equipe_id) {
+      const cr = creneauDe(quartFixe.get(p.equipe_id) ?? rotWeek[p.equipe_id] ?? null);
+      eqCr = !!cr && off.includes(cr);
+    }
+    if (journee || eqCr) tpIds.push(p.id);
+  }
+
   return (
     <div className="pagecol">
       <AppHeader role={profile.role} active="/placement" />
@@ -274,6 +324,7 @@ export default async function PlacementPage({
         habPers={habPers}
         quartOuvert={quartOuvert}
         siteNom={site.nom}
+        tpIds={tpIds}
       />
     </div>
   );

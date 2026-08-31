@@ -54,6 +54,7 @@ export default function PlacementBoard({
   numeroInit = {},
   quartOuvert = true,
   siteNom = "",
+  tpIds = [],
 }: {
   title?: ReactNode;
   jour: string;
@@ -78,6 +79,7 @@ export default function PlacementBoard({
   numeroInit?: Record<string, string>; // personne -> numero de rotation occupe
   quartOuvert?: boolean; // le quart est-il ouvert ce jour-la (Ordonnancement) ?
   siteNom?: string; // multi-tenant : nom d'usine dans le pied de page du PDF
+  tpIds?: string[]; // personnes en temps partiel (indisponibles) ce jour-la
 }) {
   const router = useRouter();
   const [place, setPlace] = useState<Record<string, string>>(placeInit);
@@ -498,15 +500,20 @@ export default function PlacementBoard({
   // Absents de l'atelier pour la FEUILLE IMPRIMEE : calcules quelle que soit la vue
   // a l'ecran (on imprime aussi bien depuis le plan), et motifs vides ecartes pour
   // ne pas gaspiller la colonne.
+  const tpSet = useMemo(() => new Set(tpIds), [tpIds]);
   const absPrint = useMemo(() => {
     const tri = (a: Personne, b: Personne) => `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`);
     const dansAtelier = (p: Personne) => !atelierId || !p.atelier_id || p.atelier_id === atelierId;
     const gensDe = (v: string) => personnes.filter((p) => place[p.id] === v && dansAtelier(p)).sort(tri);
+    // Temps partiel : personnes indisponibles ce jour-là NON déjà placées ou
+    // marquées absentes (celles-ci figurent déjà dans le plan ou sous leur motif).
+    const gensTp = personnes.filter((p) => tpSet.has(p.id) && dansAtelier(p) && !place[p.id]).sort(tri);
     return [
       ...motifs.map((mo) => ({ key: mo.id, titre: mo.libelle, gens: gensDe(`m:${mo.id}`) })),
       { key: "X", titre: "Non travaillé", gens: gensDe("X") },
+      { key: "TP", titre: "Temps partiel", gens: gensTp },
     ].filter((c) => c.gens.length > 0);
-  }, [motifs, personnes, place, atelierId]);
+  }, [motifs, personnes, place, atelierId, tpSet]);
 
   const absCartes = useMemo(() => {
     if (!vueAbsences) return [];
@@ -988,7 +995,7 @@ export default function PlacementBoard({
           </div>
 
           <div className={s.printAbs}>
-            <div className={s.printAbsTitre}>Absents du jour</div>
+            <div className={s.printAbsTitre}>Absents / TP du jour</div>
             {absPrint.map((c) => (
               <div key={c.key} className={s.printAbsBloc}>
                 <div className={s.printAbsMotif}>
@@ -1001,7 +1008,7 @@ export default function PlacementBoard({
                 ))}
               </div>
             ))}
-            {absPrint.length === 0 && <div className={s.printVide}>Aucun absent.</div>}
+            {absPrint.length === 0 && <div className={s.printVide}>Aucun absent ni TP.</div>}
           </div>
         </div>
       </div>

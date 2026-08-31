@@ -603,19 +603,20 @@ export default async function PlanningPage({
               search={searchParam}
             />
           </div>
-          {/* Partie droite : liens (occupent la hauteur des 3 lignes de filtres) */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, alignSelf: "stretch" }}>
+          {/* Partie droite : boutons carrés icône seule (hauteur des filtres),
+              libellé au survol via title. */}
+          <div style={{ display: "flex", flexDirection: "row", gap: 8, alignItems: "center" }}>
             {canEditPlanningFull && (
               <PrefillButton
                 semaines={weekMondays.map((wm) => isoDate(wm))}
                 weekLabel={`S${isoWeekNumber(weekMondays[0])} → S${isoWeekNumber(weekMondays[2])}`}
               />
             )}
-            <Link href="/horaires-specifiques" className="navlink" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 600, padding: "0 16px", border: "1px solid var(--border)", borderRadius: 10, whiteSpace: "nowrap" }}>
-              🕐 Horaires spécifiques
+            <Link href="/horaires-specifiques" className="navlink" title="Horaires spécifiques" aria-label="Horaires spécifiques" style={{ width: 34, height: 34, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}>
+              🕐
             </Link>
-            <Link href="/absences-specifiques" className="navlink" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 600, padding: "0 16px", border: "1px solid var(--border)", borderRadius: 10, whiteSpace: "nowrap" }}>
-              🤒 Absences spécifiques
+            <Link href="/absences-specifiques" className="navlink" title="Absences spécifiques" aria-label="Absences spécifiques" style={{ width: 34, height: 34, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}>
+              🤒
             </Link>
           </div>
         </div>

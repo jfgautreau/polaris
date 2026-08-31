@@ -411,16 +411,22 @@ export default async function AffichageAtelier({
 
   // Liste des lignes : personnes de l'atelier ayant une activité sur les jours
   // affichés (placement ici ou ailleurs, absence, ou TP). On ALLÈGE l'écran en
-  // retirant celles absentes sur TOUTE la période — inutile d'occuper une ligne
-  // pour un mur d'« Absence ». Une absence partielle reste visible.
+  // retirant celles qui ne travaillent JAMAIS sur toute la période — inutile
+  // d'occuper une ligne pour un mur d'« Absence » ou de « TP ». Une absence ou
+  // un TP PARTIEL reste visible (on doit voir les jours travaillés autour).
   const aUnPlacement = (id: string) => shownDays.some((d) => (byPerson.get(`${id}:${d.iso}`)?.length ?? 0) > 0);
   const aUneAbsence = (id: string) => shownDays.some((d) => absByPerson.get(id)?.has(d.iso));
   const aUnTp = (id: string) => shownDays.some((d) => tpSet.has(`${id}:${d.iso}`));
-  const absentToutePeriode = (id: string) =>
-    !noWork && !aUnPlacement(id) && shownDays.every((d) => absByPerson.get(id)?.has(d.iso));
+  // Aucun placement et chaque jour affiché est « off » (absence OU TP) : la ligne
+  // n'apporte rien. Couvre l'absence complète (comportement historique), le TP
+  // complet (nouveau) et un mélange absence/TP couvrant toute la période.
+  const toutOff = (id: string) =>
+    !noWork &&
+    !aUnPlacement(id) &&
+    shownDays.every((d) => absByPerson.get(id)?.has(d.iso) || tpSet.has(`${id}:${d.iso}`));
 
   const personList = personIds
-    .filter((id) => (aUnPlacement(id) || aUneAbsence(id) || aUnTp(id)) && !absentToutePeriode(id))
+    .filter((id) => (aUnPlacement(id) || aUneAbsence(id) || aUnTp(id)) && !toutOff(id))
     .map((id) => ({ id, ...displayById.get(id)! }))
     .sort((a, b) => (a.nom + a.prenom).localeCompare(b.nom + b.prenom));
 
