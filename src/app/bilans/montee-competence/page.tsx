@@ -5,6 +5,7 @@ import Bars from "@/app/bilans/Bars";
 import ReportAtelierFilter from "@/app/bilans/ReportAtelierFilter";
 import { requireRapportBilan } from "@/lib/permissions";
 import { fetchAll } from "@/lib/fetch-all";
+import { getSeuilCompetentC } from "@/lib/refdata";
 
 type Named = { id: string; nom: string; prenom?: string };
 type LigneRow = {
@@ -14,9 +15,6 @@ type LigneRow = {
   poste: { id: string; nom: string; actif: boolean; categorie: string | null; effectif_requis: number }[];
 };
 type Mat = { personne_id: string; poste_id: string; niveau_actuel: number; niveau_cible: number };
-
-// Seuil de « competent », commun a tous les rapports.
-const SEUIL = 2;
 
 const CATS = [
   { key: "manager", label: "Managers" },
@@ -36,6 +34,8 @@ export default async function MonteeCompetenceReport({
   const atelier = sp.atelier ?? "";
 
   const supabase = await getServerClient();
+  // Seuil « compétent » paramétrable par site (0062, repli 2).
+  const SEUIL = await getSeuilCompetentC();
   const [{ data: persD }, { data: lignesD }, matD, { data: atD }] = await Promise.all([
     supabase.from("personne").select("id, nom, prenom").eq("statut", "ACTIF").order("nom").returns<Named[]>(),
     supabase

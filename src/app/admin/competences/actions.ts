@@ -4,7 +4,7 @@ import { revalidatePath, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireModuleWrite } from "@/lib/permissions";
 import { getCurrentProfile } from "@/lib/current-user";
-import { NIVEAUX_TAG, NB_NIVEAUX_TAG } from "@/lib/refdata";
+import { NIVEAUX_TAG, NB_NIVEAUX_TAG, SEUIL_COMPETENT_TAG } from "@/lib/refdata";
 import { messageErreur, urlAvecErreur, type ErreurPg } from "@/lib/erreurs";
 
 const PATH = "/admin/competences";
@@ -34,6 +34,9 @@ export async function saveEchelle(fd: FormData) {
   // Nombre de niveaux activés : borné à [2,4] (repli 4 si absent/invalide).
   const nbBrut = Number(s(fd, "nb_niveaux"));
   const nb = Number.isFinite(nbBrut) ? Math.max(2, Math.min(4, Math.trunc(nbBrut))) : 4;
+  // Seuil « compétent » : borné à [1, nb] (repli 2, puis ramené sous nb).
+  const seuilBrut = Number(s(fd, "seuil_competent"));
+  const seuil = Math.max(1, Math.min(nb, Number.isFinite(seuilBrut) ? Math.trunc(seuilBrut) : 2));
 
   // Libellés d'abord (partie historiquement fonctionnelle) : ainsi, même tant
   // que la migration 0061 n'est pas appliquée, l'échelle continue de s'enregistrer.
@@ -52,10 +55,11 @@ export async function saveEchelle(fd: FormData) {
     }
   }
 
-  // Puis le nombre de niveaux (site.nb_niveaux, migration 0061). Tolérant à
-  // l'absence de colonne (code 42703) : avant l'application de 0061 en prod, on
-  // ignore silencieusement ce réglage plutôt que de casser l'enregistrement de
-  // l'échelle. Toute autre erreur est bien remontée.
+  // Puis les réglages portés par `site` (migrations 0061/0062). Chaque update est
+  // TOLÉRANT à l'absence de sa colonne (code 42703) et fait SÉPARÉMENT : ainsi,
+  // tant qu'une migration n'est pas appliquée en prod, on ignore silencieusement
+  // ce réglage-là sans casser l'enregistrement de l'échelle ni de l'autre réglage.
+  // Toute autre erreur est bien remontée.
   {
     const { error } = await supabase
       .from("site")
@@ -63,9 +67,17 @@ export async function saveEchelle(fd: FormData) {
       .eq("id", profile!.siteId);
     if (error && error.code !== "42703") done(error);
   }
+  {
+    const { error } = await supabase
+      .from("site")
+      .update({ seuil_competent: seuil })
+      .eq("id", profile!.siteId);
+    if (error && error.code !== "42703") done(error);
+  }
 
   updateTag(NIVEAUX_TAG);
   updateTag(NB_NIVEAUX_TAG);
+  updateTag(SEUIL_COMPETENT_TAG);
   done();
 }
 

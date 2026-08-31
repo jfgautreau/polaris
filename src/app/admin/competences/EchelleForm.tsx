@@ -13,11 +13,17 @@ import { SaveIcon } from "@/components/icons";
 export default function EchelleForm({
   niveaux,
   nbNiveaux,
+  seuilCompetent,
 }: {
   niveaux: { niveau: number; libelle: string }[];
   nbNiveaux: number;
+  seuilCompetent: number;
 }) {
   const [nb, setNb] = useState(nbNiveaux);
+  // Seuil « compétent » : borné en direct à [1, nb]. Si on abaisse le nombre de
+  // niveaux sous le seuil courant, on ramène le seuil à nb.
+  const [seuil, setSeuil] = useState(Math.min(seuilCompetent, nbNiveaux));
+  const seuilEffectif = Math.min(seuil, nb);
   const libelle = (n: number) => niveaux.find((x) => x.niveau === n)?.libelle ?? "";
 
   return (
@@ -42,6 +48,30 @@ export default function EchelleForm({
         <p className="muted" style={{ margin: "6px 0 0" }}>
           Niveaux positifs proposés à la saisie. Le niveau 0 (aucune compétence) et
           la restriction ❌ restent toujours présents.
+        </p>
+      </div>
+
+      <div style={{ marginBottom: 14 }}>
+        <label htmlFor="seuil_competent" style={{ fontWeight: 600 }}>
+          Seuil « compétent »
+        </label>
+        <select
+          id="seuil_competent"
+          name="seuil_competent"
+          value={seuilEffectif}
+          onChange={(e) => setSeuil(Number(e.target.value))}
+          style={{ marginLeft: 10, width: "auto" }}
+        >
+          {Array.from({ length: nb }, (_, i) => i + 1).map((n) => (
+            <option key={n} value={n}>
+              niveau ≥ {n}
+            </option>
+          ))}
+        </select>
+        <p className="muted" style={{ margin: "6px 0 0" }}>
+          Niveau minimal à partir duquel une personne est comptée « compétente » sur
+          un poste dans les bilans (Cockpit, Polyvalence…) et la ligne « Compétences »
+          de la matrice. Sans effet sur la saisie ni le placement.
         </p>
       </div>
 

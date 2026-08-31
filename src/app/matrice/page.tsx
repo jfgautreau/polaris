@@ -1,7 +1,7 @@
 import { getServerClient } from "@/lib/supabase-server";
 import AppHeader from "@/components/AppHeader";
 import { requireModule, canWrite } from "@/lib/permissions";
-import { getAteliersC, getEquipesC, getNiveauxC, getNbNiveauxC } from "@/lib/refdata";
+import { getAteliersC, getEquipesC, getNiveauxC, getNbNiveauxC, getSeuilCompetentC } from "@/lib/refdata";
 import { fetchAll } from "@/lib/fetch-all";
 import MatricePanel from "./MatricePanel";
 
@@ -68,6 +68,7 @@ export default async function MatricePage({
     { data: chefData },
     niveauLibelles,
     nbNiveaux,
+    seuilCompetent,
   ] = await Promise.all([
     getAteliersC(),
     getEquipesC(),
@@ -78,6 +79,7 @@ export default async function MatricePage({
       : supabase.from("equipe_chef").select("equipe_id").eq("app_user_id", profile.authId).returns<{ equipe_id: string }[]>(),
     getNiveauxC(),
     getNbNiveauxC(),
+    getSeuilCompetentC(),
   ]);
   const equipes: Equipe[] = equipesC.map((e) => ({ id: e.id, nom: e.nom }));
   const personnes = persData ?? [];
@@ -171,6 +173,7 @@ export default async function MatricePage({
           equipe={sp.equipe ?? ""}
           niveauLibelles={niveauLibelles}
           nbNiveaux={nbNiveaux}
+          seuilCompetent={seuilCompetent}
         />
       </div>
     </>

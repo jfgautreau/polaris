@@ -6,6 +6,7 @@ import ReportAtelierFilter from "@/app/bilans/ReportAtelierFilter";
 import OrdoMonthNav from "@/app/ordonnancement/OrdoMonthNav";
 import { requireRapportBilan } from "@/lib/permissions";
 import { fetchAll } from "@/lib/fetch-all";
+import { getSeuilCompetentC } from "@/lib/refdata";
 import { isoDate, isoWeekNumber, parseMois, monthDays, monthLabel } from "@/lib/week";
 import { buildJourFlow, type BesoinPoste, type PersonneDispo } from "@/lib/projection-capacite";
 
@@ -21,7 +22,6 @@ type Personne = { id: string; nom: string; prenom: string; type_contrat: string;
 type Placement = { personne_id: string; jour: string; motif_absence_id: string | null };
 type Mat = { personne_id: string; poste_id: string; niveau_actuel: number };
 
-const SEUIL = 2;
 const fmtDate = (d: string) => d.split("-").reverse().join("/");
 
 export default async function AnticipationReport({ searchParams }: { searchParams: Promise<{ atelier?: string; mois?: string }> }) {
@@ -36,6 +36,8 @@ export default async function AnticipationReport({ searchParams }: { searchParam
   const lastIso = horizonIsos[horizonIsos.length - 1];
 
   const supabase = await getServerClient();
+  // Seuil « compétent » paramétrable par site (0062, repli 2).
+  const SEUIL = await getSeuilCompetentC();
   const [{ data: lignesD }, { data: quartsD }, { data: jqD }, ovD, { data: pqOffD }, { data: persD }, plD, matD, { data: atD }] =
     await Promise.all([
       supabase.from("ligne").select("id, nom, atelier_id, poste(id, nom, actif, effectif_requis, categorie)").eq("actif", true).returns<LigneRow[]>(),

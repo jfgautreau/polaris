@@ -30,6 +30,7 @@ export default function MatrixGrid({
   mode = "actuel",
   search = "",
   nbNiveaux = 4,
+  seuilCompetent = 2,
 }: {
   groups?: Group[];
   personnes?: Personne[];
@@ -38,6 +39,7 @@ export default function MatrixGrid({
   mode?: "actuel" | "cible";
   search?: string; // saisie dans l'en-tete (cf. MatricePanel)
   nbNiveaux?: number; // niveaux positifs activés pour le site (1..nbNiveaux)
+  seuilCompetent?: number; // niveau minimal « compétent » (bilan Compétences ≥N)
 }) {
   const EMPTY_STAT = useMemo(() => emptyStat(nbNiveaux), [nbNiveaux]);
   const CYCLE = useMemo(() => buildCycle(nbNiveaux), [nbNiveaux]);
@@ -86,12 +88,12 @@ export default function MatrixGrid({
         const affiche = useActuel ? a : c;
         if (affiche === RESTRICT) st.restrict++;
         else if (affiche >= 0 && affiche <= nbNiveaux) st.lvl[affiche]++;
-        if (a >= 2) st.geA++;
-        if (c >= 2) st.geC++;
+        if (a >= seuilCompetent) st.geA++;
+        if (c >= seuilCompetent) st.geC++;
       }
     }
     return m;
-  }, [allPostes, personnes, cells, mode, nbNiveaux]);
+  }, [allPostes, personnes, cells, mode, nbNiveaux, seuilCompetent]);
 
   const statOf = (poid: string): Stat => stats.get(poid) ?? EMPTY_STAT;
 
@@ -280,7 +282,7 @@ export default function MatrixGrid({
                       ))}
                     </tr>
                     <tr className={s.rowCouverture}>
-                      <td className={s.bilanLabel}>Compétences {champ} (≥2)</td>
+                      <td className={s.bilanLabel}>Compétences {champ} (≥{seuilCompetent})</td>
                       {allPostes.map((po) => {
                         const c = statOf(po.id)[field];
                         const obj = objMap[po.id] ?? 0;

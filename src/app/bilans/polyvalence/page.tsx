@@ -7,6 +7,7 @@ import ReportAtelierFilter from "@/app/bilans/ReportAtelierFilter";
 import { requireRapportBilan } from "@/lib/permissions";
 import { isoDate, addDays } from "@/lib/week";
 import { fetchAll } from "@/lib/fetch-all";
+import { getSeuilCompetentC } from "@/lib/refdata";
 
 type Named = { id: string; nom: string; prenom?: string };
 type LigneRow = { id: string; nom: string; atelier_id: string | null; poste: { id: string; nom: string; actif: boolean; categorie: string | null; remplacable: boolean }[] };
@@ -19,7 +20,6 @@ type Mat = { personne_id: string; poste_id: string; niveau_actuel: number; nivea
 type Comp = { id: string; nom: string; a_recycler: boolean };
 type PC = { personne_id: string; competence_id: string; date_expiration: string | null };
 
-const SEUIL = 2;
 const fmtDate = (d: string | null) => (d ? d.split("-").reverse().join("/") : "—");
 
 export default async function PolyvalenceReport({ searchParams }: { searchParams: Promise<{ atelier?: string }> }) {
@@ -31,6 +31,8 @@ export default async function PolyvalenceReport({ searchParams }: { searchParams
   const in60 = isoDate(addDays(new Date(), 60));
 
   const supabase = await getServerClient();
+  // Seuil « compétent » paramétrable par site (0062, repli 2).
+  const SEUIL = await getSeuilCompetentC();
   const [{ data: persD }, { data: lignesD }, matD, { data: compD }, pcD, { data: atD }] = await Promise.all([
     supabase.from("personne").select("id, nom, prenom").eq("statut", "ACTIF").returns<Named[]>(),
     supabase.from("ligne").select("id, nom, atelier_id, poste(id, nom, actif, categorie, remplacable)").eq("actif", true).order("nom").returns<LigneRow[]>(),

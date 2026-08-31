@@ -5,6 +5,7 @@ import PageTitle from "@/components/PageTitle";
 import PrintButton from "@/components/PrintButton";
 import { requireModule } from "@/lib/permissions";
 import { getModulesMasquesC } from "@/lib/site-modules";
+import { getSeuilCompetentC } from "@/lib/refdata";
 import { RAPPORTS_BILAN } from "@/lib/bilans-rapports";
 import { fetchAll } from "@/lib/fetch-all";
 import { isoDate, addDays, monthDays, monthLabel } from "@/lib/week";
@@ -34,6 +35,8 @@ export default async function CockpitPage() {
   const monthIsos = monthDays(today.getFullYear(), today.getMonth()).map((d) => d.iso);
 
   const supabase = await getServerClient();
+  // Seuil « compétent » paramétrable par site (0062, repli 2).
+  const seuilCompetent = await getSeuilCompetentC();
   const [{ data: persD }, { data: lignesD }, matD, plD, { data: eqD }] =
     await Promise.all([
       supabase
@@ -41,7 +44,7 @@ export default async function CockpitPage() {
         .select("id, nom, prenom, statut, type_contrat, date_fin, equipe_id, sexe")
         .returns<Personne[]>(),
       supabase.from("ligne").select("id, nom, poste(id, nom, actif, remplacable)").eq("actif", true).returns<LigneRow[]>(),
-      fetchAll<Mat>(() => supabase.from("matrice").select("personne_id, poste_id").gte("niveau_actuel", 2).order("id").returns<Mat[]>()),
+      fetchAll<Mat>(() => supabase.from("matrice").select("personne_id, poste_id").gte("niveau_actuel", seuilCompetent).order("id").returns<Mat[]>()),
       fetchAll<{ poste_id: string | null; motif_absence_id: string | null }>(() =>
         supabase
           .from("placement")
@@ -83,7 +86,7 @@ export default async function CockpitPage() {
   const presentDays = placements.filter((r) => r.poste_id).length;
   const tauxAbs = absDays + presentDays > 0 ? Math.round((absDays / (absDays + presentDays)) * 100) : 0;
 
-  // Postes fragiles : nb de personnes actives competentes (niveau >= 2) par poste
+  // Postes fragiles : nb de personnes actives competentes (niveau >= seuil) par poste
   // PTNR (non remplaçable) exclus des postes fragiles / sans relève : un seul
   // titulaire par conception n'est pas une fragilité (cf. Compétences critiques).
   const postes = (lignesD ?? []).flatMap((l) =>

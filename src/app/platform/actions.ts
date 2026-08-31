@@ -249,21 +249,22 @@ async function copierReferentiels(admin: AdminClient, sourceId: string, cibleId:
     }
   }
 
-  // --- Nombre de niveaux activés (site.nb_niveaux, 0061) ---
-  //    Config portée par la ligne `site` : on recopie le réglage du site source
-  //    sur le site créé (défaut 4 sinon).
+  // --- Config d'échelle portée par `site` (nb_niveaux 0061, seuil_competent
+  //     0062) : on recopie les réglages du site source sur le site créé.
   {
     const { data } = await admin
       .from("site")
-      .select("nb_niveaux")
+      .select("nb_niveaux, seuil_competent")
       .eq("id", sourceId)
-      .single<{ nb_niveaux: number }>();
-    if (data?.nb_niveaux) {
-      const { error } = await admin
-        .from("site")
-        .update({ nb_niveaux: data.nb_niveaux })
-        .eq("id", cibleId);
-      if (error) console.error("[createSite] copie nb_niveaux :", error.message);
+      .single<{ nb_niveaux: number; seuil_competent: number }>();
+    if (data) {
+      const maj: { nb_niveaux?: number; seuil_competent?: number } = {};
+      if (data.nb_niveaux) maj.nb_niveaux = data.nb_niveaux;
+      if (data.seuil_competent) maj.seuil_competent = data.seuil_competent;
+      if (Object.keys(maj).length > 0) {
+        const { error } = await admin.from("site").update(maj).eq("id", cibleId);
+        if (error) console.error("[createSite] copie config échelle :", error.message);
+      }
     }
   }
 

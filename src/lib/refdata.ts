@@ -168,6 +168,36 @@ export async function getNbNiveauxC() {
   return getNbNiveauxBySite(await siteId());
 }
 
+// -------- Seuil « compétent » (par site) ---------------------------
+// Réglé dans /admin/competences (colonne site.seuil_competent, migration 0062).
+// Niveau minimal à partir duquel une personne est comptée COMPÉTENTE dans les
+// bilans et la ligne « Compétences (≥N) » de la Matrice. Repli 2 = comportement
+// historique (utilisé aussi tant que la migration 0062 n'est pas appliquée :
+// colonne absente → erreur avalée, on rend 2).
+export const SEUIL_COMPETENT_TAG = "refdata-seuil-competent";
+export const SEUIL_COMPETENT_DEFAUT = 2;
+
+const getSeuilCompetentBySite = unstable_cache(
+  async (site: string) => {
+    try {
+      const { data, error } = await getAdminClient()
+        .from("site")
+        .select("seuil_competent")
+        .eq("id", site)
+        .single<{ seuil_competent: number }>();
+      if (error || !data?.seuil_competent) return SEUIL_COMPETENT_DEFAUT;
+      return data.seuil_competent;
+    } catch {
+      return SEUIL_COMPETENT_DEFAUT;
+    }
+  },
+  ["refdata-seuil-competent"],
+  { ...OPTS, tags: [SEUIL_COMPETENT_TAG] }
+);
+export async function getSeuilCompetentC() {
+  return getSeuilCompetentBySite(await siteId());
+}
+
 // -------- Références de rotation -----------------------------------
 // Site-scopées : la rotation des équipes d'un site n'est pas celle d'un
 // autre. Tag dédié invalide à chaque enregistrement.
