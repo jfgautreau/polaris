@@ -249,6 +249,17 @@ export default async function PlanningPage({
   const openByIso: Record<string, string[]> = {};
   for (const d of visible) openByIso[d.iso] = d.openIds;
 
+  // Ouverture des lignes sur TOUS les ateliers (indépendante du filtre atelier) :
+  // sert au panneau d'affectation qui propose toute l'usine (bouton « Voir tous »).
+  // Le filtre atelier ne cadre que la grille et les indicateurs, pas les postes
+  // sur lesquels on peut placer quelqu'un (un prêt vers un autre atelier reste
+  // possible). Mêmes règles d'ouverture (`lineOpen`).
+  const openAllByIso: Record<string, string[]> = {};
+  for (const d of visible)
+    openAllByIso[d.iso] = quartActif(d.iso)
+      ? groupsAll.filter((g) => lineOpen(d.iso, g.ligneId)).map((g) => g.ligneId)
+      : [];
+
   const days = visible.map((d) => ({ iso: d.iso, nom: d.nom, num: d.num, firstOfWeek: d.firstOfWeek }));
   const besoin = visible.map((d) => d.besoin);
   const visIsos = visible.map((d) => d.iso);
@@ -520,7 +531,7 @@ export default async function PlanningPage({
   }));
   const displayedIds = displayed.map((p) => p.id);
 
-  const gridGroups = groups.map((g) => ({
+  const mapGroup = (g: { ligneNom: string; ligneId: string; atelierNom: string; postes: PosteRow[] }) => ({
     ligneNom: g.ligneNom,
     ligneId: g.ligneId,
     atelierNom: g.atelierNom,
@@ -531,7 +542,14 @@ export default async function PlanningPage({
       effectif: p.effectif_requis,
       categorie: p.categorie,
     })),
-  }));
+  });
+  const gridGroups = groups.map(mapGroup);
+  // Tous les ateliers (indépendant du filtre atelier), même filtrage poste×quart :
+  // alimente le panneau d'affectation « Voir tous » -> toute l'usine.
+  const allGridGroups = groupsAll
+    .map((g) => ({ ...g, postes: g.postes.filter((p) => posteActifQuart(p.id)) }))
+    .filter((g) => g.postes.length > 0)
+    .map(mapGroup);
 
   // Habilitations exigees par les postes affiches, et celles que les gens detiennent.
   // Meme lecture qu'au Placement : le manque est RECALCULE a l'affichage, si bien
@@ -603,24 +621,31 @@ export default async function PlanningPage({
               search={searchParam}
             />
           </div>
-          {/* Partie droite : boutons carrés icône seule, alignés sur les 3 lignes
-              de filtres. La colonne s'étire à la hauteur des filtres (alignItems:
-              stretch sur .planning-top) et répartit les boutons avec space-between
-              -> le 1er en face de Quart, le 2e de l'Atelier, le 3e de l'Équipe,
-              quelles que soient les hauteurs exactes. Libellé au survol via title. */}
-          <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", alignItems: "flex-end", alignSelf: "stretch" }}>
-            {canEditPlanningFull && (
-              <PrefillButton
-                semaines={weekMondays.map((wm) => isoDate(wm))}
-                weekLabel={`S${isoWeekNumber(weekMondays[0])} → S${isoWeekNumber(weekMondays[2])}`}
-              />
-            )}
-            <Link href="/horaires-specifiques" className="navlink" title="Horaires spécifiques" aria-label="Horaires spécifiques" style={{ width: 30, height: 30, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}>
-              🕐
-            </Link>
-            <Link href="/absences-specifiques" className="navlink" title="Absences spécifiques" aria-label="Absences spécifiques" style={{ width: 30, height: 30, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}>
-              🤒
-            </Link>
+          {/* Partie droite : boutons carrés icône seule. La colonne calque
+              EXACTEMENT la colonne de filtres — mêmes rangées `.filterrow`
+              (min-height 30 = hauteur d'un groupe de segments) et même `gap: 6`
+              -> chaque bouton tombe pile en face de sa ligne (Quart / Atelier /
+              Équipe). alignSelf flex-start pour ne pas étirer la colonne.
+              Libellé au survol via title. */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, alignSelf: "flex-start" }}>
+            <div className="filterrow" style={{ minHeight: 30, justifyContent: "flex-end" }}>
+              {canEditPlanningFull && (
+                <PrefillButton
+                  semaines={weekMondays.map((wm) => isoDate(wm))}
+                  weekLabel={`S${isoWeekNumber(weekMondays[0])} → S${isoWeekNumber(weekMondays[2])}`}
+                />
+              )}
+            </div>
+            <div className="filterrow" style={{ minHeight: 30, justifyContent: "flex-end" }}>
+              <Link href="/horaires-specifiques" className="navlink" title="Horaires spécifiques" aria-label="Horaires spécifiques" style={{ width: 30, height: 30, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}>
+                🕐
+              </Link>
+            </div>
+            <div className="filterrow" style={{ minHeight: 30, justifyContent: "flex-end" }}>
+              <Link href="/absences-specifiques" className="navlink" title="Absences spécifiques" aria-label="Absences spécifiques" style={{ width: 30, height: 30, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}>
+                🤒
+              </Link>
+            </div>
           </div>
         </div>
         </div>
@@ -636,7 +661,9 @@ export default async function PlanningPage({
           displayedIds={displayedIds}
           statIds={allIds}
           groups={gridGroups}
+          allGroups={allGridGroups}
           openByIso={openByIso}
+          openAllByIso={openAllByIso}
           motifs={motifs.map((m) => ({ id: m.id, code: m.code_court, couleur: m.couleur }))}
           formationMotifId={motifs.find((m) => m.libelle.toLowerCase().includes("formation"))?.id ?? null}
           besoin={besoin}

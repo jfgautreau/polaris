@@ -43,7 +43,9 @@ export default function PlanningGrid({
   displayedIds = null,
   statIds = [],
   groups = [],
+  allGroups = [],
   openByIso = {},
+  openAllByIso = {},
   motifs = [],
   besoin = [],
   initial = {},
@@ -74,7 +76,12 @@ export default function PlanningGrid({
   displayedIds?: string[] | null;
   statIds?: string[];
   groups?: Group[];
+  // Tous les ateliers (indépendant du filtre atelier) : le panneau d'affectation
+  // propose toute l'usine, pas seulement l'atelier filtré.
+  allGroups?: Group[];
   openByIso?: Record<string, string[]>;
+  // Ouverture des lignes de TOUS les ateliers (pour le panneau d'affectation).
+  openAllByIso?: Record<string, string[]>;
   motifs?: Motif[];
   besoin?: number[];
   initial?: Record<string, string>;
@@ -123,21 +130,13 @@ export default function PlanningGrid({
       if (typeof window !== "undefined") window.localStorage.setItem("planning.showBilan", next ? "1" : "0");
       return next;
     });
-  // Panneau d'affectation : par defaut, on ne propose que les postes ou la
-  // personne est competente (niveau >= min, hors restriction). Bascule via un
-  // bouton dans l'entete du panneau, memorisee en localStorage. Repli
-  // automatique : si aucun poste ne passe le filtre, on affiche tout avec un
-  // bandeau explicite plutot que d'ouvrir un panneau vide.
+  // Panneau d'affectation : à CHAQUE ouverture, on repart sur « postes compétents »
+  // (niveau >= min, hors restriction) — l'état n'est PAS mémorisé d'un clic à
+  // l'autre (demande utilisateur). La bascule « Voir tous » élargit à toute
+  // l'usine pour un forçage, mais seulement le temps que le panneau reste ouvert.
+  // Repli automatique : si aucun poste compétent, on affiche tout avec un bandeau.
   const [showAllPostes, setShowAllPostes] = useState(false);
-  useEffect(() => {
-    if (typeof window !== "undefined" && window.localStorage.getItem("planning.pickShowAll") === "1") setShowAllPostes(true);
-  }, []);
-  const togglePostes = () =>
-    setShowAllPostes((s) => {
-      const next = !s;
-      if (typeof window !== "undefined") window.localStorage.setItem("planning.pickShowAll", next ? "1" : "0");
-      return next;
-    });
+  const togglePostes = () => setShowAllPostes((s) => !s);
   // Selection d'une case (contour) pour la touche Suppr, et panneau d'affectation.
   const [selected, setSelected] = useState<string | null>(null);
   const [pick, setPick] = useState<{ pid: string; iso: string; eq: string | null; left: number; right: number; top: number; bottom: number } | null>(null);
@@ -288,6 +287,27 @@ export default function PlanningGrid({
     return { posteLigne: pl, posteLabel: lab, posteCat: cat, allLigneIds: ids };
   }, [groups]);
 
+  // Données du panneau d'affectation, calculées sur TOUS les ateliers (allGroups).
+  // Le panneau propose toute l'usine ; il n'est plus borné au filtre atelier.
+  // Repli sur `groups` si allGroups n'est pas fourni.
+  const pickSource = allGroups.length ? allGroups : groups;
+  const { pickPosteLigne, pickAllLigneIds } = useMemo(() => {
+    const pl: Record<string, string> = {};
+    const ids: string[] = [];
+    for (const g of pickSource) {
+      ids.push(g.ligneId);
+      for (const p of g.postes) pl[p.id] = g.ligneId;
+    }
+    return { pickPosteLigne: pl, pickAllLigneIds: ids };
+  }, [pickSource]);
+  // Compétence d'une personne sur un poste, à partir de l'objet poste (niveauMin
+  // porté par le poste) : pas besoin d'une table niveauMin couvrant toute l'usine.
+  const compPoste = (pid: string, po: Poste): "ok" | "restrict" | "low" => {
+    const n = matrice[`${pid}:${po.id}`] ?? 0;
+    if (n === -1) return "restrict";
+    return n >= po.niveauMin ? "ok" : "low";
+  };
+
   const horsComp = (pid: string, v: string) =>
     isPoste(v) && (matrice[`${pid}:${v}`] ?? 0) < (niveauMin[v] ?? 0);
 
@@ -298,14 +318,6 @@ export default function PlanningGrid({
     const e = habPers[`${pid}:${cid}`];
     return e === undefined ? null : { expiration: e === "" ? null : e };
   };
-  // Aide a la competence dans le panneau d'affectation, calquee sur le Placement :
-  // vert = competent, rouge = restriction medicale, estompe = niveau insuffisant.
-  const compState = (pid: string, posteId: string): "ok" | "restrict" | "low" => {
-    const n = matrice[`${pid}:${posteId}`] ?? 0;
-    if (n === -1) return "restrict";
-    return n >= (niveauMin[posteId] ?? 0) ? "ok" : "low";
-  };
-
   const habManque = (pid: string, v: string): string[] =>
     !isPoste(v)
       ? []
@@ -777,6 +789,7 @@ export default function PlanningGrid({
                         const k = key(pers.id, d.iso);
                         setSelected(k);
                         if (pick && pick.pid === pers.id && pick.iso === d.iso) { setPick(null); return; }
+                        setShowAllPostes(false); // chaque ouverture repart sur « compétents »
                         const r = e.currentTarget.getBoundingClientRect();
                         setPick({ pid: pers.id, iso: d.iso, eq: pers.equipe_id, left: r.left, right: r.right, top: r.top, bottom: r.bottom });
                       }}
@@ -940,14 +953,16 @@ export default function PlanningGrid({
       {/* Panneau d'affectation (rendu une seule fois, position fixe -> pas de clipping). */}
       {pick && (() => {
         const cur = vals[key(pick.pid, pick.iso)] ?? "";
-        const oset = new Set(openByIso[pick.iso] ?? allLigneIds);
-        const og = groups.filter((g) => oset.has(g.ligneId));
+        // Panneau = TOUTE l'usine (indépendant du filtre atelier) : lignes ouvertes
+        // tous ateliers ce jour-là.
+        const oset = new Set(openAllByIso[pick.iso] ?? pickAllLigneIds);
+        const og = pickSource.filter((g) => oset.has(g.ligneId));
         // Comptage global (postes competents / total) pour afficher la bascule.
         // On garde toujours le poste actuellement occupe visible, meme s'il ne
         // passe pas le filtre : sinon on ne pourrait plus le distinguer.
         const totalPostes = og.reduce((n, g) => n + g.postes.length, 0);
         const totalOK = og.reduce(
-          (n, g) => n + g.postes.filter((po) => compState(pick.pid, po.id) === "ok").length,
+          (n, g) => n + g.postes.filter((po) => compPoste(pick.pid, po) === "ok").length,
           0,
         );
         const forceAll = !showAllPostes && totalPostes > 0 && totalOK === 0;
@@ -956,7 +971,7 @@ export default function PlanningGrid({
           .map((g) => ({
             ...g,
             postes: g.postes.filter(
-              (po) => effShowAll || cur === po.id || compState(pick.pid, po.id) === "ok",
+              (po) => effShowAll || cur === po.id || compPoste(pick.pid, po) === "ok",
             ),
           }))
           .filter((g) => g.postes.length > 0);
@@ -975,7 +990,7 @@ export default function PlanningGrid({
           // Formation : ouvrir la pendule pour saisir le sujet (commentaire) / les horaires.
           if (editable && isFormation(value)) openExc(pid, iso);
         };
-        const curClosed = isPoste(cur) && !oset.has(posteLigne[cur] ?? "");
+        const curClosed = isPoste(cur) && !oset.has(pickPosteLigne[cur] ?? "");
         const vw = typeof window !== "undefined" ? window.innerWidth : 1280;
         const vh = typeof window !== "undefined" ? window.innerHeight : 800;
         // Le panneau s'ancre sur la case, mais il doit tenir EN ENTIER dans la
@@ -1050,7 +1065,7 @@ export default function PlanningGrid({
                           <span className="cellpick-lg" title={g.ligneNom}>{g.ligneNom}</span>
                           <span className="pick-chips">
                             {g.postes.map((po) => {
-                              const cs = compState(pick.pid, po.id);
+                              const cs = compPoste(pick.pid, po);
                               const niv = matrice[`${pick.pid}:${po.id}`] ?? 0;
                               return (
                                 <button
