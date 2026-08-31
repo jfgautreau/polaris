@@ -43,6 +43,14 @@ export default function OrdoGrid({
   const [erreur, setErreur] = useState<string | null>(null);
   // Semaine en cours d'initialisation -> modale de choix du profil.
   const [initIsos, setInitIsos] = useState<string[] | null>(null);
+  // Fermeture bloquee par des affectations -> modale « fermer quand meme ».
+  const [conflit, setConflit] = useState<{
+    affectes: { nom: string; prenom: string }[];
+    body: object;
+    reapply: () => void;
+    rollback: () => void;
+    quart: boolean; // quart (true) ou ligne (false), pour le libelle
+  } | null>(null);
 
   // Plus de remplissage par defaut : un jour sans ligne explicite est FERME.
   // La semaine type ne s'applique qu'a l'initialisation (bouton), donc modifier
@@ -107,7 +115,10 @@ export default function OrdoGrid({
   const ligneOuverte = (code: string, lg: string, iso: string) =>
     quartActif(code, iso) ? (ov[`${code}:${lg}:${iso}`] ?? true) : false;
 
-  async function post(body: object, rollback: () => void) {
+  // `reapply` : ré-applique l'état optimiste (utile après un rollback si l'on
+  // reprend l'action en `force`). `quart` : type d'élément fermé, pour le libellé
+  // de la modale de conflit.
+  async function post(body: object, rollback: () => void, reapply: () => void, quart: boolean) {
     setSaving(true);
     setErreur(null);
     try {
@@ -116,34 +127,59 @@ export default function OrdoGrid({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
+      if (res.status === 409) {
+        // Fermeture bloquee par des affectations. Deux formes de reponse :
+        //   { conflit, affectes } -> proposition « fermer quand meme » ;
+        //   { error }             -> ancien mur (repli).
+        const j = (await res.json().catch(() => ({}))) as { conflit?: boolean; affectes?: { nom: string; prenom: string }[]; error?: string };
+        rollback();
+        if (j.conflit && Array.isArray(j.affectes)) {
+          setConflit({ affectes: j.affectes, body, reapply, rollback, quart });
+        } else {
+          setErreur(j.error ?? "Échec.");
+        }
+        return;
+      }
       if (!res.ok) {
         const j = (await res.json().catch(() => ({}))) as { error?: string };
         rollback();
         setErreur(j.error ?? "Échec.");
-      } else {
-        // Meme raison qu'apres applyProfil : invalide le cache RSC pour
-        // qu'un aller-retour de menu revoie l'etat frais depuis la base.
-        router.refresh();
+        return;
       }
+      // Meme raison qu'apres applyProfil : invalide le cache RSC pour
+      // qu'un aller-retour de menu revoie l'etat frais depuis la base.
+      router.refresh();
     } finally {
       setSaving(false);
     }
+  }
+  // Rejoue la fermeture en `force` : le serveur retire les affectations puis ferme.
+  async function forcerFermeture() {
+    const c = conflit;
+    setConflit(null);
+    if (!c) return;
+    c.reapply();
+    await post({ ...c.body, force: true }, c.rollback, c.reapply, c.quart);
   }
   function toggleQuart(code: string, iso: string) {
     if (!canEdit) return;
     const prev = quartActif(code, iso);
     const next = !prev;
     const cle = `${code}:${iso}`;
-    setJq((s) => ({ ...s, [cle]: next }));
-    post({ type: "quart", quart_code: code, jour: iso, value: next }, () => setJq((s) => ({ ...s, [cle]: prev })));
+    const apply = () => setJq((s) => ({ ...s, [cle]: next }));
+    const rollback = () => setJq((s) => ({ ...s, [cle]: prev }));
+    apply();
+    post({ type: "quart", quart_code: code, jour: iso, value: next }, rollback, apply, true);
   }
   function toggleLigne(code: string, lg: string, iso: string) {
     if (!canEdit || !quartActif(code, iso)) return;
     const prev = ligneOuverte(code, lg, iso);
     const next = !prev;
     const cle = `${code}:${lg}:${iso}`;
-    setOv((s) => ({ ...s, [cle]: next }));
-    post({ type: "ligne", quart_code: code, ligne_id: lg, jour: iso, value: next }, () => setOv((s) => ({ ...s, [cle]: prev })));
+    const apply = () => setOv((s) => ({ ...s, [cle]: next }));
+    const rollback = () => setOv((s) => ({ ...s, [cle]: prev }));
+    apply();
+    post({ type: "ligne", quart_code: code, ligne_id: lg, jour: iso, value: next }, rollback, apply, false);
   }
 
   const sep = (d: Jour) => (d.firstOfWeek ? { borderLeft: "2px solid #cbd5e1" } : {});
@@ -314,6 +350,39 @@ export default function OrdoGrid({
             <p className="muted" style={{ marginTop: 10, fontSize: 12 }}>
               La semaine sélectionnée sera (ré)initialisée avec le profil choisi.
             </p>
+        </ModaleDeplacable>
+      )}
+
+      {/* Fermeture bloquee par des affectations : proposer de fermer quand meme. */}
+      {conflit && (
+        <ModaleDeplacable onClose={() => setConflit(null)} largeur={460}>
+          <div className="toolbar mdd-drag" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 6, cursor: "grab" }}>
+            <h2 style={{ margin: 0, color: "#b45309" }}>⚠ {conflit.quart ? "Quart occupé" : "Ligne occupée"}</h2>
+            <button type="button" className="btn-sm btn-ghost" onClick={() => setConflit(null)} style={{ width: "auto" }}>✕</button>
+          </div>
+          <p style={{ margin: "0 0 8px", fontSize: 14 }}>
+            {conflit.affectes.length === 1 ? "Une personne est affectée" : `${conflit.affectes.length} personnes sont affectées`}{" "}
+            sur {conflit.quart ? "ce quart" : "cette ligne"} ce jour-là. Fermer{" "}
+            {conflit.quart ? "le quart" : "la ligne"} retirera {conflit.affectes.length === 1 ? "son affectation" : "leurs affectations"} (les absences sont conservées) :
+          </p>
+          <ul style={{ margin: "0 0 12px", paddingLeft: 20, fontSize: 13, maxHeight: 220, overflowY: "auto" }}>
+            {conflit.affectes.map((p, i) => (
+              <li key={i}>{p.nom} {p.prenom}</li>
+            ))}
+          </ul>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <button type="button" className="btn-sm btn-ghost" style={{ width: "auto" }} onClick={() => setConflit(null)}>
+              Annuler
+            </button>
+            <button
+              type="button"
+              className="btn-sm"
+              style={{ width: "auto", background: "#b45309", border: "1px solid #b45309" }}
+              onClick={forcerFermeture}
+            >
+              Fermer quand même et retirer
+            </button>
+          </div>
         </ModaleDeplacable>
       )}
     </div>
