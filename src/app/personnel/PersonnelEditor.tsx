@@ -212,7 +212,7 @@ export default function PersonnelEditor({
   // Defaut ACTIF a l'ouverture : la liste montre l'effectif au travail au lieu
   // de tout melanger. Un clic sur « Tous », « A venir » ou « Parti » reste
   // possible, sans persister d'une visite a l'autre.
-  const [statutFilter, setStatutFilter] = useState<"" | "A_VENIR" | "ACTIF" | "PARTI">("ACTIF");
+  const [statutFilter, setStatutFilter] = useState<"" | "A_VENIR" | "ACTIF" | "PARTI">("");
   // Filtre secondaire : ne montrer que les fiches a completer (champs manquants).
   // Utile pour une session de menage RH. Off par defaut.
   const [incompletFilter, setIncompletFilter] = useState(false);

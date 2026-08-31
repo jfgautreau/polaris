@@ -96,7 +96,7 @@ export default function PlacementBoard({
   const [fEquipe, setFEquipe] = useState(`q:${quart}`);
   // Pre-filtre atelier : celui du plan affiche (elargissable pour aller chercher un renfort).
   const [fAtelier, setFAtelier] = useState(atelierId);
-  const [hidePlaced, setHidePlaced] = useState(false);
+  const [hidePlaced, setHidePlaced] = useState(true);
   // Filtre visuel : quand une personne est active (glissee/selectionnee),
   // n'afficher que les postes ou elle est competente (niveau >= min, hors
   // restriction). On garde toujours visibles les postes deja occupes pour
