@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { requireModuleWrite } from "@/lib/permissions";
 import { getCurrentProfile } from "@/lib/current-user";
 import { NIVEAUX_TAG, NB_NIVEAUX_TAG, SEUIL_COMPETENT_TAG } from "@/lib/refdata";
+import { HEX_NIVEAUX_AUTORISES } from "@/lib/couleurs-niveau";
 import { messageErreur, urlAvecErreur, type ErreurPg } from "@/lib/erreurs";
 
 const PATH = "/admin/competences";
@@ -42,17 +43,25 @@ export async function saveEchelle(fd: FormData) {
   // que la migration 0061 n'est pas appliquée, l'échelle continue de s'enregistrer.
   for (let n = 0; n <= nb; n++) {
     const libelle = s(fd, `niveau_${n}`);
-    if (libelle) {
-      const { error } = await supabase
+    if (!libelle) continue;
+    // Couleur : niveaux POSITIFS seulement, restreinte à la palette autorisée
+    // (le niveau 0 reste blanc/contour, jamais de couleur).
+    const couleurBrute = s(fd, `couleur_${n}`);
+    const couleur = n >= 1 && HEX_NIVEAUX_AUTORISES.has(couleurBrute) ? couleurBrute : null;
+    const row = { niveau: n, libelle, site_id: profile!.siteId, ...(couleur ? { couleur } : {}) };
+    let { error } = await supabase
+      .from("competence_niveau_libelle")
+      .upsert(row, { onConflict: "site_id,niveau" });
+    // 0063 non appliquée : la colonne `couleur` n'existe pas encore (code 42703).
+    // On réessaie sans elle pour que le libellé s'enregistre quand même.
+    if (error?.code === "42703" && couleur) {
+      ({ error } = await supabase
         .from("competence_niveau_libelle")
-        .upsert(
-          { niveau: n, libelle, site_id: profile!.siteId },
-          { onConflict: "site_id,niveau" }
-        );
-      // On s'arrete au premier echec : poursuivre laisserait une echelle
-      // partiellement enregistree sans que personne ne le sache.
-      if (error) done(error);
+        .upsert({ niveau: n, libelle, site_id: profile!.siteId }, { onConflict: "site_id,niveau" }));
     }
+    // On s'arrete au premier echec : poursuivre laisserait une echelle
+    // partiellement enregistree sans que personne ne le sache.
+    if (error) done(error);
   }
 
   // Puis les réglages portés par `site` (migrations 0061/0062). Chaque update est

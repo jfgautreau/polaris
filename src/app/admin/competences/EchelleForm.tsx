@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { saveEchelle } from "./actions";
 import { SaveIcon } from "@/components/icons";
+import { COULEURS_NIVEAU, COULEUR_NIVEAU_DEFAUT } from "@/lib/couleurs-niveau";
 
 // Échelle de niveaux (« carré magique ») + nombre de niveaux activés pour le site.
 // Le nombre de niveaux POSITIFS (1..N) est réglable par site (colonne
@@ -14,16 +15,25 @@ export default function EchelleForm({
   niveaux,
   nbNiveaux,
   seuilCompetent,
+  couleurs,
 }: {
   niveaux: { niveau: number; libelle: string }[];
   nbNiveaux: number;
   seuilCompetent: number;
+  couleurs: Record<number, string | null>;
 }) {
   const [nb, setNb] = useState(nbNiveaux);
   // Seuil « compétent » : borné en direct à [1, nb]. Si on abaisse le nombre de
   // niveaux sous le seuil courant, on ramène le seuil à nb.
   const [seuil, setSeuil] = useState(Math.min(seuilCompetent, nbNiveaux));
   const seuilEffectif = Math.min(seuil, nb);
+  // Couleur choisie par niveau positif (état local pour l'aperçu en direct de la
+  // pastille). Repli sur la couleur par défaut du niveau si aucune enregistrée.
+  const [coul, setCoul] = useState<Record<number, string>>(() => {
+    const o: Record<number, string> = {};
+    for (let n = 1; n <= 4; n++) o[n] = couleurs[n] ?? COULEUR_NIVEAU_DEFAUT[n];
+    return o;
+  });
   const libelle = (n: number) => niveaux.find((x) => x.niveau === n)?.libelle ?? "";
 
   return (
@@ -75,10 +85,37 @@ export default function EchelleForm({
         </p>
       </div>
 
+      <p className="muted" style={{ margin: "0 0 8px", fontWeight: 600 }}>Libellés et couleurs des niveaux</p>
       {Array.from({ length: nb + 1 }, (_, n) => n).map((n) => (
-        <div key={n} style={{ marginBottom: 8 }}>
-          <label htmlFor={`niveau_${n}`}>Niveau {n}</label>
-          <input id={`niveau_${n}`} name={`niveau_${n}`} defaultValue={libelle(n)} required />
+        <div key={n} style={{ marginBottom: 8, display: "flex", alignItems: "center", gap: 10 }}>
+          <label htmlFor={`niveau_${n}`} style={{ minWidth: 64 }}>Niveau {n}</label>
+          <input id={`niveau_${n}`} name={`niveau_${n}`} defaultValue={libelle(n)} required style={{ flex: 1, maxWidth: 320 }} />
+          {n === 0 ? (
+            // Niveau 0 = « aucune compétence » : toujours blanc / contour seul.
+            <span
+              aria-hidden
+              title="Niveau 0 : toujours blanc (aucune compétence)"
+              style={{ display: "inline-block", width: 22, height: 22, borderRadius: 999, background: "#fff", border: "1.5px solid #64748b", flexShrink: 0 }}
+            />
+          ) : (
+            <>
+              <span
+                aria-hidden
+                style={{ display: "inline-block", width: 22, height: 22, borderRadius: 999, background: coul[n], border: "1.5px solid #64748b", flexShrink: 0 }}
+              />
+              <select
+                name={`couleur_${n}`}
+                aria-label={`Couleur du niveau ${n}`}
+                value={coul[n]}
+                onChange={(e) => setCoul((c) => ({ ...c, [n]: e.target.value }))}
+                style={{ width: "auto" }}
+              >
+                {COULEURS_NIVEAU.map((c) => (
+                  <option key={c.hex} value={c.hex}>{c.nom}</option>
+                ))}
+              </select>
+            </>
+          )}
         </div>
       ))}
 

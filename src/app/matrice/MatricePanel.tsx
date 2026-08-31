@@ -26,6 +26,7 @@ export default function MatricePanel({
   niveauLibelles,
   nbNiveaux,
   seuilCompetent,
+  couleurs,
 }: {
   groups: Group[];
   personnes: Personne[];
@@ -38,6 +39,7 @@ export default function MatricePanel({
   niveauLibelles: { niveau: number; libelle: string }[];
   nbNiveaux: number;
   seuilCompetent: number;
+  couleurs: Record<number, string | null>;
 }) {
   const [mode, setMode] = useState<"actuel" | "cible">("actuel");
   const [showLegende, setShowLegende] = useState(false);
@@ -89,11 +91,11 @@ export default function MatricePanel({
         {groups.length === 0 ? (
           <p className="muted">Aucun poste actif (vérifiez le référentiel / le filtre atelier).</p>
         ) : (
-          <MatrixGrid groups={groups} personnes={personnes} initial={initial} canEditObjectif={canEditObjectif} mode={mode} search={search} nbNiveaux={nbNiveaux} seuilCompetent={seuilCompetent} />
+          <MatrixGrid groups={groups} personnes={personnes} initial={initial} canEditObjectif={canEditObjectif} mode={mode} search={search} nbNiveaux={nbNiveaux} seuilCompetent={seuilCompetent} couleurs={couleurs} />
         )}
       </div>
 
-      {showLegende && <LegendeModal niveauLibelles={niveauLibelles} nbNiveaux={nbNiveaux} onClose={() => setShowLegende(false)} />}
+      {showLegende && <LegendeModal niveauLibelles={niveauLibelles} nbNiveaux={nbNiveaux} couleurs={couleurs} onClose={() => setShowLegende(false)} />}
     </>
   );
 }

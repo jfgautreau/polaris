@@ -1,13 +1,14 @@
+import { COULEUR_NIVEAU_DEFAUT } from "@/lib/couleurs-niveau";
+
 // Valeur sentinelle : restriction medicale / physique (en plus de l'echelle 0..4).
 export const RESTRICT = -1;
 
-// Pastille de niveau (camembert 0->4) + couleurs, partagee grille / legende.
+// Couleurs PAR DÉFAUT des niveaux (échelle historique), 0 = contour seul.
+// Chaque site peut les personnaliser (competence_niveau_libelle.couleur, 0063) :
+// le rendu reçoit alors une map `couleurs` qui surcharge celle-ci.
 export const FILL: Record<number, string | null> = {
-  0: null, // contour seul
-  1: "#dc2626", // rouge
-  2: "#f59e0b", // orange
-  3: "#84cc16", // vert clair (lime)
-  4: "#16a34a", // vert (expert)
+  0: null,
+  ...COULEUR_NIVEAU_DEFAUT,
 };
 
 // `max` = nombre de niveaux positifs activés pour le site (1..max, défaut 4).
@@ -15,11 +16,19 @@ export const FILL: Record<number, string | null> = {
 // comme un disque plein, même quand le site n'active que 2 ou 3 niveaux. La
 // COULEUR reste indexée sur le niveau absolu (FILL) — un site à 4 niveaux est
 // donc rendu strictement à l'identique.
-export function Pie({ level, max = 4 }: { level: number; max?: number }) {
+export function Pie({
+  level,
+  max = 4,
+  couleurs = FILL,
+}: {
+  level: number;
+  max?: number;
+  couleurs?: Record<number, string | null>;
+}) {
   const size = 28, r = 11, cx = 14, cy = 14;
   const lvl = Math.max(0, Math.min(max, level));
   const f = lvl / max;
-  const fill = FILL[lvl];
+  const fill = couleurs[lvl] ?? null;
 
   let inner = null;
   if (fill && f >= 1) {
@@ -52,6 +61,14 @@ export function RestrictionMark() {
 }
 
 // Rend soit la croix de restriction (niveau -1), soit le camembert 0..max.
-export function LevelMark({ level, max = 4 }: { level: number; max?: number }) {
-  return level === RESTRICT ? <RestrictionMark /> : <Pie level={level} max={max} />;
+export function LevelMark({
+  level,
+  max = 4,
+  couleurs = FILL,
+}: {
+  level: number;
+  max?: number;
+  couleurs?: Record<number, string | null>;
+}) {
+  return level === RESTRICT ? <RestrictionMark /> : <Pie level={level} max={max} couleurs={couleurs} />;
 }

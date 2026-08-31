@@ -236,14 +236,25 @@ async function copierReferentiels(admin: AdminClient, sourceId: string, cibleId:
     }
   }
 
-  // --- Échelle des niveaux (0..4) ---
+  // --- Échelle des niveaux (0..4) + couleurs (0063) ---
+  //    Tolérant à l'absence de la colonne `couleur` (0063 non appliquée) : on
+  //    réessaie sans elle pour que les libellés se copient quand même.
   {
-    const { data } = await admin
+    type NivRow = { niveau: number; libelle: string; couleur?: string | null };
+    const avecCoul = await admin
       .from("competence_niveau_libelle")
-      .select("niveau, libelle")
+      .select("niveau, libelle, couleur")
       .eq("site_id", sourceId);
-    if (data && data.length > 0) {
-      const rows = data.map((r) => ({ ...r, site_id: cibleId }));
+    let source: NivRow[] | null = avecCoul.data;
+    if (avecCoul.error?.code === "42703") {
+      const sansCoul = await admin
+        .from("competence_niveau_libelle")
+        .select("niveau, libelle")
+        .eq("site_id", sourceId);
+      source = sansCoul.data;
+    }
+    if (source && source.length > 0) {
+      const rows = source.map((r) => ({ ...r, site_id: cibleId }));
       const { error } = await admin.from("competence_niveau_libelle").insert(rows);
       if (error) console.error("[createSite] copie échelle niveaux :", error.message);
     }

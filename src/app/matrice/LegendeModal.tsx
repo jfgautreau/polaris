@@ -6,10 +6,12 @@ import { Pie, RestrictionMark } from "./Pie";
 export default function LegendeModal({
   niveauLibelles,
   nbNiveaux,
+  couleurs,
   onClose,
 }: {
   niveauLibelles: { niveau: number; libelle: string }[];
   nbNiveaux: number;
+  couleurs: Record<number, string | null>;
   onClose: () => void;
 }) {
   // Libellés propres au SITE (competence_niveau_libelle, site-scopé depuis
@@ -26,7 +28,7 @@ export default function LegendeModal({
         <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
           {Array.from({ length: nbNiveaux + 1 }, (_, n) => n).map((n) => (
             <li key={n} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-              <span style={{ flexShrink: 0 }}><Pie level={n} max={nbNiveaux} /></span>
+              <span style={{ flexShrink: 0 }}><Pie level={n} max={nbNiveaux} couleurs={couleurs} /></span>
               <span><strong>Niveau {n}</strong>{label(n) ? ` — ${label(n)}` : ""}</span>
             </li>
           ))}

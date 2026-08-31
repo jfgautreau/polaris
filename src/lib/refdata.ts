@@ -168,6 +168,37 @@ export async function getNbNiveauxC() {
   return getNbNiveauxBySite(await siteId());
 }
 
+// -------- Couleurs des niveaux (par site) --------------------------
+// Réglées dans /admin/competences (colonne competence_niveau_libelle.couleur,
+// migration 0063). Renvoie une map niveau -> hex des SEULS niveaux personnalisés
+// (les autres retombent sur COULEUR_NIVEAU_DEFAUT côté rendu). Résilient : tant
+// que la colonne n'existe pas (0063 non appliquée), on renvoie {} et tout
+// retombe sur les défauts historiques. Partage le tag des libellés (même écran).
+const getCouleursNiveauxBySite = unstable_cache(
+  async (site: string) => {
+    try {
+      const { data, error } = await getAdminClient()
+        .from("competence_niveau_libelle")
+        .select("niveau, couleur")
+        .eq("site_id", site)
+        .not("couleur", "is", null);
+      if (error || !data) return {} as Record<number, string>;
+      const out: Record<number, string> = {};
+      for (const r of data as { niveau: number; couleur: string | null }[]) {
+        if (r.couleur) out[r.niveau] = r.couleur;
+      }
+      return out;
+    } catch {
+      return {} as Record<number, string>;
+    }
+  },
+  ["refdata-couleurs-niveaux"],
+  { ...OPTS, tags: [NIVEAUX_TAG] }
+);
+export async function getCouleursNiveauxC() {
+  return getCouleursNiveauxBySite(await siteId());
+}
+
 // -------- Seuil « compétent » (par site) ---------------------------
 // Réglé dans /admin/competences (colonne site.seuil_competent, migration 0062).
 // Niveau minimal à partir duquel une personne est comptée COMPÉTENTE dans les

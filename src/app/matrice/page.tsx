@@ -1,7 +1,8 @@
 import { getServerClient } from "@/lib/supabase-server";
 import AppHeader from "@/components/AppHeader";
 import { requireModule, canWrite } from "@/lib/permissions";
-import { getAteliersC, getEquipesC, getNiveauxC, getNbNiveauxC, getSeuilCompetentC } from "@/lib/refdata";
+import { getAteliersC, getEquipesC, getNiveauxC, getNbNiveauxC, getSeuilCompetentC, getCouleursNiveauxC } from "@/lib/refdata";
+import { couleursNiveau } from "@/lib/couleurs-niveau";
 import { fetchAll } from "@/lib/fetch-all";
 import MatricePanel from "./MatricePanel";
 
@@ -69,6 +70,7 @@ export default async function MatricePage({
     niveauLibelles,
     nbNiveaux,
     seuilCompetent,
+    couleursCustom,
   ] = await Promise.all([
     getAteliersC(),
     getEquipesC(),
@@ -80,7 +82,9 @@ export default async function MatricePage({
     getNiveauxC(),
     getNbNiveauxC(),
     getSeuilCompetentC(),
+    getCouleursNiveauxC(),
   ]);
+  const couleurs = couleursNiveau(couleursCustom);
   const equipes: Equipe[] = equipesC.map((e) => ({ id: e.id, nom: e.nom }));
   const personnes = persData ?? [];
   const chefEquipes = new Set((chefData ?? []).map((r) => r.equipe_id));
@@ -174,6 +178,7 @@ export default async function MatricePage({
           niveauLibelles={niveauLibelles}
           nbNiveaux={nbNiveaux}
           seuilCompetent={seuilCompetent}
+          couleurs={couleurs}
         />
       </div>
     </>

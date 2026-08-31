@@ -31,6 +31,7 @@ export default function MatrixGrid({
   search = "",
   nbNiveaux = 4,
   seuilCompetent = 2,
+  couleurs = FILL,
 }: {
   groups?: Group[];
   personnes?: Personne[];
@@ -40,6 +41,7 @@ export default function MatrixGrid({
   search?: string; // saisie dans l'en-tete (cf. MatricePanel)
   nbNiveaux?: number; // niveaux positifs activés pour le site (1..nbNiveaux)
   seuilCompetent?: number; // niveau minimal « compétent » (bilan Compétences ≥N)
+  couleurs?: Record<number, string | null>; // couleur par niveau (0 = contour)
 }) {
   const EMPTY_STAT = useMemo(() => emptyStat(nbNiveaux), [nbNiveaux]);
   const CYCLE = useMemo(() => buildCycle(nbNiveaux), [nbNiveaux]);
@@ -221,7 +223,7 @@ export default function MatrixGrid({
                   <tr key={`niv${lvl}`} className={s.rowNiveau}>
                     <td className={s.bilanLabel}>
                       <span className={s.bilanSwatch}>
-                        <span className={s.bilanDot} style={{ background: FILL[lvl] ?? "#999" }} />
+                        <span className={s.bilanDot} style={{ background: couleurs[lvl] ?? "#999" }} />
                         Nb de Niv. {lvl}
                       </span>
                     </td>
@@ -359,7 +361,7 @@ export default function MatrixGrid({
                     return (
                       <td key={po.id} className={g.cellTd}>
                         <div className={s.cellReadonly}>
-                          <LevelMark level={active} max={nbNiveaux} />
+                          <LevelMark level={active} max={nbNiveaux} couleurs={couleurs} />
                         </div>
                       </td>
                     );
@@ -376,7 +378,7 @@ export default function MatrixGrid({
                         title={`${pers.label} - ${po.nom}\nActuel ${lvlTxt(cell.a)} / Cible ${lvlTxt(cell.c)}\nClic +1, clic droit -1 (❌ = restriction)`}
                         className={s.cellBtn}
                       >
-                        <LevelMark level={active} max={nbNiveaux} />
+                        <LevelMark level={active} max={nbNiveaux} couleurs={couleurs} />
                         {other === RESTRICT ? (
                           <span className={`${s.otherMark} ${s.restrict}`}>✕</span>
                         ) : other > 0 ? (

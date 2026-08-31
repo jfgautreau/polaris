@@ -2,7 +2,8 @@ import AppHeader from "@/components/AppHeader";
 import { requireModule, canWrite } from "@/lib/permissions";
 import LectureSeule from "@/components/LectureSeule";
 import { getServerClient } from "@/lib/supabase-server";
-import { getNbNiveauxC, getSeuilCompetentC } from "@/lib/refdata";
+import { getNbNiveauxC, getSeuilCompetentC, getCouleursNiveauxC } from "@/lib/refdata";
+import { couleursNiveau } from "@/lib/couleurs-niveau";
 import EchelleForm from "./EchelleForm";
 import BandeauErreur from "@/components/BandeauErreur";
 
@@ -17,7 +18,7 @@ export default async function CompetencesPage({
   const { profile, perms } = await requireModule("competences", "read");
 
   const supabase = await getServerClient();
-  const [{ data: niveauxData }, nbNiveaux, seuilCompetent] = await Promise.all([
+  const [{ data: niveauxData }, nbNiveaux, seuilCompetent, couleursCustom] = await Promise.all([
     supabase
       .from("competence_niveau_libelle")
       .select("niveau, libelle")
@@ -25,9 +26,11 @@ export default async function CompetencesPage({
       .returns<Niveau[]>(),
     getNbNiveauxC(),
     getSeuilCompetentC(),
+    getCouleursNiveauxC(),
   ]);
 
   const niveaux = niveauxData ?? [];
+  const couleurs = couleursNiveau(couleursCustom);
 
   return (
     <>
@@ -43,7 +46,7 @@ export default async function CompetencesPage({
           <p className="muted">
             Nombre de niveaux activés et libellés paramétrables, propres à ce site.
           </p>
-          <EchelleForm niveaux={niveaux} nbNiveaux={nbNiveaux} seuilCompetent={seuilCompetent} />
+          <EchelleForm niveaux={niveaux} nbNiveaux={nbNiveaux} seuilCompetent={seuilCompetent} couleurs={couleurs} />
         </div>
         </LectureSeule>
       </div>
