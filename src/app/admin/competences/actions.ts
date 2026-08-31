@@ -4,7 +4,7 @@ import { revalidatePath, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireModuleWrite } from "@/lib/permissions";
 import { getCurrentProfile } from "@/lib/current-user";
-import { NIVEAUX_TAG } from "@/lib/refdata";
+import { NIVEAUX_TAG, NB_NIVEAUX_TAG } from "@/lib/refdata";
 import { messageErreur, urlAvecErreur, type ErreurPg } from "@/lib/erreurs";
 
 const PATH = "/admin/competences";
@@ -22,13 +22,22 @@ function done(err: ErreurPg = null): never {
   redirect(urlAvecErreur(PATH, msg));
 }
 
-// Echelle de niveaux (0..4)
+// Echelle de niveaux + nombre de niveaux activés pour le site.
 // MULTI-SITE (0053) : competence_niveau_libelle.PK est (site_id, niveau).
 // L'upsert cible ce couple, et pose site_id explicitement.
+// nb_niveaux (0061) vit sur `site` : borné à 2..4, on écrit la ligne du site
+// courant (.eq("id", siteId)). On n'enregistre que les libellés 0..N.
 export async function saveEchelle(fd: FormData) {
   const supabase = await requireModuleWrite("competences");
   const profile = await getCurrentProfile();
-  for (let n = 0; n <= 4; n++) {
+
+  // Nombre de niveaux activés : borné à [2,4] (repli 4 si absent/invalide).
+  const nbBrut = Number(s(fd, "nb_niveaux"));
+  const nb = Number.isFinite(nbBrut) ? Math.max(2, Math.min(4, Math.trunc(nbBrut))) : 4;
+
+  // Libellés d'abord (partie historiquement fonctionnelle) : ainsi, même tant
+  // que la migration 0061 n'est pas appliquée, l'échelle continue de s'enregistrer.
+  for (let n = 0; n <= nb; n++) {
     const libelle = s(fd, `niveau_${n}`);
     if (libelle) {
       const { error } = await supabase
@@ -42,7 +51,21 @@ export async function saveEchelle(fd: FormData) {
       if (error) done(error);
     }
   }
+
+  // Puis le nombre de niveaux (site.nb_niveaux, migration 0061). Tolérant à
+  // l'absence de colonne (code 42703) : avant l'application de 0061 en prod, on
+  // ignore silencieusement ce réglage plutôt que de casser l'enregistrement de
+  // l'échelle. Toute autre erreur est bien remontée.
+  {
+    const { error } = await supabase
+      .from("site")
+      .update({ nb_niveaux: nb })
+      .eq("id", profile!.siteId);
+    if (error && error.code !== "42703") done(error);
+  }
+
   updateTag(NIVEAUX_TAG);
+  updateTag(NB_NIVEAUX_TAG);
   done();
 }
 

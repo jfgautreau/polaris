@@ -5,9 +5,11 @@ import { Pie, RestrictionMark } from "./Pie";
 
 export default function LegendeModal({
   niveauLibelles,
+  nbNiveaux,
   onClose,
 }: {
   niveauLibelles: { niveau: number; libelle: string }[];
+  nbNiveaux: number;
   onClose: () => void;
 }) {
   // Libellés propres au SITE (competence_niveau_libelle, site-scopé depuis
@@ -22,9 +24,9 @@ export default function LegendeModal({
           <button type="button" className="btn-sm btn-ghost" onClick={onClose} style={{ width: "auto" }}>✕</button>
         </div>
         <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-          {[0, 1, 2, 3, 4].map((n) => (
+          {Array.from({ length: nbNiveaux + 1 }, (_, n) => n).map((n) => (
             <li key={n} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-              <span style={{ flexShrink: 0 }}><Pie level={n} /></span>
+              <span style={{ flexShrink: 0 }}><Pie level={n} max={nbNiveaux} /></span>
               <span><strong>Niveau {n}</strong>{label(n) ? ` — ${label(n)}` : ""}</span>
             </li>
           ))}

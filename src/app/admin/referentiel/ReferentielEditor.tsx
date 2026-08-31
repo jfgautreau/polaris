@@ -91,6 +91,7 @@ export default function ReferentielEditor({
   pcr = [],
   persons = [],
   titulaires = {},
+  nbNiveaux = 4,
 }: {
   initial: Atelier[];
   quarts?: Quart[];
@@ -99,6 +100,7 @@ export default function ReferentielEditor({
   pcr?: string[];
   persons?: Titulaire[];
   titulaires?: Record<string, Titulaire[]>;
+  nbNiveaux?: number;
 }) {
   const [tree, setTree] = useState<Atelier[]>(initial);
   // Titulaire(s) par poste (poste fixe). Modifiable ici comme dans la fiche
@@ -427,7 +429,7 @@ export default function ReferentielEditor({
                           value={p.niveau_min_requis.toString()}
                           onChange={(e) => posteField(a.id, l.id, p.id, "niveau_min_requis", Number(e.target.value))}
                         >
-                          {[0, 1, 2, 3, 4].map((n) => (
+                          {Array.from({ length: nbNiveaux + 1 }, (_, n) => n).map((n) => (
                             <option key={n} value={n}>{n}</option>
                           ))}
                         </select>

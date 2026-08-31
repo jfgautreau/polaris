@@ -138,6 +138,36 @@ export async function getNiveauxC() {
   return getNiveauxBySite(await siteId());
 }
 
+// -------- Nombre de niveaux activés (par site) ---------------------
+// Réglé dans /admin/competences (colonne site.nb_niveaux, migration 0061).
+// Nombre de niveaux POSITIFS de l'échelle (1..N), N ∈ [2,4] ; le 0 et la
+// restriction restent toujours présents. Repli 4 = échelle complète (comportement
+// historique), utilisé aussi tant que la migration 0061 n'est pas appliquée
+// (colonne absente → erreur avalée, on rend 4).
+export const NB_NIVEAUX_TAG = "refdata-nb-niveaux";
+export const NB_NIVEAUX_DEFAUT = 4;
+
+const getNbNiveauxBySite = unstable_cache(
+  async (site: string) => {
+    try {
+      const { data, error } = await getAdminClient()
+        .from("site")
+        .select("nb_niveaux")
+        .eq("id", site)
+        .single<{ nb_niveaux: number }>();
+      if (error || !data?.nb_niveaux) return NB_NIVEAUX_DEFAUT;
+      return data.nb_niveaux;
+    } catch {
+      return NB_NIVEAUX_DEFAUT;
+    }
+  },
+  ["refdata-nb-niveaux"],
+  { ...OPTS, tags: [NB_NIVEAUX_TAG] }
+);
+export async function getNbNiveauxC() {
+  return getNbNiveauxBySite(await siteId());
+}
+
 // -------- Références de rotation -----------------------------------
 // Site-scopées : la rotation des équipes d'un site n'est pas celle d'un
 // autre. Tag dédié invalide à chaque enregistrement.

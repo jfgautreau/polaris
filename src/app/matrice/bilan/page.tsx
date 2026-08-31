@@ -5,6 +5,7 @@ import { getCurrentProfile } from "@/lib/current-user";
 import AppHeader from "@/components/AppHeader";
 import { requireModule } from "@/lib/permissions";
 import { fetchAll } from "@/lib/fetch-all";
+import { getNbNiveauxC } from "@/lib/refdata";
 
 type Atelier = { id: string; nom: string };
 type Ligne = { id: string; nom: string; atelier_id: string };
@@ -17,8 +18,6 @@ type MatriceRow = {
   niveau_cible: number;
 };
 
-const SEUILS = [1, 2, 3, 4];
-
 export default async function BilanPage({
   searchParams,
 }: {
@@ -29,11 +28,14 @@ export default async function BilanPage({
   const sp = await searchParams;
   const supabase = await getServerClient();
 
-  const [{ data: ateliersD }, { data: lignesD }, { data: equipesD }] = await Promise.all([
+  const [{ data: ateliersD }, { data: lignesD }, { data: equipesD }, nbNiveaux] = await Promise.all([
     supabase.from("atelier").select("id, nom").eq("actif", true).order("nom").returns<Atelier[]>(),
     supabase.from("ligne").select("id, nom, atelier_id").eq("actif", true).order("nom").returns<Ligne[]>(),
     supabase.from("equipe").select("id, nom").eq("actif", true).order("nom").returns<Equipe[]>(),
+    getNbNiveauxC(),
   ]);
+  // Seuils cumulés « Niv ≥ n » : 1..N selon le nombre de niveaux activés (0061).
+  const SEUILS = Array.from({ length: nbNiveaux }, (_, i) => i + 1);
   const ateliers = ateliersD ?? [];
   const lignes = lignesD ?? [];
   const equipes = equipesD ?? [];

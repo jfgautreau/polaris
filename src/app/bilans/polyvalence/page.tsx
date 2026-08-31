@@ -201,7 +201,7 @@ export default async function PolyvalenceReport({ searchParams }: { searchParams
               </table>
             )}
             <p className="muted" style={{ marginTop: 8, marginBottom: 0, fontSize: 12 }}>
-              Moyenne des niveaux de la matrice (0 à 4) sur l&apos;ensemble des couples
+              Moyenne des niveaux de la matrice sur l&apos;ensemble des couples
               personne active × poste actif de la catégorie, dans cet atelier. Une compétence
               non saisie compte pour 0 ; une restriction médicale est exclue du calcul.
               Rouge &lt; 1 · orange &lt; {SEUIL} · vert ≥ {SEUIL}.

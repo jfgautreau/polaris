@@ -4,6 +4,7 @@ import { getServerClient } from "@/lib/supabase-server";
 import { requireModule , canWrite } from "@/lib/permissions";
 import LectureSeule from "@/components/LectureSeule";
 import { fetchAll } from "@/lib/fetch-all";
+import { getNbNiveauxC } from "@/lib/refdata";
 import ReferentielEditor from "./ReferentielEditor";
 
 type Poste = {
@@ -28,7 +29,7 @@ export default async function ReferentielPage() {
   const { profile, perms } = await requireModule("referentiel", "read");
 
   const supabase = await getServerClient();
-  const [{ data }, { data: quartsD }, { data: pqD }, { data: compsD }, pcrD, { data: persD }] = await Promise.all([
+  const [{ data }, { data: quartsD }, { data: pqD }, { data: compsD }, pcrD, { data: persD }, nbNiveaux] = await Promise.all([
     supabase
       .from("atelier")
       .select(
@@ -54,6 +55,7 @@ export default async function ReferentielPage() {
     // Personnes (pour le sélecteur « Titulaire » du poste) : non parties, plus
     // le poste fixe courant pour afficher le titulaire en face de chaque poste.
     supabase.from("personne").select("id, nom, prenom, poste_fixe_id, statut").neq("statut", "PARTI").order("nom").returns<{ id: string; nom: string; prenom: string; poste_fixe_id: string | null; statut: string }[]>(),
+    getNbNiveauxC(),
   ]);
 
   const ateliers = (data ?? []).map((a) => ({
@@ -98,7 +100,7 @@ export default async function ReferentielPage() {
         </p>
 
         <LectureSeule actif={!canWrite(perms, "referentiel")}>
-          <ReferentielEditor initial={ateliers} quarts={quartsD ?? []} pqOff={pqOff} comps={compsD ?? []} pcr={pcr} persons={persons} titulaires={titulaires} />
+          <ReferentielEditor initial={ateliers} quarts={quartsD ?? []} pqOff={pqOff} comps={compsD ?? []} pcr={pcr} persons={persons} titulaires={titulaires} nbNiveaux={nbNiveaux} />
         </LectureSeule>
       </div>
     </>

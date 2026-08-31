@@ -7,8 +7,9 @@ import { INTERIM_BG } from "@/lib/interim";
 import g from "@/components/persongrid.module.css";
 import s from "./matrice.module.css";
 
-// Cycle de saisie : 0 -> 1 -> 2 -> 3 -> 4 -> ❌ (restriction) -> 0.
-const CYCLE = [0, 1, 2, 3, 4, RESTRICT];
+// Cycle de saisie : 0 -> 1 -> … -> N -> ❌ (restriction) -> 0, où N =
+// nombre de niveaux activés pour le site (cf. buildCycle).
+const buildCycle = (nb: number) => [...Array.from({ length: nb + 1 }, (_, i) => i), RESTRICT];
 const lvlTxt = (n: number) => (n === RESTRICT ? "Restriction ❌" : String(n));
 const norm = (s2: string) => s2.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
@@ -19,7 +20,7 @@ type Cell = { a: number; c: number };
 // Agregat par poste, calcule en une seule passe sur toutes les personnes.
 type Stat = { lvl: number[]; restrict: number; geA: number; geC: number };
 
-const EMPTY_STAT: Stat = { lvl: [0, 0, 0, 0, 0], restrict: 0, geA: 0, geC: 0 };
+const emptyStat = (nb: number): Stat => ({ lvl: Array(nb + 1).fill(0), restrict: 0, geA: 0, geC: 0 });
 
 export default function MatrixGrid({
   groups = [],
@@ -28,6 +29,7 @@ export default function MatrixGrid({
   canEditObjectif = false,
   mode = "actuel",
   search = "",
+  nbNiveaux = 4,
 }: {
   groups?: Group[];
   personnes?: Personne[];
@@ -35,7 +37,11 @@ export default function MatrixGrid({
   canEditObjectif?: boolean;
   mode?: "actuel" | "cible";
   search?: string; // saisie dans l'en-tete (cf. MatricePanel)
+  nbNiveaux?: number; // niveaux positifs activés pour le site (1..nbNiveaux)
 }) {
+  const EMPTY_STAT = useMemo(() => emptyStat(nbNiveaux), [nbNiveaux]);
+  const CYCLE = useMemo(() => buildCycle(nbNiveaux), [nbNiveaux]);
+  const niveaux = useMemo(() => Array.from({ length: nbNiveaux }, (_, i) => i + 1), [nbNiveaux]);
   const [cells, setCells] = useState<Record<string, Cell>>(initial);
   const [showBilan, setShowBilan] = useState(false);
   const [objActuel, setObjActuel] = useState<Record<string, number>>(() => {
@@ -69,7 +75,7 @@ export default function MatrixGrid({
   // d'un balayage complet par ligne et par colonne.
   const stats = useMemo(() => {
     const m = new Map<string, Stat>();
-    for (const p of allPostes) m.set(p.id, { lvl: [0, 0, 0, 0, 0], restrict: 0, geA: 0, geC: 0 });
+    for (const p of allPostes) m.set(p.id, emptyStat(nbNiveaux));
     const useActuel = mode === "actuel";
     for (const pe of personnes) {
       for (const p of allPostes) {
@@ -79,13 +85,13 @@ export default function MatrixGrid({
         const c = cell?.c ?? 0;
         const affiche = useActuel ? a : c;
         if (affiche === RESTRICT) st.restrict++;
-        else if (affiche >= 0 && affiche <= 4) st.lvl[affiche]++;
+        else if (affiche >= 0 && affiche <= nbNiveaux) st.lvl[affiche]++;
         if (a >= 2) st.geA++;
         if (c >= 2) st.geC++;
       }
     }
     return m;
-  }, [allPostes, personnes, cells, mode]);
+  }, [allPostes, personnes, cells, mode, nbNiveaux]);
 
   const statOf = (poid: string): Stat => stats.get(poid) ?? EMPTY_STAT;
 
@@ -209,7 +215,7 @@ export default function MatrixGrid({
             {/* ---- Bilan (remonte sous les entetes, retractable) ---- */}
             {showBilan && (
               <>
-                {[1, 2, 3, 4].map((lvl) => (
+                {niveaux.map((lvl) => (
                   <tr key={`niv${lvl}`} className={s.rowNiveau}>
                     <td className={s.bilanLabel}>
                       <span className={s.bilanSwatch}>
@@ -351,7 +357,7 @@ export default function MatrixGrid({
                     return (
                       <td key={po.id} className={g.cellTd}>
                         <div className={s.cellReadonly}>
-                          <LevelMark level={active} />
+                          <LevelMark level={active} max={nbNiveaux} />
                         </div>
                       </td>
                     );
@@ -368,7 +374,7 @@ export default function MatrixGrid({
                         title={`${pers.label} - ${po.nom}\nActuel ${lvlTxt(cell.a)} / Cible ${lvlTxt(cell.c)}\nClic +1, clic droit -1 (❌ = restriction)`}
                         className={s.cellBtn}
                       >
-                        <LevelMark level={active} />
+                        <LevelMark level={active} max={nbNiveaux} />
                         {other === RESTRICT ? (
                           <span className={`${s.otherMark} ${s.restrict}`}>✕</span>
                         ) : other > 0 ? (

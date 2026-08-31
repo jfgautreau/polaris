@@ -249,6 +249,24 @@ async function copierReferentiels(admin: AdminClient, sourceId: string, cibleId:
     }
   }
 
+  // --- Nombre de niveaux activés (site.nb_niveaux, 0061) ---
+  //    Config portée par la ligne `site` : on recopie le réglage du site source
+  //    sur le site créé (défaut 4 sinon).
+  {
+    const { data } = await admin
+      .from("site")
+      .select("nb_niveaux")
+      .eq("id", sourceId)
+      .single<{ nb_niveaux: number }>();
+    if (data?.nb_niveaux) {
+      const { error } = await admin
+        .from("site")
+        .update({ nb_niveaux: data.nb_niveaux })
+        .eq("id", cibleId);
+      if (error) console.error("[createSite] copie nb_niveaux :", error.message);
+    }
+  }
+
   // --- Quarts (code, libelle, ordre, debut, fin) ---
   //    La PK est composite (code, site_id) : recopier sous le nouveau
   //    site_id ne crée aucun conflit.
