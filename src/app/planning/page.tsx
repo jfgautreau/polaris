@@ -604,8 +604,8 @@ export default async function PlanningPage({
             />
           </div>
           {/* Partie droite : boutons carrés icône seule (hauteur des filtres),
-              libellé au survol via title. */}
-          <div style={{ display: "flex", flexDirection: "row", gap: 8, alignItems: "center" }}>
+              empilés en colonne à droite des filtres, libellé au survol via title. */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-start" }}>
             {canEditPlanningFull && (
               <PrefillButton
                 semaines={weekMondays.map((wm) => isoDate(wm))}

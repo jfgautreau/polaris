@@ -22,30 +22,53 @@ export async function POST(req: NextRequest) {
   // creer_absence en 0044.
   const site_id = garde.profile.siteId;
 
-  const body = (await req.json().catch(() => null)) as { isos?: string[]; profil_id?: string } | null;
+  const body = (await req.json().catch(() => null)) as { isos?: string[]; profil_id?: string; force?: boolean } | null;
   const isos = (body?.isos ?? []).filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s));
   const profil_id = body?.profil_id || undefined;
+  const force = !!body?.force;
   if (isos.length === 0) return NextResponse.json({ error: "Aucun jour" }, { status: 400 });
 
-  // Blocage : (re)initialiser une semaine qui a deja des affectations reelles
-  // (poste_id renseigne) ecraserait les fermetures/ouvertures decidees en
-  // Placement, potentiellement laissant des personnes sur des lignes qui vont
-  // se refermer. Les jours d'absence ne comptent pas.
+  // (Re)initialiser une semaine qui a deja des affectations reelles (poste_id
+  // renseigne) ecraserait les fermetures/ouvertures decidees en Placement, et
+  // pourrait laisser des personnes sur des lignes qui vont se refermer. Les jours
+  // d'absence ne comptent pas.
   // MULTI-SITE : borne par site_id (le service_role bypass la RLS).
+  type ConflitRow = { id: string; personne: { nom: string; prenom: string } | null };
   const { data: conf, error: eConf } = await supabase
     .from("placement")
-    .select("jour")
+    .select("id, personne:personne_id(nom, prenom)")
     .eq("site_id", site_id)
     .in("jour", isos)
     .not("poste_id", "is", null)
     .is("motif_absence_id", null)
-    .limit(1);
+    .returns<ConflitRow[]>();
   if (eConf) return NextResponse.json({ error: eConf.message }, { status: 403 });
   if ((conf ?? []).length > 0) {
-    return NextResponse.json(
-      { error: "Des affectations existent déjà sur cette semaine. Videz-les dans Placement avant de la réinitialiser." },
-      { status: 409 }
-    );
+    // Proposition A : sans `force`, on renvoie la liste des personnes affectees
+    // pour que l'ecran propose « reinitialiser quand meme et retirer », plutot
+    // qu'un mur. Les noms sont dedupliques (une personne sur plusieurs jours).
+    if (!force) {
+      const vus = new Set<string>();
+      const affectes: { nom: string; prenom: string }[] = [];
+      for (const r of conf ?? []) {
+        const nom = r.personne?.nom ?? "?";
+        const prenom = r.personne?.prenom ?? "";
+        const cle = `${nom} ${prenom}`;
+        if (vus.has(cle)) continue;
+        vus.add(cle);
+        affectes.push({ nom, prenom });
+      }
+      affectes.sort((a, b) => `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`));
+      return NextResponse.json({ conflit: true, affectes }, { status: 409 });
+    }
+    // Avec `force` : on retire les affectations poste de la semaine (les absences
+    // restent) avant de reinitialiser.
+    const { error: eDel } = await supabase
+      .from("placement")
+      .delete()
+      .eq("site_id", site_id)
+      .in("id", (conf ?? []).map((r) => r.id));
+    if (eDel) return NextResponse.json({ error: eDel.message }, { status: 403 });
   }
 
   // Multi-site : quart est site-scopé depuis 0053. On borne par site_id

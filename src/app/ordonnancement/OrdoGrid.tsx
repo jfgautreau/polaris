@@ -51,6 +51,12 @@ export default function OrdoGrid({
     rollback: () => void;
     quart: boolean; // quart (true) ou ligne (false), pour le libelle
   } | null>(null);
+  // Re-initialisation bloquee par des affectations -> modale « reinitialiser quand meme ».
+  const [conflitReset, setConflitReset] = useState<{
+    affectes: { nom: string; prenom: string }[];
+    isos: string[];
+    profilId?: string;
+  } | null>(null);
 
   // Plus de remplissage par defaut : un jour sans ligne explicite est FERME.
   // La semaine type ne s'applique qu'a l'initialisation (bouton), donc modifier
@@ -79,7 +85,8 @@ export default function OrdoGrid({
   }
 
   // Applique un profil a la semaine choisie ; le serveur renvoie l'instantané.
-  async function applyProfil(isos: string[], profilId?: string) {
+  // `force` : réinitialise QUAND MÊME en retirant les affectations en conflit.
+  async function applyProfil(isos: string[], profilId?: string, force = false) {
     setInitIsos(null);
     setSaving(true);
     setErreur(null);
@@ -87,8 +94,18 @@ export default function OrdoGrid({
       const res = await fetch("/api/ordonnancement/reset-week", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isos, profil_id: profilId }),
+        body: JSON.stringify({ isos, profil_id: profilId, force }),
       });
+      if (res.status === 409) {
+        // Affectations existantes : proposer « réinitialiser quand même ».
+        const jc = (await res.json().catch(() => ({}))) as { conflit?: boolean; affectes?: { nom: string; prenom: string }[]; error?: string };
+        if (jc.conflit && Array.isArray(jc.affectes)) {
+          setConflitReset({ affectes: jc.affectes, isos, profilId });
+        } else {
+          setErreur(jc.error ?? "Échec.");
+        }
+        return;
+      }
       const j = (await res.json().catch(() => ({}))) as { jq?: Record<string, boolean>; fermetures?: string[]; error?: string };
       if (res.ok) {
         const set = new Set(isos);
@@ -381,6 +398,42 @@ export default function OrdoGrid({
               onClick={forcerFermeture}
             >
               Fermer quand même et retirer
+            </button>
+          </div>
+        </ModaleDeplacable>
+      )}
+
+      {/* Re-initialisation bloquee par des affectations : proposer de forcer. */}
+      {conflitReset && (
+        <ModaleDeplacable onClose={() => setConflitReset(null)} largeur={480}>
+          <div className="toolbar mdd-drag" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 6, cursor: "grab" }}>
+            <h2 style={{ margin: 0, color: "#b45309" }}>⚠ Semaine occupée</h2>
+            <button type="button" className="btn-sm btn-ghost" onClick={() => setConflitReset(null)} style={{ width: "auto" }}>✕</button>
+          </div>
+          <p style={{ margin: "0 0 8px", fontSize: 14 }}>
+            {conflitReset.affectes.length === 1 ? "Une personne est affectée" : `${conflitReset.affectes.length} personnes sont affectées`}{" "}
+            sur cette semaine. La réinitialiser retirera {conflitReset.affectes.length === 1 ? "son affectation" : "leurs affectations"} sur poste (les absences sont conservées) :
+          </p>
+          <ul style={{ margin: "0 0 12px", paddingLeft: 20, fontSize: 13, maxHeight: 220, overflowY: "auto" }}>
+            {conflitReset.affectes.map((p, i) => (
+              <li key={i}>{p.nom} {p.prenom}</li>
+            ))}
+          </ul>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <button type="button" className="btn-sm btn-ghost" style={{ width: "auto" }} onClick={() => setConflitReset(null)}>
+              Annuler
+            </button>
+            <button
+              type="button"
+              className="btn-sm"
+              style={{ width: "auto", background: "#b45309", border: "1px solid #b45309" }}
+              onClick={() => {
+                const c = conflitReset;
+                setConflitReset(null);
+                if (c) applyProfil(c.isos, c.profilId, true);
+              }}
+            >
+              Réinitialiser quand même et retirer
             </button>
           </div>
         </ModaleDeplacable>
