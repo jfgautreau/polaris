@@ -5,7 +5,7 @@ import PageTitle from "@/components/PageTitle";
 import { requireModule, canWritePlacementData } from "@/lib/permissions";
 import { fetchAll } from "@/lib/fetch-all";
 import { quartParDefaut, quartOuDefaut, memeQuart } from "@/lib/quarts";
-import { isoDate, mondayOf } from "@/lib/week";
+import { isoDate, mondayOf, addDays } from "@/lib/week";
 import { getRotationRefsC } from "@/lib/refdata";
 import { rotationForWeek, equipesParQuart } from "@/lib/rotation";
 import { addMonthsIso } from "@/lib/habilitations";
@@ -247,6 +247,46 @@ export default async function PlacementPage({
   const rotWeek = rotationForWeek(await getRotationRefsC(), isoDate(mondayOf(new Date(jour + "T00:00"))));
   const parQuart = equipesParQuart(equipes, rotWeek);
 
+  // Jours OUVERTS (au moins une ligne de l'atelier ouverte sur le quart courant),
+  // sur une fenêtre autour du jour affiché. Sert à la navigation par jour du
+  // Placement : les flèches sautent les jours fermés, et le calendrier grise
+  // ces jours. Mêmes règles que `ligneOuverte` (jour_quart.actif + ouverture_quart,
+  // défaut ouvert). Bornées au quart -> tables petites (≤ 240 lignes) : pas de
+  // fetchAll. RLS (getServerClient) borne déjà au site courant.
+  const winStart = isoDate(addDays(new Date(jour + "T00:00"), -90));
+  const winEnd = isoDate(addDays(new Date(jour + "T00:00"), 150));
+  const atelierLigneIds = (lignesD ?? []).map((l) => l.id);
+  const openDays: string[] = [];
+  if (atelierLigneIds.length) {
+    const [{ data: jqWin }, { data: ovWin }] = await Promise.all([
+      supabase
+        .from("jour_quart")
+        .select("jour, actif")
+        .eq("quart_code", quart)
+        .gte("jour", winStart)
+        .lte("jour", winEnd)
+        .returns<{ jour: string; actif: boolean }[]>(),
+      supabase
+        .from("ouverture_quart")
+        .select("jour, ligne_id, ouverte")
+        .eq("quart_code", quart)
+        .gte("jour", winStart)
+        .lte("jour", winEnd)
+        .returns<{ jour: string; ligne_id: string; ouverte: boolean }[]>(),
+    ]);
+    // Fermetures explicites par jour (une ligne absente = ouverte par défaut).
+    const fermByDay = new Map<string, Set<string>>();
+    for (const r of ovWin ?? [])
+      if (!r.ouverte) (fermByDay.get(r.jour) ?? fermByDay.set(r.jour, new Set()).get(r.jour)!).add(r.ligne_id);
+    for (const r of jqWin ?? []) {
+      if (!r.actif) continue; // quart fermé ce jour-là
+      const ferm = fermByDay.get(r.jour);
+      // Ouvert s'il reste au moins une ligne de l'atelier non fermée.
+      if (!ferm || atelierLigneIds.some((id) => !ferm.has(id))) openDays.push(r.jour);
+    }
+    openDays.sort();
+  }
+
   // Temps partiel du jour (mêmes règles métier que le Planning et l'affichage TV,
   // cf. src/app/planning/page.tsx) : une personne est « TP » (indisponible ce
   // jour) si sa journée est entièrement off, ou si son équipe travaille ce jour-là
@@ -325,6 +365,9 @@ export default async function PlacementPage({
         quartOuvert={quartOuvert}
         siteNom={site.nom}
         tpIds={tpIds}
+        openDays={openDays}
+        winStart={winStart}
+        winEnd={winEnd}
       />
     </div>
   );

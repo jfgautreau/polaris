@@ -8,6 +8,7 @@ import { parseNumeros } from "@/lib/numeros-rotation";
 import { styleInterim, estInterim } from "@/lib/interim";
 import SlideSwitch from "@/components/SlideSwitch";
 import { PrintIcon } from "@/components/icons";
+import JourNav from "./JourNav";
 import s from "./placement.module.css";
 
 type Atelier = { id: string; nom: string };
@@ -55,6 +56,9 @@ export default function PlacementBoard({
   quartOuvert = true,
   siteNom = "",
   tpIds = [],
+  openDays = [],
+  winStart,
+  winEnd,
 }: {
   title?: ReactNode;
   jour: string;
@@ -80,6 +84,9 @@ export default function PlacementBoard({
   quartOuvert?: boolean; // le quart est-il ouvert ce jour-la (Ordonnancement) ?
   siteNom?: string; // multi-tenant : nom d'usine dans le pied de page du PDF
   tpIds?: string[]; // personnes en temps partiel (indisponibles) ce jour-la
+  openDays?: string[]; // jours (iso) avec au moins une ligne ouverte (quart courant)
+  winStart?: string; // borne basse de la fenêtre d'ouverture (calendrier)
+  winEnd?: string; // borne haute
 }) {
   const router = useRouter();
   const [place, setPlace] = useState<Record<string, string>>(placeInit);
@@ -590,11 +597,13 @@ export default function PlacementBoard({
         </div>
         <div className={s.fitem}>
           <span>Jour</span>
-          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <button type="button" className={s.navbtn} onClick={() => go({ date: isoDate(addDays(new Date(jour + "T00:00"), -1)) })}>◀</button>
-            <input type="date" value={jour} onChange={(e) => e.target.value && go({ date: e.target.value })} />
-            <button type="button" className={s.navbtn} onClick={() => go({ date: isoDate(addDays(new Date(jour + "T00:00"), 1)) })}>▶</button>
-          </div>
+          <JourNav
+            jour={jour}
+            openDays={openDays}
+            winStart={winStart ?? isoDate(addDays(new Date(jour + "T00:00"), -90))}
+            winEnd={winEnd ?? isoDate(addDays(new Date(jour + "T00:00"), 150))}
+            onPick={(d) => go({ date: d })}
+          />
         </div>
         <div className={s.fitem}>
           <span>Affichage</span>
