@@ -458,10 +458,13 @@ export default function PlacementBoard({
     return p.equipe_id === fEquipe;
   };
 
-  // Même règle que la liste : sans équipe = toujours dans le périmètre, filtre
-  // atelier compris (un intérimaire n'est souvent rattaché à aucun des deux).
+  // Même règle que la liste : le filtre équipe est court-circuité pour les
+  // sans-équipe (equipeOk le fait), mais le filtre atelier porte sur le
+  // rattachement RÉEL (atelier_id). Ainsi un intérimaire rattaché à aucun
+  // atelier reste visible partout, mais un sans-équipe affecté à un AUTRE
+  // atelier ne pollue plus la vue de l'atelier courant.
   const inScope = (p: Personne) =>
-    !p.equipe_id || (equipeOk(p) && (!fAtelier || p.atelier_id === fAtelier));
+    equipeOk(p) && (!p.atelier_id || !fAtelier || p.atelier_id === fAtelier);
 
   // Liste des noms filtree + regroupee : a placer -> absents -> sur poste -> autre quart.
   // Une recherche cherche dans TOUT l'effectif : les pre-filtres equipe/atelier ne sont
@@ -473,7 +476,7 @@ export default function PlacementBoard({
         if (!norm(`${p.nom} ${p.prenom}`).includes(q)) return false;
       } else {
         if (!equipeOk(p)) return false;
-        if (p.equipe_id && fAtelier && p.atelier_id !== fAtelier) return false;
+        if (p.atelier_id && fAtelier && p.atelier_id !== fAtelier) return false;
       }
       if (hidePlaced && (place[p.id] || autreQuart[p.id])) return false;
       return true;
