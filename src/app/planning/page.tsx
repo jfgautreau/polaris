@@ -603,19 +603,22 @@ export default async function PlanningPage({
               search={searchParam}
             />
           </div>
-          {/* Partie droite : boutons carrés icône seule (hauteur des filtres),
-              empilés en colonne à droite des filtres, libellé au survol via title. */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-start" }}>
+          {/* Partie droite : boutons carrés icône seule, alignés sur les 3 lignes
+              de filtres. La colonne s'étire à la hauteur des filtres (alignItems:
+              stretch sur .planning-top) et répartit les boutons avec space-between
+              -> le 1er en face de Quart, le 2e de l'Atelier, le 3e de l'Équipe,
+              quelles que soient les hauteurs exactes. Libellé au survol via title. */}
+          <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", alignItems: "flex-end", alignSelf: "stretch" }}>
             {canEditPlanningFull && (
               <PrefillButton
                 semaines={weekMondays.map((wm) => isoDate(wm))}
                 weekLabel={`S${isoWeekNumber(weekMondays[0])} → S${isoWeekNumber(weekMondays[2])}`}
               />
             )}
-            <Link href="/horaires-specifiques" className="navlink" title="Horaires spécifiques" aria-label="Horaires spécifiques" style={{ width: 34, height: 34, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}>
+            <Link href="/horaires-specifiques" className="navlink" title="Horaires spécifiques" aria-label="Horaires spécifiques" style={{ width: 30, height: 30, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}>
               🕐
             </Link>
-            <Link href="/absences-specifiques" className="navlink" title="Absences spécifiques" aria-label="Absences spécifiques" style={{ width: 34, height: 34, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}>
+            <Link href="/absences-specifiques" className="navlink" title="Absences spécifiques" aria-label="Absences spécifiques" style={{ width: 30, height: 30, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}>
               🤒
             </Link>
           </div>
