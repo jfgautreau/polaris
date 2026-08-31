@@ -24,7 +24,7 @@ Détails : **[INSTALL.md](INSTALL.md)**.
 ## Modules
 - **Référentiel** — ateliers / lignes / postes (abaque, catégorie, habilitations requises), équipes & chefs.
 - **Personnel** — fiche, cycle de vie (contrats = source de vérité), absences, RGPD.
-- **Matrice de polyvalence** — niveaux actuel / cible par personne × poste, objectifs, bilan.
+- **Matrice de polyvalence** — niveaux actuel / cible par personne × poste, objectifs, bilan. Échelle du carré magique paramétrable par site (nombre de niveaux, seuil « compétent », couleur par niveau) dans l'écran Compétences.
 - **Habilitations** — échéances de recyclage, alertes couleur, cloche d'alerte.
 - **Ordonnancement** — ouverture des lignes par quart, semaines types, rotation des équipes.
 - **Planning** — placement (poste / absence / non travaillé) sur plusieurs semaines, indicateurs.

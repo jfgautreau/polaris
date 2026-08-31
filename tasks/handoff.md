@@ -84,9 +84,15 @@ Priorité d'affichage de l'horaire (TV) : **exception ponctuelle > temps partiel
 - En-têtes de poste verticaux, **sur une seule ligne** ; ils répètent le nom de la ligne
   (« Conducteur Thermo 1 » sous « Thermo 1 »). Retirer ce suffixe a été **écarté** par
   l'utilisateur (la règle naïve ne couvre que 38 des 82 postes).
-- Saisie : clic = +1, clic droit = −1, cycle `0→1→2→3→4→❌ (restriction)→0`. ⚠️ Non
-  découvrable, impossible au tactile (pas de clic droit) — un popover de choix reste à
-  faire si la saisie passe un jour sur tablette.
+- Saisie : clic = +1, clic droit = −1, cycle `0→1→…→N→❌ (restriction)→0`, où **N =
+  `site.nb_niveaux`** (2..4, réglé dans `/admin/competences`). ⚠️ Non découvrable,
+  impossible au tactile (pas de clic droit) — un popover de choix reste à faire si la
+  saisie passe un jour sur tablette.
+- **Échelle paramétrable par site** (`/admin/competences`) : nombre de niveaux activés
+  (N), seuil « compétent » de la ligne de bilan et des rapports, et **couleur de chaque
+  niveau positif** (palette fermée de 4 teintes). La grille lit ces réglages ; le niveau
+  0 (blanc) et la restriction sont toujours là. Le camembert est mis à l'échelle sur N
+  (le plus haut niveau = disque plein) ; à N=4 le rendu est identique à l'historique.
 - La grille vient du module partagé `persongrid` (cf. CLAUDE.md), pas de code local.
 
 ## Habilitations (`/habilitations`)

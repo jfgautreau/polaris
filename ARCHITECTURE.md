@@ -53,7 +53,13 @@ placement journalier, habilitations, affichage couloir, bilans).
   contrat. Les anciens champs `personne.date_arrivee` / `date_depart_prevu` /
   `motif_depart` ont été **supprimés en 0050**.
 - **Matrice** : `matrice` (niveau actuel/cible par personne×poste, valeur spéciale
-  « restriction »), `competence_niveau_libelle` (échelle paramétrable).
+  « restriction »), `competence_niveau_libelle` (échelle paramétrable : `libelle` +
+  `couleur` par niveau, migration 0063). L'échelle du carré magique se règle par site
+  dans `/admin/competences` : `site.nb_niveaux` = nombre de niveaux positifs activés
+  (2..4, 0061), `site.seuil_competent` = niveau minimal « compétent » des bilans
+  (1..4 borné à ≤ nb_niveaux, 0062), et une couleur par niveau positif choisie dans
+  une palette fermée de 4 teintes (0063). Le niveau 0 (blanc = aucune compétence) et
+  la restriction restent toujours présents.
 - **Habilitations** : `competence` (`a_recycler`, `duree_validite_mois`, `categorie`,
   `groupe`, `ordre`, `a_autorisation_conduite`), `personne_competence`
   (`date_obtention`, `date_expiration` **stockée à la saisie**, `date_autorisation_conduite`).
@@ -122,7 +128,7 @@ application, cf. `lessons.md` L23) ; la **0042** ouvre les **rôles personnalis�
 (`role_custom`) et retire le CHECK sur `app_user.role` (validation côté application :
 intégrés + `role_custom`).
 
-**Chantier multi-site (0043 → 0054)** — cf. `tasks/multi-site.md` pour le détail :
+**Chantier multi-site (0043 → 0063)** — cf. `tasks/multi-site.md` et CLAUDE.md pour le détail :
 - **0043–0048** — socle multi-tenant : table `site`, `site_id` sur les tables métier,
   RLS d'isolation, `est_super_admin`, FKs simplifiées pour PostgREST, impersonation
   par header (`x-impersonate-site`, honoré uniquement pour un super_admin).
@@ -135,6 +141,19 @@ intégrés + `role_custom`).
   `competence_niveau_libelle`, `quart` passent tous en `site_id NOT NULL` (chaque site a
   sa propre matrice des droits, ses rôles, motifs, contrats, compétences et quarts).
 - **0054** — commentaire libre sur `personne_competence`.
+- **0055–0060** — `app_user`/`audit_log` scopés au site courant (0055) ; table
+  `site_module` (masquage d'éléments par site depuis `/platform`, 0056) ;
+  `quart.rotation`/`quart.creneau` (0057) ; `site_id` sur `tp_periode` (0058) ;
+  `poste.remplacable` (PTR/PTNR) + `personne.poste_fixe_id` (0059) ;
+  `motif_absence.non_planifie` (0060).
+- **0061–0063 — échelle du carré magique paramétrable par site** (réglée dans
+  `/admin/competences`) : `site.nb_niveaux` (nombre de niveaux positifs activés,
+  2..4, 0061) ; `site.seuil_competent` (niveau minimal « compétent » des bilans,
+  1..4 borné à ≤ nb_niveaux, 0062) ; `competence_niveau_libelle.couleur` (couleur
+  par niveau positif, palette fermée de 4 teintes, CHECK en base, 0063). Le niveau
+  0 (blanc) et la restriction restent toujours présents. Lectures résilientes
+  (`getNbNiveauxC` / `getSeuilCompetentC` / `getCouleursNiveauxC`, replis 4 / 2 /
+  échelle historique).
 
 ## Sitemap (principales routes)
 - `/` accueil (logo + titre « planning »), `/planning`, `/placement` (saisie par

@@ -148,7 +148,16 @@ cross-site passe par `/platform` en service_role). **Appliquée le 2026-08-23.**
 `0056` **`site_module`** : masquage d'éléments par site depuis `/platform` (présence d'une
 ligne = masqué ; menus → blocage réel via `requireModule` + nav filtrée dans `AppHeader` ;
 extras hors nav via `MASQUABLES_EXTRA`, ex. `guide` ; helper `src/lib/site-modules.ts`).
-**Appliquée le 2026-08-24.**
+**Appliquée le 2026-08-24.** ·
+`0057` `quart.rotation`/`quart.creneau` · `0058` `site_id` sur `tp_periode` (oubli du lot
+0053) · `0059` `poste.remplacable` (PTR/PTNR) + `personne.poste_fixe_id` ·
+`0060` `motif_absence.non_planifie` ·
+`0061`–`0063` **échelle du carré magique paramétrable par site** (réglée dans
+`/admin/competences`) : `site.nb_niveaux` (nombre de niveaux positifs activés, 2..4) ·
+`site.seuil_competent` (niveau minimal « compétent » des bilans, 1..4 borné à ≤ nb_niveaux) ·
+`competence_niveau_libelle.couleur` (couleur par niveau positif, palette fermée de 4 teintes,
+CHECK en base). Le niveau 0 (blanc) et la restriction restent toujours présents. Lectures
+résilientes (repli 4 / 2 / échelle historique tant que la colonne manque). **Appliquées.**
 
 ## 5 bis. Incident 2026-08-23 (deux régressions en chaîne après 0055)
 Après application de 0055, prod HS puis écritures sur le mauvais site. À retenir :
