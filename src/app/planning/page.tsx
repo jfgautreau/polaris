@@ -614,7 +614,7 @@ export default async function PlanningPage({
               alignement garanti, et les boutons collent à droite des filtres.
               La 2e colonne rend toujours 3 cases (span vide si pré-remplir masqué)
               pour ne pas décaler les rangées. Libellé au survol via title. */}
-          <div style={{ display: "grid", gridTemplateColumns: "auto auto", columnGap: 10, rowGap: 6, alignItems: "center", justifyItems: "start" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "auto auto", columnGap: 40, rowGap: 6, alignItems: "center", justifyItems: "start", alignSelf: "flex-start", alignContent: "start" }}>
             <QuartSelector quarts={quarts} current={quart} semaine={centerIso} atelier={atelier} equipe={spEquipe} search={searchParam} />
             {canEditPlanningFull ? (
               <PrefillButton
