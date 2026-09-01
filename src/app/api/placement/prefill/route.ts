@@ -37,6 +37,7 @@ export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => null)) as { semaines?: unknown; semaine?: string } | null;
   const siteId = profile.siteId;
   const supabase = getAdminClient();
+  try {
 
   // Lundis demandés : la liste `semaines`, ou le singulier `semaine` (compat).
   const brutes = Array.isArray(body?.semaines) && body.semaines.length ? body.semaines : [body?.semaine];
@@ -265,8 +266,21 @@ export async function POST(req: NextRequest) {
   // sinon un marqueur silencieusement perdu laisse le TP non déplaçable.
   const cacheAbsent = mErr && /schema cache|does not exist|42P01|PGRST205/i.test(mErr.message);
   if (mErr && !cacheAbsent) {
-    return NextResponse.json({ error: mErr.message }, { status: 403 });
+    return NextResponse.json({ error: `marqueur tp_charge: ${mErr.message}` }, { status: 403 });
   }
 
-  return NextResponse.json({ ok: true, crees: rows.length });
+  return NextResponse.json({
+    ok: true,
+    crees: rows.length,
+    tp: tpRows.length,
+    fixe: posteRows.length,
+    site: siteId,
+    marqueur: mErr ? `ignoré (${mErr.message})` : "posé",
+  });
+  } catch (e) {
+    // Toute exception non prévue est renvoyée en clair : sans ça, le bouton
+    // n'affichait qu'un « Échec » muet et le TP restait non déplaçable.
+    const msg = e instanceof Error ? `${e.message}` : String(e);
+    return NextResponse.json({ error: `prefill: ${msg}` }, { status: 500 });
+  }
 }

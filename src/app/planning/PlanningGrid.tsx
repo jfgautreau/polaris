@@ -446,16 +446,19 @@ export default function PlanningGrid({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ semaines: [monday] }),
       });
-      const j = (await r.json().catch(() => ({}))) as { crees?: number; error?: string };
+      const j = (await r.json().catch(() => ({}))) as { crees?: number; tp?: number; fixe?: number; site?: string; marqueur?: string; error?: string };
       if (!r.ok) {
         setSaving("error");
         setPrefillWk(null);
+        window.alert(`Chargement impossible : ${j.error ?? "erreur inconnue"}`);
         setTimeout(() => setSaving("idle"), 3000);
         return;
       }
       if ((j.crees ?? 0) === 0) {
         setSaving("saved");
         setPrefillWk(null);
+        // Rien créé : on explique pourquoi (souvent : cases déjà remplies).
+        window.alert(`Semaine ${label} : rien à créer (TP ${j.tp ?? 0}, postes fixes ${j.fixe ?? 0}). Cases déjà remplies non écrasées. Marqueur TP : ${j.marqueur ?? "?"}.`);
         setTimeout(() => setSaving("idle"), 2000);
         return; // rien à ajouter (déjà rempli) : pas besoin de recharger
       }
