@@ -13,7 +13,7 @@ const JOURS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 const REF_ISO = ["2024-01-01", "2024-01-02", "2024-01-03", "2024-01-04", "2024-01-05", "2024-01-06", "2024-01-07"];
 
 const NAME_W = 160;
-const QCOL_W = 30;
+const QCOL_W = 46;
 
 function abbr(libelle: string) {
   return libelle.replace(/[^0-9A-Za-zÀ-ÿ]/g, "").slice(0, 3);
