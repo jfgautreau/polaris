@@ -2,85 +2,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getServerClient, getAdminClient } from "@/lib/supabase-server";
 import { getCurrentProfile } from "@/lib/current-user";
 import { canWritePlacementData } from "@/lib/permissions";
-import { addMonthsIso, habValable } from "@/lib/habilitations";
-import { parseNumeros } from "@/lib/numeros-rotation";
 import { getQuartsC } from "@/lib/refdata";
-import { quartOuDefaut, memeQuart, type QuartRef } from "@/lib/quarts";
-
-type SupabaseClient = Awaited<ReturnType<typeof getServerClient>>;
-
-// Habilitations exigees par le poste que la personne n'a pas (ou plus). Recalcule
-// ici plutot que de croire le client : le drapeau de forcage sert de trace d'audit.
-async function habManquantes(supabase: SupabaseClient, personne_id: string, poste_id: string, siteId: string): Promise<string[]> {
-  const { data: reqs } = await supabase
-    .from("poste_competence_requise")
-    .select("competence_id, competence:competence_id(nom, duree_validite_mois)")
-    .eq("poste_id", poste_id)
-    .eq("site_id", siteId)
-    .returns<{ competence_id: string; competence: { nom: string; duree_validite_mois: number | null } | null }[]>();
-  if (!reqs?.length) return [];
-
-  const { data: det } = await supabase
-    .from("personne_competence")
-    .select("competence_id, date_obtention, date_expiration")
-    .eq("personne_id", personne_id)
-    .eq("site_id", siteId)
-    .in("competence_id", reqs.map((r) => r.competence_id))
-    .returns<{ competence_id: string; date_obtention: string | null; date_expiration: string | null }[]>();
-
-  const parComp = new Map((det ?? []).map((d) => [d.competence_id, d]));
-  return reqs
-    .filter((r) => {
-      const d = parComp.get(r.competence_id);
-      if (!d) return true;
-      // date_expiration est stockee a la saisie : repli sur obtention + duree.
-      const exp = d.date_expiration ?? addMonthsIso(d.date_obtention, r.competence?.duree_validite_mois);
-      return !habValable({ expiration: exp });
-    })
-    .map((r) => r.competence?.nom ?? "habilitation");
-}
-
-// Premier numero de rotation encore libre sur ce poste, ce jour et ce quart.
-// `null` si le poste n'est pas numerote, ou si toutes les places numerotees sont
-// prises : la personne rejoint alors la zone « sans numero » de la tuile, plutot
-// que d'ecraser quelqu'un ou d'inventer un numero absent du referentiel.
-async function premierNumeroLibre(
-  supabase: SupabaseClient,
-  poste_id: string,
-  jour: string,
-  quart_code: string | null,
-  personne_id: string,
-  quarts: QuartRef[],
-  siteId: string
-): Promise<string | null> {
-  const { data: poste } = await supabase
-    .from("poste")
-    .select("numero_rotation")
-    .eq("id", poste_id)
-    .eq("site_id", siteId)
-    .maybeSingle<{ numero_rotation: string | null }>();
-  const numeros = parseNumeros(poste?.numero_rotation);
-  if (!numeros.length) return null;
-
-  const { data: occ } = await supabase
-    .from("placement")
-    .select("personne_id, numero_rotation, quart_code")
-    .eq("jour", jour)
-    .eq("poste_id", poste_id)
-    .eq("site_id", siteId)
-    .returns<{ personne_id: string; numero_rotation: string | null; quart_code: string | null }[]>();
-
-  // Meme quart uniquement (le repli des placements sans `quart_code` est commun a
-  // tous les ecrans, cf. src/lib/quarts.ts), et on ignore la personne qu'on est en
-  // train de (re)placer.
-  const q = quartOuDefaut(quart_code, quarts);
-  const pris = new Set(
-    (occ ?? [])
-      .filter((r) => r.personne_id !== personne_id && memeQuart(r.quart_code, q, quarts) && r.numero_rotation)
-      .map((r) => r.numero_rotation as string)
-  );
-  return numeros.find((n) => !pris.has(n)) ?? null;
-}
+import { quartOuDefaut } from "@/lib/quarts";
+import { habManquantes, premierNumeroLibre } from "@/lib/placement-helpers";
 
 // POST /api/placement/cell { personne_id, jour, equipe_id, value, forcer }
 //   value = ""  -> efface le placement
@@ -128,7 +52,11 @@ export async function POST(req: NextRequest) {
   let poste_id: string | null = null;
   let motif_absence_id: string | null = null;
   let non_travaille = false;
+  // « TP » = temps partiel matérialisé (jour entier off). Comme le « NT », ce
+  // n'est ni un poste ni une absence : une vraie ligne, donc déplaçable.
+  let tp = false;
   if (value === "X") non_travaille = true;
+  else if (value === "TP") tp = true;
   else if (value.startsWith("m:")) motif_absence_id = value.slice(2);
   else poste_id = value;
 
@@ -186,6 +114,7 @@ export async function POST(req: NextRequest) {
       poste_id,
       motif_absence_id,
       non_travaille,
+      tp,
       quart_code,
       numero_rotation,
       created_by: profile.authId,

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import ModaleDeplacable from "@/components/ModaleDeplacable";
+import { FillIcon } from "@/components/icons";
 
 type Jour = { iso: string; nom: string; num: string; firstOfWeek?: boolean };
 type Item = { id: string; label: string };
@@ -240,9 +241,9 @@ export default function OrdoGrid({
                     className="btn-sm btn-ghost"
                     onClick={() => resetWeek(blockIsos[i] ?? [])}
                     title="Initialiser cette semaine avec la semaine type (ré-applique / écrase si déjà fait)"
-                    style={{ padding: "1px 6px", fontSize: 12, lineHeight: 1.2 }}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "1px 6px", fontSize: 12, lineHeight: 1.2 }}
                   >
-                    ⚙️ Initialiser
+                    <FillIcon size={13} /> Initialiser
                   </button>
                 )}
               </span>

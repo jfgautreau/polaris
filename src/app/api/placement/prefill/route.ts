@@ -9,25 +9,27 @@ import { parseMonday, weekDays, dowMon } from "@/lib/week";
 import { contratCouvreLe, type Periode } from "@/lib/personne-statut";
 
 // POST /api/placement/prefill { semaines?: string[], semaine?: string }
-// Pré-remplit le planning : place chaque personne à POSTE FIXE (personne.poste_fixe_id)
-// sur son poste, pour les jours ouvrés (lundi→vendredi) des semaines demandées (les 3
-// semaines affichées à l'écran), SANS écraser une case déjà remplie (absence,
-// non-travaillé, autre poste) ni placer une personne hors de son effectif (contrat ne
-// couvrant pas le jour). `semaine` (singulier) reste accepté pour compat.
+// Pré-remplit une (ou plusieurs) semaine(s) affichée(s). Deux passes, dans cet
+// ordre — d'où le libellé « TP + postes fixes » du bouton :
 //
-// Le quart n'est PLUS celui affiché : il est déduit de l'ÉQUIPE de la personne —
-// quart fixe s'il existe, sinon le quart de la rotation pour cette semaine, sinon le
-// quart par défaut. Une personne à poste fixe apparaît ainsi sur son bon quart quel
-// que soit le quart affiché au moment du clic.
+//   1. TEMPS PARTIEL : matérialise les jours de TP (jour entier off) en vraies
+//      lignes `placement.tp`, et pose le marqueur `tp_charge` de la semaine.
+//      Une fois la semaine « chargée », le planning n'affiche plus le TP calculé
+//      mais ces lignes réelles — désormais DÉPLAÇABLES au glisser-déposer, et le
+//      recalcul ne les recrée plus. La règle métier est identique à l'affichage
+//      calculé (src/app/planning/page.tsx) : « TP » = journée entière off OU
+//      équipe, cette semaine, sur le créneau que la personne ne travaille pas.
+//   2. POSTES FIXES : place chaque personne à poste fixe (personne.poste_fixe_id)
+//      sur son poste, jours ouvrés lundi→vendredi, au quart de son équipe.
 //
-// Le placement est unique par (personne, jour) : « déjà rempli » = toute ligne
-// existante ce jour-là. On insère donc en `ignoreDuplicates` — jamais d'écrasement.
+// Les deux passes insèrent en `ignoreDuplicates` (onConflict personne,jour) :
+// jamais d'écrasement. Faire le TP D'ABORD garantit qu'un jour de TP d'une
+// personne à poste fixe reste un TP (le poste fixe saute la case déjà prise).
 export async function POST(req: NextRequest) {
   const profile = await getCurrentProfile();
   if (!profile) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
-  // Écriture « complète » (droit Planning OU Placement) : c'est une action de masse,
-  // on exige le client admin. Le chef d'équipe (exclu par canWritePlacementData)
-  // ne pré-remplit pas globalement.
+  // Écriture « complète » (droit Planning OU Placement) : action de masse, client
+  // admin. Le chef d'équipe (exclu par canWritePlacementData) ne pré-remplit pas.
   if (!(await canWritePlacementData(profile.role))) {
     return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
   }
@@ -36,79 +38,198 @@ export async function POST(req: NextRequest) {
   const siteId = profile.siteId;
   const supabase = getAdminClient();
 
-  // Lundis demandés : soit la liste `semaines` (les 3 semaines affichées), soit le
-  // singulier `semaine` (compat). On ne garde que des dates ISO valides.
+  // Lundis demandés : la liste `semaines`, ou le singulier `semaine` (compat).
   const brutes = Array.isArray(body?.semaines) && body.semaines.length ? body.semaines : [body?.semaine];
   const mondays = [...new Set(brutes.filter((x): x is string => typeof x === "string" && /^\d{4}-\d{2}-\d{2}$/.test(x)))];
-  // Jours ouvrés lundi→vendredi, semaine par semaine (le quart dépend de la semaine
-  // via la rotation). Les postes fixes (direction, maintenance…) ne travaillent pas
-  // le week-end ; on ne présume pas de l'ouverture des lignes en Ordonnancement.
-  const semaines = mondays.map((m) => ({ monday: m, isos: weekDays(parseMonday(m)).filter((j) => dowMon(j.iso) <= 4).map((j) => j.iso) }));
-  const allIsos = [...new Set(semaines.flatMap((s) => s.isos))];
-  if (!allIsos.length) return NextResponse.json({ ok: true, crees: 0 });
+  if (!mondays.length) return NextResponse.json({ ok: true, crees: 0 });
 
   const quarts = await getQuartsC();
   const quartDefaut = quartParDefaut(quarts);
+  const rotRefs = await getRotationRefsC();
+  const rotByMonday = new Map(mondays.map((m) => [m, rotationForWeek(rotRefs, m)]));
 
-  // Personnes à poste fixe, non parties, dont le poste fixe est actif (+ leur équipe).
-  const { data: persD } = await supabase
-    .from("personne")
-    .select("id, equipe_id, poste_fixe_id, poste:poste_fixe_id(actif)")
+  // Tous les jours (lundi→dimanche) de chaque semaine, + jours ouvrés seuls pour
+  // les postes fixes. Le TP peut tomber n'importe quel jour de la semaine.
+  const semaines = mondays.map((m) => {
+    const jours = weekDays(parseMonday(m));
+    return {
+      monday: m,
+      isosTous: jours.map((j) => j.iso),
+      isosOuvres: jours.filter((j) => dowMon(j.iso) <= 4).map((j) => j.iso),
+    };
+  });
+  const allIsos = [...new Set(semaines.flatMap((s) => s.isosTous))];
+  if (!allIsos.length) return NextResponse.json({ ok: true, crees: 0 });
+  const minIso = allIsos.reduce((a, b) => (a < b ? a : b));
+  const maxIso = allIsos.reduce((a, b) => (a > b ? a : b));
+
+  // Créneau (demi-journée) d'un quart : matin / aprem / null (plein). Piloté par
+  // quart.creneau (0057), plus codé en dur. Best-effort si la colonne manque.
+  const { data: quartRows } = await supabase
+    .from("quart")
+    .select("code, creneau")
     .eq("site_id", siteId)
-    .not("poste_fixe_id", "is", null)
-    .neq("statut", "PARTI")
-    .returns<{ id: string; equipe_id: string | null; poste_fixe_id: string; poste: { actif: boolean } | null }[]>();
-  const cibles = (persD ?? []).filter((p) => p.poste?.actif !== false);
-  if (!cibles.length) return NextResponse.json({ ok: true, crees: 0 });
-  const ids = cibles.map((p) => p.id);
+    .returns<{ code: string; creneau: string | null }[]>();
+  const creneauDeQuart = new Map((quartRows ?? []).map((q) => [q.code, q.creneau]));
+  const creneauDe = (q?: string | null): "matin" | "aprem" | null => {
+    const c = q ? creneauDeQuart.get(q) : null;
+    return c === "matin" || c === "aprem" ? c : null;
+  };
 
-  // Cases déjà occupées sur ces semaines (poste, absence ou non-travaillé).
-  const { data: existD } = await supabase
-    .from("placement")
-    .select("personne_id, jour")
-    .eq("site_id", siteId)
-    .in("jour", allIsos)
-    .in("personne_id", ids)
-    .returns<{ personne_id: string; jour: string }[]>();
-  const occ = new Set((existD ?? []).map((r) => `${r.personne_id}:${r.jour}`));
-
-  // Contrats, pour ne pas placer hors effectif (avant l'arrivée, dans un trou, après le départ).
-  const { data: cpD } = await supabase
-    .from("contrat_periode")
-    .select("personne_id, date_debut, date_fin")
-    .eq("site_id", siteId)
-    .in("personne_id", ids)
-    .returns<{ personne_id: string; date_debut: string | null; date_fin: string | null }[]>();
-  const contratsDe = new Map<string, Periode[]>();
-  for (const c of cpD ?? []) (contratsDe.get(c.personne_id) ?? contratsDe.set(c.personne_id, []).get(c.personne_id)!).push(c as Periode);
-
-  // Quart de chaque personne = quart fixe de son équipe, sinon la rotation de la
-  // semaine, sinon le quart par défaut. Sans équipe : quart par défaut.
+  // Équipes (quart fixe éventuel).
   const { data: eqD } = await supabase
     .from("equipe")
     .select("id, quart_fixe")
     .eq("site_id", siteId)
     .returns<{ id: string; quart_fixe: string | null }[]>();
   const quartFixe = new Map((eqD ?? []).map((e) => [e.id, e.quart_fixe]));
-  const rotRefs = await getRotationRefsC();
-  const rotByMonday = new Map(mondays.map((m) => [m, rotationForWeek(rotRefs, m)]));
-  const quartDe = (equipeId: string | null, monday: string): string => {
-    if (!equipeId) return quartDefaut;
-    const fixe = quartFixe.get(equipeId);
-    if (fixe) return fixe;
-    return (rotByMonday.get(monday) ?? {})[equipeId] ?? quartDefaut;
+  const teamQuart = (equipeId: string | null, monday: string): string | null => {
+    if (!equipeId) return null;
+    return quartFixe.get(equipeId) ?? (rotByMonday.get(monday) ?? {})[equipeId] ?? null;
+  };
+  const quartDe = (equipeId: string | null, monday: string): string =>
+    teamQuart(equipeId, monday) ?? quartDefaut;
+
+  const isoDow = (iso: string) => {
+    const d = new Date(iso + "T00:00").getDay();
+    return d === 0 ? 7 : d;
   };
 
-  const rows: Record<string, unknown>[] = [];
+  // ---------- Passe 1 : TEMPS PARTIEL ----------
+  type TpCfg = { off?: Record<string, string[]> } | null;
+  type TpRow = { id: string; personne_id: string; date_debut: string; date_fin: string | null; tp_config: TpCfg };
+  const { data: tpPeriodes } = await supabase
+    .from("tp_periode")
+    .select("id, personne_id, date_debut, date_fin, tp_config")
+    .eq("site_id", siteId)
+    .lte("date_debut", maxIso)
+    .or(`date_fin.is.null,date_fin.gte.${minIso}`)
+    .order("date_debut")
+    .returns<TpRow[]>();
+  const periodesByPers = new Map<string, TpRow[]>();
+  for (const p of tpPeriodes ?? [])
+    (periodesByPers.get(p.personne_id) ?? periodesByPers.set(p.personne_id, []).get(p.personne_id)!).push(p);
+
+  // Repli personne.tp_config (personnes temps_partiel sans période migrée) +
+  // équipe de tout le monde concerné.
+  const { data: tpFallback } = await supabase
+    .from("personne")
+    .select("id, equipe_id, tp_config")
+    .eq("site_id", siteId)
+    .eq("temps_partiel", true)
+    .returns<{ id: string; equipe_id: string | null; tp_config: TpCfg }[]>();
+  const equipeDe = new Map<string, string | null>();
+  const fallbackMap = new Map<string, TpCfg>();
+  for (const r of tpFallback ?? []) {
+    equipeDe.set(r.id, r.equipe_id);
+    if (!periodesByPers.has(r.id)) fallbackMap.set(r.id, r.tp_config);
+  }
+  // Équipe des personnes à période mais non temps_partiel (état rare mais possible).
+  const sansEquipe = [...periodesByPers.keys()].filter((id) => !equipeDe.has(id));
+  if (sansEquipe.length) {
+    const { data: extra } = await supabase
+      .from("personne")
+      .select("id, equipe_id")
+      .eq("site_id", siteId)
+      .in("id", sansEquipe)
+      .returns<{ id: string; equipe_id: string | null }[]>();
+    for (const r of extra ?? []) equipeDe.set(r.id, r.equipe_id);
+  }
+
+  const configPourJour = (persId: string, iso: string): TpCfg => {
+    const periodes = periodesByPers.get(persId);
+    if (periodes) {
+      for (const p of periodes)
+        if (p.date_debut <= iso && (!p.date_fin || p.date_fin >= iso)) return p.tp_config;
+      return null; // trou entre périodes = temps plein
+    }
+    return fallbackMap.get(persId) ?? null;
+  };
+  const tpPersonIds = new Set([...periodesByPers.keys(), ...fallbackMap.keys()]);
+
+  // ---------- Passe 2 : POSTES FIXES (personnes + poste actif) ----------
+  const { data: persFixe } = await supabase
+    .from("personne")
+    .select("id, equipe_id, poste_fixe_id, poste:poste_fixe_id(actif)")
+    .eq("site_id", siteId)
+    .not("poste_fixe_id", "is", null)
+    .neq("statut", "PARTI")
+    .returns<{ id: string; equipe_id: string | null; poste_fixe_id: string; poste: { actif: boolean } | null }[]>();
+  const cibles = (persFixe ?? []).filter((p) => p.poste?.actif !== false);
+
+  // Contrats de toutes les personnes concernées (TP + postes fixes) : ne pas
+  // placer hors effectif (avant l'arrivée, dans un trou, après le départ).
+  const idsContrats = [...new Set([...tpPersonIds, ...cibles.map((p) => p.id)])];
+  const contratsDe = new Map<string, Periode[]>();
+  if (idsContrats.length) {
+    const { data: cpD } = await supabase
+      .from("contrat_periode")
+      .select("personne_id, date_debut, date_fin")
+      .eq("site_id", siteId)
+      .in("personne_id", idsContrats)
+      .returns<{ personne_id: string; date_debut: string | null; date_fin: string | null }[]>();
+    for (const c of cpD ?? [])
+      (contratsDe.get(c.personne_id) ?? contratsDe.set(c.personne_id, []).get(c.personne_id)!).push(c as Periode);
+  }
+  const dansEffectif = (persId: string, iso: string): boolean => {
+    const cs = contratsDe.get(persId) ?? [];
+    // Aucun contrat renseigné : on fait confiance (données historiques).
+    return !cs.length || contratCouvreLe(cs, iso);
+  };
+
+  // Cases déjà occupées (toutes personnes concernées) : ni TP ni poste fixe ne
+  // les touche. Recalcul implicite entre passes via ignoreDuplicates au niveau DB.
+  const occ = new Set<string>();
+  if (idsContrats.length) {
+    const { data: existD } = await supabase
+      .from("placement")
+      .select("personne_id, jour")
+      .eq("site_id", siteId)
+      .in("jour", allIsos)
+      .in("personne_id", idsContrats)
+      .returns<{ personne_id: string; jour: string }[]>();
+    for (const r of existD ?? []) occ.add(`${r.personne_id}:${r.jour}`);
+  }
+
+  // Construire les lignes TP.
+  const tpRows: Record<string, unknown>[] = [];
+  for (const persId of tpPersonIds) {
+    const eq = equipeDe.get(persId) ?? null;
+    for (const sem of semaines) {
+      for (const iso of sem.isosTous) {
+        if (occ.has(`${persId}:${iso}`)) continue;
+        const cfg = configPourJour(persId, iso);
+        if (!cfg) continue;
+        const dayOff = cfg.off?.[String(isoDow(iso))] ?? [];
+        if (!dayOff.length) continue;
+        const journee = dayOff.includes("matin") && dayOff.includes("aprem");
+        const cr = creneauDe(teamQuart(eq, sem.monday));
+        const equipeCreneau = !!cr && dayOff.includes(cr);
+        if (!(journee || equipeCreneau)) continue;
+        if (!dansEffectif(persId, iso)) continue;
+        occ.add(`${persId}:${iso}`); // le poste fixe sautera cette case
+        tpRows.push({
+          personne_id: persId,
+          jour: iso,
+          tp: true,
+          equipe_id: eq,
+          created_by: profile.authId,
+          site_id: siteId,
+        });
+      }
+    }
+  }
+
+  // Construire les lignes postes fixes.
+  const posteRows: Record<string, unknown>[] = [];
   for (const sem of semaines) {
     for (const p of cibles) {
-      const cs = contratsDe.get(p.id) ?? [];
       const q = quartDe(p.equipe_id, sem.monday);
-      for (const iso of sem.isos) {
+      for (const iso of sem.isosOuvres) {
         if (occ.has(`${p.id}:${iso}`)) continue;
-        // Aucun contrat renseigné : on fait confiance (données historiques).
-        if (cs.length && !contratCouvreLe(cs, iso)) continue;
-        rows.push({
+        if (!dansEffectif(p.id, iso)) continue;
+        occ.add(`${p.id}:${iso}`);
+        posteRows.push({
           personne_id: p.id,
           jour: iso,
           poste_id: p.poste_fixe_id,
@@ -120,13 +241,29 @@ export async function POST(req: NextRequest) {
       }
     }
   }
-  if (!rows.length) return NextResponse.json({ ok: true, crees: 0 });
 
-  // ignoreDuplicates : n'insère que les (personne, jour) libres, ne touche jamais
-  // une case existante — filet supplémentaire au cas d'une écriture concurrente.
-  const { error } = await supabase
-    .from("placement")
-    .upsert(rows, { onConflict: "personne_id,jour", ignoreDuplicates: true });
-  if (error) return NextResponse.json({ error: error.message }, { status: 403 });
+  // Insertions (jamais d'écrasement) : TP puis postes fixes.
+  const rows = [...tpRows, ...posteRows];
+  if (rows.length) {
+    const { error } = await supabase
+      .from("placement")
+      .upsert(rows, { onConflict: "personne_id,jour", ignoreDuplicates: true });
+    if (error) return NextResponse.json({ error: error.message }, { status: 403 });
+  }
+
+  // Marqueur « TP chargés » de chaque semaine : coupe le calcul virtuel, ce qui
+  // rend les TP déplaçables/supprimables sans qu'ils soient recréés.
+  const { error: mErr } = await supabase
+    .from("tp_charge")
+    .upsert(
+      mondays.map((m) => ({ site_id: siteId, semaine_lundi: m, charge_par: profile.authId })),
+      { onConflict: "site_id,semaine_lundi" },
+    );
+  // Best-effort : si la table n'existe pas encore (migration 0064 non jouée),
+  // on n'échoue pas — les lignes TP éventuelles restent, le repli calculé opère.
+  if (mErr && !/tp_charge/i.test(mErr.message)) {
+    return NextResponse.json({ error: mErr.message }, { status: 403 });
+  }
+
   return NextResponse.json({ ok: true, crees: rows.length });
 }

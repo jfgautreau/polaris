@@ -377,7 +377,36 @@ export default async function PlanningPage({
     for (const r of mat) matrice[`${r.personne_id}:${r.poste_id}`] = r.niveau_actuel;
     for (const r of exc ?? [])
       exceptions[`${r.personne_id}:${r.jour}`] = { debut: r.debut ?? "", fin: r.fin ?? "", motif: r.motif ?? "" };
+
+    // TP MATÉRIALISÉS (migration 0064) : vraies lignes `placement.tp`, déplaçables.
+    // Best-effort — si la colonne n'existe pas encore, on retombe sur le calcul
+    // virtuel plus bas. Le jeton "TP" est rendu comme le TP calculé (fond violet),
+    // mais draggable et effaçable.
+    const { data: tpReal, error: tpRealErr } = await supabase
+      .from("placement")
+      .select("personne_id, jour")
+      .eq("tp", true)
+      .in("jour", visIsos)
+      .in("personne_id", allIds)
+      .returns<{ personne_id: string; jour: string }[]>();
+    if (!tpRealErr) for (const r of tpReal ?? []) initial[`${r.personne_id}:${r.jour}`] = "TP";
   }
+
+  // Semaines dont les TP ont été « chargés » (migration 0064). Sur ces semaines,
+  // seules les vraies lignes placement.tp (lues ci-dessus) s'affichent ; le calcul
+  // virtuel ne s'applique qu'aux semaines NON chargées (« repli tant que non
+  // chargé »), sans quoi un TP déplacé serait aussitôt recréé à sa place. Best-
+  // effort : table absente -> aucune semaine chargée, comportement d'avant 0064.
+  const chargedWeeks = new Set<string>();
+  {
+    const { data: tcD, error: tcErr } = await supabase
+      .from("tp_charge")
+      .select("semaine_lundi")
+      .in("semaine_lundi", weekMondays.map((wm) => isoDate(wm)))
+      .returns<{ semaine_lundi: string }[]>();
+    if (!tcErr) for (const r of tcD ?? []) chargedWeeks.add(r.semaine_lundi);
+  }
+  const weekChargedByWi = weekMondays.map((wm) => chargedWeeks.has(isoDate(wm)));
 
   // Temps partiel (best-effort, colonnes 0025). Calcul serveur.
   //
@@ -459,6 +488,8 @@ export default async function PlanningPage({
     for (const persId of personIds) {
       const eq = equipeDe.get(persId) ?? null;
       for (const d of visible) {
+        // Semaine chargée : les vraies lignes placement.tp font foi, on ne calcule pas.
+        if (weekChargedByWi[d.wi]) continue;
         const cfg = configPourJour(persId, d.iso);
         if (!cfg) continue;
         const dayOff = cfg.off?.[String(isoDow(d.iso))] ?? [];

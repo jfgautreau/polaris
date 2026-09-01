@@ -149,6 +149,11 @@ export default function PlanningGrid({
   const [pick, setPick] = useState<{ pid: string; iso: string; eq: string | null; left: number; right: number; top: number; bottom: number } | null>(null);
   // Demande de forcage en attente : le poste vise exige une habilitation absente.
   const [askHab, setAskHab] = useState<{ pid: string; iso: string; eq: string | null; value: string; manquantes: string[] } | null>(null);
+  // Glisser-deposer : demande de forcage sur un DEPLACEMENT (poste deplace sur une
+  // personne non habilitee), case source/cible en cours de drag/survol.
+  const [askMove, setAskMove] = useState<{ fromPid: string; fromIso: string; toPid: string; toIso: string; value: string; manquantes: string[] } | null>(null);
+  const [dragKey, setDragKey] = useState<string | null>(null);
+  const [overKey, setOverKey] = useState<string | null>(null);
   // Recherche par nom : filtre uniquement les lignes affichees (indicateurs inchanges).
   // Cas particulier : la recherche IGNORE les filtres equipe/atelier (elle balaie
   // l'effectif complet passe en prop) pour toujours retrouver quelqu'un ; hors
@@ -247,7 +252,8 @@ export default function PlanningGrid({
   const excLabel = (e: { debut: string; fin: string }) => `${e.debut || "?"}-${e.fin || "?"}`;
 
   const key = (pid: string, iso: string) => `${pid}:${iso}`;
-  const isPoste = (v: string) => v !== "" && v !== "X" && !v.startsWith("m:");
+  // "TP" = temps partiel matérialisé (jeton, comme "X"/"m:") : ni poste ni absence.
+  const isPoste = (v: string) => v !== "" && v !== "X" && v !== "TP" && !v.startsWith("m:");
   // Motif "Formation" : la pendule reste active pour saisir horaires / sujet (commentaire).
   const isFormation = (v: string) => !!formationMotifId && v === `m:${formationMotifId}`;
   const motifColor = useMemo(() => {
@@ -337,6 +343,7 @@ export default function PlanningGrid({
   const valueLabel = (v: string) =>
     v === "" ? "—"
     : v === "X" ? "NT"
+    : v === "TP" ? "TP"
     : v.startsWith("m:") ? (motifs.find((mo) => `m:${mo.id}` === v)?.code ?? "?")
     : (posteLabel[v] ?? posteLabelAll[v] ?? "?");
 
@@ -430,7 +437,7 @@ export default function PlanningGrid({
   // recharge la vue au succès pour voir les nouvelles cases.
   async function prefillWeek(monday: string, label: string) {
     if (prefillWk) return;
-    if (!window.confirm(`Pré-remplir les postes fixes de la semaine ${label} ?\n\nChaque personne à poste fixe est placée sur son poste, au quart de son équipe (tous quarts confondus). Les cases déjà remplies (absence, autre poste) ne sont pas touchées.`)) return;
+    if (!window.confirm(`Charger la semaine ${label} ?\n\n1. Temps partiel : les jours de TP sont posés (déplaçables ensuite au glisser-déposer).\n2. Postes fixes : chaque personne à poste fixe est placée sur son poste, au quart de son équipe.\n\nLes cases déjà remplies (absence, autre poste) ne sont jamais écrasées.`)) return;
     setPrefillWk(monday);
     setSaving("saving");
     try {
@@ -477,6 +484,52 @@ export default function PlanningGrid({
         setAskHab({ pid, iso, eq: equipe_id, value, manquantes: e.manquantes });
         return;
       }
+      setSaving("error");
+    }
+    setTimeout(() => setSaving("idle"), 1200);
+  }
+
+  // Glisser-deposer : DEPLACE la valeur d'une case (poste / NT / TP) vers une case
+  // VIDE (entre jours et/ou entre personnes). Les absences ne sont pas deplacables
+  // (source non draggable) ; on ne lache jamais sur une case occupee (cible refusee
+  // cote client, et 409 cote serveur). Un poste deplace sur une autre personne
+  // re-verifie ses habilitations -> 428 -> modale de forcage `askMove`.
+  async function moveCell(fromPid: string, fromIso: string, toPid: string, toIso: string, forcer = false) {
+    const fromK = key(fromPid, fromIso);
+    const toK = key(toPid, toIso);
+    if (fromK === toK) return;
+    const value = vals[fromK] ?? "";
+    if (!value) return;
+    const toPers = persById.get(toPid);
+    if (!toPers?.editable) return;
+    const prevTo = vals[toK] ?? "";
+    setVals((s) => ({ ...s, [toK]: value, [fromK]: "" }));
+    setSaving("saving");
+    try {
+      const res = await fetch("/api/placement/move", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from: { personne_id: fromPid, jour: fromIso },
+          to: { personne_id: toPid, jour: toIso },
+          equipe_id: toPers.equipe_id,
+          quart,
+          ...(forcer ? { forcer: true } : {}),
+        }),
+      });
+      if (res.ok) {
+        setSaving("saved");
+      } else if (res.status === 428) {
+        const j = (await res.json().catch(() => ({}))) as { manquantes?: string[] };
+        setVals((s) => ({ ...s, [toK]: prevTo, [fromK]: value })); // annule l'optimiste
+        setSaving("idle");
+        setAskMove({ fromPid, fromIso, toPid, toIso, value, manquantes: Array.isArray(j.manquantes) ? j.manquantes : [] });
+        return;
+      } else {
+        throw new Error();
+      }
+    } catch {
+      setVals((s) => ({ ...s, [toK]: prevTo, [fromK]: value })); // rollback complet
       setSaving("error");
     }
     setTimeout(() => setSaving("idle"), 1200);
@@ -621,10 +674,10 @@ export default function PlanningGrid({
                       type="button"
                       onClick={() => prefillWeek(w.monday, `S${w.num}`)}
                       disabled={prefillWk === w.monday}
-                      title="Pré-remplir les postes fixes de cette semaine (au quart de chaque équipe, sans écraser les cases remplies)"
+                      title="Charger cette semaine : poser les TP (déplaçables ensuite) puis pré-remplir les postes fixes, sans écraser les cases remplies"
                       style={{ display: "inline-flex", alignItems: "center", gap: 4, width: "auto", margin: 0, padding: "2px 8px", fontSize: 12, fontWeight: 600, lineHeight: 1.2, border: "1px solid var(--border)", borderRadius: 6, background: "#fff", color: "var(--text)", cursor: prefillWk === w.monday ? "default" : "pointer", opacity: prefillWk === w.monday ? 0.6 : 1 }}
                     >
-                      <FillIcon size={14} /> {prefillWk === w.monday ? "…" : "Remplir"}
+                      <FillIcon size={14} /> {prefillWk === w.monday ? "…" : "TP + postes fixes"}
                     </button>
                   )}
                 </span>
@@ -775,9 +828,19 @@ export default function PlanningGrid({
                 // d'absence, le motif prime : la case reste modifiable et affiche
                 // la couleur du motif au lieu de « TP ».
                 const tpAbsence = tpb && !!motifColor[v];
+                // TP materialise (jeton "TP") : vraie ligne, deplacable, effacable.
+                const vTP = v === "TP";
                 const bloque = (tpb && !tpAbsence) || hors;
-                const showFill = pers.editable && !otherByCell[key(pers.id, d.iso)] && !bloque;
+                const showFill = pers.editable && !otherByCell[key(pers.id, d.iso)] && !bloque && !vTP;
                 const other = v === "" ? otherByCell[key(pers.id, d.iso)] : undefined;
+                // Glisser-deposer. Source draggable : poste, NT ou TP reel (jamais
+                // une absence, jamais le vide). Cible d'un depot : case VIDE,
+                // editable, non bloquee (ni hors-effectif, ni TP calcule, ni « autre
+                // quart »). On ne lache jamais sur une case occupee.
+                const kCell = key(pers.id, d.iso);
+                const dragSource = pers.editable && (isPoste(v) || v === "X" || vTP);
+                const dropTarget = pers.editable && v === "" && !hors && !(tpb && !tpAbsence) && !other;
+                const isOver = overKey === kCell && dropTarget;
                 // Surlignage : cette case correspond-elle au type d'anomalie selectionne ce jour-la ?
                 const hiActive = highlight?.iso === d.iso;
                 const matchHi = !!hiActive && ((highlight!.type === "hc" && alert) || (highlight!.type === "over" && over));
@@ -794,6 +857,8 @@ export default function PlanningGrid({
                       // > aujourd'hui.
                       background: hors
                         ? "#f1f5f9"
+                        : vTP
+                        ? "#e0e7ff"
                         : tpb && !tpAbsence
                         ? "#e0e7ff"
                         : motifColor[v]
@@ -807,6 +872,8 @@ export default function PlanningGrid({
                         : undefined,
                       padding: 0,
                       position: "relative",
+                      outline: isOver ? "2px dashed #4f46e5" : undefined,
+                      outlineOffset: isOver ? -2 : undefined,
                       ...sep(d),
                     }}
                     title={[
@@ -815,6 +882,15 @@ export default function PlanningGrid({
                       manque.length ? `⚠ Placement forcé — habilitation manquante : ${manque.join(", ")}` : "",
                       over ? `Sur-effectif (${perDay[i].counts[v]}/${effectif[v] ?? 0})` : "",
                     ].filter(Boolean).join(" · ") || undefined}
+                    onDragOver={dropTarget ? (e) => { e.preventDefault(); if (overKey !== kCell) setOverKey(kCell); } : undefined}
+                    onDragLeave={dropTarget ? () => setOverKey((o) => (o === kCell ? null : o)) : undefined}
+                    onDrop={dropTarget ? (e) => {
+                      e.preventDefault();
+                      const from = e.dataTransfer.getData("text/plain") || dragKey;
+                      setOverKey(null);
+                      setDragKey(null);
+                      if (from) { const [fp, fi] = from.split(":"); if (fp && fi) moveCell(fp, fi, pers.id, d.iso); }
+                    } : undefined}
                   >
                     {hors ? (
                       // Case grisee, aucun label : la personne n'est pas dans
@@ -839,7 +915,14 @@ export default function PlanningGrid({
                       type="button"
                       className={`cellbtn${isPoste(v) ? " poste" : ""}${selected === key(pers.id, d.iso) ? " sel" : ""}`}
                       disabled={!pers.editable}
-                      title="Cliquer pour affecter · Suppr pour effacer"
+                      draggable={dragSource}
+                      onDragStart={dragSource ? (e) => {
+                        e.dataTransfer.setData("text/plain", kCell);
+                        e.dataTransfer.effectAllowed = "move";
+                        setDragKey(kCell);
+                      } : undefined}
+                      onDragEnd={() => { setDragKey(null); setOverKey(null); }}
+                      title={dragSource ? "Glisser pour déplacer · cliquer pour réaffecter · Suppr pour effacer" : "Cliquer pour affecter · Suppr pour effacer"}
                       onClick={(e) => {
                         const k = key(pers.id, d.iso);
                         setSelected(k);
@@ -964,7 +1047,8 @@ export default function PlanningGrid({
         cliquez une pastille de la ligne « Alertes » pour surligner les cases concernées ·{" "}
         <span style={{ background: "#1d4ed8", color: "#fff", borderRadius: 3, padding: "0 3px", fontSize: 10 }}>🕐</span>{" "}
         horaire spécifique (survolez une case placée) · jours sans ligne ouverte masqués ·{" "}
-        cliquez une case puis <kbd>Suppr</kbd> pour l&apos;effacer.
+        cliquez une case puis <kbd>Suppr</kbd> pour l&apos;effacer ·{" "}
+        <strong>glissez</strong> une affectation (poste, NT, TP) vers une case vide pour la déplacer (les absences ne se déplacent pas).
       </p>
 
       {/* Habilitation manquante : confirmer ou renoncer. Meme geste qu'au Placement —
@@ -997,6 +1081,44 @@ export default function PlanningGrid({
                   const a = askHab;
                   setAskHab(null);
                   change(a.pid, a.iso, a.eq, a.value, true);
+                }}
+              >
+                Oui, je force
+              </button>
+            </div>
+        </ModaleDeplacable>
+      )}
+
+      {/* Deplacement (glisser-deposer) vers une personne non habilitee : meme geste
+          de forcage que la saisie, mais sur le DEPLACEMENT. */}
+      {askMove && (
+        <ModaleDeplacable onClose={() => setAskMove(null)} largeur={440} zIndex={90}>
+            <h2 className="mdd-drag" style={{ margin: "0 0 8px", fontSize: 18, color: "#b91c1c", cursor: "grab" }}>⚠ Habilitation manquante</h2>
+            <p style={{ margin: "0 0 6px", fontSize: 14 }}>
+              <strong>{persById.get(askMove.toPid)?.label ?? ""}</strong> n&apos;est pas habilité(e) pour le
+              poste <strong>{posteLabel[askMove.value] ?? posteLabelAll[askMove.value] ?? "?"}</strong>.
+            </p>
+            {askMove.manquantes.length > 0 && (
+              <p style={{ margin: "0 0 14px", fontSize: 14 }}>
+                Manque : <strong style={{ color: "#b91c1c" }}>{askMove.manquantes.join(", ")}</strong>
+              </p>
+            )}
+            <p className="muted" style={{ margin: "0 0 14px", fontSize: 12 }}>
+              Un placement forcé est tracé (auteur et date) et s&apos;affiche en rouge tant que
+              l&apos;habilitation n&apos;est pas régularisée.
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button type="button" className="btn-sm btn-ghost" onClick={() => setAskMove(null)}>
+                Non
+              </button>
+              <button
+                type="button"
+                className="btn-sm"
+                style={{ background: "#dc2626", color: "#fff", border: "1px solid #dc2626", fontWeight: 700 }}
+                onClick={() => {
+                  const a = askMove;
+                  setAskMove(null);
+                  moveCell(a.fromPid, a.fromIso, a.toPid, a.toIso, true);
                 }}
               >
                 Oui, je force
