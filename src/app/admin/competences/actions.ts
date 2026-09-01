@@ -52,9 +52,11 @@ export async function saveEchelle(fd: FormData) {
     let { error } = await supabase
       .from("competence_niveau_libelle")
       .upsert(row, { onConflict: "site_id,niveau" });
-    // 0063 non appliquée : la colonne `couleur` n'existe pas encore (code 42703).
-    // On réessaie sans elle pour que le libellé s'enregistre quand même.
-    if (error?.code === "42703" && couleur) {
+    // Colonne `couleur` absente (0063/0065 non appliquée) : Postgres renvoie
+    // 42703, mais PostgREST renvoie PGRST204 (« column ... in the schema cache »)
+    // quand il ne connaît pas la colonne. On couvre les DEUX et on réessaie sans
+    // la couleur pour que le libellé s'enregistre quand même.
+    if ((error?.code === "42703" || error?.code === "PGRST204") && couleur) {
       ({ error } = await supabase
         .from("competence_niveau_libelle")
         .upsert({ niveau: n, libelle, site_id: profile!.siteId }, { onConflict: "site_id,niveau" }));

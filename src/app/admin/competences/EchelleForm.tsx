@@ -3,7 +3,52 @@
 import { useState } from "react";
 import { saveEchelle } from "./actions";
 import { SaveIcon } from "@/components/icons";
-import { COULEURS_NIVEAU, COULEUR_NIVEAU_DEFAUT } from "@/lib/couleurs-niveau";
+import { NUANCIER, COULEUR_NIVEAU_DEFAUT } from "@/lib/couleurs-niveau";
+
+// Sélecteur de couleur d'un niveau : pastille cliquable qui déploie le nuancier.
+// Pas de <input type="color"> (la boîte de dialogue OS fait planter l'onglet ici,
+// cf. CLAUDE.md). La valeur est portée par un input caché pour la soumission du
+// formulaire ; `onChange` remonte l'aperçu au parent.
+function NuancierPicker({ name, value, onChange }: { name: string; value: string; onChange: (hex: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const isSel = (c: string) => value.toLowerCase() === c.toLowerCase();
+  return (
+    <span style={{ position: "relative", display: "inline-block" }}>
+      <input type="hidden" name={name} value={value} />
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        title="Choisir une couleur dans le nuancier"
+        aria-label="Choisir une couleur"
+        style={{ width: 34, height: 22, borderRadius: 5, background: value, border: "1px solid #94a3b8", cursor: "pointer", padding: 0, margin: 0 }}
+      />
+      {open && (
+        <>
+          <span onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 39 }} />
+          <div
+            style={{
+              position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 40,
+              background: "#fff", border: "1px solid #cbd5e1", borderRadius: 8,
+              boxShadow: "0 8px 24px rgba(0,0,0,0.18)", padding: 8,
+              display: "grid", gridTemplateColumns: "repeat(6, 24px)", gap: 6,
+            }}
+          >
+            {NUANCIER.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => { onChange(c); setOpen(false); }}
+                title={c}
+                aria-label={`Couleur ${c}`}
+                style={{ width: 24, height: 24, borderRadius: 5, background: c, border: isSel(c) ? "2px solid #111" : "1px solid #cbd5e1", cursor: "pointer", padding: 0, margin: 0 }}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </span>
+  );
+}
 
 // Échelle de niveaux (« carré magique ») + nombre de niveaux activés pour le site.
 // Le nombre de niveaux POSITIFS (1..N) est réglable par site (colonne
@@ -103,17 +148,11 @@ export default function EchelleForm({
                 aria-hidden
                 style={{ display: "inline-block", width: 22, height: 22, borderRadius: 999, background: coul[n], border: "1.5px solid #64748b", flexShrink: 0 }}
               />
-              <select
+              <NuancierPicker
                 name={`couleur_${n}`}
-                aria-label={`Couleur du niveau ${n}`}
                 value={coul[n]}
-                onChange={(e) => setCoul((c) => ({ ...c, [n]: e.target.value }))}
-                style={{ width: "auto" }}
-              >
-                {COULEURS_NIVEAU.map((c) => (
-                  <option key={c.hex} value={c.hex}>{c.nom}</option>
-                ))}
-              </select>
+                onChange={(hex) => setCoul((c) => ({ ...c, [n]: hex }))}
+              />
             </>
           )}
         </div>
