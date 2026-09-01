@@ -243,7 +243,7 @@ export default function OrdoGrid({
         style={{ textAlign: "center", background: !active ? "#f1f5f9" : on ? undefined : "#fee2e2", ...border }}
         title={active ? `${l.nom} — ${q.libelle} — ${on ? "ouverte" : "fermée"}` : `${q.libelle} inactif ce jour (activez le quart)`}
       >
-        <input type="checkbox" checked={on} disabled={!canEdit || !active} onChange={() => toggleLigne(q.code, l.id, d.iso)} style={{ width: "auto", cursor: canEdit && active ? "pointer" : "not-allowed" }} />
+        <input type="checkbox" checked={on} disabled={!canEdit || !active} onChange={() => toggleLigne(q.code, l.id, d.iso)} style={{ width: "auto", margin: "0 auto", display: "block", cursor: canEdit && active ? "pointer" : "not-allowed" }} />
       </td>
     );
   };
@@ -319,7 +319,7 @@ export default function OrdoGrid({
                       const init = dayInitialized(d.iso);
                       return (
                         <td key={`${d.iso}:${q.code}`} style={{ textAlign: "center", background: on ? "#dcfce7" : init ? "#fee2e2" : "#f1f5f9", ...(qi === 0 ? sepDay(d) : { borderLeft: "1px solid #eef2f7" }) }} title={`${q.libelle} — ${on ? "actif" : "inactif"}${init ? "" : " (semaine non initialisée)"}`}>
-                          <input type="checkbox" checked={on} disabled={!canEdit} onChange={() => toggleQuart(q.code, d.iso)} style={{ width: "auto", cursor: canEdit ? "pointer" : "default" }} />
+                          <input type="checkbox" checked={on} disabled={!canEdit} onChange={() => toggleQuart(q.code, d.iso)} style={{ width: "auto", margin: "0 auto", display: "block", cursor: canEdit ? "pointer" : "default" }} />
                         </td>
                       );
                     })
@@ -389,7 +389,7 @@ export default function OrdoGrid({
                                 const on = ligneOuverte(journeeQuart.code, l.id, d.iso);
                                 return (
                                   <td key={d.iso} colSpan={ncq} style={{ textAlign: "center", background: !active ? "#f1f5f9" : on ? undefined : "#fee2e2", ...sepDay(d) }} title={active ? `${l.nom} — ${on ? "ouverte" : "fermée"}` : "Journée inactive ce jour (aucun quart actif)"}>
-                                    <input type="checkbox" checked={on} disabled={!canEdit || !active} onChange={() => toggleLigne(journeeQuart.code, l.id, d.iso)} style={{ width: "auto", cursor: canEdit && active ? "pointer" : "not-allowed" }} />
+                                    <input type="checkbox" checked={on} disabled={!canEdit || !active} onChange={() => toggleLigne(journeeQuart.code, l.id, d.iso)} style={{ width: "auto", margin: "0 auto", display: "block", cursor: canEdit && active ? "pointer" : "not-allowed" }} />
                                   </td>
                                 );
                               })}

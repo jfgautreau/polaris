@@ -167,7 +167,7 @@ export default function SemaineTypeEditor({
     }
     return (
       <td key={ck} style={{ textAlign: "center", background: !on ? "#f1f5f9" : open ? undefined : "#fee2e2", ...border }} title={on ? `${l.nom} — ${q.libelle} — ${open ? "ouverte" : "fermée"}` : `${q.libelle} inactif`}>
-        <input type="checkbox" checked={open} disabled={!on} onChange={() => toggleLigne(q.code, l.id, j)} style={{ width: "auto", cursor: on ? "pointer" : "not-allowed" }} />
+        <input type="checkbox" checked={open} disabled={!on} onChange={() => toggleLigne(q.code, l.id, j)} style={{ width: "auto", margin: "0 auto", display: "block", cursor: on ? "pointer" : "not-allowed" }} />
       </td>
     );
   };
@@ -228,7 +228,7 @@ export default function SemaineTypeEditor({
                     const on = actif(q.code, j);
                     return (
                       <td key={`${j}:${q.code}`} style={{ textAlign: "center", background: on ? "#dcfce7" : "#fee2e2", ...(qi === 0 ? sepDay : { borderLeft: "1px solid #eef2f7" }) }} title={`${q.libelle} — ${on ? "actif" : "inactif"}`}>
-                        <input type="checkbox" checked={on} disabled={!profilId} onChange={() => toggle(q.code, j)} style={{ width: "auto", cursor: profilId ? "pointer" : "default" }} />
+                        <input type="checkbox" checked={on} disabled={!profilId} onChange={() => toggle(q.code, j)} style={{ width: "auto", margin: "0 auto", display: "block", cursor: profilId ? "pointer" : "default" }} />
                       </td>
                     );
                   })
@@ -283,7 +283,7 @@ export default function SemaineTypeEditor({
                               const open = ligneOuverte(journeeQuart.code, l.id, j);
                               return (
                                 <td key={j} colSpan={ncq} style={{ textAlign: "center", background: !on ? "#f1f5f9" : open ? undefined : "#fee2e2", ...sepDay }} title={on ? `${l.nom} — ${open ? "ouverte" : "fermée"}` : "Journée inactive ce jour"}>
-                                  <input type="checkbox" checked={open} disabled={!on} onChange={() => toggleLigne(journeeQuart.code, l.id, j)} style={{ width: "auto", cursor: on ? "pointer" : "not-allowed" }} />
+                                  <input type="checkbox" checked={open} disabled={!on} onChange={() => toggleLigne(journeeQuart.code, l.id, j)} style={{ width: "auto", margin: "0 auto", display: "block", cursor: on ? "pointer" : "not-allowed" }} />
                                 </td>
                               );
                             })}
