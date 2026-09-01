@@ -236,6 +236,11 @@ export async function POST(req: NextRequest) {
           poste_id: p.poste_fixe_id,
           quart_code: q,
           equipe_id: p.equipe_id ?? null,
+          // tp explicite : dans un upsert de lot, PostgREST prend l'union des clés
+          // et écrit NULL (pas le DEFAULT) là où une clé manque. Sans ce false, les
+          // lignes postes fixes (mêlées aux lignes TP qui portent tp:true) violaient
+          // la contrainte NOT NULL de placement.tp.
+          tp: false,
           created_by: profile.authId,
           site_id: siteId,
         });
