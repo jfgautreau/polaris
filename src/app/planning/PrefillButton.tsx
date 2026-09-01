@@ -61,7 +61,7 @@ export default function PrefillButton({
         title="Pré-remplir postes fixes — placer les personnes à poste fixe sur leur poste, sur les 3 semaines affichées et au quart de leur équipe (sans écraser les cases remplies)"
         aria-label="Pré-remplir postes fixes"
         className="navlink"
-        style={{ width: 30, height: 30, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, border: "1px solid var(--border)", borderRadius: 8, background: "#fff", color: "var(--text)", cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1 }}
+        style={{ margin: 0, width: 30, height: 30, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, border: "1px solid var(--border)", borderRadius: 8, background: "#fff", color: "var(--text)", cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1 }}
       >
         {busy ? "…" : "📌"}
       </button>
