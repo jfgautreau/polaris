@@ -566,11 +566,11 @@ prochain gros chantier, pas une optimisation cosmétique.
 - Référentiel : `src/app/admin/referentiel/*` + `src/app/api/referentiel/route.ts`
   (colonnes **N° Rot**, **Habil. requises**, **Rempl.** (PTR/PTNR) et **Titulaire**).
   ⚠️ **Rempl.** = `poste.remplacable` (PTR remplaçable / **PTNR** non — un seul titulaire
-  par conception). ⚠️ **Titulaire** (op `set-titulaire`) écrit `personne.poste_fixe_id`
-  (même donnée que la fiche Personnel) : sémantique « un titulaire » depuis cette vue
-  (rattacher détache l'ancien, la colonne étant mono-valuée) ; plusieurs titulaires se
-  gèrent côté Personnel. Édition inline (une seule liste `<select>` montée à la fois →
-  DOM léger malgré des centaines de personnes).
+  par conception). ⚠️ **Titulaire** (op `toggle-titulaire`, par personne) écrit
+  `personne.poste_fixe_id` (même donnée que la fiche Personnel). **Modale à cases à cocher**
+  comme les Habil. requises (avec recherche) : un poste peut avoir **plusieurs titulaires** ;
+  une personne n'a qu'**un seul** poste fixe (colonne mono-valuée), donc la cocher ici la
+  **détache** de son poste fixe précédent (la modale le signale : « titulaire de X »).
 - Habilitations : `src/app/habilitations/{page,HabilitationsList,HabMark,HabLegendeModal,HabMajModal,AutorisationMark}.tsx`
   + `src/app/admin/habilitations-param/*` + `src/app/api/habilitations/route.ts`.
   Saisie **au clic sur une pastille** (modale pré-remplie) ; l'en-tête est rendu par

@@ -104,11 +104,13 @@ export default function ReferentielEditor({
 }) {
   const [tree, setTree] = useState<Atelier[]>(initial);
   // Titulaire(s) par poste (poste fixe). Modifiable ici comme dans la fiche
-  // Personnel — même donnée (personne.poste_fixe_id).
+  // Personnel — même donnée (personne.poste_fixe_id). Un poste peut avoir
+  // plusieurs titulaires ; une personne n'a qu'UN poste fixe.
   const [titu, setTitu] = useState<Record<string, Titulaire[]>>(titulaires);
-  // Poste dont on édite le titulaire (une seule liste <select> montée à la fois
-  // → DOM léger même avec des centaines de personnes).
-  const [tituEdit, setTituEdit] = useState<string | null>(null);
+  // Poste dont on édite les titulaires (modale à cases à cocher, comme les
+  // habilitations requises) + recherche (des centaines de personnes possibles).
+  const [tituFor, setTituFor] = useState<{ id: string; nom: string } | null>(null);
+  const [tituSearch, setTituSearch] = useState("");
   // Desactivations poste x quart (cle `${poste}:${quart}`). Absent = actif.
   const [off, setOff] = useState<Set<string>>(new Set(pqOff));
   // Habilitations requises (cle `${poste}:${competence}`). Presente = exigee.
@@ -152,22 +154,24 @@ export default function ReferentielEditor({
   const setPoste = (aid: string, lid: string, pid: string, fn: (p: Poste) => Poste) =>
     setLigne(aid, lid, (l) => ({ ...l, poste: l.poste.map((p) => (p.id === pid ? fn(p) : p)) }));
 
-  // -- Titulaire (poste fixe) --
-  function setTitulaire(posteId: string, personneId: string) {
-    setTituEdit(null);
-    const pers = personneId ? persons.find((p) => p.id === personneId) : null;
+  // -- Titulaire (poste fixe) : cases à cocher, comme les habilitations --
+  const estTitulaire = (posteId: string, personneId: string) =>
+    (titu[posteId] ?? []).some((t) => t.id === personneId);
+  function toggleTitulaire(posteId: string, personneId: string, on: boolean) {
+    const pers = persons.find((p) => p.id === personneId);
+    if (!pers) return;
     setTitu((t) => {
       const next: Record<string, Titulaire[]> = {};
-      // Une personne n'a qu'UN poste fixe : on la retire de tout autre poste.
+      // Une personne n'a qu'UN poste fixe : on la retire de tout autre poste
+      // (cocher ici la détache de son poste fixe précédent).
       for (const [pid, list] of Object.entries(t)) {
-        const filtered = personneId ? list.filter((x) => x.id !== personneId) : list;
-        if (pid !== posteId && filtered.length) next[pid] = filtered;
+        const filtered = list.filter((x) => x.id !== personneId);
+        if (filtered.length) next[pid] = filtered;
       }
-      // Ce poste n'a qu'un titulaire depuis cette vue (cf. commentaire de l'op).
-      next[posteId] = pers ? [pers] : [];
+      if (on) next[posteId] = [...(next[posteId] ?? []), pers].sort((a, b) => a.label.localeCompare(b.label));
       return next;
     });
-    post("set-titulaire", { poste_id: posteId, personne_id: personneId });
+    post("toggle-titulaire", { poste_id: posteId, personne_id: personneId, actif: on });
   }
 
   // -- Atelier --
@@ -359,7 +363,7 @@ export default function ReferentielEditor({
                     <th title="N° d'affichage du poste sur les TV / PDF (croissant)">N° aff.</th>
                     <th title="N° de rotation, libre. Un poste à plusieurs positions porte plusieurs numéros (ex. « 12, 13 »).">N° Rot</th>
                     <th title="Habilitations exigées pour tenir ce poste">Habil. requises</th>
-                    <th title="Titulaire du poste (poste fixe). Même donnée que le sélecteur « Poste fixe » de la fiche Personnel : la personne est pré-remplie sur ce poste dans le planning.">Titulaire</th>
+                    <th title="Titulaire(s) du poste (poste fixe). Cocher une ou plusieurs personnes, comme les habilitations requises. Même donnée que le sélecteur « Poste fixe » de la fiche Personnel : chaque titulaire est pré-rempli sur ce poste dans le planning.">Titulaire</th>
                     {quarts.map((q) => (
                       <th key={q.code} title={`Tourne en ${q.libelle}`} style={{ fontSize: 11 }}>
                         {q.libelle.slice(0, 4)}
@@ -470,35 +474,20 @@ export default function ReferentielEditor({
                         </button>
                       </td>
                       <td>
-                        {tituEdit === p.id ? (
-                          <select
-                            autoFocus
-                            defaultValue={titu[p.id]?.[0]?.id ?? ""}
-                            onChange={(e) => setTitulaire(p.id, e.target.value)}
-                            onBlur={() => setTituEdit(null)}
-                            style={{ width: "100%", minWidth: 0 }}
-                          >
-                            <option value="">— Aucun</option>
-                            {persons.map((pp) => (
-                              <option key={pp.id} value={pp.id}>{pp.label}</option>
-                            ))}
-                          </select>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setTituEdit(p.id)}
-                            title="Définir le titulaire (poste fixe) de ce poste"
-                            style={{ ...REQ_BTN, minHeight: 26 }}
-                          >
-                            {(titu[p.id]?.length ?? 0) === 0 ? (
-                              <span className="muted" style={{ fontWeight: 500 }}>＋ définir</span>
-                            ) : (
-                              titu[p.id].map((t) => (
-                                <span key={t.id} style={{ ...REQ_TAG, background: "#ede9fe", color: "#5b21b6" }}>{t.label}</span>
-                              ))
-                            )}
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => { setTituSearch(""); setTituFor({ id: p.id, nom: p.nom }); }}
+                          title="Choisir le(s) titulaire(s) (poste fixe) de ce poste"
+                          style={REQ_BTN}
+                        >
+                          {(titu[p.id]?.length ?? 0) === 0 ? (
+                            <span className="muted" style={{ fontWeight: 500 }}>＋ définir</span>
+                          ) : (
+                            titu[p.id].map((t) => (
+                              <span key={t.id} style={{ ...REQ_TAG, background: "#ede9fe", color: "#5b21b6" }}>{t.label}</span>
+                            ))
+                          )}
+                        </button>
                       </td>
                       {quarts.map((q) => (
                         <td key={q.code} style={{ textAlign: "center" }}>
@@ -572,6 +561,64 @@ export default function ReferentielEditor({
               )}
         </ModaleDeplacable>
       )}
+
+      {/* Modale : titulaire(s) du poste (poste fixe) — cases à cocher */}
+      {tituFor && (() => {
+        // Poste fixe courant de chaque personne (pour signaler un déplacement).
+        const posteDe: Record<string, string> = {};
+        for (const [pid, list] of Object.entries(titu)) for (const t of list) posteDe[t.id] = pid;
+        const posteNom: Record<string, string> = {};
+        for (const a of tree) for (const l of a.ligne) for (const p of l.poste) posteNom[p.id] = p.nom;
+        const q = tituSearch.trim().toLowerCase();
+        const liste = q ? persons.filter((p) => p.label.toLowerCase().includes(q)) : persons;
+        return (
+          <ModaleDeplacable onClose={() => setTituFor(null)} largeur={460} zIndex={80}>
+            <div className="mdd-drag" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4, cursor: "grab" }}>
+              <h2 style={{ margin: 0, fontSize: 18 }}>Titulaire(s) du poste</h2>
+              <button type="button" onClick={() => setTituFor(null)} title="Fermer" style={{ width: "auto", margin: 0, padding: "2px 10px", fontSize: 16 }}>
+                ✕
+              </button>
+            </div>
+            <p className="muted" style={{ marginTop: 0, marginBottom: 8, fontSize: 13 }}>
+              Poste <strong>{tituFor.nom || "(sans nom)"}</strong>. Les titulaires sont pré-remplis sur
+              ce poste dans le planning. Une personne n&apos;a qu&apos;un seul poste fixe : la cocher ici
+              la détache de son poste fixe précédent.
+            </p>
+            <input
+              value={tituSearch}
+              onChange={(e) => setTituSearch(e.target.value)}
+              placeholder="Rechercher une personne…"
+              style={{ width: "100%", marginBottom: 8 }}
+            />
+            {persons.length === 0 ? (
+              <p className="muted">Aucune personne.</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 2, maxHeight: "50vh", overflow: "auto" }}>
+                {liste.map((pp) => {
+                  const autre = posteDe[pp.id] && posteDe[pp.id] !== tituFor.id ? posteNom[posteDe[pp.id]] : null;
+                  return (
+                    <label key={pp.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 6px", borderRadius: 6, cursor: "pointer", fontSize: 13 }}>
+                      <input
+                        type="checkbox"
+                        checked={estTitulaire(tituFor.id, pp.id)}
+                        onChange={(e) => toggleTitulaire(tituFor.id, pp.id, e.target.checked)}
+                        style={{ width: "auto" }}
+                      />
+                      <span style={{ flex: 1 }}>{pp.label}</span>
+                      {autre && (
+                        <span className="muted" style={{ fontSize: 11 }} title={`Actuellement titulaire de « ${autre} » — cocher le déplacera ici`}>
+                          titulaire de {autre}
+                        </span>
+                      )}
+                    </label>
+                  );
+                })}
+                {liste.length === 0 && <p className="muted" style={{ margin: "4px 6px" }}>Aucun résultat.</p>}
+              </div>
+            )}
+          </ModaleDeplacable>
+        );
+      })()}
     </div>
   );
 }
