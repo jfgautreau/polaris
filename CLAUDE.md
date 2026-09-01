@@ -437,16 +437,21 @@ prochain gros chantier, pas une optimisation cosmétique.
   document autonome ouvert dans un onglet, mais servi derrière l'authentification).
 - Composants partagés : `src/components/{SlideSwitch,ToggleSwitch,AtelierEquipeFiltres,LectureSeule,PageTitle,PrintButton,AutoRefresh,BandeauErreur,ConfirmForm,DateRangePicker,ActifCheckbox,ModaleDeplacable,InfoBulle,icons,SaveIcon,persongrid.module.css,usePersonGrid.ts}`.
   Icônes toutes centralisées dans `icons.tsx` (`SaveIcon`, `EditIcon`, `CheckIcon`, `TrashIcon`, `PrintIcon`, `AbsenceIcon`, `SearchIcon`, `InfoIcon`, `GearIcon`). `SaveIcon.tsx` reste comme shim d'import historique.
-- Planning : `src/app/planning/{page,PlanningGrid,PlanningFilters,AtelierFilter,QuartSelector,PrefillButton}.tsx`.
-  ⚠️ **Pré-remplissage « postes fixes »** (`PrefillButton` → `/api/placement/prefill`,
+- Planning : `src/app/planning/{page,PlanningGrid,PlanningFilters,AtelierFilter,QuartSelector}.tsx`.
+  ⚠️ **Pré-remplissage « postes fixes »** (bouton **« ⛁ Remplir »** dans l'entête de
+  CHAQUE semaine du `PlanningGrid`, `FillIcon` pot de peinture, → `/api/placement/prefill`,
   droit Planning/Placement complet) : place chaque personne à **poste fixe**
-  (`personne.poste_fixe_id`) sur son poste, pour les **3 semaines affichées**
-  (lundi→vendredi), au **quart de son équipe** (quart fixe, sinon rotation de la semaine,
-  sinon défaut) — indépendamment du quart affiché. `upsert ignoreDuplicates` sur
-  `(personne, jour)` → **n'écrase jamais** une case remplie (absence/affectation) ; saute
-  les jours **hors effectif** (contrat ne couvrant pas le jour). ⚠️ La grille garde son
-  état local (`useState(initial)`) et ignore `router.refresh()` : le bouton **recharge la
-  vue** (`window.location.reload()`) après succès, sinon l'écran ne se met à jour qu'au F5.
+  (`personne.poste_fixe_id`) sur son poste, **pour la semaine cliquée** (lundi→vendredi,
+  une seule semaine — plus le bouton unique qui faisait les 3), au **quart de son équipe**
+  (quart fixe, sinon rotation de la semaine, sinon défaut) — indépendamment du quart
+  affiché. `upsert ignoreDuplicates` sur `(personne, jour)` → **n'écrase jamais** une case
+  remplie (absence/affectation) ; saute les jours **hors effectif** (contrat ne couvrant pas
+  le jour). ⚠️ La grille garde son état local (`useState(initial)`) et ignore
+  `router.refresh()` : le bouton **recharge la vue** (`window.location.reload()`) après
+  succès (sauf si 0 case créée), sinon l'écran ne se met à jour qu'au F5. Modèle « comme
+  Ordonnancement » (un bouton par entête de semaine). L'entête des 3 colonnes du bandeau
+  (Année/Mois/Semaine · Quart/Atelier/Équipe · boutons 🕐/🤒) s'aligne via
+  `.planning-top .filterrow { min-height }` (rangées de hauteur commune).
 - Placement (saisie glisser-déposer, droit **`placement`**) : `src/app/placement/{page,PlacementBoard,placement.module.css}`.
   Plan par ligne → postes → **cases numérotées** ; bascule **Plan / Absences** (`?vue=absences`,
   absences filtrées par l'atelier affiché) ; copie **écraser / compléter** ; bouton **PDF**

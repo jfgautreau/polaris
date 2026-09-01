@@ -6,9 +6,10 @@ import { dowMon } from "@/lib/week";
 import { habValable } from "@/lib/habilitations";
 import { INTERIM_BG } from "@/lib/interim";
 import ModaleDeplacable from "@/components/ModaleDeplacable";
+import { FillIcon } from "@/components/icons";
 
 type Jour = { iso: string; nom: string; num: string; firstOfWeek: boolean };
-type WeekBlock = { num: number; span: number; year: number; isCurrent: boolean };
+type WeekBlock = { num: number; span: number; year: number; isCurrent: boolean; monday: string };
 type Poste = { id: string; nom: string; niveauMin: number; effectif: number; categorie?: string };
 
 const CAT_BILANS: { key: string; label: string }[] = [
@@ -38,6 +39,7 @@ const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCa
 export default function PlanningGrid({
   days,
   weekBlocks = [],
+  canPrefill = false,
   todayIso = "",
   personnes = [],
   displayedIds = null,
@@ -68,6 +70,9 @@ export default function PlanningGrid({
 }: {
   days: Jour[];
   weekBlocks?: WeekBlock[];
+  // Droit d'utiliser le bouton « remplir » (pré-remplissage postes fixes) dans
+  // l'entête de chaque semaine. Réservé à l'écriture complète (hors chef).
+  canPrefill?: boolean;
   todayIso?: string;
   personnes?: Personne[];
   // Sous-ensemble affiche par defaut (filtre equipe/atelier serveur). `null` =
@@ -108,6 +113,8 @@ export default function PlanningGrid({
 }) {
   const [vals, setVals] = useState<Record<string, string>>(initial);
   const [saving, setSaving] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  // Semaine (lundi) dont le pré-remplissage « postes fixes » est en cours.
+  const [prefillWk, setPrefillWk] = useState<string | null>(null);
   // Surlignage d'un type d'anomalie pour un jour donne (clic sur une puce d'en-tete).
   const [highlight, setHighlight] = useState<{ iso: string; type: "hc" | "over" } | null>(null);
   const toggleHi = (iso: string, type: "hc" | "over") =>
@@ -416,6 +423,43 @@ export default function PlanningGrid({
     throw new Error();
   }
 
+  // Pré-remplissage des postes fixes d'UNE semaine (bouton dans l'entête, à la
+  // manière du « Initialiser » d'Ordonnancement). Place chaque personne à poste
+  // fixe sur son poste, au quart de son équipe, sans écraser les cases remplies.
+  // La grille garde son état local (useState) et ignore router.refresh() : on
+  // recharge la vue au succès pour voir les nouvelles cases.
+  async function prefillWeek(monday: string, label: string) {
+    if (prefillWk) return;
+    if (!window.confirm(`Pré-remplir les postes fixes de la semaine ${label} ?\n\nChaque personne à poste fixe est placée sur son poste, au quart de son équipe (tous quarts confondus). Les cases déjà remplies (absence, autre poste) ne sont pas touchées.`)) return;
+    setPrefillWk(monday);
+    setSaving("saving");
+    try {
+      const r = await fetch("/api/placement/prefill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ semaines: [monday] }),
+      });
+      const j = (await r.json().catch(() => ({}))) as { crees?: number; error?: string };
+      if (!r.ok) {
+        setSaving("error");
+        setPrefillWk(null);
+        setTimeout(() => setSaving("idle"), 3000);
+        return;
+      }
+      if ((j.crees ?? 0) === 0) {
+        setSaving("saved");
+        setPrefillWk(null);
+        setTimeout(() => setSaving("idle"), 2000);
+        return; // rien à ajouter (déjà rempli) : pas besoin de recharger
+      }
+      window.location.reload();
+    } catch {
+      setSaving("error");
+      setPrefillWk(null);
+      setTimeout(() => setSaving("idle"), 3000);
+    }
+  }
+
   async function change(pid: string, iso: string, equipe_id: string | null, value: string, forcer = false) {
     const k = key(pid, iso);
     const prev = vals[k] ?? "";
@@ -572,6 +616,17 @@ export default function PlanningGrid({
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontWeight: w.isCurrent ? 700 : undefined }}>
                   {w.year} · Semaine {w.num}
                   {w.isCurrent && <span className="muted" style={{ fontWeight: 400 }}>(en cours)</span>}
+                  {canPrefill && (
+                    <button
+                      type="button"
+                      onClick={() => prefillWeek(w.monday, `S${w.num}`)}
+                      disabled={prefillWk === w.monday}
+                      title="Pré-remplir les postes fixes de cette semaine (au quart de chaque équipe, sans écraser les cases remplies)"
+                      style={{ display: "inline-flex", alignItems: "center", gap: 4, width: "auto", margin: 0, padding: "2px 8px", fontSize: 12, fontWeight: 600, lineHeight: 1.2, border: "1px solid var(--border)", borderRadius: 6, background: "#fff", color: "var(--text)", cursor: prefillWk === w.monday ? "default" : "pointer", opacity: prefillWk === w.monday ? 0.6 : 1 }}
+                    >
+                      <FillIcon size={14} /> {prefillWk === w.monday ? "…" : "Remplir"}
+                    </button>
+                  )}
                 </span>
               </th>
             ))}

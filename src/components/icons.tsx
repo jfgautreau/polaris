@@ -99,6 +99,19 @@ export function AbsenceIcon({ size = 16, color = "currentColor" }: P) {
   );
 }
 
+// Remplissage « Pré-remplir » — pot de peinture (paint-bucket, style Lucide).
+export function FillIcon({ size = 15, color = "currentColor" }: P) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke={color}
+      strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ verticalAlign: "-2px" }}>
+      <path d="m19 11-8-8-8.6 8.6a2 2 0 0 0 0 2.8l5.2 5.2c.8.8 2 .8 2.8 0L19 11Z" />
+      <path d="m5 2 5 5" />
+      <path d="M2 13h15" />
+      <path d="M21.5 20a2 2 0 1 1-4 0c0-1.6 1.7-2.4 2-4 .3 1.6 2 2.4 2 4Z" />
+    </svg>
+  );
+}
+
 // Corbeille — proposition retenue (variante « couvercle + fûts »).
 export function TrashIcon({ size = 15, color = "currentColor" }: P) {
   return (

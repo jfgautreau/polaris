@@ -16,7 +16,6 @@ import { requireModule, canWrite } from "@/lib/permissions";
 import PlanningFilters from "./PlanningFilters";
 import AtelierFilter from "./AtelierFilter";
 import QuartSelector from "./QuartSelector";
-import PrefillButton from "./PrefillButton";
 import PlanningGrid from "./PlanningGrid";
 import { getRotationRefsC } from "@/lib/refdata";
 import { rotationForWeek } from "@/lib/rotation";
@@ -264,7 +263,7 @@ export default async function PlanningPage({
   const besoin = visible.map((d) => d.besoin);
   const visIsos = visible.map((d) => d.iso);
 
-  const weekBlocks: { num: number; span: number; year: number; isCurrent: boolean }[] = [];
+  const weekBlocks: { num: number; span: number; year: number; isCurrent: boolean; monday: string }[] = [];
   for (let wi = 0; wi < 3; wi++) {
     const span = visible.filter((d) => d.wi === wi).length;
     if (span > 0)
@@ -273,6 +272,7 @@ export default async function PlanningPage({
         year: weekMondays[wi].getFullYear(),
         span,
         isCurrent: isoDate(weekMondays[wi]) === todayMondayIso,
+        monday: isoDate(weekMondays[wi]),
       });
   }
   const seenWeek = new Set<number>();
@@ -608,11 +608,11 @@ export default async function PlanningPage({
         <div className="planning-top" style={{ justifyContent: "space-between", gap: 28, flexWrap: "wrap", alignItems: "flex-start" }}>
           {/* Partie gauche : Annee / Mois / Semaine */}
           <PlanningNav base="/planning" semaine={centerIso} extra={extra} />
-          {/* Partie centrale : Quart / Atelier / Équipe (colonne flex, gap 6).
+          {/* Partie centrale : Quart / Atelier / Équipe (colonne flex, gap 2).
               Chaque composant rend une .filterrow, dont la hauteur est fixée à
-              34 px par .planning-top .filterrow -> alignée avec la colonne de
+              32 px par .planning-top .filterrow -> alignée avec la colonne de
               gauche (Année/Mois/Semaine). */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             <QuartSelector quarts={quarts} current={quart} semaine={centerIso} atelier={atelier} equipe={spEquipe} search={searchParam} />
             <AtelierFilter ateliers={ateliers} atelier={atelier} equipe={spEquipe} quart={quart} semaine={centerIso} search={searchParam} />
             <PlanningFilters
@@ -624,18 +624,11 @@ export default async function PlanningPage({
               search={searchParam}
             />
           </div>
-          {/* Partie droite : 3 boutons icône, une par rangée .filterrow (même
-              hauteur 34 px, même gap 6) -> alignés respectivement sur Quart /
-              Atelier / Équipe (et donc Année / Mois / Semaine). Libellé au survol. */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <div className="filterrow" style={{ justifyContent: "flex-end" }}>
-              {canEditPlanningFull && (
-                <PrefillButton
-                  semaines={weekMondays.map((wm) => isoDate(wm))}
-                  weekLabel={`S${isoWeekNumber(weekMondays[0])} → S${isoWeekNumber(weekMondays[2])}`}
-                />
-              )}
-            </div>
+          {/* Partie droite : boutons icône (Horaires / Absences spécifiques), une
+              par rangée .filterrow -> alignés sur Quart / Atelier. Le bouton de
+              remplissage a été déplacé dans l'entête de chaque semaine (grille).
+              Libellé au survol via title. */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             <div className="filterrow" style={{ justifyContent: "flex-end" }}>
               <Link href="/horaires-specifiques" className="navlink" title="Horaires spécifiques" aria-label="Horaires spécifiques" style={{ width: 30, height: 30, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}>
                 🕐
@@ -656,6 +649,7 @@ export default async function PlanningPage({
           key={`${spEquipe}|${atelier}|${quart}|${centerIso}`}
           days={days}
           weekBlocks={weekBlocks}
+          canPrefill={canEditPlanningFull}
           todayIso={isoDate(new Date())}
           personnes={gridPersonnes}
           displayedIds={displayedIds}

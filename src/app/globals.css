@@ -610,7 +610,7 @@ a {
    (et non height) pour ne pas rogner un groupe de segments qui viendrait à passer
    sur deux lignes en fenêtre étroite. */
 .planning-top .filterrow {
-  min-height: 34px;
+  min-height: 32px;
 }
 
 /* Cases planning : select sans fleche native */

@@ -63,7 +63,7 @@ export default function PlanningNav({
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
       {/* Annee */}
       <div className="filterrow">
         <span className="lbl">Année</span>
