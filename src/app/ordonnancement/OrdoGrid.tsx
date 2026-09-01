@@ -13,7 +13,6 @@ type Profil = { id: string; nom: string; par_defaut: boolean };
 
 const NAME_W = 150;
 const QCOL_W = 24;
-const DAY_W = 40;
 
 function abbr(libelle: string) {
   return libelle.replace(/[^0-9A-Za-zÀ-ÿ]/g, "").slice(0, 3);
@@ -358,17 +357,20 @@ export default function OrdoGrid({
                 les lignes sont éditables dès qu'un quart tournant est actif ce jour. */}
             {journeeQuart && (() => {
               const jLignes = lignes.filter((l) => l.quarts.includes(journeeQuart.code));
-              const jStyle: React.CSSProperties = { borderCollapse: "collapse", tableLayout: "fixed", width: "100%", minWidth: NAME_W + days.length * DAY_W };
+              // Même colgroup + gridStyle que la grille du haut : chaque case
+              // « journée » occupe les ncq sous-colonnes (colSpan) du jour → les
+              // colonnes des deux tableaux sont alignées à l'identique.
               return (
                 <div style={{ marginTop: 22 }}>
                   <h2 style={{ margin: "0 0 2px" }}>{journeeQuart.libelle} <span className="muted" style={{ fontSize: 12, fontWeight: 400 }}>(pleine journée — active dès qu&apos;un quart tourne)</span></h2>
-                  <table className="matrix rowh" style={jStyle}>
+                  <table className="matrix rowh" style={gridStyle}>
+                    <ColsGrid />
                     <thead>
                       <tr>
                         <th style={{ width: NAME_W, textAlign: "left" }}>Ligne</th>
                         {days.map((d) => (
-                          <th key={d.iso} style={{ textAlign: "center", ...sepDay(d), background: dayBg(d.iso) }}>
-                            {d.nom.slice(0, 2)}<br /><span className="muted" style={{ fontWeight: 400, fontSize: 10 }}>{d.num}</span>
+                          <th key={d.iso} colSpan={ncq} style={{ textAlign: "center", ...sepDay(d), background: dayBg(d.iso) }}>
+                            {d.nom.slice(0, 2)} <span className="muted" style={{ fontWeight: 400, fontSize: 10 }}>{d.num}</span>
                           </th>
                         ))}
                       </tr>
@@ -377,7 +379,7 @@ export default function OrdoGrid({
                       {groupsFrom(jLignes).map((g) => (
                         <Fragment key={`jate:${g.atelierNom}`}>
                           <tr>
-                            <td colSpan={1 + days.length} style={{ background: "#eef2f7", fontWeight: 700, fontSize: 12, padding: "3px 8px" }}>{g.atelierNom}</td>
+                            <td colSpan={1 + days.length * ncq} style={{ background: "#eef2f7", fontWeight: 700, fontSize: 12, padding: "3px 8px" }}>{g.atelierNom}</td>
                           </tr>
                           {g.lignes.map((l) => (
                             <tr key={l.id}>
@@ -386,7 +388,7 @@ export default function OrdoGrid({
                                 const active = journeeActif(d.iso);
                                 const on = ligneOuverte(journeeQuart.code, l.id, d.iso);
                                 return (
-                                  <td key={d.iso} style={{ textAlign: "center", background: !active ? "#f1f5f9" : on ? undefined : "#fee2e2", ...sepDay(d) }} title={active ? `${l.nom} — ${on ? "ouverte" : "fermée"}` : "Journée inactive ce jour (aucun quart actif)"}>
+                                  <td key={d.iso} colSpan={ncq} style={{ textAlign: "center", background: !active ? "#f1f5f9" : on ? undefined : "#fee2e2", ...sepDay(d) }} title={active ? `${l.nom} — ${on ? "ouverte" : "fermée"}` : "Journée inactive ce jour (aucun quart actif)"}>
                                     <input type="checkbox" checked={on} disabled={!canEdit || !active} onChange={() => toggleLigne(journeeQuart.code, l.id, d.iso)} style={{ width: "auto", cursor: canEdit && active ? "pointer" : "not-allowed" }} />
                                   </td>
                                 );
@@ -396,7 +398,7 @@ export default function OrdoGrid({
                         </Fragment>
                       ))}
                       {jLignes.length === 0 && (
-                        <tr><td colSpan={1 + days.length} className="muted">Aucune ligne en {journeeQuart.libelle}.</td></tr>
+                        <tr><td colSpan={1 + days.length * ncq} className="muted">Aucune ligne en {journeeQuart.libelle}.</td></tr>
                       )}
                     </tbody>
                   </table>
