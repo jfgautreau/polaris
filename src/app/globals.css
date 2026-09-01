@@ -604,6 +604,14 @@ a {
   align-items: flex-start;
   margin-bottom: 10px;
 }
+/* Alignement des 3 colonnes du bandeau (nav / filtres / boutons) : toutes les
+   rangées .filterrow y font EXACTEMENT la même hauteur, si bien que la ligne N
+   de chaque colonne tombe au même Y (Année=Quart=Pré-remplir, etc.). min-height
+   (et non height) pour ne pas rogner un groupe de segments qui viendrait à passer
+   sur deux lignes en fenêtre étroite. */
+.planning-top .filterrow {
+  min-height: 34px;
+}
 
 /* Cases planning : select sans fleche native */
 /* Case du planning : le select remplit toute la case (pas de rectangle arrondi),
