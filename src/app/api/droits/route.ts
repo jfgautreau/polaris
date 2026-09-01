@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { MODULE_KEYS, moduleWriteGuard, verifierChangementDroit, type Niveau } from "@/lib/permissions";
 import { getCurrentSite } from "@/lib/current-site";
-import { ROLES } from "@/lib/roles";
+import { getAllRoles } from "@/lib/roles-server";
 
 // POST /api/droits { role, module, niveau }
 // Enregistre un droit (role x module) a la volee, pour le titulaire du droit
@@ -27,7 +27,11 @@ export async function POST(req: NextRequest) {
   const role = String(body?.role ?? "");
   const module = String(body?.module ?? "");
   const niveau = String(body?.niveau ?? "") as Niveau;
-  if (!ROLES.includes(role as (typeof ROLES)[number]) || !MODULE_KEYS.includes(module) || !VALID.includes(niveau)) {
+  // Rôle valide = intégré OU personnalisé du site courant (role_custom, 0042/0053).
+  // Ne PAS valider contre les seuls ROLES intégrés : éditer les droits d'un rôle
+  // personnalisé retombait alors en 400 « Paramètres invalides » → « Échec » à l'écran.
+  const rolesValides = new Set((await getAllRoles()).map((r) => r.code));
+  if (!rolesValides.has(role) || !MODULE_KEYS.includes(module) || !VALID.includes(niveau)) {
     return NextResponse.json({ error: "Paramètres invalides" }, { status: 400 });
   }
 
