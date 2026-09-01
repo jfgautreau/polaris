@@ -30,7 +30,7 @@ function NuancierPicker({ name, value, onChange }: { name: string; value: string
               position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 40,
               background: "#fff", border: "1px solid #cbd5e1", borderRadius: 8,
               boxShadow: "0 8px 24px rgba(0,0,0,0.18)", padding: 8,
-              display: "grid", gridTemplateColumns: "repeat(6, 24px)", gap: 6,
+              display: "grid", gridTemplateColumns: "repeat(10, 22px)", gap: 5,
             }}
           >
             {NUANCIER.map((c) => (
@@ -40,7 +40,7 @@ function NuancierPicker({ name, value, onChange }: { name: string; value: string
                 onClick={() => { onChange(c); setOpen(false); }}
                 title={c}
                 aria-label={`Couleur ${c}`}
-                style={{ width: 24, height: 24, borderRadius: 5, background: c, border: isSel(c) ? "2px solid #111" : "1px solid #cbd5e1", cursor: "pointer", padding: 0, margin: 0 }}
+                style={{ width: 22, height: 22, borderRadius: 5, background: c, border: isSel(c) ? "2px solid #111" : "1px solid #cbd5e1", cursor: "pointer", padding: 0, margin: 0 }}
               />
             ))}
           </div>
