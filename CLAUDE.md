@@ -177,6 +177,12 @@ données, RLS), `tasks/handoff.md` (détail écran par écran), `tasks/lessons.m
   que la semaine n'a pas été « initialisée ») ; une ligne absente d'`ouverture_quart` est
   **ouverte**. Planning **et** Placement appliquent cette règle — d'où un plan vide, avec
   message explicite, sur une semaine non initialisée.
+  ⚠️ **Activation « Journée » DÉRIVÉE** : le quart *journée* (pleine journée — détecté sans
+  code en dur comme le quart **sans `creneau` au plus petit `ordre`**) n'a plus de bascule
+  propre dans l'écran. Son `jour_quart.actif` est **maintenu en base = OU(quarts tournants
+  du jour)** par `/api/ordonnancement/quart` (à chaque bascule d'un tournant) **et** par
+  `/reset-week` (à l'initialisation). Planning / Placement / TV lisent donc une journée
+  active dès qu'au moins matin/après-midi/nuit l'est, sans dérivation dupliquée en lecture.
   ⚠️ **Fermer un quart / une ligne (ou ré-initialiser une semaine) qui porte des
   affectations réelles** ne renvoie plus un mur : `/api/ordonnancement/quart` et
   `/reset-week` renvoient `{ conflit, affectes }` (liste des personnes) en **409**, et
@@ -206,8 +212,12 @@ données, RLS), `tasks/handoff.md` (détail écran par écran), `tasks/lessons.m
   (« nettoyer + isoler », cf. Bilans) : aucun impact sur le planning ni le placement.
   Défaut `true` (PTR) → aucun changement de comportement tant qu'un poste n'est pas marqué.
 - **Poste fixe (`personne.poste_fixe_id`)** (migration 0059) : la personne « appartient »
-  à ce poste et y est **pré-remplie** dans le planning (bouton « Pré-remplir postes fixes »,
-  cf. Planning). Saisi des **deux côtés, même donnée** : sélecteur de la fiche Personnel
+  à ce poste et y est **pré-remplie** dans le planning (bouton « TP + postes fixes »,
+  cf. Planning). ⚠️ **Affectation AUTOMATIQUE ≠ saisie manuelle sur l'habilitation** : le
+  pré-remplissage **ne demande pas et ne force pas**. Une personne qui n'a pas (ou plus) les
+  habilitations exigées par son poste fixe **n'est simplement pas placée** (contrôle groupé
+  dans `/api/placement/prefill`, mêmes règles que `habManquantes`). La saisie manuelle, elle,
+  ouvre le pop-up de forçage. Saisi des **deux côtés, même donnée** : sélecteur de la fiche Personnel
   (modale Informations) **ou** colonne « Titulaire » du Référentiel. **Indépendant** de
   PTR/PTNR (un PTR peut avoir un titulaire pré-rempli ; un PTNR peut rester vacant).
 - **Quarts : aucun code en dur.** `src/lib/quarts.ts` porte les deux règles qui étaient
@@ -446,16 +456,31 @@ prochain gros chantier, pas une optimisation cosmétique.
   document autonome ouvert dans un onglet, mais servi derrière l'authentification).
 - Composants partagés : `src/components/{SlideSwitch,ToggleSwitch,AtelierEquipeFiltres,LectureSeule,PageTitle,PrintButton,AutoRefresh,BandeauErreur,ConfirmForm,DateRangePicker,ActifCheckbox,ModaleDeplacable,InfoBulle,icons,SaveIcon,persongrid.module.css,usePersonGrid.ts}`.
   Icônes toutes centralisées dans `icons.tsx` (`SaveIcon`, `EditIcon`, `CheckIcon`, `TrashIcon`, `PrintIcon`, `AbsenceIcon`, `SearchIcon`, `InfoIcon`, `GearIcon`, `FillIcon` pot de peinture = pré-remplissage). `SaveIcon.tsx` reste comme shim d'import historique.
+- Ordonnancement : `src/app/ordonnancement/{page,OrdoGrid,OrdoQuinzaineNav,semaine-type/*}.tsx`.
+  **Fenêtre 15 jours** (2 semaines + le lundi suivant) à partir du lundi de la semaine
+  choisie ; nav `OrdoQuinzaineNav` (`?debut=<lundiISO>`, flèches par 14 j). ⚠️ `weekDays()`
+  **ne pose PAS `firstOfWeek`** — la page le remet (chaque lundi), sinon les blocs-semaine ne
+  se découpent pas et le **même n° de semaine s'étale sur toute la fenêtre** (bug vécu, cf.
+  lessons L37). **Grille unique** : sous chaque date, 3 sous-colonnes **matin / après-midi /
+  nuit** ; **1ʳᵉ ligne « Activation »** (bascule `jour_quart` des quarts tournants), puis les
+  **lignes groupées par atelier** (ordre du Référentiel : atelier → `ordre_affichage` → nom).
+  **Journée** (pleine journée) **à part en dessous**, activation **dérivée** (cf. « Journée
+  DÉRIVÉE » plus haut). **En-tête figé** par la **méthode du Planning** : deux cartes alignées
+  par un `colgroup` partagé + `table-layout: fixed` — carte d'en-tête `flex:0 0 auto`
+  (dates/quarts + Activation), carte de corps `flex:1` défilante (lignes). Une case grise
+  « · » = la ligne ne tourne pas sur ce quart ; case verrouillée = quart inactif ce jour.
 - Planning : `src/app/planning/{page,PlanningGrid,PlanningFilters,AtelierFilter,QuartSelector}.tsx`.
-  ⚠️ **Pré-remplissage « postes fixes »** (bouton **« ⛁ Remplir »** dans l'entête de
-  CHAQUE semaine du `PlanningGrid`, `FillIcon` pot de peinture, → `/api/placement/prefill`,
-  droit Planning/Placement complet) : place chaque personne à **poste fixe**
+  ⚠️ **Pré-remplissage « TP + postes fixes »** (bouton **« ⛁ TP + postes fixes »** dans
+  l'entête de CHAQUE semaine du `PlanningGrid`, `FillIcon` pot de peinture, →
+  `/api/placement/prefill`, droit Planning/Placement complet) : pose d'abord les **TP**
+  matérialisés (cf. migration 0064), **puis** place chaque personne à **poste fixe**
   (`personne.poste_fixe_id`) sur son poste, **pour la semaine cliquée** (lundi→vendredi,
-  une seule semaine — plus le bouton unique qui faisait les 3), au **quart de son équipe**
-  (quart fixe, sinon rotation de la semaine, sinon défaut) — indépendamment du quart
-  affiché. `upsert ignoreDuplicates` sur `(personne, jour)` → **n'écrase jamais** une case
-  remplie (absence/affectation) ; saute les jours **hors effectif** (contrat ne couvrant pas
-  le jour). ⚠️ La grille garde son état local (`useState(initial)`) et ignore
+  une seule semaine), au **quart de son équipe** (quart fixe, sinon rotation de la semaine,
+  sinon défaut) — indépendamment du quart affiché. ⚠️ **Affectation automatique : ne demande
+  pas, ne force pas** — une personne **non habilitée** pour son poste fixe **n'est pas
+  placée** (contrôle groupé). `upsert ignoreDuplicates` sur `(personne, jour)` → **n'écrase
+  jamais** une case remplie (absence/affectation) ; saute les jours **hors effectif** (contrat
+  ne couvrant pas le jour). ⚠️ La grille garde son état local (`useState(initial)`) et ignore
   `router.refresh()` : le bouton **recharge la vue** (`window.location.reload()`) après
   succès (sauf si 0 case créée), sinon l'écran ne se met à jour qu'au F5. Modèle « comme
   Ordonnancement » (un bouton par entête de semaine). L'entête des 3 colonnes du bandeau

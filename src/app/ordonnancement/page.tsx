@@ -4,7 +4,7 @@ import { fetchAll } from "@/lib/fetch-all";
 import AppHeader from "@/components/AppHeader";
 import PageTitle from "@/components/PageTitle";
 import { requireModule, canWrite } from "@/lib/permissions";
-import { parseMonday, weekDays, isoDate, mondayOf, addDays, isoWeekNumber, type Jour } from "@/lib/week";
+import { parseMonday, weekDays, isoDate, mondayOf, addDays, isoWeekNumber, dowMon, type Jour } from "@/lib/week";
 import { getProfils } from "@/lib/semaine-type";
 import OrdoGrid from "./OrdoGrid";
 import OrdoQuinzaineNav from "./OrdoQuinzaineNav";
@@ -32,11 +32,14 @@ export default async function OrdonnancementPage({
   // Fenêtre de 15 jours à partir du lundi de la semaine choisie (défaut : semaine courante).
   const start = parseMonday(sp.debut);
   const startIso = isoDate(start);
+  // ⚠️ weekDays() ne pose PAS firstOfWeek — on le marque ici (chaque lundi), sans
+  // quoi les blocs-semaine ne se découpent pas et le même n° de semaine s'étale
+  // sur toute la fenêtre.
   const days: Jour[] = [
     ...weekDays(start),
     ...weekDays(addDays(start, 7)),
     ...weekDays(addDays(start, 14)).slice(0, JOURS_CIBLES - 14),
-  ];
+  ].map((d) => ({ ...d, firstOfWeek: dowMon(d.iso) === 0 }));
   const isos = days.map((d) => d.iso);
 
   // Blocs-semaine (annee + n0 ISO) pour l'en-tete des tableaux.

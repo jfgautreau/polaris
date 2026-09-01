@@ -75,18 +75,27 @@ export async function POST(req: NextRequest) {
   // pour ne pas lire les codes d'autres sites via service_role.
   const { data: quartsD } = await supabase
     .from("quart")
-    .select("code")
+    .select("code, ordre, creneau")
     .eq("site_id", site_id)
-    .returns<{ code: string }[]>();
+    .returns<{ code: string; ordre: number; creneau: string | null }[]>();
   const quarts = (quartsD ?? []).map((q) => q.code);
   if (quarts.length === 0) return NextResponse.json({ error: "Aucun quart" }, { status: 400 });
+  // « Journée » (pleine journée) = quart sans créneau au plus petit ordre. Sa
+  // ligne jour_quart est DÉRIVÉE : active dès qu'au moins un quart tournant l'est.
+  const journeeCode = [...(quartsD ?? [])].filter((q) => !q.creneau).sort((a, b) => a.ordre - b.ordre)[0]?.code ?? null;
 
   const [type, ouvType] = await Promise.all([getSemaineType(supabase, profil_id), getSemaineOuverture(supabase, profil_id)]);
 
-  // 1) Quarts actifs <- gabarit.
-  const rows = isos.flatMap((iso) =>
-    quarts.map((code) => ({ jour: iso, quart_code: code, actif: typeQuartActif(type, iso, code), site_id }))
-  );
+  // 1) Quarts actifs <- gabarit, puis journée = OU(quarts tournants) du jour.
+  const rows = isos.flatMap((iso) => {
+    const perQuart = quarts.map((code) => ({ jour: iso, quart_code: code, actif: typeQuartActif(type, iso, code), site_id }));
+    if (journeeCode) {
+      const rotActif = perQuart.some((r) => r.quart_code !== journeeCode && r.actif);
+      const jr = perQuart.find((r) => r.quart_code === journeeCode);
+      if (jr) jr.actif = rotActif;
+    }
+    return perQuart;
+  });
   // onConflict inclut site_id : nouvelle PK (site_id, jour, quart_code)
   // depuis 0053. Sans site_id, un même (jour, quart_code) sur un autre
   // site déclencherait un conflit de PK côté service_role.

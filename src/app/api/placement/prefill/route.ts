@@ -7,6 +7,7 @@ import { quartParDefaut } from "@/lib/quarts";
 import { rotationForWeek } from "@/lib/rotation";
 import { parseMonday, weekDays, dowMon } from "@/lib/week";
 import { contratCouvreLe, type Periode } from "@/lib/personne-statut";
+import { addMonthsIso, habValable } from "@/lib/habilitations";
 
 // POST /api/placement/prefill { semaines?: string[], semaine?: string }
 // Pré-remplit une (ou plusieurs) semaine(s) affichée(s). Deux passes, dans cet
@@ -221,10 +222,51 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Contrôle d'habilitation — AFFECTATION AUTOMATIQUE : contrairement à la saisie
+  // manuelle (qui propose de forcer via un pop-up), le pré-remplissage NE DEMANDE
+  // PAS et NE FORCE PAS. Une personne qui n'a pas (ou plus) les habilitations
+  // exigées par son poste fixe n'est simplement pas placée. Contrôle groupé.
+  const posteFixeIds = [...new Set(cibles.map((p) => p.poste_fixe_id))];
+  const reqByPoste = new Map<string, { competence_id: string; duree: number | null }[]>();
+  const compIds = new Set<string>();
+  if (posteFixeIds.length) {
+    const { data: pcr } = await supabase
+      .from("poste_competence_requise")
+      .select("poste_id, competence_id, competence:competence_id(duree_validite_mois)")
+      .eq("site_id", siteId)
+      .in("poste_id", posteFixeIds)
+      .returns<{ poste_id: string; competence_id: string; competence: { duree_validite_mois: number | null } | null }[]>();
+    for (const r of pcr ?? []) {
+      (reqByPoste.get(r.poste_id) ?? reqByPoste.set(r.poste_id, []).get(r.poste_id)!).push({ competence_id: r.competence_id, duree: r.competence?.duree_validite_mois ?? null });
+      compIds.add(r.competence_id);
+    }
+  }
+  const detByKey = new Map<string, { obt: string | null; exp: string | null }>();
+  if (compIds.size && cibles.length) {
+    const { data: det } = await supabase
+      .from("personne_competence")
+      .select("personne_id, competence_id, date_obtention, date_expiration")
+      .eq("site_id", siteId)
+      .in("personne_id", cibles.map((p) => p.id))
+      .in("competence_id", [...compIds])
+      .returns<{ personne_id: string; competence_id: string; date_obtention: string | null; date_expiration: string | null }[]>();
+    for (const d of det ?? []) detByKey.set(`${d.personne_id}:${d.competence_id}`, { obt: d.date_obtention, exp: d.date_expiration });
+  }
+  // Vrai si la personne détient TOUTES les habilitations valides exigées par le poste.
+  const habilitePourFixe = (persId: string, posteId: string): boolean =>
+    (reqByPoste.get(posteId) ?? []).every((r) => {
+      const d = detByKey.get(`${persId}:${r.competence_id}`);
+      if (!d) return false;
+      const exp = d.exp ?? addMonthsIso(d.obt, r.duree);
+      return habValable({ expiration: exp });
+    });
+
   // Construire les lignes postes fixes.
   const posteRows: Record<string, unknown>[] = [];
   for (const sem of semaines) {
     for (const p of cibles) {
+      // Non habilité(e) pour son poste fixe : on ne le/la place pas (aucun forçage).
+      if (!habilitePourFixe(p.id, p.poste_fixe_id)) continue;
       const q = quartDe(p.equipe_id, sem.monday);
       for (const iso of sem.isosOuvres) {
         if (occ.has(`${p.id}:${iso}`)) continue;

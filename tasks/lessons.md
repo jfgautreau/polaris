@@ -598,3 +598,23 @@ la hauteur des rangées). Ne PAS descendre `min-height` sous la hauteur des segm
 les rangées de filtres grandiraient (contenu) pendant que les rangées de boutons resteraient
 à `min-height` → re-décalage. Éviter les grilles étirées : `align-self: flex-start` /
 `align-content: start` si grille il y a.
+
+## L39 — `weekDays()` ne pose PAS `firstOfWeek` : blocs-semaine non découpés
+
+**Contexte** : refonte Ordonnancement en fenêtre de 15 jours. La page construisait les jours
+par `[...weekDays(start), ...weekDays(start+7), ...weekDays(start+14).slice(0,1)]`, puis calculait
+les blocs-semaine (pour le n° de semaine en en-tête) via une boucle
+`if (d.firstOfWeek || blocs.length===0) { nouveau bloc } else { span++ }`.
+
+**Symptôme** : **le même numéro de semaine s'étalait sur toute la fenêtre** (« S36 » sur 15 j).
+`isoWeekNumber` était pourtant correct (vérifié, y compris à la bascule d'année). Le bug : la
+fabrique `weekDays()` (`src/lib/week.ts`) renvoie `{ iso, nom, num }` **sans** `firstOfWeek` —
+et un diagnostic hâtif qui *réplique* `weekDays` en posant `firstOfWeek:i===0` masque le bug
+(lire la VRAIE source, pas une ré-implémentation). Résultat : tous les `d.firstOfWeek` valent
+`undefined` → seul le tout premier jour crée un bloc → **un unique bloc de 15 jours** → un seul
+n° de semaine.
+
+**Solution** : marquer `firstOfWeek` après coup dans la page, sur les vrais lundis :
+`.map((d) => ({ ...d, firstOfWeek: dowMon(d.iso) === 0 }))`. Les blocs se redécoupent en
+[7, 7, 1] et chaque semaine reçoit son numéro. Leçon générale : **ne pas présumer qu'un helper
+partagé remplit un champ optionnel** (`firstOfWeek?`) — le vérifier dans sa source.
