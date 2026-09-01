@@ -1,18 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useRouter } from "next/navigation";
 import ModaleDeplacable from "@/components/ModaleDeplacable";
 import { FillIcon } from "@/components/icons";
 
 type Jour = { iso: string; nom: string; num: string; firstOfWeek?: boolean };
-type Item = { id: string; label: string };
-type Quart = { code: string; libelle: string };
+type Quart = { code: string; libelle: string; ordre: number; creneau: string | null };
+type Ligne = { id: string; nom: string; atelierNom: string; quarts: string[] };
 type WeekBlock = { num: number; year: number; span: number };
 type Profil = { id: string; nom: string; par_defaut: boolean };
 
-const FIRST_W = 240; // assez large pour « Support · Sécurité / Environnement » (34 car.)
-const DAY_W = 34;
+const NAME_W = 190; // colonne des noms de lignes
+const QCOL_W = 26; // largeur d'une sous-colonne de quart
+const DAY_W = 40; // largeur d'une colonne jour (tableau « quarts actifs »)
+
+// Hauteurs des rangées d'en-tête (pour l'empilement sticky).
+const H_WEEK = 26;
+const H_DATE = 30;
+
+function abbr(libelle: string) {
+  return libelle.replace(/[^0-9A-Za-zÀ-ÿ]/g, "").slice(0, 3);
+}
 
 export default function OrdoGrid({
   days,
@@ -20,7 +29,9 @@ export default function OrdoGrid({
   todayIso,
   currentWeekIsos = [],
   quarts,
-  linesByQuart,
+  columnQuarts,
+  journeeQuart,
+  lignes,
   jourQuartState,
   ouvertureState,
   profils = [],
@@ -31,7 +42,9 @@ export default function OrdoGrid({
   todayIso: string;
   currentWeekIsos?: string[];
   quarts: Quart[];
-  linesByQuart: Record<string, Item[]>;
+  columnQuarts: Quart[];
+  journeeQuart: Quart | null;
+  lignes: Ligne[];
   jourQuartState: Record<string, boolean>;
   ouvertureState: Record<string, boolean>;
   profils?: Profil[];
@@ -42,29 +55,21 @@ export default function OrdoGrid({
   const [ov, setOv] = useState<Record<string, boolean>>(ouvertureState);
   const [saving, setSaving] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
-  // Semaine en cours d'initialisation -> modale de choix du profil.
   const [initIsos, setInitIsos] = useState<string[] | null>(null);
-  // Fermeture bloquee par des affectations -> modale « fermer quand meme ».
   const [conflit, setConflit] = useState<{
     affectes: { nom: string; prenom: string }[];
     body: object;
     reapply: () => void;
     rollback: () => void;
-    quart: boolean; // quart (true) ou ligne (false), pour le libelle
+    quart: boolean;
   } | null>(null);
-  // Re-initialisation bloquee par des affectations -> modale « reinitialiser quand meme ».
   const [conflitReset, setConflitReset] = useState<{
     affectes: { nom: string; prenom: string }[];
     isos: string[];
     profilId?: string;
   } | null>(null);
 
-  // Plus de remplissage par defaut : un jour sans ligne explicite est FERME.
-  // La semaine type ne s'applique qu'a l'initialisation (bouton), donc modifier
-  // la semaine type ensuite n'est pas retroactif sur les semaines deja initialisees.
   const quartActif = (code: string, iso: string) => jq[`${code}:${iso}`] ?? false;
-
-  // Un jour est "initialise" s'il porte au moins une ligne jour_quart explicite.
   const dayInitialized = (iso: string) => quarts.some((q) => `${q.code}:${iso}` in jq);
 
   // ISO de chaque bloc-semaine (pour le bouton "Initialiser").
@@ -77,7 +82,6 @@ export default function OrdoGrid({
     }
   }
 
-  // Clic sur "Initialiser" -> confirmation si deja initialisee, puis modale profil.
   function resetWeek(isos: string[]) {
     if (!canEdit || !isos.length) return;
     const dejaInit = isos.some((iso) => dayInitialized(iso));
@@ -85,8 +89,6 @@ export default function OrdoGrid({
     setInitIsos(isos);
   }
 
-  // Applique un profil a la semaine choisie ; le serveur renvoie l'instantané.
-  // `force` : réinitialise QUAND MÊME en retirant les affectations en conflit.
   async function applyProfil(isos: string[], profilId?: string, force = false) {
     setInitIsos(null);
     setSaving(true);
@@ -98,7 +100,6 @@ export default function OrdoGrid({
         body: JSON.stringify({ isos, profil_id: profilId, force }),
       });
       if (res.status === 409) {
-        // Affectations existantes : proposer « réinitialiser quand même ».
         const jc = (await res.json().catch(() => ({}))) as { conflit?: boolean; affectes?: { nom: string; prenom: string }[]; error?: string };
         if (jc.conflit && Array.isArray(jc.affectes)) {
           setConflitReset({ affectes: jc.affectes, isos, profilId });
@@ -113,13 +114,10 @@ export default function OrdoGrid({
         setJq((s) => ({ ...s, ...(j.jq ?? {}) }));
         setOv((s) => {
           const n = { ...s };
-          for (const k of Object.keys(n)) if (set.has(k.slice(-10))) delete n[k]; // efface les surcharges de la semaine
+          for (const k of Object.keys(n)) if (set.has(k.slice(-10))) delete n[k];
           for (const key of j.fermetures ?? []) n[key] = false;
           return n;
         });
-        // Invalide le cache RSC : sans ca, une navigation « menu autre puis
-        // retour » servait la page mise en cache AVANT l'initialisation, et
-        // l'ecran redemarrait vide alors que la base etait bien ecrite.
         router.refresh();
       } else {
         setErreur(j.error ?? "Échec.");
@@ -128,14 +126,10 @@ export default function OrdoGrid({
       setSaving(false);
     }
   }
-  // Apres initialisation : ligne ouverte par defaut (absence) tant que le quart
-  // est actif ; les fermetures explicites portent une ligne ouverture_quart=false.
+
   const ligneOuverte = (code: string, lg: string, iso: string) =>
     quartActif(code, iso) ? (ov[`${code}:${lg}:${iso}`] ?? true) : false;
 
-  // `reapply` : ré-applique l'état optimiste (utile après un rollback si l'on
-  // reprend l'action en `force`). `quart` : type d'élément fermé, pour le libellé
-  // de la modale de conflit.
   async function post(body: object, rollback: () => void, reapply: () => void, quart: boolean) {
     setSaving(true);
     setErreur(null);
@@ -146,9 +140,6 @@ export default function OrdoGrid({
         body: JSON.stringify(body),
       });
       if (res.status === 409) {
-        // Fermeture bloquee par des affectations. Deux formes de reponse :
-        //   { conflit, affectes } -> proposition « fermer quand meme » ;
-        //   { error }             -> ancien mur (repli).
         const j = (await res.json().catch(() => ({}))) as { conflit?: boolean; affectes?: { nom: string; prenom: string }[]; error?: string };
         rollback();
         if (j.conflit && Array.isArray(j.affectes)) {
@@ -164,14 +155,11 @@ export default function OrdoGrid({
         setErreur(j.error ?? "Échec.");
         return;
       }
-      // Meme raison qu'apres applyProfil : invalide le cache RSC pour
-      // qu'un aller-retour de menu revoie l'etat frais depuis la base.
       router.refresh();
     } finally {
       setSaving(false);
     }
   }
-  // Rejoue la fermeture en `force` : le serveur retire les affectations puis ferme.
   async function forcerFermeture() {
     const c = conflit;
     setConflit(null);
@@ -200,85 +188,130 @@ export default function OrdoGrid({
     post({ type: "ligne", quart_code: code, ligne_id: lg, jour: iso, value: next }, rollback, apply, false);
   }
 
-  const sep = (d: Jour) => (d.firstOfWeek ? { borderLeft: "2px solid #cbd5e1" } : {});
   const currentSet = new Set(currentWeekIsos);
   const currentBlockIdx = blockIsos.findIndex((isos) => isos.some((iso) => currentSet.has(iso)));
-  const dayBg = (iso: string) =>
-    iso === todayIso ? "#dbeafe" : currentSet.has(iso) ? "#eff6ff" : undefined;
+  const dayBg = (iso: string) => (iso === todayIso ? "#dbeafe" : currentSet.has(iso) ? "#eff6ff" : undefined);
+  const sepDay = (d: Jour): React.CSSProperties =>
+    d.firstOfWeek ? { borderLeft: "2px solid #94a3b8" } : { borderLeft: "1px solid #e2e8f0" };
 
-  const tableStyle: React.CSSProperties = {
+  // Regroupe les lignes (déjà triées) par atelier, en conservant l'ordre.
+  const groupsFrom = (src: Ligne[]) => {
+    const out: { atelierNom: string; lignes: Ligne[] }[] = [];
+    for (const l of src) {
+      let g = out[out.length - 1];
+      if (!g || g.atelierNom !== l.atelierNom) { g = { atelierNom: l.atelierNom, lignes: [] }; out.push(g); }
+      g.lignes.push(l);
+    }
+    return out;
+  };
+
+  // -------- Tableau « Quarts actifs par jour » (quarts en lignes × 15 jours) --------
+  const topTableStyle: React.CSSProperties = {
     borderCollapse: "collapse",
     tableLayout: "fixed",
     width: "100%",
-    minWidth: FIRST_W + days.length * DAY_W,
+    minWidth: NAME_W + days.length * DAY_W,
   };
 
-  const Header = ({ label, showReset = false }: { label: string; showReset?: boolean }) => (
-    <thead>
-      {weekBlocks.length > 0 && (
-        <tr>
-          <th style={{ width: FIRST_W }}></th>
-          {weekBlocks.map((w, i) => {
-            const isCurrent = i === currentBlockIdx;
-            return (
-            <th
-              key={i}
-              colSpan={w.span}
-              style={{
-                textAlign: "center",
-                fontSize: 12,
-                borderLeft: "2px solid #cbd5e1",
-                background: isCurrent ? "#dbeafe" : "#f8fafc",
-                fontWeight: isCurrent ? 700 : undefined,
-              }}
-            >
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                {w.year} · S{w.num}
-                {isCurrent && <span className="muted" style={{ fontWeight: 400 }}>(en cours)</span>}
-                {showReset && canEdit && (
-                  <button
-                    type="button"
-                    className="btn-sm btn-ghost"
-                    onClick={() => resetWeek(blockIsos[i] ?? [])}
-                    title="Initialiser cette semaine avec la semaine type (ré-applique / écrase si déjà fait)"
-                    style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "1px 6px", fontSize: 12, lineHeight: 1.2 }}
-                  >
-                    <FillIcon size={13} /> Initialiser
-                  </button>
-                )}
-              </span>
-            </th>
-            );
-          })}
-        </tr>
-      )}
-      <tr>
-        <th style={{ width: FIRST_W, textAlign: "left" }}>{label}</th>
-        {days.map((d) => (
-          <th key={d.iso} style={{ textAlign: "center", ...sep(d), background: dayBg(d.iso) }}>
-            {d.nom.slice(0, 2)}
-            <br />
-            <span className="muted" style={{ fontWeight: 400, fontSize: 10 }}>{d.num}</span>
-          </th>
-        ))}
-      </tr>
-    </thead>
+  // -------- Grille des lignes (colonnes matin/A-M/nuit sous les dates) --------
+  const ncq = columnQuarts.length || 1;
+  const gridStyle: React.CSSProperties = {
+    borderCollapse: "collapse",
+    tableLayout: "fixed",
+    width: "100%",
+    minWidth: NAME_W + days.length * ncq * QCOL_W,
+  };
+  const stickyTh = (top: number, bg: string): React.CSSProperties => ({
+    position: "sticky",
+    top,
+    zIndex: 6,
+    background: bg,
+  });
+
+  // Cellule d'une ligne pour un (jour, quart) donné dans la grille en colonnes.
+  const gridCell = (l: Ligne, d: Jour, q: Quart, firstOfDay: boolean) => {
+    const dispo = l.quarts.includes(q.code);
+    const active = quartActif(q.code, d.iso);
+    const on = ligneOuverte(q.code, l.id, d.iso);
+    const border: React.CSSProperties = firstOfDay ? sepDay(d) : {};
+    const ck = `${d.iso}:${q.code}`;
+    if (!dispo) {
+      return (
+        <td key={ck} style={{ textAlign: "center", background: "#f8fafc", color: "#cbd5e1", ...border }} title={`Cette ligne ne tourne pas en ${q.libelle}`}>
+          ·
+        </td>
+      );
+    }
+    return (
+      <td
+        key={ck}
+        style={{ textAlign: "center", background: !active ? "#f1f5f9" : on ? undefined : "#fee2e2", ...border }}
+        title={active ? `${l.nom} — ${q.libelle} — ${on ? "ouverte" : "fermée"}` : `${q.libelle} inactif ce jour (initialiser la semaine / activer le quart)`}
+      >
+        <input
+          type="checkbox"
+          checked={on}
+          disabled={!canEdit || !active}
+          onChange={() => toggleLigne(q.code, l.id, d.iso)}
+          style={{ width: "auto", cursor: canEdit && active ? "pointer" : "not-allowed" }}
+        />
+      </td>
+    );
+  };
+
+  const colGrid = (
+    <colgroup>
+      <col style={{ width: NAME_W }} />
+      {days.map((d) => columnQuarts.map((q) => <col key={`${d.iso}:${q.code}`} style={{ width: QCOL_W }} />))}
+    </colgroup>
   );
 
   return (
-    <div className="gridband scroll">
+    <div className="gridband" style={{ paddingTop: 4 }}>
       {erreur && (
         <div role="alert" style={{ margin: "0 0 10px", padding: "8px 12px", borderRadius: 8, background: "#fef2f2", color: "#991b1b", border: "1px solid #fecaca", fontSize: 13, fontWeight: 600 }}>
           {erreur}
           <button type="button" onClick={() => setErreur(null)} style={{ float: "right", background: "transparent", border: "none", color: "#991b1b", cursor: "pointer", fontSize: 14, width: "auto", margin: 0, padding: 0 }}>✕</button>
         </div>
       )}
-      <div className="card section" style={{ overflowX: "auto" }}>
+
+      {/* --- Quarts actifs par jour (fixe en haut) --- */}
+      <div className="card" style={{ overflowX: "auto", flex: "0 0 auto" }}>
         <h2 style={{ marginTop: 0 }}>
           Quarts actifs par jour {saving && <span className="muted" style={{ fontSize: 12 }}>· enregistrement…</span>}
         </h2>
-        <table className="matrix rowh" style={tableStyle}>
-          <Header label="Quart" showReset />
+        <table className="matrix rowh" style={topTableStyle}>
+          <thead>
+            <tr>
+              <th style={{ width: NAME_W }}></th>
+              {weekBlocks.map((w, i) => {
+                const isCurrent = i === currentBlockIdx;
+                return (
+                  <th key={i} colSpan={w.span} style={{ textAlign: "center", fontSize: 12, borderLeft: "2px solid #94a3b8", background: isCurrent ? "#dbeafe" : "#f8fafc", fontWeight: isCurrent ? 700 : undefined }}>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      {w.year} · S{w.num}
+                      {isCurrent && <span className="muted" style={{ fontWeight: 400 }}>(en cours)</span>}
+                      {canEdit && (
+                        <button type="button" className="btn-sm btn-ghost" onClick={() => resetWeek(blockIsos[i] ?? [])} title="Initialiser cette semaine avec la semaine type (ré-applique / écrase si déjà fait)" style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "1px 6px", fontSize: 12, lineHeight: 1.2 }}>
+                          <FillIcon size={13} /> Initialiser
+                        </button>
+                      )}
+                    </span>
+                  </th>
+                );
+              })}
+            </tr>
+            <tr>
+              <th style={{ width: NAME_W, textAlign: "left" }}>Quart</th>
+              {days.map((d) => (
+                <th key={d.iso} style={{ textAlign: "center", ...sepDay(d), background: dayBg(d.iso) }}>
+                  {d.nom.slice(0, 2)}
+                  <br />
+                  <span className="muted" style={{ fontWeight: 400, fontSize: 10 }}>{d.num}</span>
+                </th>
+              ))}
+            </tr>
+          </thead>
           <tbody>
             {quarts.map((q) => (
               <tr key={q.code}>
@@ -287,7 +320,7 @@ export default function OrdoGrid({
                   const on = quartActif(q.code, d.iso);
                   const init = dayInitialized(d.iso);
                   return (
-                    <td key={d.iso} style={{ textAlign: "center", background: on ? undefined : init ? "#fee2e2" : "#f1f5f9", ...sep(d) }}>
+                    <td key={d.iso} style={{ textAlign: "center", background: on ? undefined : init ? "#fee2e2" : "#f1f5f9", ...sepDay(d) }}>
                       <input type="checkbox" checked={on} disabled={!canEdit} onChange={() => toggleQuart(q.code, d.iso)} style={{ width: "auto", cursor: canEdit ? "pointer" : "default" }} title={init ? undefined : "Semaine non initialisée"} />
                     </td>
                   );
@@ -298,51 +331,124 @@ export default function OrdoGrid({
         </table>
       </div>
 
-      <h2 style={{ marginTop: 24 }}>Lignes ouvertes par quart</h2>
-      <p className="muted" style={{ marginTop: -8 }}>
-        Rien n&apos;est rempli par défaut : utilisez <strong>« ⚙️ Initialiser »</strong>{" "}
-        en haut d&apos;une semaine pour appliquer la semaine type. Une fois initialisée, désactiver un quart ferme et verrouille ses lignes ce jour-là.
-        Modifier la semaine type ensuite n&apos;affecte pas les semaines déjà initialisées (ré-initialisez pour écraser).
-      </p>
-      {quarts.map((q) => {
-        const qLignes = linesByQuart[q.code] ?? [];
-        return (
-          <div key={q.code} className="card section" style={{ overflowX: "auto" }}>
-            <h2 style={{ marginTop: 0 }}>{q.libelle}</h2>
-            <table className="matrix rowh" style={tableStyle}>
-              <Header label="Ligne" />
-              <tbody>
-                {qLignes.map((l) => (
-                  <tr key={l.id}>
-                    <td style={{ whiteSpace: "nowrap" }}>{l.label}</td>
-                    {days.map((d) => {
-                      const active = quartActif(q.code, d.iso);
-                      const on = ligneOuverte(q.code, l.id, d.iso);
-                      return (
-                        <td key={d.iso} style={{ textAlign: "center", background: !active ? "#f1f5f9" : on ? undefined : "#fee2e2", ...sep(d) }}>
-                          <input
-                            type="checkbox"
-                            checked={on}
-                            disabled={!canEdit || !active}
-                            onChange={() => toggleLigne(q.code, l.id, d.iso)}
-                            style={{ width: "auto", cursor: canEdit && active ? "pointer" : "not-allowed" }}
-                          />
-                        </td>
-                      );
-                    })}
-                  </tr>
+      {/* --- Grille des lignes : colonnes matin / A-M / nuit sous les dates (défile, en-tête figé) --- */}
+      <div className="card grow" style={{ overflow: "auto", marginTop: 16, minHeight: 160 }}>
+        <h2 style={{ marginTop: 0 }}>Lignes ouvertes</h2>
+        <p className="muted" style={{ marginTop: -6, fontSize: 12 }}>
+          Colonnes <strong>matin · après-midi · nuit</strong> sous chaque date. Lignes groupées par atelier (ordre du référentiel).
+          Une case grise « · » = la ligne ne tourne pas sur ce quart. Case verrouillée = quart inactif ce jour (initialisez la semaine).
+        </p>
+        {columnQuarts.length === 0 ? (
+          <p className="muted">Aucun quart en rotation configuré.</p>
+        ) : (
+          <table className="matrix rowh" style={gridStyle}>
+            {colGrid}
+            <thead>
+              {/* Rangée semaines */}
+              <tr>
+                <th rowSpan={3} style={{ ...stickyTh(0, "#fff"), width: NAME_W, textAlign: "left", zIndex: 8, verticalAlign: "bottom" }}>Ligne</th>
+                {weekBlocks.map((w, i) => {
+                  const isCurrent = i === currentBlockIdx;
+                  return (
+                    <th key={i} colSpan={w.span * ncq} style={{ ...stickyTh(0, isCurrent ? "#dbeafe" : "#f8fafc"), textAlign: "center", fontSize: 12, borderLeft: "2px solid #94a3b8", fontWeight: isCurrent ? 700 : undefined, height: H_WEEK }}>
+                      {w.year} · S{w.num}{isCurrent && <span className="muted" style={{ fontWeight: 400 }}> (en cours)</span>}
+                    </th>
+                  );
+                })}
+              </tr>
+              {/* Rangée dates */}
+              <tr>
+                {days.map((d) => (
+                  <th key={d.iso} colSpan={ncq} style={{ ...stickyTh(H_WEEK, dayBg(d.iso) ?? "#fff"), textAlign: "center", height: H_DATE, ...sepDay(d) }}>
+                    {d.nom.slice(0, 2)} <span className="muted" style={{ fontWeight: 400, fontSize: 10 }}>{d.num}</span>
+                  </th>
                 ))}
-                {qLignes.length === 0 && (
-                  <tr>
-                    <td colSpan={days.length + 1} className="muted">Aucune ligne activée sur ce quart (référentiel).</td>
-                  </tr>
+              </tr>
+              {/* Rangée quarts (matin / A-M / nuit) */}
+              <tr>
+                {days.map((d) =>
+                  columnQuarts.map((q, qi) => (
+                    <th key={`${d.iso}:${q.code}`} style={{ ...stickyTh(H_WEEK + H_DATE, dayBg(d.iso) ?? "#f8fafc"), textAlign: "center", fontSize: 10, fontWeight: 600, color: "#475569", padding: "2px 0", ...(qi === 0 ? sepDay(d) : { borderLeft: "1px solid #eef2f7" }) }} title={q.libelle}>
+                      {abbr(q.libelle)}
+                    </th>
+                  ))
                 )}
-              </tbody>
-            </table>
-          </div>
-        );
-      })}
-      {quarts.length === 0 && <p className="muted">Aucun quart configuré.</p>}
+              </tr>
+            </thead>
+            <tbody>
+              {groupsFrom(lignes).map((g) => (
+                <Fragment key={`ate:${g.atelierNom}`}>
+                  <tr>
+                    <td colSpan={1 + days.length * ncq} style={{ background: "#eef2f7", fontWeight: 700, fontSize: 12, padding: "3px 8px" }}>
+                      {g.atelierNom}
+                    </td>
+                  </tr>
+                  {g.lignes.map((l) => (
+                    <tr key={l.id}>
+                      <td style={{ whiteSpace: "nowrap", paddingLeft: 14 }}>{l.nom}</td>
+                      {days.map((d) => columnQuarts.map((q, qi) => gridCell(l, d, q, qi === 0)))}
+                    </tr>
+                  ))}
+                </Fragment>
+              ))}
+              {lignes.length === 0 && (
+                <tr>
+                  <td colSpan={1 + days.length * ncq} className="muted">Aucune ligne active.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
+
+        {/* --- Journée : à part, en dessous --- */}
+        {journeeQuart && (() => {
+          const jLignes = lignes.filter((l) => l.quarts.includes(journeeQuart.code));
+          const jStyle: React.CSSProperties = { borderCollapse: "collapse", tableLayout: "fixed", width: "100%", minWidth: NAME_W + days.length * DAY_W };
+          return (
+            <div style={{ marginTop: 22 }}>
+              <h2 style={{ marginTop: 0 }}>{journeeQuart.libelle} <span className="muted" style={{ fontSize: 12, fontWeight: 400 }}>(pleine journée)</span></h2>
+              <table className="matrix rowh" style={jStyle}>
+                <thead>
+                  <tr>
+                    <th style={{ width: NAME_W, textAlign: "left" }}>Ligne</th>
+                    {days.map((d) => (
+                      <th key={d.iso} style={{ textAlign: "center", ...sepDay(d), background: dayBg(d.iso) }}>
+                        {d.nom.slice(0, 2)}<br /><span className="muted" style={{ fontWeight: 400, fontSize: 10 }}>{d.num}</span>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {groupsFrom(jLignes).map((g) => (
+                    <Fragment key={`jate:${g.atelierNom}`}>
+                      <tr>
+                        <td colSpan={1 + days.length} style={{ background: "#eef2f7", fontWeight: 700, fontSize: 12, padding: "3px 8px" }}>{g.atelierNom}</td>
+                      </tr>
+                      {g.lignes.map((l) => (
+                        <tr key={l.id}>
+                          <td style={{ whiteSpace: "nowrap", paddingLeft: 14 }}>{l.nom}</td>
+                          {days.map((d) => {
+                            const active = quartActif(journeeQuart.code, d.iso);
+                            const on = ligneOuverte(journeeQuart.code, l.id, d.iso);
+                            return (
+                              <td key={d.iso} style={{ textAlign: "center", background: !active ? "#f1f5f9" : on ? undefined : "#fee2e2", ...sepDay(d) }}>
+                                <input type="checkbox" checked={on} disabled={!canEdit || !active} onChange={() => toggleLigne(journeeQuart.code, l.id, d.iso)} style={{ width: "auto", cursor: canEdit && active ? "pointer" : "not-allowed" }} />
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </Fragment>
+                  ))}
+                  {jLignes.length === 0 && (
+                    <tr><td colSpan={1 + days.length} className="muted">Aucune ligne en {journeeQuart.libelle}.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          );
+        })()}
+      </div>
 
       {/* Modale : choix du profil de semaine type à appliquer. */}
       {initIsos && (
@@ -389,17 +495,8 @@ export default function OrdoGrid({
             ))}
           </ul>
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-            <button type="button" className="btn-sm btn-ghost" style={{ width: "auto" }} onClick={() => setConflit(null)}>
-              Annuler
-            </button>
-            <button
-              type="button"
-              className="btn-sm"
-              style={{ width: "auto", background: "#b45309", border: "1px solid #b45309" }}
-              onClick={forcerFermeture}
-            >
-              Fermer quand même et retirer
-            </button>
+            <button type="button" className="btn-sm btn-ghost" style={{ width: "auto" }} onClick={() => setConflit(null)}>Annuler</button>
+            <button type="button" className="btn-sm" style={{ width: "auto", background: "#b45309", border: "1px solid #b45309" }} onClick={forcerFermeture}>Fermer quand même et retirer</button>
           </div>
         </ModaleDeplacable>
       )}
@@ -421,21 +518,8 @@ export default function OrdoGrid({
             ))}
           </ul>
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-            <button type="button" className="btn-sm btn-ghost" style={{ width: "auto" }} onClick={() => setConflitReset(null)}>
-              Annuler
-            </button>
-            <button
-              type="button"
-              className="btn-sm"
-              style={{ width: "auto", background: "#b45309", border: "1px solid #b45309" }}
-              onClick={() => {
-                const c = conflitReset;
-                setConflitReset(null);
-                if (c) applyProfil(c.isos, c.profilId, true);
-              }}
-            >
-              Réinitialiser quand même et retirer
-            </button>
+            <button type="button" className="btn-sm btn-ghost" style={{ width: "auto" }} onClick={() => setConflitReset(null)}>Annuler</button>
+            <button type="button" className="btn-sm" style={{ width: "auto", background: "#b45309", border: "1px solid #b45309" }} onClick={() => { const c = conflitReset; setConflitReset(null); if (c) applyProfil(c.isos, c.profilId, true); }}>Réinitialiser quand même et retirer</button>
           </div>
         </ModaleDeplacable>
       )}

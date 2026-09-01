@@ -4,25 +4,39 @@ import { fetchAll } from "@/lib/fetch-all";
 import AppHeader from "@/components/AppHeader";
 import PageTitle from "@/components/PageTitle";
 import { requireModule, canWrite } from "@/lib/permissions";
-import { parseMois, monthDays, isoDate, mondayOf, addDays, isoWeekNumber } from "@/lib/week";
+import { parseMonday, weekDays, isoDate, mondayOf, addDays, isoWeekNumber, type Jour } from "@/lib/week";
 import { getProfils } from "@/lib/semaine-type";
 import OrdoGrid from "./OrdoGrid";
-import OrdoMonthNav from "./OrdoMonthNav";
+import OrdoQuinzaineNav from "./OrdoQuinzaineNav";
 
-type Ligne = { id: string; nom: string; atelier: { nom: string } | null; poste: { id: string; actif: boolean }[] };
-type Quart = { code: string; libelle: string };
+type Ligne = {
+  id: string;
+  nom: string;
+  ordre_affichage: number | null;
+  atelier: { id: string; nom: string } | null;
+  poste: { id: string; actif: boolean }[];
+};
+type Quart = { code: string; libelle: string; ordre: number; creneau: string | null };
+
+const JOURS_CIBLES = 15; // fenêtre affichée : 15 jours (2 semaines + le lundi suivant).
 
 export default async function OrdonnancementPage({
   searchParams,
 }: {
-  searchParams: Promise<{ mois?: string }>;
+  searchParams: Promise<{ debut?: string }>;
 }) {
   const { profile, perms } = await requireModule("ordonnancement", "read");
   const canEdit = canWrite(perms, "ordonnancement");
 
   const sp = await searchParams;
-  const { year, month0 } = parseMois(sp.mois);
-  const days = monthDays(year, month0);
+  // Fenêtre de 15 jours à partir du lundi de la semaine choisie (défaut : semaine courante).
+  const start = parseMonday(sp.debut);
+  const startIso = isoDate(start);
+  const days: Jour[] = [
+    ...weekDays(start),
+    ...weekDays(addDays(start, 7)),
+    ...weekDays(addDays(start, 14)).slice(0, JOURS_CIBLES - 14),
+  ];
   const isos = days.map((d) => d.iso);
 
   // Blocs-semaine (annee + n0 ISO) pour l'en-tete des tableaux.
@@ -38,12 +52,11 @@ export default async function OrdonnancementPage({
 
   const supabase = await getServerClient();
   const [{ data: quartsD }, { data: lignesD }, { data: jq }, ov, { data: pqOffD }, profils] = await Promise.all([
-    supabase.from("quart").select("code, libelle").order("ordre").returns<Quart[]>(),
+    supabase.from("quart").select("code, libelle, ordre, creneau").order("ordre").returns<Quart[]>(),
     supabase
       .from("ligne")
-      .select("id, nom, atelier:atelier_id(nom), poste(id, actif)")
+      .select("id, nom, ordre_affichage, atelier:atelier_id(id, nom), poste(id, actif)")
       .eq("actif", true)
-      .order("nom")
       .returns<Ligne[]>(),
     supabase
       .from("jour_quart")
@@ -62,21 +75,46 @@ export default async function OrdonnancementPage({
     getProfils(supabase),
   ]);
 
+  const quarts = quartsD ?? [];
+  // Split : la « journée » (pleine journée, mise à part en bas) = le quart sans
+  // créneau au plus petit ordre. Les autres (matin / après-midi / nuit) forment
+  // les colonnes. Robuste (aucun code en dur) et correct multi-site.
+  const journeeQuart =
+    [...quarts].filter((q) => !q.creneau).sort((a, b) => a.ordre - b.ordre)[0] ?? null;
+  const columnQuarts = quarts.filter((q) => q.code !== journeeQuart?.code);
+
   const jourQuartState: Record<string, boolean> = {};
   for (const r of jq ?? []) jourQuartState[`${r.quart_code}:${r.jour}`] = r.actif;
   const ouvertureState: Record<string, boolean> = {};
   for (const r of ov) ouvertureState[`${r.quart_code}:${r.ligne_id}:${r.jour}`] = r.ouverte;
 
-  // Lignes proposees PAR QUART = uniquement celles ayant au moins un poste actif
-  // tournant sur ce quart (referentiel poste_quart, defaut actif).
+  // Lignes triées comme au Référentiel : atelier, puis ordre_affichage, puis nom.
+  // -> lignes regroupées par atelier dans la grille.
+  const ordreThenNom = (a: Ligne, b: Ligne) =>
+    (a.atelier?.nom ?? "").localeCompare(b.atelier?.nom ?? "") ||
+    (a.ordre_affichage ?? 0) - (b.ordre_affichage ?? 0) ||
+    a.nom.localeCompare(b.nom);
+
+  // Une ligne « tourne » sur un quart si elle a au moins un poste actif non
+  // désactivé pour ce quart (référentiel poste_quart, défaut actif).
   const pqOff = new Set((pqOffD ?? []).map((r) => `${r.poste_id}:${r.quart_code}`));
-  const ligneLabel = (l: Ligne) => (l.atelier?.nom ? `${l.atelier.nom} / ${l.nom}` : l.nom);
-  const linesByQuart: Record<string, { id: string; label: string }[]> = {};
-  for (const q of quartsD ?? []) {
-    linesByQuart[q.code] = (lignesD ?? [])
-      .filter((l) => (l.poste ?? []).some((p) => p.actif && !pqOff.has(`${p.id}:${q.code}`)))
-      .map((l) => ({ id: l.id, label: ligneLabel(l) }));
-  }
+  const quartsDeLigne = (l: Ligne) =>
+    quarts
+      .filter((q) => (l.poste ?? []).some((p) => p.actif && !pqOff.has(`${p.id}:${q.code}`)))
+      .map((q) => q.code);
+
+  const lignes = (lignesD ?? [])
+    .slice()
+    .sort(ordreThenNom)
+    .map((l) => ({
+      id: l.id,
+      nom: l.nom,
+      atelierNom: l.atelier?.nom ?? "—",
+      quarts: quartsDeLigne(l),
+    }))
+    .filter((l) => l.quarts.length > 0);
+
+  const todayMonday = isoDate(mondayOf());
 
   return (
     <>
@@ -94,22 +132,19 @@ export default async function OrdonnancementPage({
             </Link>
           </div>
         </div>
-        <OrdoMonthNav base="/ordonnancement" year={year} month0={month0} />
+        <OrdoQuinzaineNav base="/ordonnancement" debut={startIso} todayMonday={todayMonday} days={days} />
         </div>
 
         <OrdoGrid
-          // `key` sur le mois : OrdoMonthNav navigue en soft (router.push),
-          // le composant client garde alors son useState initialise sur le
-          // MOIS PRECEDENT — l'ecran affiche octobre vide alors que la base
-          // porte les donnees. Le `key` force React a le remonter pour que
-          // useState relise les props fraiches.
-          key={`${year}-${month0}`}
+          key={startIso}
           days={days}
           weekBlocks={weekBlocks}
           todayIso={isoDate(new Date())}
           currentWeekIsos={Array.from({ length: 7 }, (_, i) => isoDate(addDays(mondayOf(), i)))}
-          quarts={quartsD ?? []}
-          linesByQuart={linesByQuart}
+          quarts={quarts}
+          columnQuarts={columnQuarts}
+          journeeQuart={journeeQuart}
+          lignes={lignes}
           jourQuartState={jourQuartState}
           ouvertureState={ouvertureState}
           profils={profils}
