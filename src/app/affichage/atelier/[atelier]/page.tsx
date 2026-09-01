@@ -268,9 +268,37 @@ export default async function AffichageAtelier({
       for (const m of mondaySet) rotByMonday.set(m, rotationForWeek(rotRefs, m));
       const creneauDe = (q?: string | null) => (q === "matin" ? "matin" : q === "apres_midi" ? "aprem" : null);
 
+      // TP MATÉRIALISÉS (migration 0064). Sur une semaine « chargée » (tp_charge),
+      // le manager a pu DÉPLACER un jour de TP dans le Planning : on lit alors les
+      // vraies lignes placement.tp au lieu de recalculer depuis tp_config. Repli
+      // sur le calcul pour les semaines non chargées. Best-effort avant migration.
+      const chargedMondays = new Set<string>();
+      {
+        const { data: tcD, error: tcErr } = await admin
+          .from("tp_charge")
+          .select("semaine_lundi")
+          .eq("site_id", site.id)
+          .in("semaine_lundi", [...mondaySet])
+          .returns<{ semaine_lundi: string }[]>();
+        if (!tcErr) for (const r of tcD ?? []) chargedMondays.add(r.semaine_lundi);
+      }
+      const jourCharge = (iso: string) => chargedMondays.has(isoDate(mondayOf(new Date(iso + "T00:00"))));
+      if (chargedMondays.size) {
+        const { data: tpReal, error: tpRealErr } = await admin
+          .from("placement")
+          .select("personne_id, jour")
+          .eq("tp", true)
+          .eq("site_id", site.id)
+          .in("jour", isos)
+          .returns<{ personne_id: string; jour: string }[]>();
+        if (!tpRealErr) for (const r of tpReal ?? []) if (jourCharge(r.jour)) tpSet.add(`${r.personne_id}:${r.jour}`);
+      }
+
       for (const [persId, periodes] of periodesByPers) {
         const eq = tpEquipe.get(persId) ?? null;
         for (const iso of isos) {
+          // Semaine chargée : les vraies lignes placement.tp font foi (ci-dessus).
+          if (jourCharge(iso)) continue;
           // Trouver la période applicable pour ce jour.
           const per = periodes.find((p) => p.date_debut <= iso && (!p.date_fin || p.date_fin >= iso));
           if (!per?.tp_config) continue;
