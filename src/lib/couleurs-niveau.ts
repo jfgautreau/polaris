@@ -3,31 +3,25 @@
 // migrations 0063 puis 0065) ; le niveau 0 reste toujours « blanc / contour seul »
 // (aucune compétence).
 //
-// La palette a été ÉLARGIE au-delà des 4 teintes historiques (rouge → orange →
-// vert clair → vert) vers un vrai nuancier, tout en restant une liste FERMÉE :
-// validation côté serveur avant écriture, et rendu cohérent. Les 4 teintes
-// historiques figurent en tête car elles servent de défaut d'échelle.
+// Nuancier = dégradé continu ROUGE → VERT en 12 teintes (bas → haut de l'échelle),
+// cohérent avec la lecture du carré magique. Liste FERMÉE : validation côté serveur
+// avant écriture, rendu cohérent partout.
 export const NUANCIER: readonly string[] = [
-  // Rouges → oranges → jaunes (bas de l'échelle)
-  "#dc2626", "#ef4444", "#ea580c", "#f97316", "#f59e0b", "#eab308",
-  // Jaunes-verts → verts (haut de l'échelle)
-  "#facc15", "#84cc16", "#65a30d", "#22c55e", "#16a34a", "#059669",
-  // Turquoise → cyans → bleus
-  "#14b8a6", "#06b6d4", "#0ea5e9", "#3b82f6", "#2563eb", "#4f46e5",
-  // Violets → roses → gris
-  "#7c3aed", "#a855f7", "#d946ef", "#ec4899", "#f43f5e", "#64748b",
+  "#c52020", "#c54120", "#c56220", "#c58120", "#c5a220", "#c5c320",
+  "#a7c520", "#86c520", "#65c520", "#47c520", "#26c520", "#20c53c",
 ] as const;
 
 // Ensemble des hex autorisés (validation côté serveur avant écriture).
 export const HEX_NIVEAUX_AUTORISES: ReadonlySet<string> = new Set(NUANCIER);
 
-// Couleur par défaut de chaque niveau positif = échelle historique. Sert de repli
-// tant qu'aucune couleur n'est enregistrée (site neuf, ou migration non appliquée).
+// Couleur par défaut de chaque niveau positif = jalons du dégradé rouge → vert.
+// Sert de repli tant qu'aucune couleur n'est enregistrée (site neuf, ou migration
+// non appliquée). Chaque valeur appartient au NUANCIER.
 export const COULEUR_NIVEAU_DEFAUT: Record<number, string> = {
-  1: "#dc2626",
-  2: "#f59e0b",
-  3: "#84cc16",
-  4: "#16a34a",
+  1: "#c52020",
+  2: "#c58120",
+  3: "#86c520",
+  4: "#20c53c",
 };
 
 // Map complète niveau -> couleur (0 = null/contour), en fusionnant d'éventuelles
