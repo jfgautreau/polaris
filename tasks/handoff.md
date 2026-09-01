@@ -35,7 +35,20 @@ menu suit l'écriture, pas la lecture.
   pastille rouge ; habilitation manquante/périmée → rouge **encadré** (distinct du niveau).
 - **Vue Absences** : `SlideSwitch` Plan / Absences (`?vue=absences`), une carte par motif,
   filtrée par l'atelier affiché.
-- **Bouton PDF** : A4 paysage, mise à l'échelle **mesurée** (cf. `lessons.md` L16).
+- **Navigation par jour** (`JourNav.tsx`, remplace le `<input type="date">` natif) : les
+  flèches **◀ / ▶ sautent** au jour **ouvert** précédent / suivant (≥ 1 ligne de l'atelier
+  ouverte sur le quart courant ; repli ±1 j si aucun connu). Le **calendrier déroulant
+  grise** (désactive) les jours sans ligne ouverte — le natif ne sait pas désactiver des
+  jours arbitraires. `openDays` calculé **serveur** (`page.tsx`) sur une fenêtre
+  **[-90 ; +150] jours** autour du jour affiché, bornée **quart + atelier** (mêmes règles
+  que `ligneOuverte` : `jour_quart.actif` + `ouverture_quart`, défaut ouvert), à laquelle
+  la navigation du calendrier est bornée.
+- **Bouton PDF** : A4 paysage, mise à l'échelle **mesurée** (cf. `lessons.md` L16). La
+  colonne de droite « **Absents / TP du jour** » liste les motifs d'absence **et** un bloc
+  « **Temps partiel** » (personnes indisponibles ce jour au sens TP, non déjà placées ni
+  absentes). Le TP du jour est calculé **serveur** (`page.tsx`, `tpIds`) avec les **mêmes
+  règles que le Planning / la TV** (journée off, ou équipe sur le créneau non travaillé via
+  la rotation datée + `quart.creneau`).
 
 ## Temps partiel (`personne.tp_config`, jsonb, options cumulables)
 Modale `TempsPartielModal`, API `/api/personnel` op `tp`. Périodes datées dans
@@ -66,6 +79,22 @@ Priorité d'affichage de l'horaire (TV) : **exception ponctuelle > temps partiel
   associée → équipe vide (toutes les personnes).
 - Panneau d'affectation (`.cellpick`) : ateliers en colonnes côte à côte, **sans
   ascenseur** ; les ateliers longs (ex. CONDI) sont répartis sur jusqu'à 3 colonnes.
+  ⚠️ **S'ouvre TOUJOURS sur les postes compétents** (matrice, niveau ≥ min hors
+  restriction) : l'état de la bascule « Voir tous » n'est **plus mémorisé** (ni
+  localStorage, ni entre deux ouvertures — `setShowAllPostes(false)` à chaque clic de
+  case). ⚠️ « **Voir tous** » affiche **TOUTE l'usine** (tous ateliers), pas seulement
+  l'atelier filtré : le filtre atelier ne cadre que la grille et les indicateurs, pas les
+  postes plaçables (prêt inter-atelier). Le panneau lit `allGroups` + `openAllByIso`
+  (indépendants du filtre), la compétence étant calculée depuis l'objet poste.
+- **Pré-remplissage « postes fixes »** : bouton « **⛁ Remplir** » (`FillIcon`, pot de
+  peinture) dans l'**entête de CHAQUE semaine** (modèle « Initialiser » d'Ordonnancement),
+  → `/api/placement/prefill`, **semaine cliquée uniquement**. Réservé à l'écriture complète
+  (`canPrefill`). Recharge la vue au succès (l'état local de la grille ignore
+  `router.refresh()`).
+- **Bandeau de filtres** — 3 colonnes (nav Année/Mois/Semaine · Quart/Atelier/Équipe ·
+  boutons 🕐/🤒) alignées par une **hauteur de rangée commune** :
+  `.planning-top .filterrow { min-height }` (cf. `lessons.md`, piège du `margin-top`
+  global sur les `<button>`).
 - Options de case construites **à l'ouverture seulement** (`onMouseDown`/`onFocus`) :
   sinon ~110k `<option>` dans le DOM.
 - Colonne des noms : largeur `nb car. × 8 px + 46` (160–480 px), **pas de troncature**.

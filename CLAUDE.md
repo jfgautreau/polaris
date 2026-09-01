@@ -177,6 +177,15 @@ données, RLS), `tasks/handoff.md` (détail écran par écran), `tasks/lessons.m
   que la semaine n'a pas été « initialisée ») ; une ligne absente d'`ouverture_quart` est
   **ouverte**. Planning **et** Placement appliquent cette règle — d'où un plan vide, avec
   message explicite, sur une semaine non initialisée.
+  ⚠️ **Fermer un quart / une ligne (ou ré-initialiser une semaine) qui porte des
+  affectations réelles** ne renvoie plus un mur : `/api/ordonnancement/quart` et
+  `/reset-week` renvoient `{ conflit, affectes }` (liste des personnes) en **409**, et
+  l'écran propose « **Fermer / Réinitialiser quand même et retirer** ». Avec `{ force: true }`
+  le serveur **supprime ces affectations poste** (les absences restent) puis ferme. Le test
+  de conflit couvre l'**angle mort `quart_code = NULL`** : un placement sans quart s'affiche
+  sous le quart PAR DÉFAUT du site (`quartParDefaut`/`memeQuart`) → fermer ce quart-là les
+  prend aussi en compte, au lieu de les orphaniser en silence (`reset-week` n'a pas cet
+  angle mort : il vérifie toute la semaine sans filtre de quart).
 - **Numéros de rotation** : `poste.numero_rotation`, texte libre saisi au Référentiel
   (« 12, 15-17 »). `parseNumeros()` (`src/lib/numeros-rotation.ts`, testé) le développe en
   cases de dépôt ; la place occupée est mémorisée dans `placement.numero_rotation`.
@@ -436,7 +445,7 @@ prochain gros chantier, pas une optimisation cosmétique.
   `UserMenu` porte aussi le lien vers le **guide utilisateur** (`public/guide.html`,
   document autonome ouvert dans un onglet, mais servi derrière l'authentification).
 - Composants partagés : `src/components/{SlideSwitch,ToggleSwitch,AtelierEquipeFiltres,LectureSeule,PageTitle,PrintButton,AutoRefresh,BandeauErreur,ConfirmForm,DateRangePicker,ActifCheckbox,ModaleDeplacable,InfoBulle,icons,SaveIcon,persongrid.module.css,usePersonGrid.ts}`.
-  Icônes toutes centralisées dans `icons.tsx` (`SaveIcon`, `EditIcon`, `CheckIcon`, `TrashIcon`, `PrintIcon`, `AbsenceIcon`, `SearchIcon`, `InfoIcon`, `GearIcon`). `SaveIcon.tsx` reste comme shim d'import historique.
+  Icônes toutes centralisées dans `icons.tsx` (`SaveIcon`, `EditIcon`, `CheckIcon`, `TrashIcon`, `PrintIcon`, `AbsenceIcon`, `SearchIcon`, `InfoIcon`, `GearIcon`, `FillIcon` pot de peinture = pré-remplissage). `SaveIcon.tsx` reste comme shim d'import historique.
 - Planning : `src/app/planning/{page,PlanningGrid,PlanningFilters,AtelierFilter,QuartSelector}.tsx`.
   ⚠️ **Pré-remplissage « postes fixes »** (bouton **« ⛁ Remplir »** dans l'entête de
   CHAQUE semaine du `PlanningGrid`, `FillIcon` pot de peinture, → `/api/placement/prefill`,
@@ -452,11 +461,16 @@ prochain gros chantier, pas une optimisation cosmétique.
   Ordonnancement » (un bouton par entête de semaine). L'entête des 3 colonnes du bandeau
   (Année/Mois/Semaine · Quart/Atelier/Équipe · boutons 🕐/🤒) s'aligne via
   `.planning-top .filterrow { min-height }` (rangées de hauteur commune).
-- Placement (saisie glisser-déposer, droit **`placement`**) : `src/app/placement/{page,PlacementBoard,placement.module.css}`.
+- Placement (saisie glisser-déposer, droit **`placement`**) : `src/app/placement/{page,PlacementBoard,JourNav,placement.module.css}`.
   Plan par ligne → postes → **cases numérotées** ; bascule **Plan / Absences** (`?vue=absences`,
   absences filtrées par l'atelier affiché) ; copie **écraser / compléter** ; bouton **PDF**
-  (feuille A4 paysage : plan + colonne des absents, mise à l'échelle mesurée).
-  Écrit via `/api/placement/{cell,copy,reset-week}` — même table que le Planning.
+  (feuille A4 paysage : plan + colonne « **Absents / TP du jour** » — motifs d'absence **et**
+  bloc **Temps partiel** ; TP du jour calculé serveur `tpIds`, mêmes règles que Planning/TV ;
+  mise à l'échelle mesurée).
+  **Navigation par jour** = `JourNav` (remplace `<input type="date">`) : flèches ◀/▶
+  **sautent** au jour ouvert précédent/suivant, calendrier déroulant **grise** les jours
+  sans ligne ouverte ; `openDays` calculé serveur sur fenêtre [-90;+150] j, borné quart+atelier.
+  Écrit via `/api/placement/{cell,copy,reset-week,prefill}` — même table que le Planning.
   V2 prévue : vrai plan géographique (image + positions).
 - Matrice : `src/app/matrice/{page,MatricePanel,MatrixGrid,Pie,LegendeModal}.tsx` + `matrice.module.css`.
   L'en-tête (titre · recherche · légende · bascule Actuel/Cible · filtres) est dans
@@ -563,8 +577,11 @@ prochain gros chantier, pas une optimisation cosmétique.
   personnes **sans atelier d'affectation** (`atelier_id` null) : pas d'écran maison,
   donc elles restent sur leur atelier de **placement** (découvertes via `plHere`,
   les placements sur les postes de cet atelier dont `personne.atelier_id` est null).
-  Allègement : une personne **absente sur TOUTE la période affichée** est retirée
-  (les absences partielles restent, avec « Absence » sur les jours concernés).
+  Allègement : une personne **qui ne travaille JAMAIS sur toute la période affichée**
+  est retirée — prédicat `toutOff` = aucun placement **et** chaque jour affiché « off »
+  (**absence OU TP**). Couvre l'absence complète (historique), le **TP complet** et un
+  mélange absence/TP ; les absences/TP **partiels** restent visibles (« Absence » / « TP »
+  sur les jours concernés).
   Colonnes (`shownDays`) = jours **ouverts** de CET atelier (`openDays`) **∪** jours
   où au moins une personne affichée est **placée** (`placementDays`) : ce second
   terme fait apparaître la feuille même quand l'atelier maison est fermé ce jour-là

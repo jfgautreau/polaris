@@ -555,3 +555,46 @@ vient de `useState(props)`, `router.refresh()` **ne suffit pas**. Soit remonter 
 personnes) → doit pouvoir **se scinder** ; ne jamais lui laisser `avoid`, et neutraliser tout
 `sticky`. Et un saut de page relatif (`+`, `~`, `:not(:first)`) doit tenir compte des frères
 masqués par `display:none`, qui restent dans l'arbre.
+
+## L37 — La règle `button` GLOBALE (`margin-top: 18px`) casse l'alignement d'un `<button>` non resetté
+
+**Symptôme** : dans le bandeau du Planning, les 3 icônes (📌/🕐/🤒) refusaient de s'aligner
+sur les lignes de filtres (Année/Quart, Mois/Atelier, Semaine/Équipe). Après plusieurs
+essais d'alignement (flex, grille, `space-between`), nav ↔ filtres finissaient alignés mais
+la colonne de boutons restait **décalée ~15 px vers le bas**, de façon quasi constante.
+
+**Racine** : `globals.css` porte une règle **de type** `button { margin-top: 18px; padding:
+10px; width: 100%; … }` (pensée pour les gros boutons de formulaire). Elle est neutralisée
+partout où on s'y attend — `.seg { margin: 0 }` (segments de filtre) — et n'atteint pas les
+liens (`<a class="navlink">`, cas de 🕐/🤒). **Mais** le bouton 📌 (Pré-remplir) était un vrai
+`<button>` **sans reset** : il héritait de `margin-top: 18px`, ce qui gonflait sa rangée et,
+par cascade en colonne flex, **poussait toute la colonne** vers le bas.
+
+**Diagnostic** : mesuré au pixel (centres de rangées) — nav & filtres à 93/133/173, boutons
+à 109/147/187 (+14 à +16). Avec `margin: 0` sur le `<button>` → 291/331/371 pour les trois,
+alignés au pixel.
+
+**Fix / règle** : tout `<button>` icône hors formulaire doit poser `margin: 0` explicitement
+(les `<a>` et `.seg` n'ont pas le souci). Piège transverse : un désalignement « constant »
+d'une colonne de boutons face à des segments trahit presque toujours cette marge globale, pas
+la stratégie de layout.
+
+## L38 — Aligner N colonnes indépendantes = imposer une hauteur de rangée COMMUNE
+
+**Contexte** : le bandeau du Planning a 3 colonnes indépendantes (nav `PlanningNav` /
+filtres `QuartSelector`+`AtelierFilter`+`PlanningFilters` / boutons), chacune une colonne
+flex de `.filterrow`. Des colonnes flex séparées calculent **leurs propres** hauteurs de
+rangée : l'alignement inter-colonnes n'est jamais garanti, il « marche par hasard » tant que
+les contenus font la même hauteur, et casse au moindre écart (gap différent, bouton d'une
+autre taille, grille étirée par `align-items: stretch` + `align-content` qui fait *grandir*
+les rangées).
+
+**Solution déterministe retenue** : une règle scoppée `.planning-top .filterrow { min-height:
+32px }` force **toutes** les rangées des 3 colonnes à la même hauteur (min-height ≥ hauteur
+des segments **et** ≥ hauteur des boutons 30 px → toutes à 32) ; avec le **même `gap`** (2 px)
+dans les 3 colonnes et un alignement en haut (`align-items: flex-start`), la ligne N de chaque
+colonne tombe au même Y. « Espace entre les lignes » = ce `gap` (levier direct, sans toucher
+la hauteur des rangées). Ne PAS descendre `min-height` sous la hauteur des segments : sinon
+les rangées de filtres grandiraient (contenu) pendant que les rangées de boutons resteraient
+à `min-height` → re-décalage. Éviter les grilles étirées : `align-self: flex-start` /
+`align-content: start` si grille il y a.
