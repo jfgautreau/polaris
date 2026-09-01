@@ -259,9 +259,12 @@ export async function POST(req: NextRequest) {
       mondays.map((m) => ({ site_id: siteId, semaine_lundi: m, charge_par: profile.authId })),
       { onConflict: "site_id,semaine_lundi" },
     );
-  // Best-effort : si la table n'existe pas encore (migration 0064 non jouée),
-  // on n'échoue pas — les lignes TP éventuelles restent, le repli calculé opère.
-  if (mErr && !/tp_charge/i.test(mErr.message)) {
+  // Best-effort UNIQUEMENT sur « table absente / cache PostgREST pas encore
+  // rechargé » (migration 0064 juste jouée) : dans ce cas les lignes TP restent
+  // et le repli calculé opère. Toute AUTRE erreur du marqueur est surfacée —
+  // sinon un marqueur silencieusement perdu laisse le TP non déplaçable.
+  const cacheAbsent = mErr && /schema cache|does not exist|42P01|PGRST205/i.test(mErr.message);
+  if (mErr && !cacheAbsent) {
     return NextResponse.json({ error: mErr.message }, { status: 403 });
   }
 

@@ -490,6 +490,10 @@ export default async function PlanningPage({
       for (const d of visible) {
         // Semaine chargée : les vraies lignes placement.tp font foi, on ne calcule pas.
         if (weekChargedByWi[d.wi]) continue;
+        // Une vraie ligne de placement existe déjà pour cette case (poste, absence,
+        // NT ou TP matérialisé) : le virtuel ne doit pas la recouvrir. Rend un TP
+        // réel toujours cliquable/draggable même si le marqueur tp_charge a échoué.
+        if (initial[`${persId}:${d.iso}`] !== undefined) continue;
         const cfg = configPourJour(persId, d.iso);
         if (!cfg) continue;
         const dayOff = cfg.off?.[String(isoDow(d.iso))] ?? [];

@@ -896,7 +896,9 @@ export default function PlanningGrid({
                       // Case grisee, aucun label : la personne n'est pas dans
                       // l'effectif ce jour-la. Distincte du TP (fond violet).
                       <div className="cell-other" style={{ color: "#94a3b8" }} aria-hidden="true">·</div>
-                    ) : tpb && !tpAbsence ? (
+                    ) : tpb && !tpAbsence && !vTP ? (
+                      // TP CALCULÉ (virtuel) : aperçu non déplaçable. Un TP RÉEL
+                      // (vTP) passe par le bouton ci-dessous, donc reste draggable.
                       <div className="cell-other" style={{ color: "#3730a3" }} title="Temps partiel — journée entière non travaillée">TP</div>
                     ) : other ? (
                       <div
