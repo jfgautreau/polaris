@@ -70,6 +70,14 @@ dans le planning quand l'une des deux conditions est vraie :
 fond gris) — deux canaux distincts de bout en bout (cf. `lessons.md` L28). L'ancienne
 flèche `tpRedirect` a été supprimée.
 
+⚠️ **TP MATÉRIALISÉ** (migration 0064). Le calcul `tpBlocked` ci-dessus reste l'**aperçu**
+des semaines **non chargées**. Le bouton « TP + postes fixes » du Planning pose de **vraies
+lignes `placement.tp`** (jeton `"TP"`, déplaçables au glisser-déposer) et un marqueur
+`tp_charge(site_id, semaine_lundi)` : sur une semaine chargée, le calcul virtuel s'éteint et
+seules les lignes réelles font foi (sinon un TP déplacé serait recréé). Le virtuel s'éteint
+AUSSI dès qu'une vraie ligne de placement existe pour la case. La **TV** suit les lignes
+réelles sur les semaines chargées (jour de TP éventuellement déplacé), repli calculé sinon.
+
 Priorité d'affichage de l'horaire (TV) : **exception ponctuelle > temps partiel > standard**.
 
 ## Planning (`/planning`)
@@ -86,11 +94,21 @@ Priorité d'affichage de l'horaire (TV) : **exception ponctuelle > temps partiel
   l'atelier filtré : le filtre atelier ne cadre que la grille et les indicateurs, pas les
   postes plaçables (prêt inter-atelier). Le panneau lit `allGroups` + `openAllByIso`
   (indépendants du filtre), la compétence étant calculée depuis l'objet poste.
-- **Pré-remplissage « postes fixes »** : bouton « **⛁ Remplir** » (`FillIcon`, pot de
-  peinture) dans l'**entête de CHAQUE semaine** (modèle « Initialiser » d'Ordonnancement),
-  → `/api/placement/prefill`, **semaine cliquée uniquement**. Réservé à l'écriture complète
-  (`canPrefill`). Recharge la vue au succès (l'état local de la grille ignore
-  `router.refresh()`).
+- **Chargement « ⛁ TP + postes fixes »** (`FillIcon`, pot de peinture) dans l'**entête de
+  CHAQUE semaine** (modèle « Initialiser » d'Ordonnancement), → `/api/placement/prefill`,
+  **semaine cliquée uniquement**, écriture complète (`canPrefill`). Deux passes, dans cet
+  ordre : (1) **matérialise les TP** de la semaine (vraies lignes `placement.tp`, cf.
+  migration 0064, + marqueur `tp_charge` qui éteint le calcul virtuel), (2) **pré-remplit les
+  postes fixes** (`personne.poste_fixe_id`). ⚠️ **Affectation AUTOMATIQUE : ne demande pas,
+  ne force pas** — une personne **non habilitée** pour son poste fixe **n'est pas placée**
+  (contrôle groupé). N'écrase jamais une case remplie (`ignoreDuplicates`). Recharge la vue
+  au succès (l'état local ignore `router.refresh()`).
+- **Glisser-déposer des affectations** (DnD natif) : on **DÉPLACE** une case remplie (poste,
+  NT, ou **TP réel**), **jamais une absence**, vers une case **vide**, entre jours et
+  personnes. Déplacement seul, dépôt refusé sur case occupée/bloquée. Route
+  `/api/placement/move` (contrôle d'habilitation sur la personne d'arrivée → modale de
+  forçage `askMove`, recalcul du numéro de rotation libre). Un TP réel devient déplaçable ;
+  le déplacer ne le fait pas revenir (le marqueur `tp_charge` a éteint le recalcul).
 - **Bandeau de filtres** — 3 colonnes (nav Année/Mois/Semaine · Quart/Atelier/Équipe ·
   boutons 🕐/🤒) alignées par une **hauteur de rangée commune** :
   `.planning-top .filterrow { min-height }` (cf. `lessons.md`, piège du `margin-top`
@@ -104,6 +122,27 @@ Priorité d'affichage de l'horaire (TV) : **exception ponctuelle > temps partiel
   défaut (`horaire_poste`).
 - Flèche `»` de recopie : lundi→jeudi = fin de semaine en cours ; à partir du vendredi =
   jours affichés de la semaine suivante.
+
+## Ordonnancement (`/ordonnancement`)
+- **Fenêtre 15 jours** (2 semaines + le lundi suivant), à partir du lundi de la semaine
+  choisie. Nav `OrdoQuinzaineNav` (`?debut=<lundiISO>`, flèches par 14 j, bouton
+  Aujourd'hui). ⚠️ `weekDays()` **ne pose pas `firstOfWeek`** : la page le remet sur chaque
+  lundi (sinon même n° de semaine sur toute la fenêtre — `lessons.md` L39).
+- **Grille unique**, en-tête figé par la **méthode du Planning** (deux cartes alignées par un
+  `colgroup` partagé + `table-layout: fixed` : en-tête `flex:0`, corps `flex:1` défilant).
+  Sous chaque date, 3 sous-colonnes **matin / après-midi / nuit**. **1ʳᵉ ligne « Activation »**
+  = bascule `jour_quart` des quarts tournants. Puis **lignes groupées par atelier** (ordre du
+  Référentiel : atelier → `ordre_affichage` → nom). Case grise « · » = la ligne ne tourne pas
+  sur ce quart ; case verrouillée = quart inactif ce jour.
+- **Journée** (pleine journée) **à part, en dessous** ; colonnes alignées (colgroup partagé,
+  `colSpan` par jour). ⚠️ **Activation dérivée** : le quart *journée* (détecté sans code en
+  dur = quart **sans `creneau` au plus petit `ordre`**) n'a plus de bascule. Son
+  `jour_quart.actif` est **maintenu en base = OU(quarts tournants du jour)** par
+  `/api/ordonnancement/quart` (à chaque bascule) **et** `/reset-week` (à l'initialisation) →
+  Planning / Placement / TV cohérents, sans dérivation dupliquée en lecture.
+- **Semaine type** (`/ordonnancement/semaine-type`) : **même trame** sur **7 jours** (Lun→Dim,
+  dimanche en rouge), ligne « Activation » (tournants), lignes par atelier, **journée
+  dérivée** à part. Gabarit appliqué par « Initialiser ». Gestion des profils inchangée.
 
 ## Matrice de polyvalence (`/matrice`)
 - Bilan **plié par défaut** (« + Bilan / − Bilan »), alimenté en **une seule passe**

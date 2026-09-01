@@ -445,7 +445,10 @@ et l'hydratation devient très lourde. Les habilitations sont dans le même ordr
 prochain gros chantier, pas une optimisation cosmétique.
 
 ## Carte des fichiers
-- Socle : `src/lib/{permissions,roles,roles-server,current-user,current-site,site-modules,week,refdata,parametres,habilitations,horaires,supabase-server,fetch-all,numeros-rotation,password-link,rotation,password,erreurs,absence,absences-periodes,calendrier,quarts,semaine-type,interim,noms,bilans-rapports,synthese-data}.ts`, `src/proxy.ts`.
+- Socle : `src/lib/{permissions,roles,roles-server,current-user,current-site,site-modules,week,refdata,parametres,habilitations,horaires,supabase-server,fetch-all,numeros-rotation,password-link,placement-helpers,rotation,password,erreurs,absence,absences-periodes,calendrier,quarts,semaine-type,interim,noms,bilans-rapports,synthese-data}.ts`, `src/proxy.ts`.
+  - `placement-helpers.ts` : `habManquantes()` + `premierNumeroLibre()`, partagés par
+    `/api/placement/cell` **et** `/api/placement/move` (contrôle d'habilitation et numéro
+    de rotation libre) pour ne pas diverger entre saisie et déplacement.
   - `horaires.ts` (testé) : **résolveur unique de l'horaire affiché** d'une personne
     sur un poste un jour donné — priorité **exception ponctuelle > temps partiel >
     horaire standard** (la priorité porte sur la SOURCE, pas borne par borne). Partagé
@@ -461,7 +464,7 @@ prochain gros chantier, pas une optimisation cosmétique.
   choisie ; nav `OrdoQuinzaineNav` (`?debut=<lundiISO>`, flèches par 14 j). ⚠️ `weekDays()`
   **ne pose PAS `firstOfWeek`** — la page le remet (chaque lundi), sinon les blocs-semaine ne
   se découpent pas et le **même n° de semaine s'étale sur toute la fenêtre** (bug vécu, cf.
-  lessons L37). **Grille unique** : sous chaque date, 3 sous-colonnes **matin / après-midi /
+  lessons L39). **Grille unique** : sous chaque date, 3 sous-colonnes **matin / après-midi /
   nuit** ; **1ʳᵉ ligne « Activation »** (bascule `jour_quart` des quarts tournants), puis les
   **lignes groupées par atelier** (ordre du Référentiel : atelier → `ordre_affichage` → nom).
   **Journée** (pleine journée) **à part en dessous**, activation **dérivée** (cf. « Journée
@@ -469,6 +472,11 @@ prochain gros chantier, pas une optimisation cosmétique.
   par un `colgroup` partagé + `table-layout: fixed` — carte d'en-tête `flex:0 0 auto`
   (dates/quarts + Activation), carte de corps `flex:1` défilante (lignes). Une case grise
   « · » = la ligne ne tourne pas sur ce quart ; case verrouillée = quart inactif ce jour.
+  ⚠️ **Semaine type** (`semaine-type/{page,SemaineTypeEditor}.tsx`) reprend la **même trame**
+  sur **7 jours de semaine** (Lun→Dim, dimanche en rouge) : ligne « Activation » (quarts
+  tournants), lignes par atelier, **journée dérivée** à part en bas (colonnes alignées par
+  `colgroup` partagé). Le gabarit sert de base au bouton « Initialiser ». APIs
+  `/api/ordonnancement/{semaine-type,semaine-type-ouverture,semaine-type-profil}` inchangées.
 - Planning : `src/app/planning/{page,PlanningGrid,PlanningFilters,AtelierFilter,QuartSelector}.tsx`.
   ⚠️ **Pré-remplissage « TP + postes fixes »** (bouton **« ⛁ TP + postes fixes »** dans
   l'entête de CHAQUE semaine du `PlanningGrid`, `FillIcon` pot de peinture, →
@@ -486,6 +494,16 @@ prochain gros chantier, pas une optimisation cosmétique.
   Ordonnancement » (un bouton par entête de semaine). L'entête des 3 colonnes du bandeau
   (Année/Mois/Semaine · Quart/Atelier/Équipe · boutons 🕐/🤒) s'aligne via
   `.planning-top .filterrow { min-height }` (rangées de hauteur commune).
+  ⚠️ **Glisser-déposer des affectations** (DnD natif HTML5, comme le Placement) : on
+  **DÉPLACE** une case remplie (**poste, NT, ou TP réel** — jamais une **absence**, jamais
+  le vide) vers une case **VIDE**, entre jours et/ou entre personnes. **Déplacement
+  uniquement** (pas de copie) ; **dépôt refusé sur une case occupée** (409) ou bloquée
+  (hors-effectif, autre quart, TP calculé). Route dédiée **`/api/placement/move`**
+  `{ from, to, equipe_id, quart, forcer }` : lit la source, réécrit la cible (recalcul du 1er
+  numéro de rotation libre, contrôle d'habilitation de la personne d'arrivée → **428** +
+  modale de forçage `askMove`), puis supprime la source (insertion cible AVANT suppression :
+  un refus laisse la source en place). Un **TP réel** (`placement.tp`, cf. 0064) rend un
+  bouton draggable, prioritaire sur l'aperçu TP calculé.
 - Placement (saisie glisser-déposer, droit **`placement`**) : `src/app/placement/{page,PlacementBoard,JourNav,placement.module.css}`.
   Plan par ligne → postes → **cases numérotées** ; bascule **Plan / Absences** (`?vue=absences`,
   absences filtrées par l'atelier affiché) ; copie **écraser / compléter** ; bouton **PDF**
@@ -495,7 +513,7 @@ prochain gros chantier, pas une optimisation cosmétique.
   **Navigation par jour** = `JourNav` (remplace `<input type="date">`) : flèches ◀/▶
   **sautent** au jour ouvert précédent/suivant, calendrier déroulant **grise** les jours
   sans ligne ouverte ; `openDays` calculé serveur sur fenêtre [-90;+150] j, borné quart+atelier.
-  Écrit via `/api/placement/{cell,copy,reset-week,prefill}` — même table que le Planning.
+  Écrit via `/api/placement/{cell,copy,reset-week,prefill,move}` — même table que le Planning.
   V2 prévue : vrai plan géographique (image + positions).
 - Matrice : `src/app/matrice/{page,MatricePanel,MatrixGrid,Pie,LegendeModal}.tsx` + `matrice.module.css`.
   L'en-tête (titre · recherche · légende · bascule Actuel/Cible · filtres) est dans
