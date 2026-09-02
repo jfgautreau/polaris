@@ -733,7 +733,11 @@ export default function PersonnelEditor({
                       <td>{pastilleIncomplet(r)}{r.nom}</td>
                       <td>{r.prenom}</td>
                       <td style={{ textAlign: "center" }}><SexePill sexe={r.sexe} /></td>
-                      <td style={{ textAlign: "center" }}>{equipeNom(r.equipe_id) || "-"}</td>
+                      <td style={{ textAlign: "center" }}>
+                        {r.equipe_id
+                          ? <span className="sexe-pill" style={eqStyle(r.equipe_id)}>{equipeNom(r.equipe_id)}</span>
+                          : "-"}
+                      </td>
                       <td style={{ textAlign: "center" }}>{atelierNom(r.atelier_id) || "-"}</td>
                       <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>{fmtDate(r.date_livret_accueil)}</td>
                       <td style={{ textAlign: "center", ...tightPad }}><BoutonAbsences row={r} onOpen={() => setAbsFor(r)} /></td>

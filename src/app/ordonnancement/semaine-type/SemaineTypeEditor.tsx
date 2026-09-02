@@ -43,6 +43,10 @@ export default function SemaineTypeEditor({
 
   const rotatingCodes = columnQuarts.map((q) => q.code);
   const ncq = columnQuarts.length || 1;
+  // Lignes affichables dans la grille du haut : au moins un quart colonne
+  // (matin / après-midi / nuit). Une ligne « journée seule » n'aurait que des
+  // « · » ici → on ne crée pas sa rangée (elle reste dans la section Journée).
+  const gridLignes = lignes.filter((l) => l.quarts.some((c) => rotatingCodes.includes(c)));
 
   const goProfil = (id: string) => router.push(`/ordonnancement/semaine-type?profil=${id}`);
   async function profilOp(op: string, payload: Record<string, unknown>) {
@@ -234,7 +238,7 @@ export default function SemaineTypeEditor({
                   })
                 )}
               </tr>
-              {groupsFrom(lignes).map((g) => (
+              {groupsFrom(gridLignes).map((g) => (
                 <Fragment key={`ate:${g.atelierNom}`}>
                   <tr>
                     <td colSpan={1 + JOURS.length * ncq} style={{ background: "#eef2f7", fontWeight: 700, fontSize: 12, padding: "3px 8px" }}>{g.atelierNom}</td>
@@ -247,7 +251,7 @@ export default function SemaineTypeEditor({
                   ))}
                 </Fragment>
               ))}
-              {lignes.length === 0 && (
+              {gridLignes.length === 0 && (
                 <tr><td colSpan={1 + JOURS.length * ncq} className="muted">Aucune ligne active.</td></tr>
               )}
             </tbody>
