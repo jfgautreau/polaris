@@ -41,10 +41,15 @@ export function Pie({
     const large = f > 0.5 ? 1 : 0;
     inner = <path d={`M${cx},${cy} L${cx},${cy - r} A${r},${r} 0 ${large} 1 ${x},${y} Z`} fill={fill} />;
   }
+  // Ordre de peinture : fond blanc → couleur (disque/camembert) → CONTOUR EN
+  // DERNIER. Dessiner le contour par-dessus la couleur garde le liseré gris net
+  // sur toute sa largeur ; sinon la couleur (même rayon r) recouvrait sa moitié
+  // interne et paraissait déborder du cercle (surtout avec une teinte saturée).
   return (
     <svg width={size} height={size} style={{ display: "block" }}>
-      <circle cx={cx} cy={cy} r={r} fill="#fff" stroke="#64748b" strokeWidth={1.5} />
+      <circle cx={cx} cy={cy} r={r} fill="#fff" />
       {inner}
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="#64748b" strokeWidth={1.5} />
     </svg>
   );
 }
