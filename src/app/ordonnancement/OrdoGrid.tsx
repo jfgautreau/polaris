@@ -65,6 +65,12 @@ export default function OrdoGrid({
   } | null>(null);
 
   const rotatingCodes = columnQuarts.map((q) => q.code);
+  // Lignes réellement affichables dans la grille du haut : celles qui tournent sur
+  // au moins un quart colonne (matin / après-midi / nuit). Une ligne qui ne tourne
+  // que sur la « journée » n'a que des « · » ici → on ne crée pas sa rangée (elle
+  // reste visible dans la section Journée en dessous). Idem : un atelier vidé de
+  // toutes ses lignes ne crée plus d'en-tête.
+  const gridLignes = lignes.filter((l) => l.quarts.some((c) => rotatingCodes.includes(c)));
   const quartActif = (code: string, iso: string) => jq[`${code}:${iso}`] ?? false;
   // Journée : active DÈS QU'un quart tournant l'est (règle métier). On la maintient
   // aussi dans l'état optimiste pour que l'édition des lignes « journée » suive.
@@ -334,7 +340,7 @@ export default function OrdoGrid({
             <table className="matrix rowh" style={gridStyle}>
               <ColsGrid />
               <tbody>
-                {groupsFrom(lignes).map((g) => (
+                {groupsFrom(gridLignes).map((g) => (
                   <Fragment key={`ate:${g.atelierNom}`}>
                     <tr>
                       <td colSpan={1 + days.length * ncq} style={{ background: "#eef2f7", fontWeight: 700, fontSize: 12, padding: "3px 8px" }}>{g.atelierNom}</td>
@@ -347,7 +353,7 @@ export default function OrdoGrid({
                     ))}
                   </Fragment>
                 ))}
-                {lignes.length === 0 && (
+                {gridLignes.length === 0 && (
                   <tr><td colSpan={1 + days.length * ncq} className="muted">Aucune ligne active.</td></tr>
                 )}
               </tbody>
