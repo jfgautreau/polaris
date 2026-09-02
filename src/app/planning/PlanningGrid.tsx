@@ -8,7 +8,7 @@ import { INTERIM_BG } from "@/lib/interim";
 import ModaleDeplacable from "@/components/ModaleDeplacable";
 import { FillIcon } from "@/components/icons";
 
-type Jour = { iso: string; nom: string; num: string; firstOfWeek: boolean };
+type Jour = { iso: string; nom: string; num: string; firstOfWeek: boolean; closed?: boolean };
 type WeekBlock = { num: number; span: number; year: number; isCurrent: boolean; monday: string };
 type Poste = { id: string; nom: string; niveauMin: number; effectif: number; categorie?: string };
 
@@ -550,7 +550,7 @@ export default function PlanningGrid({
     const avantVendredi = dowMon(days[dayIndex].iso) < 4; // 0 = lundi .. 4 = vendredi
     const targets = days
       .filter((_, j) => (avantVendredi ? j > dayIndex && weekIdx[j] === wk : weekIdx[j] === wk + 1))
-      .filter((t) => !otherByCell[key(pers.id, t.iso)]);
+      .filter((t) => !t.closed && !otherByCell[key(pers.id, t.iso)]);
     if (targets.length === 0) return; // rien a recopier (fin de semaine / plus de semaine affichee)
     const hasExisting = targets.some((t) => (vals[key(pers.id, t.iso)] ?? "") !== "");
     if (
@@ -680,7 +680,7 @@ export default function PlanningGrid({
                       title="Charger cette semaine : poser les TP (déplaçables ensuite) puis pré-remplir les postes fixes, sans écraser les cases remplies"
                       style={{ display: "inline-flex", alignItems: "center", gap: 4, width: "auto", margin: 0, padding: "2px 8px", fontSize: 12, fontWeight: 600, lineHeight: 1.2, border: "1px solid var(--border)", borderRadius: 6, background: "#fff", color: "var(--text)", cursor: prefillWk === w.monday ? "default" : "pointer", opacity: prefillWk === w.monday ? 0.6 : 1 }}
                     >
-                      <FillIcon size={14} /> {prefillWk === w.monday ? "…" : "TP + postes fixes"}
+                      <FillIcon size={14} /> {prefillWk === w.monday ? "…" : "TP + pré-affectation"}
                     </button>
                   )}
                 </span>
@@ -689,7 +689,7 @@ export default function PlanningGrid({
           </tr>
           <tr>
             {days.map((d) => (
-              <th key={d.iso} style={{ textAlign: "center", padding: "2px 2px", position: "sticky", top: 26, zIndex: 20, ...sep(d), borderBottom: "2px solid #94a3b8", background: isToday(d) ? "#dbeafe" : "#fff" }}>
+              <th key={d.iso} style={{ textAlign: "center", padding: "2px 2px", position: "sticky", top: 26, zIndex: 20, ...sep(d), borderBottom: "2px solid #94a3b8", background: d.closed ? "#f1f5f9" : isToday(d) ? "#dbeafe" : "#fff", color: d.closed ? "#94a3b8" : undefined }}>
                 {d.nom.slice(0, 2)}
                 <br />
                 <span className="muted" style={{ fontWeight: 400 }}>{d.num}</span>
@@ -796,7 +796,7 @@ export default function PlanningGrid({
       <table className="matrix" style={tStyle}>
         <Cols />
         <tbody>
-          {shown.map((pers) => (
+          {shown.map((pers, rowIndex) => (
             <tr key={pers.id}>
               <td style={{ background: "#fff", whiteSpace: "nowrap" }}>
                 <span
@@ -815,6 +815,26 @@ export default function PlanningGrid({
                 {!pers.editable && <span className="muted"> (lecture)</span>}
               </td>
               {days.map((d, i) => {
+                // Jour fermé (aucune ligne ouverte / semaine non initialisée) : une
+                // seule cellule fusionnée sur toute la colonne (rowSpan) porte le
+                // message. Rendue à la 1re ligne ; les suivantes n'émettent rien
+                // dans cette colonne (la fusion les couvre) → alignement préservé.
+                if (d.closed) {
+                  if (rowIndex !== 0) return null;
+                  return (
+                    <td
+                      key={d.iso}
+                      rowSpan={shown.length}
+                      style={{ background: "#f8fafc", verticalAlign: "middle", textAlign: "center", ...sep(d) }}
+                    >
+                      <div style={{ color: "#64748b", fontSize: 12, lineHeight: 1.5, padding: "10px 8px" }}>
+                        Jour sans production
+                        <br />
+                        <span style={{ fontSize: 11 }}>pour l&apos;activer, contacter l&apos;ordonnancement</span>
+                      </div>
+                    </td>
+                  );
+                }
                 const v = vals[key(pers.id, d.iso)] ?? "";
                 const alert = horsComp(pers.id, v);
                 // Placement force : habilitation exigee manquante ou perimee.
@@ -1051,7 +1071,7 @@ export default function PlanningGrid({
         encadré rouge = forçage, habilitation manquante ·
         cliquez une pastille de la ligne « Alertes » pour surligner les cases concernées ·{" "}
         <span style={{ background: "#1d4ed8", color: "#fff", borderRadius: 3, padding: "0 3px", fontSize: 10 }}>🕐</span>{" "}
-        horaire spécifique (survolez une case placée) · jours sans ligne ouverte masqués ·{" "}
+        horaire spécifique (survolez une case placée) · jour sans production = semaine non initialisée par l&apos;ordonnancement ·{" "}
         cliquez une case puis <kbd>Suppr</kbd> pour l&apos;effacer ·{" "}
         <strong>glissez</strong> une affectation (poste, NT, TP) vers une case vide pour la déplacer (les absences ne se déplacent pas).
       </p>

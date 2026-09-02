@@ -11,6 +11,7 @@ import {
   addDays,
   mondayOf,
   isoWeekNumber,
+  dowMon,
 } from "@/lib/week";
 import { requireModule, canWrite } from "@/lib/permissions";
 import PlanningFilters from "./PlanningFilters";
@@ -237,13 +238,18 @@ export default async function PlanningPage({
   const lineOpen = (iso: string, ligneId: string) =>
     quartActif(iso) ? (ouvMap.has(`${iso}:${ligneId}`) ? ouvMap.get(`${iso}:${ligneId}`)! : true) : false;
 
+  // On affiche désormais TOUS les jours de semaine (lundi→vendredi), même quand
+  // aucune ligne n'est ouverte : la colonne porte alors un message « Jour sans
+  // production » plutôt que de disparaître — sans quoi une semaine non initialisée
+  // donnait l'impression d'un bug d'affichage. Les week-ends restent masqués tant
+  // qu'ils ne produisent pas (une éventuelle production le samedi reste visible).
   const visible = rawDays
     .map((d) => {
       const openIds = quartActif(d.iso) ? groups.filter((g) => lineOpen(d.iso, g.ligneId)).map((g) => g.ligneId) : [];
       const besoin = openIds.reduce((s, lid) => s + (lineEffectif[lid] ?? 0), 0);
       return { ...d, open: openIds.length > 0, besoin, openIds };
     })
-    .filter((d) => d.open);
+    .filter((d) => dowMon(d.iso) < 5 || d.open);
 
   const openByIso: Record<string, string[]> = {};
   for (const d of visible) openByIso[d.iso] = d.openIds;
@@ -259,7 +265,7 @@ export default async function PlanningPage({
       ? groupsAll.filter((g) => lineOpen(d.iso, g.ligneId)).map((g) => g.ligneId)
       : [];
 
-  const days = visible.map((d) => ({ iso: d.iso, nom: d.nom, num: d.num, firstOfWeek: d.firstOfWeek }));
+  const days = visible.map((d) => ({ iso: d.iso, nom: d.nom, num: d.num, firstOfWeek: d.firstOfWeek, closed: !d.open }));
   const besoin = visible.map((d) => d.besoin);
   const visIsos = visible.map((d) => d.iso);
 
