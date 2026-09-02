@@ -23,6 +23,7 @@ import { rotationForWeek } from "@/lib/rotation";
 import { addMonthsIso } from "@/lib/habilitations";
 import { quartParDefaut, quartOuDefaut, memeQuart } from "@/lib/quarts";
 import { estAuTravailLe, deriverArriveeDepart } from "@/lib/personne-statut";
+import { PrintIcon } from "@/components/icons";
 
 type PosteRow = {
   id: string;
@@ -678,6 +679,14 @@ export default async function PlanningPage({
             <div className="filterrow" style={{ justifyContent: "flex-end" }}>
               <Link href="/absences-specifiques" className="navlink" title="Absences spécifiques" aria-label="Absences spécifiques" style={{ width: 30, height: 30, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}>
                 🤒
+              </Link>
+            </div>
+            {/* Impression « affichage TV » de tous les plannings : ouvre la feuille
+                d'impression groupée (une page A3 par atelier), qui lance l'impression
+                automatiquement. Nouvel onglet pour ne pas quitter le planning. */}
+            <div className="filterrow" style={{ justifyContent: "flex-end" }}>
+              <Link href={`/affichage/impression?date=${centerIso}`} target="_blank" className="navlink" title="Imprimer tous les plannings (affichage TV)" aria-label="Imprimer tous les plannings" style={{ width: 30, height: 30, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", color: "#1d4ed8", border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}>
+                <PrintIcon />
               </Link>
             </div>
           </div>
