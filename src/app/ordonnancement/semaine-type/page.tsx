@@ -59,7 +59,7 @@ export default async function SemaineTypePage({ searchParams }: { searchParams: 
   return (
     <>
       <AppHeader role={profile.role} active="/ordonnancement" />
-      <div className="container" style={{ maxWidth: 900 }}>
+      <div className="container" style={{ maxWidth: 1200 }}>
         <div className="toolbar">
           <h1 style={{ margin: 0 }}>Semaine type</h1>
           <Link href="/ordonnancement" className="iconbtn" style={{ padding: "6px 12px" }}>&larr; Ordonnancement</Link>
