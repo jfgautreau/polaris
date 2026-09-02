@@ -107,7 +107,10 @@ données, RLS), `tasks/handoff.md` (détail écran par écran), `tasks/lessons.m
   profile.siteId` écrivait sur le mauvais site tant que `profile.siteId` n'était pas
   impersonation-aware.
 - **`/api/droits` (matrice des droits)** obéit à `verifierChangementDroit()`, testée,
-  avec trois verrous et **aucun rôle littéral** :
+  avec trois verrous et **aucun rôle littéral**. ⚠️ Le rôle reçu est validé contre
+  **`getAllRoles()`** (intégrés **+** `role_custom` du site), pas contre les seuls `ROLES`
+  intégrés : sinon éditer les droits d'un **rôle personnalisé** retombait en `400 Paramètres
+  invalides` (« Échec » à l'écran). Les trois verrous :
   1. **anti-verrou** — on ne modifie pas les droits de **son propre** rôle (sinon on se
      retire `utilisateurs` et l'écran devient inaccessible à tous) ;
   2. **`ROLE_TOUT_PUISSANT`** — le rôle à qui `defaultsFor` donne `write` partout (donc
@@ -212,7 +215,7 @@ données, RLS), `tasks/handoff.md` (détail écran par écran), `tasks/lessons.m
   (« nettoyer + isoler », cf. Bilans) : aucun impact sur le planning ni le placement.
   Défaut `true` (PTR) → aucun changement de comportement tant qu'un poste n'est pas marqué.
 - **Poste fixe (`personne.poste_fixe_id`)** (migration 0059) : la personne « appartient »
-  à ce poste et y est **pré-remplie** dans le planning (bouton « TP + postes fixes »,
+  à ce poste et y est **pré-remplie** dans le planning (bouton « TP + pré-affectation »,
   cf. Planning). ⚠️ **Affectation AUTOMATIQUE ≠ saisie manuelle sur l'habilitation** : le
   pré-remplissage **ne demande pas et ne force pas**. Une personne qui n'a pas (ou plus) les
   habilitations exigées par son poste fixe **n'est simplement pas placée** (contrôle groupé
@@ -471,14 +474,28 @@ prochain gros chantier, pas une optimisation cosmétique.
   DÉRIVÉE » plus haut). **En-tête figé** par la **méthode du Planning** : deux cartes alignées
   par un `colgroup` partagé + `table-layout: fixed` — carte d'en-tête `flex:0 0 auto`
   (dates/quarts + Activation), carte de corps `flex:1` défilante (lignes). Une case grise
-  « · » = la ligne ne tourne pas sur ce quart ; case verrouillée = quart inactif ce jour.
-  ⚠️ **Semaine type** (`semaine-type/{page,SemaineTypeEditor}.tsx`) reprend la **même trame**
+  « · » (individuelle) = la ligne ne tourne pas sur ce quart ; case verrouillée = quart
+  inactif ce jour. ⚠️ **On ne rend PAS une rangée entièrement en « · »** : une ligne qui ne
+  tourne sur AUCUN quart colonne (matin/après-midi/nuit — typiquement « journée seule »)
+  est filtrée de la grille du haut (`gridLignes`), et l'en-tête d'atelier disparaît s'il n'a
+  plus de ligne — la ligne reste visible dans la section Journée. En-tête : seul le bouton
+  « ⚙️ Semaine type » (le bouton « Rotation des équipes » a été retiré, la rotation se règle
+  dans `/admin/equipes`).
+  ⚠️ **Semaine type** (`semaine-type/{page,SemaineTypeEditor}.tsx`, conteneur `maxWidth: 1200`
+  pour montrer toutes les colonnes) reprend la **même trame** (même filtrage `gridLignes`)
   sur **7 jours de semaine** (Lun→Dim, dimanche en rouge) : ligne « Activation » (quarts
   tournants), lignes par atelier, **journée dérivée** à part en bas (colonnes alignées par
   `colgroup` partagé). Le gabarit sert de base au bouton « Initialiser ». APIs
   `/api/ordonnancement/{semaine-type,semaine-type-ouverture,semaine-type-profil}` inchangées.
 - Planning : `src/app/planning/{page,PlanningGrid,PlanningFilters,AtelierFilter,QuartSelector}.tsx`.
-  ⚠️ **Pré-remplissage « TP + postes fixes »** (bouton **« ⛁ TP + postes fixes »** dans
+  ⚠️ **Jours de semaine TOUJOURS affichés** (lundi→vendredi), même sur une semaine non
+  initialisée : la colonne fermée (aucune ligne ouverte) porte alors, sur toute sa hauteur
+  (cellule fusionnée `rowSpan`, alignée en haut), le message **« Jour sans production — pour
+  l'activer, contacter l'ordo »** au lieu de disparaître (une semaine vide ne ressemble plus
+  à un bug). Filtre côté serveur (`page.tsx`) : `dowMon(iso) < 5 || d.open` → on garde tous
+  les jours de semaine, et les **week-ends seulement s'ils produisent** (`days[i].closed`
+  porte l'état). La recopie hebdo (`»`) n'écrit pas sur un jour fermé.
+  ⚠️ **Pré-remplissage « TP + pré-affectation »** (bouton **« ⛁ TP + pré-affectation »** dans
   l'entête de CHAQUE semaine du `PlanningGrid`, `FillIcon` pot de peinture, →
   `/api/placement/prefill`, droit Planning/Placement complet) : pose d'abord les **TP**
   matérialisés (cf. migration 0064), **puis** place chaque personne à **poste fixe**
@@ -518,6 +535,13 @@ prochain gros chantier, pas une optimisation cosmétique.
 - Matrice : `src/app/matrice/{page,MatricePanel,MatrixGrid,Pie,LegendeModal}.tsx` + `matrice.module.css`.
   L'en-tête (titre · recherche · légende · bascule Actuel/Cible · filtres) est dans
   `MatricePanel` ; `MatrixGrid` reçoit `search` en prop.
+  ⚠️ **Recherche transverse au filtre atelier** (comme le Planning) : `page.tsx` ne borne
+  PLUS les personnes par équipe/atelier en base — il charge tout l'effectif actif et passe
+  un `displayedIds` (personnes passant équipe+atelier) qui décide du sous-ensemble affiché
+  PAR DÉFAUT ; la recherche par nom balaie tout l'effectif et fait apparaître quelqu'un hors
+  atelier filtré (ex. taper GAUTREAU / Condi alors qu'on a filtré FAB). Les **colonnes**
+  (postes) restent bornées à l'atelier ; le **bilan** (`stats`) est calculé sur le seul
+  sous-ensemble affiché (`bilanPersonnes`), pas sur tout l'effectif.
   ⚠️ **Pastille orange `!` « sans compétence »** (devant le nom, comme la fiche
   incomplète du Personnel) : personne **ACTIVE** (les « À venir » sont exclues) sans
   **aucun** niveau actuel ≥ 1 sur **aucun poste actif, tous ateliers confondus**. Le
@@ -532,7 +556,10 @@ prochain gros chantier, pas une optimisation cosmétique.
   part des **jours** et non de la table `absence` — 401 des 421 jours sont saisis au
   Planning sans période déclarée. Il enjambe les week-ends (écart ≤ 3 jours) et ne
   réunit jamais deux motifs différents. L'en-tête complet est dans `PersonnelEditor`
-  (la page ne rend que `AppHeader`).
+  (la page ne rend que `AppHeader`). ⚠️ **Recherche multi-colonnes** (flag `search` sur
+  `COLS`) : porte sur matricule, badge, nom, prénom, H/F, équipe, atelier, pointure — **pas**
+  sur Contrat, Statut ni Commentaire. En lecture seule, la colonne **Équipe garde sa
+  pastille colorée** (`eqStyle`), comme sexe/TP/statut (l'atelier n'a pas de couleur).
   ⚠️ **Colonnes Contrat et Statut = résultantes** — plus de saisie directe. Un clic
   ouvre la modale `CycleDeVieModal` qui unifie **Arrivée / Contrats / Départ prévu**
   (auparavant éparpillés entre ContratsModal, AbsencesModal et le toggle Actif/Parti).
