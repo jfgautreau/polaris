@@ -17,6 +17,7 @@ type Opt = { id: string; label: string };
 export default function MatricePanel({
   groups,
   personnes,
+  displayedIds = null,
   initial,
   canEditObjectif,
   ateliers,
@@ -30,6 +31,7 @@ export default function MatricePanel({
 }: {
   groups: Group[];
   personnes: Personne[];
+  displayedIds?: string[] | null;
   initial: Record<string, Cell>;
   canEditObjectif: boolean;
   ateliers: Opt[];
@@ -91,7 +93,7 @@ export default function MatricePanel({
         {groups.length === 0 ? (
           <p className="muted">Aucun poste actif (vérifiez le référentiel / le filtre atelier).</p>
         ) : (
-          <MatrixGrid groups={groups} personnes={personnes} initial={initial} canEditObjectif={canEditObjectif} mode={mode} search={search} nbNiveaux={nbNiveaux} seuilCompetent={seuilCompetent} couleurs={couleurs} />
+          <MatrixGrid groups={groups} personnes={personnes} displayedIds={displayedIds} initial={initial} canEditObjectif={canEditObjectif} mode={mode} search={search} nbNiveaux={nbNiveaux} seuilCompetent={seuilCompetent} couleurs={couleurs} />
         )}
       </div>
 

@@ -48,16 +48,19 @@ export default async function MatricePage({
     .order("nom");
   if (sp.atelier) ligneQ = ligneQ.eq("atelier_id", sp.atelier);
 
-  // Personnes : filtre equipe ET filtre atelier (affectation par defaut du module personnel).
-  let persQ = supabase
+  // Personnes : on charge TOUT l'effectif actif (les filtres équipe/atelier ne
+  // sont PAS appliqués en base). Les filtres décident seulement du sous-ensemble
+  // affiché PAR DÉFAUT (`displayedIds` plus bas) ; la recherche par nom, côté
+  // client, balaie l'effectif complet et retrouve donc quelqu'un hors filtre —
+  // ex. taper GAUTREAU (atelier Condi) alors qu'on a filtré sur FAB. Les colonnes
+  // (postes) restent, elles, bornées au filtre atelier (cf. ligneQ ci-dessus).
+  const persQ = supabase
     .from("personne")
     .select("id, nom, prenom, equipe_id, atelier_id, type_contrat, statut")
     // Actifs + personnes À venir (déjà recrutées, pas encore arrivées) : on veut
     // pouvoir préparer/renseigner leur polyvalence avant l'arrivée.
     .in("statut", ["ACTIF", "A_VENIR"])
     .order("nom");
-  if (sp.equipe) persQ = persQ.eq("equipe_id", sp.equipe);
-  if (sp.atelier) persQ = persQ.eq("atelier_id", sp.atelier);
 
   // Vague 1 : tout ce qui est independant part en parallele.
   // Donnees de reference (atelier / equipe / niveaux) servies par le cache.
@@ -149,6 +152,12 @@ export default async function MatricePage({
     for (const r of rows) avecCompetence.add(r.personne_id);
   }
 
+  // Sous-ensemble affiché par défaut : les personnes passant les filtres
+  // équipe + atelier. La recherche par nom (client) passe outre et balaie tout.
+  const displayedIds = personnes
+    .filter((p) => (!sp.equipe || p.equipe_id === sp.equipe) && (!sp.atelier || p.atelier_id === sp.atelier))
+    .map((p) => p.id);
+
   // Perimetre d'edition (chefEquipes recupere en vague 1)
   const gridPersonnes = personnes.map((p) => ({
     id: p.id,
@@ -169,6 +178,7 @@ export default async function MatricePage({
         <MatricePanel
           groups={groups}
           personnes={gridPersonnes}
+          displayedIds={displayedIds}
           initial={initial}
           canEditObjectif={canEditMatrice}
           ateliers={ateliers.map((a) => ({ id: a.id, label: a.nom }))}

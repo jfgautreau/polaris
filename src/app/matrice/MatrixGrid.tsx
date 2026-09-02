@@ -25,6 +25,7 @@ const emptyStat = (nb: number): Stat => ({ lvl: Array(nb + 1).fill(0), restrict:
 export default function MatrixGrid({
   groups = [],
   personnes = [],
+  displayedIds = null,
   initial = {},
   canEditObjectif = false,
   mode = "actuel",
@@ -35,6 +36,9 @@ export default function MatrixGrid({
 }: {
   groups?: Group[];
   personnes?: Personne[];
+  // Sous-ensemble affiché par défaut (filtres équipe/atelier serveur). `null` =
+  // tout l'effectif. La recherche par nom passe outre et balaie `personnes`.
+  displayedIds?: string[] | null;
   initial?: Record<string, Cell>;
   canEditObjectif?: boolean;
   mode?: "actuel" | "cible";
@@ -63,9 +67,19 @@ export default function MatrixGrid({
   const objTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const allPostes = useMemo(() => groups.flatMap((gr) => gr.postes), [groups]);
-  // Filtre de recherche sur le nom (accents ignores). N'affecte que les lignes
-  // affichees ; le bilan reste calcule sur l'ensemble.
-  const shown = search.trim() ? personnes.filter((p) => norm(p.label).includes(norm(search))) : personnes;
+  const displayedSet = useMemo(() => (displayedIds ? new Set(displayedIds) : null), [displayedIds]);
+  // Sous-ensemble affiché par défaut (filtres équipe/atelier). Le bilan est
+  // calculé sur CE sous-ensemble (population de l'atelier filtré), pas sur tout.
+  const bilanPersonnes = useMemo(
+    () => (displayedSet ? personnes.filter((p) => displayedSet.has(p.id)) : personnes),
+    [personnes, displayedSet],
+  );
+  // Recherche sur le nom (accents ignorés) : balaie TOUT l'effectif, ce qui
+  // permet de faire apparaître quelqu'un hors du filtre atelier/équipe courant.
+  // Hors recherche, on se limite au sous-ensemble affiché par défaut.
+  const shown = search.trim()
+    ? personnes.filter((p) => norm(p.label).includes(norm(search)))
+    : bilanPersonnes;
   // Virtualisation des lignes : seules les personnes visibles sont rendues (cf.
   // usePersonGrid). `rowCount` suit le filtre de recherche.
   const { headCardRef, headTableRef, rowsTableRef, rowsCardProps, virtual } = usePersonGrid(g.colHover, 2, {
@@ -81,7 +95,7 @@ export default function MatrixGrid({
     const m = new Map<string, Stat>();
     for (const p of allPostes) m.set(p.id, emptyStat(nbNiveaux));
     const useActuel = mode === "actuel";
-    for (const pe of personnes) {
+    for (const pe of bilanPersonnes) {
       for (const p of allPostes) {
         const st = m.get(p.id)!;
         const cell = cells[key(pe.id, p.id)];
@@ -95,7 +109,7 @@ export default function MatrixGrid({
       }
     }
     return m;
-  }, [allPostes, personnes, cells, mode, nbNiveaux, seuilCompetent]);
+  }, [allPostes, bilanPersonnes, cells, mode, nbNiveaux, seuilCompetent]);
 
   const statOf = (poid: string): Stat => stats.get(poid) ?? EMPTY_STAT;
 
@@ -399,7 +413,11 @@ export default function MatrixGrid({
             {shown.length === 0 && (
               <tr>
                 <td colSpan={allPostes.length + 1} className="muted">
-                  {personnes.length === 0 ? "Aucune personne active." : "Aucun résultat pour cette recherche."}
+                  {personnes.length === 0
+                    ? "Aucune personne active."
+                    : search.trim()
+                      ? "Aucun résultat pour cette recherche."
+                      : "Aucune personne dans ce filtre (tapez un nom pour chercher dans tout l'effectif)."}
                 </td>
               </tr>
             )}

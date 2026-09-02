@@ -88,7 +88,7 @@ type ColKey =
 // c'est donc le rapport entre colonnes qui compte. Libelles longs raccourcis pour
 // ne pas deborder d'une colonne etroite (en-tetes en `nowrap`).
 const COLS: { key: ColKey; label: string; w: number; search?: boolean }[] = [
-  { key: "type_contrat", label: "Contrat", w: 5, search: true },
+  { key: "type_contrat", label: "Contrat", w: 5 },
   { key: "matricule", label: "Matricule", w: 6, search: true },
   { key: "numero_badge", label: "Badge", w: 4, search: true },
   { key: "nom", label: "Nom", w: 11, search: true },
@@ -101,8 +101,8 @@ const COLS: { key: ColKey; label: string; w: number; search?: boolean }[] = [
   { key: "alerte", label: "⚠ 18m", w: 5.5 },
   { key: "pointure", label: "Point.", w: 4, search: true },
   { key: "tp", label: "TP", w: 3.5 },
-  { key: "statut", label: "Statut", w: 5, search: true },
-  { key: "commentaire", label: "Commentaire", w: 17.5, search: true },
+  { key: "statut", label: "Statut", w: 5 },
+  { key: "commentaire", label: "Commentaire", w: 17.5 },
 ];
 // Colonnes dont le contenu est centre (Commentaire reste aligne a gauche).
 const CENTER = new Set<ColKey>(["type_contrat", "matricule", "numero_badge", "sexe", "equipe", "atelier", "tp", "pointure", "absences"]);
