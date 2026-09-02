@@ -6,27 +6,28 @@ import { PrintIcon } from "@/components/icons";
 
 // Impression « tous les plannings » : chaque atelier occupe UNE page A3
 // verticale. Comme sur l'écran TV (AffichageBarre) et au Placement, aucune règle
-// CSS ne sait « faire rentrer » un contenu — on mesure puis on met à l'échelle,
-// bloc par bloc. A3 portrait à 96 dpi, marges 8 mm : 1060 x 1525 px utiles.
+// CSS ne sait « faire rentrer » un contenu — on mesure puis on met à l'échelle.
+// A3 portrait à 96 dpi, marges 8 mm : 1060 x 1525 px utiles.
 const PAGE_L = 1060;
 const PAGE_H = 1525;
-const LARGEURS_ESSAI = [700, 820, 940, 1060, 1300, 1600, 1900];
-const ECHELLE_MAX = 1.6;
 
+// ⚠️ Échelle UNIFORME entre les pages : à l'inverse de l'écran TV (une seule
+// feuille, mise à l'échelle au mieux), on veut ici la MÊME taille de police d'un
+// atelier à l'autre. Chaque bloc est rendu à la largeur exacte de la page
+// (PAGE_L), puis on applique à TOUS le même facteur = le plus petit qui fasse
+// tenir la page la plus haute. Plafonné à 1.0 : on ne grossit jamais au-delà de
+// la taille naturelle (police plus compacte, jamais gonflée).
 function ajusterEtImprimer() {
-  const pages = Array.from(document.querySelectorAll<HTMLElement>(".atelier-contenu"));
-  for (const el of pages) {
+  const blocs = Array.from(document.querySelectorAll<HTMLElement>(".atelier-contenu"));
+  for (const el of blocs) {
     el.style.transformOrigin = "top left";
     el.style.transform = "none";
-    let meilleur = { f: 0, w: PAGE_L };
-    for (const w of LARGEURS_ESSAI) {
-      el.style.width = `${w}px`;
-      const f = Math.min(ECHELLE_MAX, PAGE_L / w, PAGE_H / el.scrollHeight);
-      if (f > meilleur.f) meilleur = { f, w };
-    }
-    el.style.width = `${meilleur.w}px`;
-    el.style.transform = `scale(${meilleur.f})`;
+    el.style.width = `${PAGE_L}px`;
   }
+  // Facteur commun : la page la plus dense impose l'échelle de toutes les autres.
+  let f = 1;
+  for (const el of blocs) f = Math.min(f, PAGE_H / el.scrollHeight);
+  for (const el of blocs) el.style.transform = `scale(${f})`;
   window.print();
 }
 
