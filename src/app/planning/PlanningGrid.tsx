@@ -825,12 +825,12 @@ export default function PlanningGrid({
                     <td
                       key={d.iso}
                       rowSpan={shown.length}
-                      style={{ background: "#f8fafc", verticalAlign: "middle", textAlign: "center", ...sep(d) }}
+                      style={{ background: "#f8fafc", verticalAlign: "top", textAlign: "center", ...sep(d) }}
                     >
                       <div style={{ color: "#64748b", fontSize: 12, lineHeight: 1.5, padding: "10px 8px" }}>
                         Jour sans production
                         <br />
-                        <span style={{ fontSize: 11 }}>pour l&apos;activer, contacter l&apos;ordonnancement</span>
+                        <span style={{ fontSize: 11 }}>pour l&apos;activer, contacter l&apos;ordo</span>
                       </div>
                     </td>
                   );
