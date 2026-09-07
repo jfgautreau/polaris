@@ -73,18 +73,22 @@ export function GearIcon({ size = 16, color = "currentColor" }: P) {
   );
 }
 
-// Impression / PDF — imprimante (silhouette Lucide, choix du 07/09/2026).
-// La feuille de sortie est une rangée distincte qui déborde du corps : la
-// silhouette d'imprimante reste lisible même à 16 px (l'ancienne superposait
-// feuille du haut / corps / bac et se lisait comme un pâté).
-export function PrintIcon({ size = 16, color = "currentColor" }: P) {
+// Impression / PDF — imprimante « pleine » (choix du 07/09/2026). Silhouette
+// remplie (comme SaveIcon) : bien plus lisible à 16 px qu'un fin contour bleu
+// clair, qui se perdait sur le fond blanc du bouton. La feuille de sortie et la
+// LED sont évidées avec la couleur du fond (`hole`, blanc par défaut).
+export function PrintIcon({ size = 16, hole = "#fff" }: { size?: number; hole?: string }) {
   return (
-    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke={color}
-      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ verticalAlign: "-3px" }}>
-      <path d="M6 9V2h12v7" />
-      <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-      <rect x="6" y="14" width="12" height="8" rx="1" />
-      <path d="M6 11.5h.01" />
+    <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden="true" style={{ verticalAlign: "-3px" }}>
+      {/* feuille du haut */}
+      <path fill="currentColor" d="M6 3.2c0-.66.54-1.2 1.2-1.2h9.6c.66 0 1.2.54 1.2 1.2V8H6V3.2Z" />
+      {/* corps de l'imprimante */}
+      <rect fill="currentColor" x="2" y="8" width="20" height="10" rx="2.2" />
+      {/* LED (évidée) */}
+      <circle fill={hole} cx="18.4" cy="11.2" r="1.05" />
+      {/* feuille de sortie (évidée) + lignes de texte */}
+      <rect fill={hole} x="6" y="13" width="12" height="8" rx="1" />
+      <path stroke="currentColor" fill="none" strokeWidth="1.3" strokeLinecap="round" d="M8.6 15.6h6.8M8.6 17.8h4.8" />
     </svg>
   );
 }
