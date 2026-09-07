@@ -73,22 +73,25 @@ export function GearIcon({ size = 16, color = "currentColor" }: P) {
   );
 }
 
-// Impression / PDF — imprimante « pleine » (choix du 07/09/2026). Silhouette
-// remplie (comme SaveIcon) : bien plus lisible à 16 px qu'un fin contour bleu
-// clair, qui se perdait sur le fond blanc du bouton. La feuille de sortie et la
-// LED sont évidées avec la couleur du fond (`hole`, blanc par défaut).
+// Impression / PDF — imprimante « pleine » (choix du 07/09/2026).
+// ⚠️ Toute la silhouette est en `currentColor` (bleu) : sur le fond BLANC du
+// bouton, évider la feuille de sortie en blanc rendait la moitié basse de
+// l'imprimante invisible → elle paraissait minuscule. Les détails (LED, lignes
+// de texte, fente) sont donc dessinés en `hole` (blanc) PAR-DESSUS le bleu,
+// sans jamais creuser la silhouette.
 export function PrintIcon({ size = 16, hole = "#fff" }: { size?: number; hole?: string }) {
   return (
     <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden="true" style={{ verticalAlign: "-3px" }}>
       {/* feuille du haut */}
-      <path fill="currentColor" d="M6 3.2c0-.66.54-1.2 1.2-1.2h9.6c.66 0 1.2.54 1.2 1.2V8H6V3.2Z" />
+      <path fill="currentColor" d="M6.5 2.5h11v5.5h-11z" />
       {/* corps de l'imprimante */}
-      <rect fill="currentColor" x="2" y="8" width="20" height="10" rx="2.2" />
-      {/* LED (évidée) */}
-      <circle fill={hole} cx="18.4" cy="11.2" r="1.05" />
-      {/* feuille de sortie (évidée) + lignes de texte */}
-      <rect fill={hole} x="6" y="13" width="12" height="8" rx="1" />
-      <path stroke="currentColor" fill="none" strokeWidth="1.3" strokeLinecap="round" d="M8.6 15.6h6.8M8.6 17.8h4.8" />
+      <rect fill="currentColor" x="2" y="8" width="20" height="9" rx="2.2" />
+      {/* feuille de sortie : bleue, dépasse sous le corps (visible sur fond blanc) */}
+      <path fill="currentColor" d="M6 13h12v7.3c0 .4-.3.7-.7.7H6.7c-.4 0-.7-.3-.7-.7V13Z" />
+      {/* détails clairs PAR-DESSUS : fente, LED, deux lignes de « texte » */}
+      <path stroke={hole} fill="none" strokeWidth="1.4" strokeLinecap="round" d="M5 10.4h6" />
+      <circle fill={hole} cx="18.2" cy="10.6" r="1.05" />
+      <path stroke={hole} fill="none" strokeWidth="1.4" strokeLinecap="round" d="M8.7 16h6.6M8.7 18.4h4.6" />
     </svg>
   );
 }
