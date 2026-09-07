@@ -686,7 +686,7 @@ export default async function PlanningPage({
                 automatiquement. Nouvel onglet pour ne pas quitter le planning. */}
             <div className="filterrow" style={{ justifyContent: "flex-end" }}>
               <Link href={`/affichage/impression?date=${centerIso}`} target="_blank" className="navlink" title="Imprimer tous les plannings (affichage TV)" aria-label="Imprimer tous les plannings" style={{ width: 30, height: 30, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", color: "#1d4ed8", border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}>
-                <PrintIcon />
+                <PrintIcon size={20} />
               </Link>
             </div>
           </div>
