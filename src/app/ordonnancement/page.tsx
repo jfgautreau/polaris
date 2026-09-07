@@ -18,7 +18,7 @@ type Ligne = {
 };
 type Quart = { code: string; libelle: string; ordre: number; creneau: string | null };
 
-const JOURS_CIBLES = 15; // fenêtre affichée : 15 jours (2 semaines + le lundi suivant).
+const JOURS_CIBLES = 14; // fenêtre affichée : 2 semaines pleines (14 jours).
 
 export default async function OrdonnancementPage({
   searchParams,
@@ -29,7 +29,7 @@ export default async function OrdonnancementPage({
   const canEdit = canWrite(perms, "ordonnancement");
 
   const sp = await searchParams;
-  // Fenêtre de 15 jours à partir du lundi de la semaine choisie (défaut : semaine courante).
+  // Fenêtre de 2 semaines pleines à partir du lundi de la semaine choisie (défaut : semaine courante).
   const start = parseMonday(sp.debut);
   const startIso = isoDate(start);
   // ⚠️ weekDays() ne pose PAS firstOfWeek — on le marque ici (chaque lundi), sans
@@ -38,8 +38,9 @@ export default async function OrdonnancementPage({
   const days: Jour[] = [
     ...weekDays(start),
     ...weekDays(addDays(start, 7)),
-    ...weekDays(addDays(start, 14)).slice(0, JOURS_CIBLES - 14),
-  ].map((d) => ({ ...d, firstOfWeek: dowMon(d.iso) === 0 }));
+  ]
+    .slice(0, JOURS_CIBLES)
+    .map((d) => ({ ...d, firstOfWeek: dowMon(d.iso) === 0 }));
   const isos = days.map((d) => d.iso);
 
   // Blocs-semaine (annee + n0 ISO) pour l'en-tete des tableaux.

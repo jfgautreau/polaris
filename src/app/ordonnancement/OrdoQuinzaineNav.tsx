@@ -50,7 +50,7 @@ export default function OrdoQuinzaineNav({
       <strong style={{ marginLeft: 6 }}>
         {libDate(debut)} → {libDate(fin)}
       </strong>
-      <span className="muted" style={{ fontSize: 12 }}>· 15 jours</span>
+      <span className="muted" style={{ fontSize: 12 }}>· 2 semaines</span>
     </div>
   );
 }

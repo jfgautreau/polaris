@@ -73,15 +73,18 @@ export function GearIcon({ size = 16, color = "currentColor" }: P) {
   );
 }
 
-// Impression / PDF — variante A « imprimante contour » (choix du 24/07/2026).
+// Impression / PDF — imprimante (silhouette Lucide, choix du 07/09/2026).
+// La feuille de sortie est une rangée distincte qui déborde du corps : la
+// silhouette d'imprimante reste lisible même à 16 px (l'ancienne superposait
+// feuille du haut / corps / bac et se lisait comme un pâté).
 export function PrintIcon({ size = 16, color = "currentColor" }: P) {
   return (
     <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke={color}
       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ verticalAlign: "-3px" }}>
-      <path d="M6 9V3h12v6" />
-      <rect x="3" y="9" width="18" height="8" rx="2" />
-      <path d="M6 17v4h12v-4" />
-      <path d="M7.5 12.5h.01" />
+      <path d="M6 9V2h12v7" />
+      <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+      <rect x="6" y="14" width="12" height="8" rx="1" />
+      <path d="M6 11.5h.01" />
     </svg>
   );
 }
