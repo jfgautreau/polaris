@@ -1,154 +1,45 @@
 import Link from "next/link";
 import { getServerClient } from "@/lib/supabase-server";
 import AppHeader from "@/components/AppHeader";
+import PageTitle from "@/components/PageTitle";
 import ReportActions from "@/app/bilans/ReportActions";
 import Bars from "@/app/bilans/Bars";
 import ReportAtelierFilter from "@/app/bilans/ReportAtelierFilter";
 import { requireRapportBilan } from "@/lib/permissions";
-import { isoDate, addDays } from "@/lib/week";
-import { fetchAll } from "@/lib/fetch-all";
-import { getSeuilCompetentC } from "@/lib/refdata";
-
-type Named = { id: string; nom: string; prenom?: string };
-type LigneRow = { id: string; nom: string; atelier_id: string | null; poste: { id: string; nom: string; actif: boolean; categorie: string | null; remplacable: boolean }[] };
-const CATS = [
-  { key: "manager", label: "Managers" },
-  { key: "conducteur", label: "Conducteurs" },
-  { key: "operateur", label: "Opérateurs" },
-] as const;
-type Mat = { personne_id: string; poste_id: string; niveau_actuel: number; niveau_cible: number };
-type Comp = { id: string; nom: string; a_recycler: boolean };
-type PC = { personne_id: string; competence_id: string; date_expiration: string | null };
+import { chargerPolyvalenceCompetences, H_DEPART, H_HAB, type Verdict } from "@/lib/polyvalence-competences-data";
 
 const fmtDate = (d: string | null) => (d ? d.split("-").reverse().join("/") : "—");
+const fmtMoy = (v: number) => v.toFixed(1).replace(".", ",");
+const catBadge = (c: string) => {
+  const s = c === "conducteur"
+    ? { t: "Cond.", color: "#4338ca", bg: "#eceafe" }
+    : c === "manager"
+    ? { t: "Mgr", color: "#9333ea", bg: "#f3e8ff" }
+    : { t: "Opér.", color: "#0e7490", bg: "#e2f2f6" };
+  return <span className="rbadge" style={{ background: s.bg, color: s.color, fontSize: 10.5 }}>{s.t}</span>;
+};
+const verdictBadge = (v: Verdict) =>
+  v === "critique" ? <span className="rbadge danger">critique</span> : v === "fragile" ? <span className="rbadge warn">fragile</span> : <span className="muted">—</span>;
+
+const NAV = [
+  { id: "constat", n: "1", t: "Constat" },
+  { id: "postes", n: "2", t: "Postes & fragilité" },
+  { id: "risques", n: "3", t: "Risques" },
+  { id: "action", n: "4", t: "Qui former" },
+];
 
 export default async function PolyvalenceReport({ searchParams }: { searchParams: Promise<{ atelier?: string }> }) {
   const { profile } = await requireRapportBilan("polyvalence");
   const sp = await searchParams;
   const atelier = sp.atelier ?? "";
-  const todayIso = isoDate(new Date());
-  const in30 = isoDate(addDays(new Date(), 30));
-  const in60 = isoDate(addDays(new Date(), 60));
 
   const supabase = await getServerClient();
-  // Seuil « compétent » paramétrable par site (0062, repli 2).
-  const SEUIL = await getSeuilCompetentC();
-  const [{ data: persD }, { data: lignesD }, matD, { data: compD }, pcD, { data: atD }] = await Promise.all([
-    supabase.from("personne").select("id, nom, prenom").eq("statut", "ACTIF").returns<Named[]>(),
-    supabase.from("ligne").select("id, nom, atelier_id, poste(id, nom, actif, categorie, remplacable)").eq("actif", true).order("nom").returns<LigneRow[]>(),
-    fetchAll<Mat>(() =>
-      supabase.from("matrice").select("personne_id, poste_id, niveau_actuel, niveau_cible").order("id").returns<Mat[]>()
-    ),
-    supabase.from("competence").select("id, nom, a_recycler").eq("actif", true).returns<Comp[]>(),
-    fetchAll<PC>(() =>
-      supabase.from("personne_competence").select("personne_id, competence_id, date_expiration").order("id").returns<PC[]>()
-    ),
+  const [{ data: atD }, r] = await Promise.all([
     supabase.from("atelier").select("id, nom").eq("actif", true).order("nom").returns<{ id: string; nom: string }[]>(),
+    chargerPolyvalenceCompetences(supabase, { atelier }),
   ]);
 
-  const active = persD ?? [];
-  const activeIds = new Set(active.map((p) => p.id));
-  const persNom = (id: string) => {
-    const p = active.find((x) => x.id === id);
-    return p ? `${p.nom} ${p.prenom ?? ""}`.trim() : "?";
-  };
-
-  // Postes du perimetre (filtre atelier via ligne.atelier_id).
-  const lignesScoped = (lignesD ?? []).filter((l) => !atelier || l.atelier_id === atelier);
-  const postes = lignesScoped.flatMap((l) =>
-    (l.poste ?? []).filter((p) => p.actif).map((p) => ({ id: p.id, nom: p.nom, ligne: l.nom, categorie: p.categorie ?? "operateur", atelierId: l.atelier_id, remplacable: p.remplacable !== false }))
-  );
-  // PTNR (non remplaçable) : exclus des analyses de fragilité / relève / écart-cible
-  // — un seul titulaire par conception n'est pas une anomalie. Ils restent suivis,
-  // isolés, dans le rapport Compétences critiques (départs / expirations).
-  const postesRempl = postes.filter((p) => p.remplacable);
-  const nbPtnr = postes.length - postesRempl.length;
-  const posteNom = new Map(postes.map((p) => [p.id, p]));
-  const scopedPosteIds = new Set(postes.map((p) => p.id));
-
-  // ---- 2.0 Competence moyenne par atelier et par categorie ----
-  // Moyenne ARITHMETIQUE des niveaux (0 a 4) sur toutes les cases de la matrice
-  // qui croisent une personne active et un poste actif de la categorie, dans cet
-  // atelier. Une case absente de la matrice vaut 0 : on la compte, sinon un
-  // atelier ou personne n'est forme afficherait une moyenne flatteuse.
-  const ateliers = atD ?? [];
-  const postesTousAteliers = (lignesD ?? []).flatMap((l) =>
-    (l.poste ?? []).filter((p) => p.actif).map((p) => ({ id: p.id, categorie: p.categorie ?? "operateur", atelierId: l.atelier_id }))
-  );
-  const niveauDe = new Map<string, number>();
-  for (const r of matD) niveauDe.set(`${r.personne_id}:${r.poste_id}`, r.niveau_actuel);
-  const moyenne = (atelierId: string | null, cat: string) => {
-    const ids = postesTousAteliers.filter((p) => p.atelierId === atelierId && p.categorie === cat).map((p) => p.id);
-    if (ids.length === 0 || active.length === 0) return null;
-    let somme = 0;
-    let n = 0;
-    for (const p of active) {
-      for (const pid of ids) {
-        // Une restriction (-1) n'est pas un niveau : elle ne pese pas la moyenne.
-        const v = niveauDe.get(`${p.id}:${pid}`) ?? 0;
-        if (v < 0) continue;
-        somme += v;
-        n++;
-      }
-    }
-    return n ? somme / n : null;
-  };
-  const lignesMoyennes = ateliers
-    .map((a) => ({ nom: a.nom, valeurs: CATS.map((c) => moyenne(a.id, c.key)) }))
-    .filter((r) => r.valeurs.some((v) => v !== null));
-  const fmtMoy = (v: number | null) => (v === null ? "—" : v.toFixed(2).replace(".", ","));
-  // Teinte : rouge sous 1, orange sous 2 (le seuil de competence), vert au-dela.
-  const teinteMoy = (v: number | null) =>
-    v === null ? undefined : v < 1 ? "#fee2e2" : v < SEUIL ? "#ffedd5" : "#dcfce7";
-
-  // Matrice cote personnes actives ET postes du perimetre.
-  const mat = matD.filter((r) => activeIds.has(r.personne_id) && scopedPosteIds.has(r.poste_id));
-
-  // ---- 2.1 Postes fragiles ----
-  const compByPoste = new Map<string, string[]>(); // poste -> noms competents (>= seuil)
-  for (const r of mat) {
-    if (r.niveau_actuel >= SEUIL) (compByPoste.get(r.poste_id) ?? compByPoste.set(r.poste_id, []).get(r.poste_id)!).push(persNom(r.personne_id));
-  }
-  // Fragilité évaluée sur les seuls postes remplaçables (PTR).
-  const postesEval = postesRempl.map((p) => ({ ...p, noms: compByPoste.get(p.id) ?? [] }));
-  const fragiles = postesEval.filter((p) => p.noms.length <= 1).sort((a, b) => a.noms.length - b.noms.length);
-  const sansReleve = fragiles.filter((p) => p.noms.length === 0).length;
-
-  // ---- 2.2 Ecart actuel -> cible (par poste) ----
-  // PTNR exclus : leur cible de relève est 1 par conception, pas un écart à combler.
-  const ecarts = postesRempl
-    .map((p) => {
-      const rows = mat.filter((r) => r.poste_id === p.id);
-      const actuel = rows.filter((r) => r.niveau_actuel >= SEUIL).length;
-      const cible = rows.filter((r) => r.niveau_cible >= SEUIL).length;
-      return { label: p.nom, ligne: p.ligne, actuel, cible, n: Math.max(0, cible - actuel) };
-    })
-    .filter((e) => e.n > 0)
-    .sort((a, b) => b.n - a.n);
-  const ecartTotal = ecarts.reduce((s, e) => s + e.n, 0);
-
-  // ---- 2.4 Habilitations a echeance ----
-  const recyclables = new Set((compD ?? []).filter((c) => c.a_recycler).map((c) => c.id));
-  const compNom = new Map((compD ?? []).map((c) => [c.id, c.nom]));
-  const echeances = pcD
-    .filter((r) => activeIds.has(r.personne_id) && recyclables.has(r.competence_id) && r.date_expiration && r.date_expiration <= in60)
-    .map((r) => ({
-      personne: persNom(r.personne_id),
-      competence: compNom.get(r.competence_id) ?? "?",
-      date: r.date_expiration!,
-      statut: r.date_expiration! < todayIso ? "expiree" : r.date_expiration! <= in30 ? "urgent" : "proche",
-    }))
-    .sort((a, b) => a.date.localeCompare(b.date));
-  const echeancesCritiques = echeances.filter((e) => e.statut !== "proche").length;
-
-  // ---- 2.5 Polyvalence par personne ----
-  const masteredBy = new Map<string, number>();
-  for (const r of mat) if (r.niveau_actuel >= SEUIL) masteredBy.set(r.personne_id, (masteredBy.get(r.personne_id) ?? 0) + 1);
-  const polyParPers = active
-    .map((p) => ({ id: p.id, label: `${p.nom} ${p.prenom ?? ""}`.trim(), n: masteredBy.get(p.id) ?? 0 }))
-    .sort((a, b) => a.n - b.n);
-  const polyMoy = active.length ? Math.round((polyParPers.reduce((s, p) => s + p.n, 0) / active.length) * 10) / 10 : 0;
-  const moinsPoly = polyParPers.slice(0, 10);
+  const polyMax = Math.max(1, ...r.polyParService.map((s) => s.moyenne));
 
   return (
     <>
@@ -156,8 +47,11 @@ export default async function PolyvalenceReport({ searchParams }: { searchParams
       <div className="container" style={{ maxWidth: 1500 }}>
         <div className="report-head">
           <div>
-            <h1>Polyvalence &amp; compétences</h1>
-            <div className="sub">Compétent = niveau ≥ {SEUIL} · {active.length} personnes actives · {postes.length} postes actifs</div>
+            <PageTitle module="bilans">Polyvalence &amp; compétences</PageTitle>
+            <div className="sub">
+              Compétent = <strong>peut tenir le poste aujourd&apos;hui</strong> (niveau min. du poste + habilitation valide) ·
+              {" "}{r.nbActifs} personnes actives · {r.nbPostes} postes actifs
+            </div>
           </div>
           <ReportActions>
             <Link href="/matrice" className="navlink">Saisie matrice</Link>
@@ -166,136 +60,209 @@ export default async function PolyvalenceReport({ searchParams }: { searchParams
 
         <ReportAtelierFilter ateliers={atD ?? []} atelier={atelier} />
 
+        {/* Sous-navigation par ancres */}
+        <nav className="noprint" style={{ display: "flex", gap: 4, flexWrap: "wrap", margin: "6px 0 16px", paddingBottom: 10, borderBottom: "1px solid var(--border)" }}>
+          {NAV.map((s) => (
+            <a key={s.id} href={`#${s.id}`} style={{ textDecoration: "none", fontSize: 13, fontWeight: 600, color: "var(--muted)", padding: "7px 13px", borderRadius: 8, display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#e11d48", background: "#fdecf1", width: 20, height: 20, borderRadius: 6, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{s.n}</span>
+              {s.t}
+            </a>
+          ))}
+        </nav>
+
         <div className="kpi-grid">
-          <div className={`kpi ${fragiles.length > 0 ? "warn" : "ok"}`}><div className="v">{fragiles.length}</div><div className="l">Postes fragiles</div><div className="s">≤ 1 personne compétente</div></div>
-          <div className={`kpi ${sansReleve > 0 ? "danger" : "ok"}`}><div className="v">{sansReleve}</div><div className="l">Postes sans relève</div></div>
-          <div className={`kpi ${ecartTotal > 0 ? "warn" : "ok"}`}><div className="v">{ecartTotal}</div><div className="l">Écart à combler</div><div className="s">compétences manquantes vs cible</div></div>
-          <div className={`kpi ${echeancesCritiques > 0 ? "danger" : "ok"}`}><div className="v">{echeances.length}</div><div className="l">Habilitations à échéance</div><div className="s">{echeancesCritiques} critique(s)</div></div>
-          <div className="kpi accent"><div className="v">{polyMoy}</div><div className="l">Polyvalence moyenne</div><div className="s">postes maîtrisés / personne</div></div>
+          <div className="kpi accent"><div className="v">{fmtMoy(r.polyvalenceMoyenne)}</div><div className="l">Polyvalence moyenne</div><div className="s">postes tenus / personne</div></div>
+          <div className={`kpi ${r.nbSansReleveSure > 0 ? "danger" : "ok"}`}><div className="v">{r.nbSansReleveSure}</div><div className="l">Postes sans relève sûre</div><div className="s">0 relève fiable à {H_DEPART} j</div></div>
+          <div className={`kpi ${r.nbFragiles > 0 ? "warn" : "ok"}`}><div className="v">{r.nbFragiles}</div><div className="l">Postes fragiles</div><div className="s">1 seule relève sûre</div></div>
+          <div className={`kpi ${r.ecartTotal > 0 ? "warn" : "ok"}`}><div className="v">{r.ecartTotal}</div><div className="l">Écart à combler</div><div className="s">formations vers la cible</div></div>
+          <div className={`kpi ${r.nbClesPartantes > 0 ? "danger" : "ok"}`}><div className="v">{r.nbClesPartantes}</div><div className="l">Personnes clés partantes</div><div className="s">seule relève d&apos;un poste</div></div>
+          <div className={`kpi ${r.nbEcheancesCritiques > 0 ? "danger" : r.echeances.length > 0 ? "warn" : "ok"}`}><div className="v">{r.echeances.length}</div><div className="l">Habilitations à échéance</div><div className="s">{r.nbEcheancesCritiques} critique(s) · ≤ {H_HAB} j</div></div>
         </div>
 
-        {/* 2.0 Competence moyenne par atelier */}
-        <div className="report-section">
-          <h2>Compétence moyenne par service</h2>
-          <div className="card">
-            {lignesMoyennes.length === 0 ? (
-              <p className="muted">Aucun poste actif rattaché à un atelier.</p>
+        {/* ---------- 1. CONSTAT ---------- */}
+        <div className="report-section" id="constat" style={{ scrollMarginTop: 16 }}>
+          <h2>1 · Constat — état de la polyvalence</h2>
+          <div className="report-grid2">
+            <div className="card">
+              <h2 style={{ marginTop: 0, fontSize: 15 }}>Polyvalence moyenne par service</h2>
+              {r.polyParService.length === 0 ? (
+                <p className="muted">Aucune personne affectée à un service.</p>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {r.polyParService.map((s) => (
+                    <div key={s.atelierId} style={{ display: "grid", gridTemplateColumns: "150px 1fr 60px", alignItems: "center", gap: 10, fontSize: 13 }}>
+                      <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={`${s.nom} · ${s.nbPersonnes} pers.`}>{s.nom}</span>
+                      <span style={{ background: "var(--border)", borderRadius: 6, height: 16, overflow: "hidden" }}>
+                        <span style={{ display: "block", height: "100%", width: `${(s.moyenne / polyMax) * 100}%`, background: "#4338ca", borderRadius: 6 }} />
+                      </span>
+                      <span style={{ textAlign: "right", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{fmtMoy(s.moyenne)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="muted" style={{ marginTop: 10, fontSize: 12 }}>
+                Pour chaque service, moyenne — sur les personnes qui y sont <strong>affectées</strong> — du nombre de
+                postes <strong>de ce service</strong> que chacune peut tenir aujourd&apos;hui. Moyenne usine&nbsp;: <strong>{fmtMoy(r.polyvalenceMoyenne)}</strong>.
+              </p>
+            </div>
+            <div className="card">
+              <h2 style={{ marginTop: 0, fontSize: 15 }}>Personnes à développer <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>· polyvalence la plus faible</span></h2>
+              <Bars items={r.personnesADevelopper} accent="#7c3aed" suffix=" postes" />
+            </div>
+          </div>
+        </div>
+
+        {/* ---------- 2. POSTES ---------- */}
+        <div className="report-section" id="postes" style={{ scrollMarginTop: 16 }}>
+          <h2>2 · Postes — couverture &amp; fragilité</h2>
+          <div className="card" style={{ overflowX: "auto" }}>
+            {r.postesCritiquesFragiles.length === 0 ? (
+              <p className="muted">Aucun poste critique ou fragile : chaque poste remplaçable a au moins 2 relèves sûres.</p>
             ) : (
               <table>
-                <thead>
-                  <tr>
-                    <th>Service</th>
-                    {CATS.map((c) => (
-                      <th key={c.key} style={{ textAlign: "center" }}>{c.label}</th>
-                    ))}
-                  </tr>
-                </thead>
+                <thead><tr><th>Poste</th><th>Service</th><th>Cat.</th><th style={{ textAlign: "center" }}>Relève sûre</th><th style={{ textAlign: "center" }}>Cible</th><th>Relève (risque signalé)</th><th style={{ textAlign: "right" }}>Verdict</th></tr></thead>
                 <tbody>
-                  {lignesMoyennes.map((r) => (
-                    <tr key={r.nom}>
-                      <td><strong>{r.nom}</strong></td>
-                      {r.valeurs.map((v, i) => (
-                        <td key={i} style={{ textAlign: "center", fontWeight: 700, background: teinteMoy(v) }}>{fmtMoy(v)}</td>
-                      ))}
+                  {r.postesCritiquesFragiles.map((a) => (
+                    <tr key={a.id}>
+                      <td><strong>{a.nom}</strong><br /><span className="muted" style={{ fontSize: 11 }}>{a.ligne}</span></td>
+                      <td className="muted">{a.atelierNom}</td>
+                      <td>{catBadge(a.categorie)}</td>
+                      <td style={{ textAlign: "center", fontWeight: 700, color: a.sure === 0 ? "var(--danger)" : a.sure === 1 ? "#9a3412" : "var(--ok)" }}>{a.sure}</td>
+                      <td style={{ textAlign: "center" }} className="muted">{a.cible}</td>
+                      <td>
+                        {a.releve.length === 0 ? <span className="rbadge danger">aucune relève</span> : a.releve.map((m) => (
+                          <span key={m.id} style={{ marginRight: 8, whiteSpace: "nowrap" }}>
+                            {m.nom}{m.risque ? <span className="rbadge warn" style={{ marginLeft: 4 }}>{m.risque}</span> : null}
+                          </span>
+                        ))}
+                      </td>
+                      <td style={{ textAlign: "right" }}>{verdictBadge(a.verdict)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             )}
-            <p className="muted" style={{ marginTop: 8, marginBottom: 0, fontSize: 12 }}>
-              Moyenne des niveaux de la matrice sur l&apos;ensemble des couples
-              personne active × poste actif de la catégorie, dans ce service. Une compétence
-              non saisie compte pour 0 ; une restriction médicale est exclue du calcul.
-              Rouge &lt; 1 · orange &lt; {SEUIL} · vert ≥ {SEUIL}.
+            <p className="muted" style={{ marginTop: 8, fontSize: 12 }}>
+              <strong>Relève</strong> = personnes actives au niveau min. requis <strong>et</strong> habilitées aujourd&apos;hui.
+              {" "}<strong>Relève sûre</strong> = sans risque imminent (départ ≤ {H_DEPART} j, retraite, ou habilitation exigée expirant ≤ {H_HAB} j).
+              {" "}<strong>Critique</strong> = 0 relève sûre (poste que vous allez perdre) · <strong>fragile</strong> = une seule.
+              {r.nbTenus > 0 && <> {" "}· {r.nbTenus} poste{r.nbTenus > 1 ? "s" : ""} tenu{r.nbTenus > 1 ? "s" : ""} (≥ 2 relèves sûres) non listé{r.nbTenus > 1 ? "s" : ""}.</>}
             </p>
           </div>
-        </div>
 
-        {/* 2.1 Postes fragiles */}
-        <div className="report-section">
-          <h2>Postes fragiles (risque mono-compétence)</h2>
-          {nbPtnr > 0 && (
-            <p className="muted" style={{ marginTop: -4, fontSize: 12 }}>
-              {nbPtnr} poste{nbPtnr > 1 ? "s" : ""} PTNR (non remplaçable{nbPtnr > 1 ? "s" : ""}) exclu{nbPtnr > 1 ? "s" : ""} de cette analyse — voir <Link href="/bilans/competences-critiques" className="navlink">Compétences critiques</Link>.
-            </p>
-          )}
-          {fragiles.length === 0 ? (
-            <p className="muted">Aucun poste fragile : chaque poste remplaçable a au moins 2 personnes compétentes.</p>
-          ) : (
-            <div className="card">
+          {r.ptnr.length > 0 && (
+            <div className="card" style={{ overflowX: "auto", marginTop: 14 }}>
+              <h2 style={{ marginTop: 0, fontSize: 15 }}>Postes à titulaire unique (PTNR) <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>· un seul titulaire par conception</span></h2>
               <table>
-                <thead><tr><th>Poste</th><th>Ligne</th><th>Personne compétente</th><th style={{ textAlign: "right" }}>Couverture</th></tr></thead>
+                <thead><tr><th>Poste</th><th>Service</th><th>Titulaire(s)</th><th style={{ textAlign: "right" }}>État</th></tr></thead>
                 <tbody>
-                  {fragiles.map((p) => (
-                    <tr key={p.id}>
-                      <td><strong>{p.nom}</strong></td>
-                      <td className="muted">{p.ligne}</td>
-                      <td>{p.noms.length ? p.noms.join(", ") : <span className="muted">—</span>}</td>
-                      <td style={{ textAlign: "right" }}><span className={`rbadge ${p.noms.length === 0 ? "danger" : "warn"}`}>{p.noms.length === 0 ? "aucune relève" : "1 personne"}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        {/* 2.2 Ecart cible */}
-        <div className="report-section">
-          <h2>Écart polyvalence actuel → cible</h2>
-          <div className="card">
-            {ecarts.length === 0 ? <p className="muted">Tous les objectifs de polyvalence sont atteints.</p> : (
-              <Bars items={ecarts.map((e) => ({ label: e.label, n: e.n, sub: `${e.actuel}/${e.cible}` }))} accent="#d97706" />
-            )}
-          </div>
-        </div>
-
-        {/* Le plan de montee en competence a son propre rapport : on ne garde
-            ici qu'un renvoi, pour eviter deux tableaux a maintenir en parallele. */}
-        <div className="report-section">
-          <h2>Plan de montée en compétence</h2>
-          <div className="card">
-            <p style={{ margin: 0 }}>
-              {ecartTotal === 0
-                ? "Tous les objectifs de polyvalence sont atteints."
-                : `${ecartTotal} compétence(s) à acquérir pour atteindre les cibles.`}{" "}
-              <Link href="/bilans/montee-competence" className="navlink">
-                Ouvrir le plan détaillé &rarr;
-              </Link>
-            </p>
-          </div>
-        </div>
-
-        {/* 2.4 Habilitations a echeance */}
-        <div className="report-section">
-          <h2>Habilitations à recycler — échéances (60 jours)</h2>
-          <div className="card">
-            {echeances.length === 0 ? <p className="muted">Aucune habilitation à recycler dans les 60 jours.</p> : (
-              <table>
-                <thead><tr><th>Personne</th><th>Habilitation</th><th style={{ textAlign: "right" }}>Expiration</th></tr></thead>
-                <tbody>
-                  {echeances.map((e, i) => (
-                    <tr key={i}>
-                      <td>{e.personne}</td>
-                      <td>{e.competence}</td>
+                  {r.ptnr.map((a) => (
+                    <tr key={a.id}>
+                      <td><strong>{a.nom}</strong><br /><span className="muted" style={{ fontSize: 11 }}>{a.ligne}</span></td>
+                      <td className="muted">{a.atelierNom}</td>
+                      <td>
+                        {a.releve.length === 0 ? <span className="muted">—</span> : a.releve.map((m) => (
+                          <span key={m.id} style={{ marginRight: 8, whiteSpace: "nowrap" }}>
+                            {m.nom}{m.risque ? <span className="rbadge danger" style={{ marginLeft: 4 }}>{m.risque}</span> : null}
+                          </span>
+                        ))}
+                      </td>
                       <td style={{ textAlign: "right" }}>
-                        <span className={`rbadge ${e.statut === "expiree" ? "danger" : e.statut === "urgent" ? "danger" : "warn"}`}>
-                          {e.statut === "expiree" ? "expirée · " : ""}{fmtDate(e.date)}
-                        </span>
+                        {a.vacant ? <span className="rbadge danger">poste vacant</span> : a.aRisque ? <span className="rbadge danger">titulaire sur le départ</span> : <span className="rbadge">tenu</span>}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            )}
+              <p className="muted" style={{ marginTop: 8, fontSize: 12 }}>
+                Ces postes sont <strong>exclus des indicateurs de fragilité</strong> ci-dessus (ils y fausseraient le compte). Le vrai risque ici est le <strong>départ du titulaire</strong> — à anticiper par un transfert de savoir.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* ---------- 3. RISQUES ---------- */}
+        <div className="report-section" id="risques" style={{ scrollMarginTop: 16 }}>
+          <h2>3 · Risques à anticiper</h2>
+          <div className="report-grid2">
+            <div className="card">
+              <h2 style={{ marginTop: 0, fontSize: 15 }}>Personnes clés sur le départ</h2>
+              {r.clesARisque.length === 0 ? (
+                <p className="muted">Aucune personne « seule relève d&apos;un poste » ne quitte l&apos;effectif dans les {H_DEPART} jours.</p>
+              ) : (
+                <table>
+                  <thead><tr><th>Personne</th><th>Départ</th><th>Seule relève de</th></tr></thead>
+                  <tbody>
+                    {r.clesARisque.map((c) => (
+                      <tr key={c.id}>
+                        <td>{c.nom} <span className="muted">· {c.contrat}</span></td>
+                        <td><span className={`rbadge ${c.retraite ? "danger" : "warn"}`}>{c.retraite ? "retraite · " : ""}{fmtDate(c.date)}</span></td>
+                        <td>{c.postes.map((n, i) => (<span key={i} className="rbadge danger" style={{ marginRight: 6 }}>{n}</span>))}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              <p className="muted" style={{ marginTop: 8, fontSize: 12 }}>Ces personnes emportent un savoir non doublé : à former en priorité avant leur départ.</p>
+            </div>
+            <div className="card">
+              <h2 style={{ marginTop: 0, fontSize: 15 }}>Habilitations à échéance <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>· ≤ {H_HAB} jours</span></h2>
+              {r.echeances.length === 0 ? (
+                <p className="muted">Aucune habilitation à recycler dans les {H_HAB} jours.</p>
+              ) : (
+                <table>
+                  <thead><tr><th>Personne</th><th>Habilitation</th><th style={{ textAlign: "right" }}>Expiration</th></tr></thead>
+                  <tbody>
+                    {r.echeances.slice(0, 40).map((e, i) => (
+                      <tr key={i}>
+                        <td>{e.personne}</td>
+                        <td>{e.competence}</td>
+                        <td style={{ textAlign: "right" }}>
+                          <span className={`rbadge ${e.statut === "proche" ? "warn" : "danger"}`}>{e.statut === "expiree" ? "expirée · " : ""}{fmtDate(e.date)}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              {r.echeances.length > 40 && <p className="muted" style={{ marginTop: 6, fontSize: 12 }}>… et {r.echeances.length - 40} autres.</p>}
+            </div>
           </div>
         </div>
 
-        {/* 2.5 Polyvalence par personne */}
-        <div className="report-section">
-          <h2>Personnes à développer (polyvalence la plus faible)</h2>
-          <div className="card">
-            <Bars items={moinsPoly} accent="#7c3aed" suffix=" postes" />
+        {/* ---------- 4. ACTION ---------- */}
+        <div className="report-section" id="action" style={{ scrollMarginTop: 16 }}>
+          <h2>4 · Qui former, sur quel poste</h2>
+          <div className="card" style={{ overflowX: "auto" }}>
+            {r.ecartTotal === 0 ? (
+              <p className="muted">Aucun écart individuel : tout le monde est au niveau cible.</p>
+            ) : r.formations.length === 0 ? (
+              <p style={{ margin: 0 }}>
+                {r.ecartTotal} formation(s) vers la cible, toutes sur des postes déjà tenus (≥ 2 relèves).{" "}
+                <Link href="/matrice" className="navlink">Détail dans la matrice &rarr;</Link>
+              </p>
+            ) : (
+              <>
+                <table>
+                  <thead><tr><th>Personne</th><th>Poste à couvrir</th><th>Service</th><th style={{ textAlign: "center" }}>Actuel → Cible</th><th style={{ textAlign: "right" }}>Priorité (fragilité du poste)</th></tr></thead>
+                  <tbody>
+                    {r.formations.map((f, i) => (
+                      <tr key={i}>
+                        <td>{f.personne}</td>
+                        <td><strong>{f.poste}</strong></td>
+                        <td className="muted">{f.atelierNom}</td>
+                        <td style={{ textAlign: "center" }}>{f.actuel} → {f.cible}</td>
+                        <td style={{ textAlign: "right" }}>{verdictBadge(f.fragilite)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="muted" style={{ marginTop: 8, fontSize: 12 }}>
+                  Les <strong>{r.nbFormationsPrioritaires} formation{r.nbFormationsPrioritaires > 1 ? "s" : ""} prioritaire{r.nbFormationsPrioritaires > 1 ? "s" : ""}</strong> (postes critiques et fragiles) d&apos;abord.
+                  {r.nbFormationsAutres > 0 && <> <strong>+ {r.nbFormationsAutres} autre{r.nbFormationsAutres > 1 ? "s" : ""}</strong> sur des postes déjà tenus — <Link href="/matrice" className="navlink">détail complet dans la matrice &rarr;</Link></>}
+                </p>
+              </>
+            )}
           </div>
         </div>
       </div>
