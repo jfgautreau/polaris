@@ -194,7 +194,7 @@ export default async function AssezCompetencesPage({ searchParams }: { searchPar
               <div className="card">
                 <h2 style={{ marginTop: 0, fontSize: 15 }}>Périmètre du calcul</h2>
                 <ul className="muted" style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.7 }}>
-                  <li><strong>Besoin par créneau</strong> = effectif requis du poste, <strong>pour chaque quart où il est activé</strong> (« Horaires des quarts »). Un poste matin + après-midi pèse 2× son effectif. Semaine initialisée par l&apos;ordonnancement → on prend ses quarts et lignes ouverts.</li>
+                  <li><strong>Besoin par créneau</strong> = effectif requis du poste, <strong>sur chaque quart posté</strong> où il tourne (matin, après-midi, nuit). Un poste matin + après-midi pèse 2× son effectif. La <strong>journée</strong> (régulière) n&apos;est comptée que pour un poste en journée seule — elle ne s&apos;ajoute jamais à matin/après-midi. Semaine initialisée par l&apos;ordonnancement → on prend ses quarts et lignes ouverts.</li>
                   <li><strong>Compétent</strong> = niveau ≥ niveau minimum du poste <em>et</em> habilitations valides ce jour-là.</li>
                   <li><strong>Présent</strong> = hors congé et absence, hors temps partiel indisponible, dans l&apos;effectif ce jour.</li>
                   <li>Postes à titulaire unique (PTNR) exclus. Affectation calculée <strong>globalement</strong> chaque jour.</li>
