@@ -154,6 +154,15 @@ données, RLS), `tasks/handoff.md` (détail écran par écran), `tasks/lessons.m
   `action_link`, il ne marche pas ici.
 
 ## Modèle métier — les pièges
+- **« Atelier » (technique) = « Service » (affiché)** — décidé le 2026-09-08.
+  Le terme métier reste `atelier` dans TOUT le code et la base (table `atelier`,
+  `personne.atelier_id`, routes `/affichage/atelier/[atelier]`, composants
+  `AtelierFilter` / `AtelierEquipeFiltres` / `ReportAtelierFilter` / `AtelierPlanning`,
+  op API `create-atelier`/`update-atelier`, classes CSS), mais il est **libellé
+  « Service » partout dans l'UI, sur les 2 sites** (filtres, en-têtes de colonnes,
+  options, titres, messages, info-bulles, cartes Bilans, `public/guide.html`, libellés
+  du journal d'audit). ⚠️ **Ne jamais réintroduire « atelier » dans une chaîne
+  visible** ni renommer les identifiants techniques. Renommage = libellés seulement.
 - **Quart ≠ Équipe.** Quarts : `journee`/`matin`/`apres_midi`/`nuit` (table `quart`,
   site-scopée depuis 0053 : PK composite `(code, site_id)`, FKs composites
   `(quart_code, site_id) → quart(code, site_id)` sur les 10 tables enfants —
