@@ -12,9 +12,10 @@ import {
 import AjoutModal from "./AjoutModal";
 import BandeauErreur from "@/components/BandeauErreur";
 import FenetreAffichageInline from "./FenetreAffichageInline";
+import ImportAbsences from "./ImportAbsences";
 import { CheckIcon, EditIcon } from "@/components/icons";
 
-type Motif = { id: string; libelle: string; code_court: string; couleur: string; actif: boolean; non_planifie: boolean };
+type Motif = { id: string; libelle: string; code_court: string; couleur: string; actif: boolean; non_planifie: boolean; code_gt: string | null };
 type Agence = { id: string; nom: string; actif: boolean };
 type TypeContrat = { code: string; libelle: string; actif: boolean; ordre: number };
 type FenetreAffichage = { jours_avant: number; jours_apres: number };
@@ -38,17 +39,25 @@ export default async function MotifsPage({
   const sp = await searchParams;
   const supabase = await getServerClient();
   const [motifsR, agencesR, typesR, fenR] = await Promise.all([
-    supabase.from("motif_absence").select("id, libelle, code_court, couleur, actif, non_planifie").order("libelle").returns<Motif[]>(),
+    supabase.from("motif_absence").select("id, libelle, code_court, couleur, actif, non_planifie, code_gt").order("libelle").returns<Motif[]>(),
     supabase.from("agence_interim").select("id, nom, actif").order("nom").returns<Agence[]>(),
     supabase.from("type_contrat").select("code, libelle, actif, ordre").order("ordre").returns<TypeContrat[]>(),
     supabase.from("parametre_affichage").select("jours_avant, jours_apres").maybeSingle<FenetreAffichage>(),
   ]);
-  // Repli tant que la migration 0060 (colonne non_planifie) n'est pas jouée.
-  const npDispo = !motifsR.error;
+  // Replis en cascade : code_gt (0066) puis non_planifie (0060) peuvent manquer
+  // tant que la migration correspondante n'est pas jouée.
   let motifs = motifsR.data ?? [];
+  let gtDispo = !motifsR.error;
+  let npDispo = !motifsR.error;
   if (motifsR.error) {
-    const { data } = await supabase.from("motif_absence").select("id, libelle, code_court, couleur, actif").order("libelle").returns<Omit<Motif, "non_planifie">[]>();
-    motifs = (data ?? []).map((m) => ({ ...m, non_planifie: false }));
+    const r2 = await supabase.from("motif_absence").select("id, libelle, code_court, couleur, actif, non_planifie").order("libelle").returns<Omit<Motif, "code_gt">[]>();
+    if (!r2.error) {
+      npDispo = true;
+      motifs = (r2.data ?? []).map((m) => ({ ...m, code_gt: null }));
+    } else {
+      const { data } = await supabase.from("motif_absence").select("id, libelle, code_court, couleur, actif").order("libelle").returns<Omit<Motif, "non_planifie" | "code_gt">[]>();
+      motifs = (data ?? []).map((m) => ({ ...m, non_planifie: false, code_gt: null }));
+    }
   }
   const agences = agencesR.data ?? [];
   const agencesIndispo = !!agencesR.error;
@@ -77,6 +86,15 @@ export default async function MotifsPage({
             <> <strong style={{ color: "var(--danger)" }}>Exécutez la migration 0060</strong> dans le SQL Editor pour activer cette colonne.</>
           )}
         </p>
+        <p className="muted" style={{ marginTop: -8, marginBottom: 16 }}>
+          Le <strong>Code GT</strong> est le code du logiciel RH (« 00CLFA »,
+          « 00MASH »…) rattaché à ce motif : il sert à l&apos;import automatique
+          des absences (section plus bas). Un code inconnu à l&apos;import crée un
+          nouveau motif.
+          {!gtDispo && (
+            <> <strong style={{ color: "var(--danger)" }}>Exécutez la migration 0066</strong> pour activer le Code GT et l&apos;import.</>
+          )}
+        </p>
 
         <AjoutModal libelle="Ajouter un motif" titre="Ajouter un motif d'absence">
           <form action={createMotif} autoComplete="off" className="inline-form">
@@ -92,6 +110,10 @@ export default async function MotifsPage({
               <span>Code</span>
               <input name="code_court" placeholder="CP" maxLength={6} required />
             </div>
+            <div className="field">
+              <span>Code GT</span>
+              <input name="code_gt" placeholder="00CLFA" maxLength={20} />
+            </div>
             <button type="submit" className="btn-sm">Ajouter</button>
           </form>
         </AjoutModal>
@@ -103,6 +125,7 @@ export default async function MotifsPage({
                 <th>Couleur</th>
                 <th>Libellé</th>
                 <th>Code</th>
+                <th style={{ width: 90 }}>Code GT</th>
                 <th style={{ width: 90, textAlign: "center" }}>Non planifié</th>
                 <th style={{ width: 90 }}></th>
                 <th style={{ width: 60, textAlign: "center" }}>Actif</th>
@@ -123,6 +146,7 @@ export default async function MotifsPage({
                     </td>
                     <td><input form={`ed-motif-${m.id}`} name="libelle" defaultValue={m.libelle} autoFocus required style={{ width: "100%" }} /></td>
                     <td><input form={`ed-motif-${m.id}`} name="code_court" defaultValue={m.code_court} maxLength={6} required style={{ width: 90 }} /></td>
+                    <td><input form={`ed-motif-${m.id}`} name="code_gt" defaultValue={m.code_gt ?? ""} maxLength={20} placeholder="00CLFA" style={{ width: 90 }} /></td>
                     <td style={{ textAlign: "center" }}><ActifCheckbox id={m.id} actif={m.non_planifie} action={toggleNonPlanifie} title={m.non_planifie ? "Repasser en planifié" : "Marquer non planifié"} /></td>
                     <td style={{ whiteSpace: "nowrap", textAlign: "center" }}>
                       <button form={`ed-motif-${m.id}`} type="submit" title="Valider" className="iconbtn ok"><CheckIcon /></button>
@@ -135,6 +159,7 @@ export default async function MotifsPage({
                     <td><span style={{ display: "inline-block", width: 20, height: 14, borderRadius: 3, background: m.couleur, border: "1px solid #cbd5e1" }} /></td>
                     <td>{m.libelle}</td>
                     <td><strong>{m.code_court}</strong></td>
+                    <td>{m.code_gt || <span className="muted">—</span>}</td>
                     <td style={{ textAlign: "center" }}>
                       <ActifCheckbox id={m.id} actif={m.non_planifie} action={toggleNonPlanifie} title={m.non_planifie ? "Non planifié — repasser en planifié" : "Planifié — marquer non planifié"} />
                     </td>
@@ -147,7 +172,7 @@ export default async function MotifsPage({
                   </tr>
                 )
               )}
-              {motifs.length === 0 && (<tr><td colSpan={6} className="muted">Aucun motif.</td></tr>)}
+              {motifs.length === 0 && (<tr><td colSpan={7} className="muted">Aucun motif.</td></tr>)}
             </tbody>
           </table>
         </div>
@@ -328,6 +353,21 @@ export default async function MotifsPage({
             <FenetreAffichageInline initial={fenetre} />
           </div>
         )}
+
+        {/* ---------------- Import des absences (logiciel RH / GT) ---------------- */}
+        <h2 style={{ marginTop: 32, marginBottom: 4 }}>Import des absences (logiciel RH)</h2>
+        <p className="muted" style={{ marginBottom: 16 }}>
+          Déposez l&apos;export CSV du logiciel de gestion des temps (absences groupées
+          par matricule). L&apos;analyse rapproche chaque personne <strong>par le nom</strong>
+          {" "}(les matricules RH ne correspondent pas à Polaris) et propose de créer les
+          motifs manquants d&apos;après leur <strong>Code GT</strong>. Les cas douteux sont à
+          confirmer avant l&apos;import ; l&apos;équivalence retenue est mémorisée pour les
+          imports suivants. À l&apos;import, les jours d&apos;absence de la période couverte
+          sont <strong>remplacés</strong> par le fichier (le RH fait foi). Chaque ligne datée
+          compte pour une <strong>journée entière</strong>.
+        </p>
+        <ImportAbsences />
+
         </LectureSeule>
       </div>
     </>

@@ -29,9 +29,11 @@ export async function createMotif(fd: FormData) {
   const libelle = s(fd, "libelle");
   const code_court = s(fd, "code_court");
   if (!libelle || !code_court) done();
+  // code_gt (0066) : code du logiciel RH rattaché au motif, sert à l'import.
   const { error } = await supabase.from("motif_absence").insert({
     libelle,
     code_court,
+    code_gt: s(fd, "code_gt") || null,
     couleur: s(fd, "couleur") || "#e5e7eb",
     site_id: site.id,
   });
@@ -40,14 +42,17 @@ export async function createMotif(fd: FormData) {
 
 export async function updateMotif(fd: FormData) {
   const supabase = await requireModuleWrite("motifs");
+  const site = await getCurrentSite();
   const { error } = await supabase
     .from("motif_absence")
     .update({
       libelle: s(fd, "libelle"),
       code_court: s(fd, "code_court"),
+      code_gt: s(fd, "code_gt") || null,
       couleur: s(fd, "couleur") || "#e5e7eb",
     })
-    .eq("id", s(fd, "id"));
+    .eq("id", s(fd, "id"))
+    .eq("site_id", site.id);
   done(error);
 }
 

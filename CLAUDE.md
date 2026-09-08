@@ -727,7 +727,16 @@ prochain gros chantier, pas une optimisation cosmétique.
   si le rapport est masqué). Réglage **indépendant** du masquage du menu Bilans.
   `setModuleMasque` accepte une clé de `MODULE_KEYS`, de `CLES_MASQUABLES_EXTRA`
   **ou** de `CLES_RAPPORTS_BILAN`.
-- Migrations : `supabase/migrations/0001..0065` (dernière appliquée : **0065**,
+- Migrations : `supabase/migrations/0001..0066` (dernière appliquée : **0065** ;
+  **`0066` écrite, EN ATTENTE d'exécution** dans le SQL Editor — `motif_absence.code_gt`
+  (code du logiciel RH rattaché à un motif, colonne « Code GT » dans Param RH) + table
+  `import_absence_personne` (équivalence apprise *matricule fichier RH → personne*, les
+  matricules RH ne correspondant pas à Polaris). Support de l'**import des absences RH**
+  depuis Param RH : dépôt du CSV → aperçu (appariement **par nom**, motifs manquants créés
+  d'après leur Code GT) → écriture qui **remplace** les jours d'absence sur la fenêtre du
+  fichier. Parser/appariement purs et testés dans `src/lib/import-absences-rh.ts` ;
+  route `/api/import-absences` (garde `motifs`), UI `src/app/admin/motifs/ImportAbsences.tsx`.
+  Chaque ligne datée = **journée entière** d'absence),
   ouverture de `competence_niveau_libelle.couleur` au **nuancier** — CHECK de format
   hexadécimal en remplacement du verrou 4 teintes de 0063, liste fermée imposée côté
   app ; migration idempotente rattrapant « 0063 jamais appliquée » ; `0064` =
