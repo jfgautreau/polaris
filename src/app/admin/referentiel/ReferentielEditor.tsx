@@ -279,7 +279,7 @@ export default function ReferentielEditor({
       </div>
 
       <div style={{ display: "flex", marginBottom: 12 }}>
-        <button type="button" style={ADD_BTN} onClick={() => addAtelier("")} title="Ajouter un atelier (à compléter ensuite)">
+        <button type="button" style={ADD_BTN} onClick={() => addAtelier("")} title="Ajouter un service (à compléter ensuite)">
           ＋ Ajouter un atelier
         </button>
       </div>
@@ -290,11 +290,11 @@ export default function ReferentielEditor({
           <div className="toolbar refhead" style={{ alignItems: "center" }}>
             <input
               value={a.nom}
-              placeholder="Nom de l'atelier"
+              placeholder="Nom du service"
               onChange={(e) => renameAtelier(a.id, e.target.value)}
               style={{ fontSize: 16, fontWeight: 700, width: 260 }}
             />
-            <ToggleSwitch on={a.actif} onChange={(v) => toggleAtelier(a.id, v)} title="Activer / désactiver l'atelier" />
+            <ToggleSwitch on={a.actif} onChange={(v) => toggleAtelier(a.id, v)} title="Activer / désactiver le service" />
             <button type="button" style={ADD_BTN} onClick={() => addLigne(a.id, "")} title="Ajouter une ligne (à compléter ensuite)">
               ＋ Ajouter une ligne
             </button>
@@ -522,7 +522,7 @@ export default function ReferentielEditor({
         </div>
       ))}
 
-      {tree.length === 0 && <p className="muted">Aucun atelier. Ajoutez-en un ci-dessus.</p>}
+      {tree.length === 0 && <p className="muted">Aucun service. Ajoutez-en un ci-dessus.</p>}
 
       {/* Modale : habilitations exigees par un poste (enregistrement immediat) */}
       {reqFor && (

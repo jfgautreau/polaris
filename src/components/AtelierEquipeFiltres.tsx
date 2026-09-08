@@ -37,7 +37,7 @@ export default function AtelierEquipeFiltres({
   return (
     <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center", opacity: pending ? 0.5 : 1, transition: "opacity .1s" }}>
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <span className="muted">Atelier :</span>
+        <span className="muted">Service :</span>
         <div className="segments">
           <button type="button" className={atelier === "" ? "seg active" : "seg"} onClick={() => go({ atelier: "" })}>
             Tous

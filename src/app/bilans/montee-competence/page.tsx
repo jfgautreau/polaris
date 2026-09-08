@@ -69,7 +69,7 @@ export default async function MonteeCompetenceReport({
         nom: p.nom,
         ligne: l.nom,
         atelierId: l.atelier_id,
-        atelier: l.atelier_id ? atNom.get(l.atelier_id) ?? "—" : "Sans atelier",
+        atelier: l.atelier_id ? atNom.get(l.atelier_id) ?? "—" : "Sans service",
         categorie: p.categorie ?? "operateur",
         effectif: p.effectif_requis ?? 0,
       }))
@@ -242,14 +242,14 @@ export default async function MonteeCompetenceReport({
               )}
             </div>
             <div className="card">
-              <h2 style={{ marginTop: 0, fontSize: 15 }}>Par atelier</h2>
+              <h2 style={{ marginTop: 0, fontSize: 15 }}>Par service</h2>
               {parAtelier.length === 0 ? (
                 <p className="muted">Aucun objectif de polyvalence saisi.</p>
               ) : (
                 <table>
                   <thead>
                     <tr>
-                      <th>Atelier</th>
+                      <th>Service</th>
                       <th style={{ textAlign: "center" }}>Actuel</th>
                       <th style={{ textAlign: "center" }}>Cible</th>
                       <th style={{ textAlign: "center" }}>Écart</th>

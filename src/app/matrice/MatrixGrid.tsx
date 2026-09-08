@@ -339,7 +339,7 @@ export default function MatrixGrid({
                 <td className={g.nameCell}>
                   {pers.sansCompetence && (
                     <span
-                      title="Aucune compétence sur aucun poste (tous ateliers confondus)"
+                      title="Aucune compétence sur aucun poste (tous services confondus)"
                       aria-label="Aucune compétence"
                       style={{
                         display: "inline-flex",

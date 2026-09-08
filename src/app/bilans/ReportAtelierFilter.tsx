@@ -31,7 +31,7 @@ export default function ReportAtelierFilter({
 
   return (
     <div className="noprint" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-      <span className="muted" style={{ fontWeight: 600 }}>Atelier :</span>
+      <span className="muted" style={{ fontWeight: 600 }}>Service :</span>
       <div className="segments">
         {avecTous && (
           <button type="button" className={atelier === "" ? "seg active" : "seg"} onClick={() => go("")}>

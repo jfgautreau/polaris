@@ -65,7 +65,7 @@ export default async function ImpressionTousLesPlannings({
 
       {ateliers.length === 0 ? (
         <p className="muted" style={{ padding: 24 }}>
-          Aucun atelier avec des lignes actives à imprimer.
+          Aucun service avec des lignes actives à imprimer.
         </p>
       ) : (
         ateliers.map((a) => (

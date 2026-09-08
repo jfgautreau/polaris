@@ -176,7 +176,7 @@ export default async function PolyvalenceReport({ searchParams }: { searchParams
 
         {/* 2.0 Competence moyenne par atelier */}
         <div className="report-section">
-          <h2>Compétence moyenne par atelier</h2>
+          <h2>Compétence moyenne par service</h2>
           <div className="card">
             {lignesMoyennes.length === 0 ? (
               <p className="muted">Aucun poste actif rattaché à un atelier.</p>
@@ -184,7 +184,7 @@ export default async function PolyvalenceReport({ searchParams }: { searchParams
               <table>
                 <thead>
                   <tr>
-                    <th>Atelier</th>
+                    <th>Service</th>
                     {CATS.map((c) => (
                       <th key={c.key} style={{ textAlign: "center" }}>{c.label}</th>
                     ))}
@@ -204,7 +204,7 @@ export default async function PolyvalenceReport({ searchParams }: { searchParams
             )}
             <p className="muted" style={{ marginTop: 8, marginBottom: 0, fontSize: 12 }}>
               Moyenne des niveaux de la matrice sur l&apos;ensemble des couples
-              personne active × poste actif de la catégorie, dans cet atelier. Une compétence
+              personne active × poste actif de la catégorie, dans ce service. Une compétence
               non saisie compte pour 0 ; une restriction médicale est exclue du calcul.
               Rouge &lt; 1 · orange &lt; {SEUIL} · vert ≥ {SEUIL}.
             </p>

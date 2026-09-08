@@ -47,7 +47,7 @@ export default function ImpressionAuto() {
       <button
         type="button"
         onClick={ajusterEtImprimer}
-        title="Imprimer / enregistrer en PDF (une page A3 par atelier)"
+        title="Imprimer / enregistrer en PDF (une page A3 par service)"
         style={{
           display: "inline-flex",
           alignItems: "center",

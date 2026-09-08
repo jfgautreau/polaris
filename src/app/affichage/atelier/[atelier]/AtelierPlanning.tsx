@@ -63,7 +63,7 @@ export default async function AtelierPlanning({
   if (!atelier) {
     return (
       <div className="container">
-        <h1>Atelier introuvable</h1>
+        <h1>Service introuvable</h1>
         <p className="muted">Vérifiez l&apos;URL (/affichage).</p>
       </div>
     );
@@ -413,7 +413,7 @@ export default async function AtelierPlanning({
           <div style={{ fontWeight: 600 }}>{info?.nom ?? "?"}</div>
           {distant && (
             <div style={{ color: "#b45309", fontStyle: "italic", fontSize: 12 }}>
-              (Atelier {atelierNomById.get(info!.atelierId) ?? "?"})
+              (Service {atelierNomById.get(info!.atelierId) ?? "?"})
             </div>
           )}
           {h && <div style={{ color: "#1d4ed8", fontSize: 13 }}>{h}</div>}
@@ -465,7 +465,7 @@ export default async function AtelierPlanning({
 
       {noWork ? (
         <p className="muted" style={{ fontSize: 18, padding: 20 }}>
-          Aucun jour ouvert dans cet atelier sur la période affichée (J-1 à J+4).
+          Aucun jour ouvert dans ce service sur la période affichée (J-1 à J+4).
           Vérifiez l’ouverture des lignes dans Ordonnancement.
         </p>
       ) : (
@@ -522,7 +522,7 @@ export default async function AtelierPlanning({
       <div style={{ marginTop: 14, fontSize: 14, color: "#6b7280" }}>
         Légende : <span style={{ background: INTERIM_BG, padding: "0 6px" }}>Intérimaire</span>{" "}
         · <span style={{ background: AUJOURDHUI, padding: "0 6px" }}>Aujourd&apos;hui</span> · horaires en bleu ·{" "}
-        <span style={{ color: "#b45309", fontStyle: "italic" }}>(Atelier X)</span> = prêté ·{" "}
+        <span style={{ color: "#b45309", fontStyle: "italic" }}>(Service X)</span> = prêté ·{" "}
         <span style={{ color: "#b91c1c" }}>Absence</span>{" "}
         · <span style={{ color: "#3730a3" }}>TP</span> (temps partiel){refreshNote ? " · mise à jour auto toutes les 5 min." : "."}
       </div>

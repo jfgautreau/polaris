@@ -362,9 +362,9 @@ export default function AbsencesEditor({
             <input value={fNom} onChange={(e) => setFNom(e.target.value)} placeholder="🔍 rechercher un nom" />
           </div>
           <div className="field" style={{ flex: "0 0 200px" }}>
-            <span>Atelier</span>
+            <span>Service</span>
             <select value={fAtelier} onChange={(e) => setFAtelier(e.target.value)}>
-              <option value="">Tous ateliers</option>
+              <option value="">Tous services</option>
               {ateliers.map((a) => (<option key={a.id} value={a.id}>{a.nom}</option>))}
             </select>
           </div>

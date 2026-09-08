@@ -38,7 +38,7 @@ export default function AtelierFilter({
 
   return (
     <div className="filterrow" style={{ opacity: pending ? 0.5 : 1, transition: "opacity .1s" }}>
-      <span className="lbl">Atelier</span>
+      <span className="lbl">Service</span>
       <div className="segments">
         <button type="button" className={atelier === "" ? "seg active" : "seg"} onClick={() => go("")}>
           Tous

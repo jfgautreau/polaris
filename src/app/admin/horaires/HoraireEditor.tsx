@@ -158,7 +158,7 @@ export default function HoraireEditor({
   }
 
   // -- Suppressions ciblees (sur les postes visibles, quarts actifs) --
-  const porteeLabel = atelier ? "l'atelier sélectionné" : "tous les ateliers";
+  const porteeLabel = atelier ? "le service sélectionné" : "tous les services";
   function viderJour(j: number) {
     if (!window.confirm(`Vider tous les horaires du ${JOURS[j]} (${porteeLabel}) ?`)) return;
     const out: ApiCell[] = [];
@@ -203,7 +203,7 @@ export default function HoraireEditor({
       {/* Barre d'outils : ateliers + suppressions ciblees */}
       <div className="card" style={{ position: "sticky", top: 0, zIndex: 6, marginBottom: 16 }}>
         <div className="toolbar" style={{ alignItems: "center", flexWrap: "wrap", gap: 10 }}>
-          <span className="muted">Atelier :</span>
+          <span className="muted">Service :</span>
           <div className="segments">
             <button type="button" className={atelier === "" ? "seg active" : "seg"} onClick={() => setAtelier("")}>
               Tous

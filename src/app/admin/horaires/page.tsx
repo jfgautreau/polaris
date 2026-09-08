@@ -39,7 +39,7 @@ export default async function HorairesPage() {
       ligneNom: l.nom,
       ligneOrdre: l.ordre_affichage ?? 0,
       atelierId: l.atelier?.id ?? "",
-      atelierNom: l.atelier?.nom ?? "(Sans atelier)",
+      atelierNom: l.atelier?.nom ?? "(Sans service)",
       postes: [...(l.poste ?? [])]
         .filter((p) => p.actif)
         .sort((a, b) => ordreThenNom({ ordre: a.ordre_affichage ?? 0, nom: a.nom }, { ordre: b.ordre_affichage ?? 0, nom: b.nom }))

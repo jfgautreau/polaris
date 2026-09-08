@@ -25,7 +25,7 @@ export default async function AffichageIndex() {
   return (
     <div className="container">
       <h1>Affichage couloir</h1>
-      <p className="muted">Choisissez un atelier pour afficher son placement du jour.</p>
+      <p className="muted">Choisissez un service pour afficher son placement du jour.</p>
       <div className="card">
         <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
           {ateliers.map((a) => (
@@ -35,7 +35,7 @@ export default async function AffichageIndex() {
               </Link>
             </li>
           ))}
-          {ateliers.length === 0 && <li className="muted">Aucun atelier.</li>}
+          {ateliers.length === 0 && <li className="muted">Aucun service.</li>}
         </ul>
       </div>
     </div>

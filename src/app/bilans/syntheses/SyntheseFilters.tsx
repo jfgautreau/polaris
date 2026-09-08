@@ -96,7 +96,7 @@ export default function SyntheseFilters({
       {vue === "absences" && (
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginLeft: "auto" }}>
           <select value={atelier} onChange={(e) => go({ atelier: e.target.value })} style={{ height: 32 }}>
-            <option value="">Tous les ateliers</option>
+            <option value="">Tous les services</option>
             {ateliers.map((a) => (
               <option key={a.id} value={a.id}>{a.nom}</option>
             ))}

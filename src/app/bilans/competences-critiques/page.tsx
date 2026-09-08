@@ -185,7 +185,7 @@ export default async function CompetencesCritiquesReport({ searchParams }: { sea
               <p className="muted">Aucun poste critique ou fragile : chaque poste a au moins 2 personnes habilitées sans risque imminent.</p>
             ) : (
               <table>
-                <thead><tr><th>Poste</th><th>Atelier</th><th style={{ textAlign: "center" }}>Relève sûre</th><th>Relève (risque)</th><th style={{ textAlign: "right" }}>Verdict</th></tr></thead>
+                <thead><tr><th>Poste</th><th>Service</th><th style={{ textAlign: "center" }}>Relève sûre</th><th>Relève (risque)</th><th style={{ textAlign: "right" }}>Verdict</th></tr></thead>
                 <tbody>
                   {critiques.map((a) => (
                     <tr key={a.id}>
@@ -217,7 +217,7 @@ export default async function CompetencesCritiquesReport({ searchParams }: { sea
             <h2>Postes à titulaire unique (PTNR)</h2>
             <div className="card" style={{ overflowX: "auto" }}>
               <table>
-                <thead><tr><th>Poste</th><th>Atelier</th><th>Titulaire(s)</th><th style={{ textAlign: "right" }}>État</th></tr></thead>
+                <thead><tr><th>Poste</th><th>Service</th><th>Titulaire(s)</th><th style={{ textAlign: "right" }}>État</th></tr></thead>
                 <tbody>
                   {ptnr.map((a) => (
                     <tr key={a.id}>

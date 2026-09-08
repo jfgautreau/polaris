@@ -95,7 +95,7 @@ const COLS: { key: ColKey; label: string; w: number; search?: boolean }[] = [
   { key: "prenom", label: "Prénom", w: 10, search: true },
   { key: "sexe", label: "H/F", w: 3, search: true },
   { key: "equipe", label: "Équipe", w: 5, search: true },
-  { key: "atelier", label: "Atelier", w: 4, search: true },
+  { key: "atelier", label: "Service", w: 4, search: true },
   { key: "date_livret_accueil", label: "Livret", w: 7 },
   { key: "absences", label: "Abs.", w: 4 },
   { key: "alerte", label: "⚠ 18m", w: 5.5 },
@@ -983,7 +983,7 @@ export default function PersonnelEditor({
                 </select>
               </div>
               <div className="field">
-                <span>Atelier</span>
+                <span>Service</span>
                 <select value={at} onChange={(e) => setAt(e.target.value)}>
                   <option value="">-</option>{ateliers.map((x) => (<option key={x.id} value={x.id}>{x.nom}</option>))}
                 </select>

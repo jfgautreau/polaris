@@ -58,7 +58,7 @@ export default async function PersonnelReport({ searchParams }: { searchParams: 
   const persAtelier = new Map(allPersons.map((p) => [p.id, p.atelier_id]));
   const active = persons.filter((p) => p.statut === "ACTIF");
   const eqNom = (id: string | null) => (id ? (eqD ?? []).find((e) => e.id === id)?.nom ?? "—" : "Sans équipe");
-  const atNom = (id: string | null) => (id ? (atD ?? []).find((a) => a.id === id)?.nom ?? "—" : "Sans atelier");
+  const atNom = (id: string | null) => (id ? (atD ?? []).find((a) => a.id === id)?.nom ?? "—" : "Sans service");
   const persNom = (id: string) => {
     const p = persons.find((x) => x.id === id);
     return p ? `${p.nom} ${p.prenom}` : "?";
@@ -137,7 +137,7 @@ export default async function PersonnelReport({ searchParams }: { searchParams: 
               <Bars items={parEquipe} />
             </div>
             <div className="card">
-              <h2 style={{ marginTop: 0, fontSize: 15 }}>Répartition par atelier</h2>
+              <h2 style={{ marginTop: 0, fontSize: 15 }}>Répartition par service</h2>
               <Bars items={parAtelier} accent="#7c3aed" />
             </div>
           </div>

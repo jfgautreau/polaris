@@ -93,7 +93,7 @@ export default async function BilanPage({
 
         <form className="toolbar" method="get">
           <div className="field">
-            <span>Atelier</span>
+            <span>Service</span>
             <select name="atelier" defaultValue={sp.atelier ?? ""}>
               <option value="">Tous</option>
               {ateliers.map((a) => (

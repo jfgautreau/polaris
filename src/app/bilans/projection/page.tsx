@@ -181,7 +181,7 @@ export default async function ProjectionPage({ searchParams }: { searchParams: P
                   <table>
                     <thead>
                       <tr>
-                        <th>Semaine</th><th>Atelier</th><th>Poste</th>
+                        <th>Semaine</th><th>Service</th><th>Poste</th>
                         <th style={{ textAlign: "center" }}>Manque</th>
                         <th style={{ textAlign: "center" }}>Besoin</th>
                         <th style={{ textAlign: "center" }}>Relève (matrice)</th>

@@ -576,7 +576,7 @@ export default function PlacementBoard({
       <div className={s.filters}>
         {title && <div style={{ alignSelf: "center", marginRight: 4 }}>{title}</div>}
         <div className={s.fitem}>
-          <span>Atelier</span>
+          <span>Service</span>
           <div className="segments">
             {ateliers.map((a) => (
               <button key={a.id} type="button" className={atelierId === a.id ? "seg active" : "seg"} onClick={() => go({ atelier: a.id })}>
@@ -615,7 +615,7 @@ export default function PlacementBoard({
             offColor="#4f46e5"
             onColor="#b45309"
             width={168}
-            title={vueAbsences ? "Revenir au plan de l'atelier" : "Voir les absences de cet atelier"}
+            title={vueAbsences ? "Revenir au plan du service" : "Voir les absences de ce service"}
           />
         </div>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
@@ -635,7 +635,7 @@ export default function PlacementBoard({
             type="button"
             className={s.navbtn}
             onClick={imprimer}
-            title="Imprimer le plan de cet atelier (1 page A4 paysage)"
+            title="Imprimer le plan de ce service (1 page A4 paysage)"
             style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
           >
             <PrintIcon size={15} /> PDF
@@ -725,7 +725,7 @@ export default function PlacementBoard({
                 </>
               ) : (
                 <p className="muted" style={{ margin: 0 }}>
-                  Aucun poste ouvert pour ce quart dans cet atelier (lignes fermées dans
+                  Aucun poste ouvert pour ce quart dans ce service (lignes fermées dans
                   l&apos;Ordonnancement, ou postes désactivés sur ce quart).
                 </p>
               )}
@@ -852,7 +852,7 @@ export default function PlacementBoard({
                 </optgroup>
               </select>
               <select value={fAtelier} onChange={(e) => setFAtelier(e.target.value)}>
-                <option value="">Tous ateliers</option>
+                <option value="">Tous services</option>
                 {ateliers.map((a) => (
                   <option key={a.id} value={a.id}>{a.nom}</option>
                 ))}
@@ -954,7 +954,7 @@ export default function PlacementBoard({
           contenu et la mise a l'echelle (cf. placement.module.css). */}
       <div className={s.printInner} ref={printRef}>
         <div className={s.printHead}>
-          <strong className={s.printTitre}>{ateliers.find((a) => a.id === atelierId)?.nom ?? "Atelier"}</strong>
+          <strong className={s.printTitre}>{ateliers.find((a) => a.id === atelierId)?.nom ?? "Service"}</strong>
           <span>{quartLib[quart] ?? quart}</span>
           <span>{jourLabel(jour)}</span>
           <span className={s.printCouv}>
