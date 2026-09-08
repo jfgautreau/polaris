@@ -7,13 +7,13 @@ import ReportAtelierFilter from "@/app/bilans/ReportAtelierFilter";
 import CouvertureSemaineNav from "./CouvertureSemaineNav";
 import { requireRapportBilan } from "@/lib/permissions";
 import { isoDate, parseMonday, isoWeekNumber } from "@/lib/week";
-import { chargerCouvertureConges, type ServiceJour } from "@/lib/assez-competences-data";
+import { chargerCouvertureConges, type ServiceJour, type PosteJourCase } from "@/lib/assez-competences-data";
 
 const MOIS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
 const fmtJour = (iso: string) => { const [, m, d] = iso.split("-").map(Number); return `${d} ${MOIS[m - 1]}`; };
 const catLabel = (c: string) => (c === "conducteur" ? "Cond." : c === "manager" ? "Mgr" : "Opér.");
 
-// Style d'une case service selon son solde du jour.
+// Cellule agrégée d'un service selon son solde du jour.
 function celluleService(j: ServiceJour): { txt: string; bg?: string; color: string; poids: number } {
   if (j.besoin === 0) return { txt: "—", color: "#cbd5e1", poids: 400 };
   if (j.deficit > 0) return { txt: `−${j.deficit}`, bg: "#fee2e2", color: "#7f1d1d", poids: 700 };
@@ -36,13 +36,30 @@ export default async function AssezCompetencesPage({ searchParams }: { searchPar
 
   const shown = atelier ? services.filter((s) => s.atelierId === atelier) : services;
 
-  // Libellé de la quinzaine pour la navigation.
   const semA = cols[0]?.semaine ?? isoWeekNumber(new Date());
   const semB = cols[cols.length - 1]?.semaine ?? semA;
   const navLabel = `S${semA} → S${semB} · ${fmtJour(cols[0]?.iso ?? lundiDepart)} – ${fmtJour(cols[cols.length - 1]?.iso ?? lundiDepart)}`;
 
-  // Bordure de césure entre les deux semaines (avant chaque lundi sauf le 1er).
   const sep = (ci: number): React.CSSProperties => (ci > 0 && cols[ci].premierDeSemaine ? { borderLeft: "2px solid #cbd5e1" } : {});
+
+  // Cellule d'un poste un jour : une puce par créneau ouvert.
+  const celluleposte = (c: PosteJourCase) => {
+    if (!c.ouvert || c.quarts.length === 0) return <span style={{ color: "#e2e8f0" }}>·</span>;
+    return (
+      <span style={{ display: "inline-flex", gap: 3, flexWrap: "wrap", justifyContent: "center" }}>
+        {c.quarts.map((q) => {
+          const manque = q.deficit > 0;
+          return (
+            <span key={q.quart} title={`${q.label} : ${q.couvrable}/${q.besoin} tenable${q.besoin > 1 ? "s" : ""}`}
+              style={{ fontSize: 10.5, fontWeight: 700, fontVariantNumeric: "tabular-nums", padding: "2px 5px", borderRadius: 5,
+                background: manque ? "#fee2e2" : "#e7f4ec", color: manque ? "#7f1d1d" : "#15803d", whiteSpace: "nowrap" }}>
+              {q.label} {manque ? `${q.couvrable}/${q.besoin}` : q.besoin}
+            </span>
+          );
+        })}
+      </span>
+    );
+  };
 
   return (
     <>
@@ -52,7 +69,7 @@ export default async function AssezCompetencesPage({ searchParams }: { searchPar
           <div>
             <PageTitle module="bilans">Assez de compétences&nbsp;?</PageTitle>
             <div className="sub">
-              Aide à la validation des congés, <strong>avant</strong> toute affectation de planning · quinzaine ·
+              Aide à la validation des congés, <strong>avant</strong> toute affectation de planning · quinzaine · besoin <strong>par créneau</strong> ·
               une personne polyvalente ne tient qu&apos;<strong>une place à la fois</strong> (affectation optimale, jamais comptée deux fois)
             </div>
           </div>
@@ -71,7 +88,7 @@ export default async function AssezCompetencesPage({ searchParams }: { searchPar
               <div className={`kpi ${nbEnTension > 0 ? "danger" : "ok"}`}>
                 <div className="v">{nbEnTension}<small> / {nbServices}</small></div>
                 <div className="l">Services en tension</div>
-                <div className="s">au moins un jour non tenu</div>
+                <div className="s">au moins un créneau non tenu</div>
               </div>
               <div className={`kpi ${pireJour.places > 0 ? "danger" : "ok"}`}>
                 <div className="v">{pireJour.places}</div>
@@ -91,12 +108,12 @@ export default async function AssezCompetencesPage({ searchParams }: { searchPar
             </div>
 
             <div className="report-section">
-              <h2>Couverture par service</h2>
+              <h2>Couverture par service et par créneau</h2>
               <div className="card" style={{ overflowX: "auto" }}>
                 <table className="matrix" style={{ borderCollapse: "collapse", width: "100%" }}>
                   <thead>
                     <tr>
-                      <th style={{ position: "sticky", left: 0, background: "#fff", zIndex: 2, minWidth: 220 }} />
+                      <th style={{ position: "sticky", left: 0, background: "#fff", zIndex: 2, minWidth: 210 }} />
                       <th style={{ background: "#f8fafc" }} />
                       <th style={{ background: "#f8fafc" }} />
                       {[0, 1].map((w) => {
@@ -110,10 +127,10 @@ export default async function AssezCompetencesPage({ searchParams }: { searchPar
                     </tr>
                     <tr>
                       <th style={{ textAlign: "left", position: "sticky", left: 0, background: "#fff", zIndex: 2, paddingLeft: 12 }}>Service / poste</th>
-                      <th style={{ background: "#f8fafc", fontSize: 11, minWidth: 52 }}>Cat.</th>
-                      <th style={{ background: "#f8fafc", fontSize: 11, minWidth: 52 }}>Besoin</th>
+                      <th style={{ background: "#f8fafc", fontSize: 11, minWidth: 46 }}>Cat.</th>
+                      <th style={{ background: "#f8fafc", fontSize: 11, minWidth: 78 }}>Besoin</th>
                       {cols.map((c, ci) => (
-                        <th key={c.iso} style={{ textAlign: "center", minWidth: 46, fontSize: 12, background: "#f8fafc", ...sep(ci) }}>
+                        <th key={c.iso} style={{ textAlign: "center", minWidth: 62, fontSize: 12, background: "#f8fafc", ...sep(ci) }}>
                           {c.jourCourt}<br /><span className="muted" style={{ fontWeight: 400, fontSize: 9 }}>{c.num}</span>
                         </th>
                       ))}
@@ -128,29 +145,25 @@ export default async function AssezCompetencesPage({ searchParams }: { searchPar
                             <span className="muted" style={{ fontWeight: 400, fontSize: 11, marginLeft: 6 }}>{s.nbPostes} poste{s.nbPostes > 1 ? "s" : ""}</span>
                           </td>
                           <td />
-                          <td style={{ textAlign: "center", color: "var(--muted)", fontWeight: 700 }}>{s.besoinJour}<span style={{ fontWeight: 400, fontSize: 10 }}>/j</span></td>
+                          <td />
                           {s.jours.map((j, ci) => {
                             const c = celluleService(j);
                             return (
                               <td key={ci} style={{ textAlign: "center", padding: 3, ...sep(ci) }}>
-                                <div style={{ background: c.bg, color: c.color, fontWeight: c.poids, borderRadius: 7, padding: "6px 0", fontVariantNumeric: "tabular-nums" }}>{c.txt}</div>
+                                <div style={{ background: c.bg, color: c.color, fontWeight: c.poids, borderRadius: 7, padding: "6px 0", fontVariantNumeric: "tabular-nums" }} title="Solde du service (tous créneaux) : +réserve / 0 juste / −manque">{c.txt}</div>
                               </td>
                             );
                           })}
                         </tr>
-                        {s.postesQuiCoincent.map((p) => (
-                          <tr key={p.id}>
+                        {s.postes.map((p) => (
+                          <tr key={p.id} style={{ opacity: p.enTension ? 1 : 0.82 }}>
                             <td style={{ position: "sticky", left: 0, background: "#fff", zIndex: 1, paddingLeft: 28, fontSize: 12.5 }}>{p.nom}</td>
                             <td style={{ textAlign: "center" }}>
-                              <span className="rbadge" style={{ background: p.categorie === "conducteur" ? "#eceafe" : "#e2f2f6", color: p.categorie === "conducteur" ? "#4338ca" : "#0e7490", fontSize: 10.5 }}>{catLabel(p.categorie)}</span>
+                              <span className="rbadge" style={{ background: p.categorie === "conducteur" ? "#eceafe" : p.categorie === "manager" ? "#f3e8ff" : "#e2f2f6", color: p.categorie === "conducteur" ? "#4338ca" : p.categorie === "manager" ? "#9333ea" : "#0e7490", fontSize: 10 }}>{catLabel(p.categorie)}</span>
                             </td>
-                            <td style={{ textAlign: "center", color: "var(--muted)", fontSize: 13 }}>{p.besoin}</td>
-                            {p.deficit.map((d, ci) => (
-                              <td key={ci} style={{ textAlign: "center", padding: 3, ...sep(ci) }}>
-                                {d > 0
-                                  ? <div style={{ background: "#fee2e2", color: "#7f1d1d", fontWeight: 700, borderRadius: 7, padding: "5px 0", fontSize: 12, fontVariantNumeric: "tabular-nums" }}>−{d}</div>
-                                  : <span style={{ color: "#e2e8f0" }}>·</span>}
-                              </td>
+                            <td style={{ fontSize: 11, color: "var(--muted)", whiteSpace: "nowrap" }}>{p.besoinResume.map((b) => `${b.label} ${b.besoin}`).join(" · ")}</td>
+                            {p.jours.map((c, ci) => (
+                              <td key={ci} style={{ textAlign: "center", padding: 3, ...sep(ci) }}>{celluleposte(c)}</td>
                             ))}
                           </tr>
                         ))}
@@ -166,27 +179,25 @@ export default async function AssezCompetencesPage({ searchParams }: { searchPar
                 <h2 style={{ marginTop: 0, fontSize: 15 }}>Comment se lit le manque</h2>
                 <p className="muted" style={{ marginBottom: 8 }}>
                   Le solde d&apos;un service, chaque jour, est le <strong>meilleur remplissage possible</strong> de ses postes
-                  par les personnes présentes et compétentes — chacune affectée à <strong>un seul</strong> poste, pour tout le site.
+                  et créneaux par les personnes présentes et compétentes — chacune affectée à <strong>une seule</strong> place, pour tout le site.
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 13 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}><span style={pastille("#e7f4ec", "#15803d")}>+2</span> Réserve — des personnes qualifiées en plus du besoin</div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}><span style={pastille("#fef3c7", "#92400e")}>0</span> Juste couvert — un congé de plus casse la couverture</div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}><span style={pastille("#fee2e2", "#7f1d1d")}>−1</span> Place non tenue — compétence manquante ce jour</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}><span style={pastille("#e7f4ec", "#15803d")}>M 3</span> Créneau couvert (matin, 3 places tenues)</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}><span style={pastille("#fee2e2", "#7f1d1d")}>A 1/3</span> Créneau en manque (après-midi, 1 tenable sur 3)</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}><span style={pastille("#e7f4ec", "#15803d")}>+2</span> / <span style={pastille("#fef3c7", "#92400e")}>0</span> / <span style={pastille("#fee2e2", "#7f1d1d")}>−1</span> Solde agrégé du service (réserve / juste / manque)</div>
                 </div>
                 <p className="muted" style={{ marginTop: 10, fontSize: 12 }}>
-                  Un service peut sembler couvert poste par poste et rester en rouge&nbsp;: les mêmes polyvalents
-                  ne peuvent pas tenir deux postes en même temps. Le détail montre les postes qui coincent.
-                  La <strong>réserve</strong> (vert) est une borne haute&nbsp;: elle ignore le fait qu&apos;une personne
-                  puisse être requise ailleurs le même jour.
+                  Un service peut sembler couvert poste par poste et rester en rouge&nbsp;: les mêmes polyvalents ne
+                  peuvent pas tenir deux places en même temps. La <strong>réserve</strong> (vert) est une borne haute.
                 </p>
               </div>
               <div className="card">
                 <h2 style={{ marginTop: 0, fontSize: 15 }}>Périmètre du calcul</h2>
                 <ul className="muted" style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.7 }}>
-                  <li><strong>Besoin</strong> = effectif requis de chaque poste au Référentiel, chaque jour ouvré. Postes à titulaire unique (PTNR) exclus.</li>
+                  <li><strong>Besoin par créneau</strong> = effectif requis du poste, <strong>pour chaque quart où il est activé</strong> (« Horaires des quarts »). Un poste matin + après-midi pèse 2× son effectif. Semaine initialisée par l&apos;ordonnancement → on prend ses quarts et lignes ouverts.</li>
                   <li><strong>Compétent</strong> = niveau ≥ niveau minimum du poste <em>et</em> habilitations valides ce jour-là.</li>
-                  <li><strong>Présent</strong> = hors congé et absence déclarée, hors temps partiel indisponible, dans l&apos;effectif ce jour (contrats).</li>
-                  <li>Affectation calculée <strong>globalement</strong> chaque jour&nbsp;: le filtre Service masque des lignes, il n&apos;assouplit jamais la contrainte «&nbsp;une personne = une place&nbsp;».</li>
+                  <li><strong>Présent</strong> = hors congé et absence, hors temps partiel indisponible, dans l&apos;effectif ce jour.</li>
+                  <li>Postes à titulaire unique (PTNR) exclus. Affectation calculée <strong>globalement</strong> chaque jour.</li>
                 </ul>
               </div>
             </div>
@@ -198,5 +209,5 @@ export default async function AssezCompetencesPage({ searchParams }: { searchPar
 }
 
 function pastille(bg: string, color: string): React.CSSProperties {
-  return { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 36, height: 22, borderRadius: 6, background: bg, color, fontWeight: 700, fontSize: 12, flex: "0 0 auto", fontVariantNumeric: "tabular-nums" };
+  return { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 30, height: 22, padding: "0 6px", borderRadius: 6, background: bg, color, fontWeight: 700, fontSize: 11, flex: "0 0 auto", fontVariantNumeric: "tabular-nums" };
 }

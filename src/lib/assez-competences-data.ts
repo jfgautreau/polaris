@@ -1,28 +1,27 @@
 // Rapport « Assez de compétences ? » — aide à la VALIDATION DES CONGÉS, avant
-// toute affectation de planning. Pour chaque service et chaque jour ouvré de la
-// quinzaine : reste-t-il assez de personnes présentes et compétentes pour tenir
-// les postes requis ? Une personne polyvalente ne tient qu'UN poste à la fois —
-// jamais comptée deux fois.
+// toute affectation de planning. Pour chaque service, chaque jour ouvré et chaque
+// CRÉNEAU (matin / après-midi / nuit / journée) de la quinzaine : reste-t-il assez
+// de personnes présentes et compétentes pour tenir les postes requis ? Une
+// personne polyvalente ne tient qu'UN poste à la fois — jamais comptée deux fois.
 //
-// C'est un FRÈRE de la Projection de capacité (`projection-capacite-data.ts`),
-// avec deux différences assumées :
-//   1. Le BESOIN vient du RÉFÉRENTIEL (`poste.effectif_requis`), pas de
-//      l'ordonnancement : on veut le besoin théorique de chaque jour ouvré,
-//      indépendamment de la semaine-type / des quarts (le planning n'est pas
-//      encore fait). Les PTNR (`remplacable = false`, titulaire unique par
-//      conception) sont exclus, comme dans le Cockpit et Polyvalence.
-//   2. La maille est SERVICE × JOUR sur 2 semaines (10 jours ouvrés), pas la
-//      semaine agrégée.
+// FRÈRE de la Projection de capacité (`projection-capacite-data.ts`). Le cœur de
+// calcul est partagé : `buildJourFlow` (affectation optimale par flot maximum, une
+// personne = une place), et l'affectation est GLOBALE au site chaque jour (un seul
+// graphe pour tous les services + tous les créneaux). Le filtre de service ne fait
+// que masquer des lignes à l'écran, il n'assouplit jamais la contrainte.
 //
-// Le cœur de calcul est partagé : `buildJourFlow` (affectation optimale par flot
-// maximum, une personne = une place). L'AFFECTATION EST GLOBALE au site chaque
-// jour (un seul graphe pour tous les services) : une personne utilisée sur un
-// service ne peut pas l'être sur un autre le même jour. Le filtre de service à
-// l'écran ne fait que masquer des lignes — il ne recalcule jamais une couverture
-// « par service » qui rendrait les polyvalents disponibles deux fois.
+// BESOIN — par (poste × quart), pas par poste :
+//   • Par défaut (semaine non initialisée), source RÉFÉRENTIEL : chaque quart où le
+//     poste est ACTIVÉ (`poste_quart`, défaut actif) compte pour son `effectif_requis`.
+//     Un poste ouvert matin ET après-midi pèse donc 3 + 3 = 6 places sur la journée.
+//     ⚠️ Conséquence : pour qu'un poste ne compte pas sur un créneau qu'il ne fait
+//     pas (p. ex. la « journée » quand il tourne en matin/après-midi), il faut
+//     désactiver ce quart pour ce poste dans « Horaires des quarts ».
+//   • Quand l'ORDONNANCEMENT a initialisé le jour, on prend ses données (plus fines :
+//     quarts réellement actifs `jour_quart` et lignes ouvertes `ouverture_quart`).
+//   • PTNR (`remplacable = false`) exclus, comme au Cockpit et à Polyvalence.
 //
-// ⚠️ RLS : appelé avec getServerClient() (bilan en lecture), donc scopé au site
-// courant automatiquement — aucun site_id à forcer ici.
+// ⚠️ RLS : appelé avec getServerClient() (bilan en lecture) → scopé au site courant.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchAll } from "@/lib/fetch-all";
@@ -34,36 +33,36 @@ import { buildJourFlow, type BesoinPoste, type PersonneDispo } from "@/lib/proje
 
 export type JourCol = {
   iso: string;
-  jourCourt: string; // « Lun »
-  num: string; // « 15/09 »
-  semaine: number; // n° ISO
-  premierDeSemaine: boolean; // vrai le lundi (marque la césure entre les 2 semaines)
+  jourCourt: string;
+  num: string;
+  semaine: number;
+  premierDeSemaine: boolean;
 };
 
-export type PosteQuiCoince = {
+// Un créneau d'un poste un jour : besoin, couvrable, manque.
+export type QuartCase = { quart: string; label: string; besoin: number; couvrable: number; deficit: number };
+// Une case (poste × jour) = les créneaux ouverts ce jour + le manque total.
+export type PosteJourCase = { ouvert: boolean; quarts: QuartCase[]; deficit: number };
+
+export type PosteCouverture = {
   id: string;
   nom: string;
   categorie: string;
-  besoin: number; // effectif_requis
-  deficit: number[]; // par colonne (0 = pas de manque ce jour)
+  besoinResume: { label: string; besoin: number }[]; // structure de besoin (référentiel) pour la colonne « Besoin »
+  jours: PosteJourCase[]; // aligné sur cols
+  enTension: boolean;
 };
 
-// État d'un service un jour : besoin, manque (déficit du flot global attribué à
-// ce service) et réserve théorique (personnes présentes qualifiées non requises).
-export type ServiceJour = {
-  besoin: number;
-  deficit: number; // places non tenables (source de vérité)
-  reserve: number; // marge indicative si couvert (borne haute, cf. note UI)
-};
+// État agrégé d'un service un jour.
+export type ServiceJour = { besoin: number; deficit: number; reserve: number };
 
 export type ServiceCouverture = {
   atelierId: string;
   atelierNom: string;
-  besoinJour: number; // besoin d'un jour ouvré (constant : référentiel)
   nbPostes: number;
   jours: ServiceJour[]; // aligné sur cols
-  enTension: boolean; // au moins un jour en déficit
-  postesQuiCoincent: PosteQuiCoince[]; // uniquement les postes en déficit ≥ 1 jour
+  enTension: boolean;
+  postes: PosteCouverture[]; // TOUS les postes du service
 };
 
 export type CouvertureResult = {
@@ -71,9 +70,9 @@ export type CouvertureResult = {
   services: ServiceCouverture[];
   nbServices: number;
   nbEnTension: number;
-  pireJour: { iso: string | null; places: number }; // plus grand total de places non couvertes sur un jour
-  nbAbsents: number; // personnes distinctes absentes ≥ 1 jour ouvré de la quinzaine
-  joursSansTension: number; // colonnes sans aucun déficit
+  pireJour: { iso: string | null; places: number };
+  nbAbsents: number;
+  joursSansTension: number;
 };
 
 type LigneRow = {
@@ -93,13 +92,22 @@ type LigneRow = {
 
 const JOURS_COURTS = ["Lun", "Mar", "Mer", "Jeu", "Ven"];
 
+// Libellé court d'un quart pour l'affichage par créneau.
+function labelQuart(code: string, creneau: string | null): string {
+  if (creneau === "matin") return "M";
+  if (creneau === "aprem") return "A";
+  if (code === "nuit") return "N";
+  if (code === "journee") return "J";
+  return code.slice(0, 1).toUpperCase();
+}
+
 export async function chargerCouvertureConges(
   supabase: SupabaseClient,
   opts: { lundiDepart: string; nbSemaines?: number }
 ): Promise<CouvertureResult> {
   const nbSemaines = opts.nbSemaines ?? 2;
 
-  // Lundis de l'horizon + colonnes = jours ouvrés (Lun→Ven) de chaque semaine.
+  // Colonnes = jours ouvrés (Lun→Ven) de chaque semaine.
   const lundis: string[] = [];
   const cols: JourCol[] = [];
   {
@@ -123,7 +131,6 @@ export async function chargerCouvertureConges(
   const horizonIsos = cols.map((c) => c.iso);
   const firstIso = horizonIsos[0];
   const lastIso = horizonIsos[horizonIsos.length - 1];
-  // Le lundi couvrant chaque colonne (pour la rotation datée du temps partiel).
   const lundiDeCol = cols.map((_, i) => lundis[Math.floor(i / 5)]);
 
   const [
@@ -135,15 +142,14 @@ export async function chargerCouvertureConges(
     { data: pcrD },
     { data: equipesD },
     { data: quartsD },
+    { data: pqOffD },
+    { data: jqD },
+    ovD,
     { data: rr },
     { data: tpP },
     { data: tpF },
   ] = await Promise.all([
-    supabase
-      .from("ligne")
-      .select("id, nom, atelier_id, poste(id, nom, actif, effectif_requis, niveau_min_requis, categorie, remplacable)")
-      .eq("actif", true)
-      .returns<LigneRow[]>(),
+    supabase.from("ligne").select("id, nom, atelier_id, poste(id, nom, actif, effectif_requis, niveau_min_requis, categorie, remplacable)").eq("actif", true).returns<LigneRow[]>(),
     supabase.from("atelier").select("id, nom").eq("actif", true).order("nom").returns<{ id: string; nom: string }[]>(),
     supabase.from("personne").select("id, equipe_id").returns<{ id: string; equipe_id: string | null }[]>(),
     fetchAll<{ personne_id: string; date_debut: string | null; date_fin: string | null }>(() =>
@@ -154,48 +160,66 @@ export async function chargerCouvertureConges(
     ),
     supabase.from("poste_competence_requise").select("poste_id, competence_id, competence:competence_id(duree_validite_mois)").returns<{ poste_id: string; competence_id: string; competence: { duree_validite_mois: number | null } | null }[]>(),
     supabase.from("equipe").select("id, quart_fixe").eq("actif", true).returns<{ id: string; quart_fixe: string | null }[]>(),
-    supabase.from("quart").select("code, creneau").returns<{ code: string; creneau: string | null }[]>(),
+    supabase.from("quart").select("code, creneau, ordre").order("ordre").returns<{ code: string; creneau: string | null; ordre: number }[]>(),
+    supabase.from("poste_quart").select("poste_id, quart_code").eq("actif", false).returns<{ poste_id: string; quart_code: string }[]>(),
+    supabase.from("jour_quart").select("jour, quart_code, actif").in("jour", horizonIsos).returns<{ jour: string; quart_code: string; actif: boolean }[]>(),
+    fetchAll<{ jour: string; ligne_id: string; quart_code: string; ouverte: boolean }>(() =>
+      supabase.from("ouverture_quart").select("jour, ligne_id, quart_code, ouverte").in("jour", horizonIsos).order("jour").order("ligne_id").order("quart_code").returns<{ jour: string; ligne_id: string; quart_code: string; ouverte: boolean }[]>()
+    ),
     supabase.from("rotation_reference").select("semaine, equipe_id, quart_code").returns<RotationRef[]>(),
     supabase.from("tp_periode").select("personne_id, date_debut, date_fin, tp_config").lte("date_debut", lastIso).or(`date_fin.is.null,date_fin.gte.${firstIso}`).returns<TpRow[]>(),
     supabase.from("personne").select("id, tp_config").eq("temps_partiel", true).returns<{ id: string; tp_config: TpConfig }[]>(),
   ]);
 
   const atelierNom = new Map((atD ?? []).map((a) => [a.id, a.nom]));
+  const quarts = (quartsD ?? []).map((q) => q.code); // triés par ordre
+  const labelDe = new Map((quartsD ?? []).map((q) => [q.code, labelQuart(q.code, q.creneau)]));
+  const pqOff = new Set((pqOffD ?? []).map((r) => `${r.poste_id}:${r.quart_code}`));
 
   // Postes du besoin : actifs, remplaçables (PTNR exclus), effectif_requis > 0.
-  type PosteBesoin = { id: string; nom: string; categorie: string; atelierId: string; atelierNom: string; effectifRequis: number; niveauMin: number };
+  type PosteBesoin = { id: string; nom: string; categorie: string; ligneId: string; atelierId: string; atelierNom: string; effectifRequis: number };
   const postesBesoin: PosteBesoin[] = [];
   const posteMin = new Map<string, number>();
-  const posteService = new Map<string, string>(); // posteId -> atelierId
-  const posteActif = new Set<string>();
+  const posteService = new Map<string, string>();
   for (const l of lignesD ?? []) {
     const aid = l.atelier_id ?? "—";
     for (const p of l.poste ?? []) {
       if (!p.actif) continue;
       posteMin.set(p.id, p.niveau_min_requis);
-      posteActif.add(p.id);
-      if (p.remplacable === false) continue; // PTNR : titulaire unique, hors besoin
+      if (p.remplacable === false) continue;
       const eff = p.effectif_requis ?? 0;
       if (eff <= 0) continue;
-      postesBesoin.push({
-        id: p.id,
-        nom: p.nom,
-        categorie: p.categorie ?? "operateur",
-        atelierId: aid,
-        atelierNom: l.atelier_id ? atelierNom.get(l.atelier_id) ?? "—" : "Sans service",
-        effectifRequis: eff,
-        niveauMin: p.niveau_min_requis,
-      });
+      postesBesoin.push({ id: p.id, nom: p.nom, categorie: p.categorie ?? "operateur", ligneId: l.id, atelierId: aid, atelierNom: l.atelier_id ? atelierNom.get(l.atelier_id) ?? "—" : "Sans service", effectifRequis: eff });
       posteService.set(p.id, aid);
     }
   }
-
-  // Besoins d'un jour ouvré = constants (référentiel) : un BesoinPoste par poste,
-  // clé = posteId (le quart n'a pas de sens ici, avant l'ordonnancement).
-  const besoins: BesoinPoste[] = postesBesoin.map((p) => ({ cle: p.id, posteId: p.id, quart: "", effectifRequis: p.effectifRequis }));
   const besoinPosteIds = new Set(postesBesoin.map((p) => p.id));
 
-  // Qualification datée : niveau matrice ≥ requis ET habilitations valides ce jour.
+  // Ordonnancement réel + détection « jour ordonnancé ».
+  const actMap = new Map<string, boolean>();
+  const joursOrdonnances = new Set<string>();
+  for (const r of jqD ?? []) { actMap.set(`${r.quart_code}:${r.jour}`, r.actif); joursOrdonnances.add(r.jour); }
+  const ouvMap = new Map<string, boolean>();
+  for (const r of ovD) ouvMap.set(`${r.quart_code}:${r.ligne_id}:${r.jour}`, r.ouverte);
+
+  // Besoins (poste × quart) ouverts un jour donné. Référentiel par défaut
+  // (poste_quart), ordonnancement quand le jour est initialisé.
+  const besoinsJour = (iso: string): BesoinPoste[] => {
+    const ordonnance = joursOrdonnances.has(iso);
+    const out: BesoinPoste[] = [];
+    for (const p of postesBesoin) {
+      for (const q of quarts) {
+        if (pqOff.has(`${p.id}:${q}`)) continue; // poste ne tourne jamais sur ce quart
+        const ouvert = ordonnance
+          ? (actMap.get(`${q}:${iso}`) ?? false) && (ouvMap.get(`${q}:${p.ligneId}:${iso}`) ?? true)
+          : true; // référentiel : chaque quart activé du poste compte
+        if (ouvert) out.push({ cle: `${p.id}:${q}`, posteId: p.id, quart: q, effectifRequis: p.effectifRequis });
+      }
+    }
+    return out;
+  };
+
+  // Qualification datée : niveau matrice ≥ requis ET habilitations valides.
   const matNiveau = new Map<string, number>();
   for (const r of matD) matNiveau.set(`${r.personne_id}:${r.poste_id}`, r.niveau_actuel);
   const habPoste = new Map<string, string[]>();
@@ -218,9 +242,9 @@ export async function chargerCouvertureConges(
     if (requises)
       for (const cid of requises) {
         const exp = habExp.get(`${pid}:${cid}`);
-        if (exp === undefined) return false; // non détenue
+        if (exp === undefined) return false;
         if (!habValable({ expiration: exp })) return false;
-        if (exp !== null && iso > exp) return false; // expirée à cette date
+        if (exp !== null && iso > exp) return false;
       }
     return true;
   };
@@ -234,7 +258,7 @@ export async function chargerCouvertureConges(
     return contratCouvreLe(cs, iso);
   };
 
-  // Absences : placement.motif_absence_id (jour par jour) + filet table `absence`.
+  // Absences : placement.motif_absence_id + filet table `absence`.
   const absSet = new Map<string, Set<string>>();
   const marquerAbsent = (iso: string, pid: string) => (absSet.get(iso) ?? absSet.set(iso, new Set()).get(iso)!).add(pid);
   const abs = await fetchAll<{ personne_id: string; jour: string; motif_absence_id: string | null }>(() =>
@@ -244,8 +268,8 @@ export async function chargerCouvertureConges(
   const { data: absPer } = await supabase.from("absence").select("personne_id, date_debut, date_fin").lte("date_debut", lastIso).or(`date_fin.is.null,date_fin.gte.${firstIso}`).returns<{ personne_id: string; date_debut: string; date_fin: string | null }[]>();
   for (const a of absPer ?? []) for (const iso of horizonIsos) if (iso >= a.date_debut && (!a.date_fin || iso <= a.date_fin)) marquerAbsent(iso, a.personne_id);
 
-  // Temps partiel : périodes datées (tp_periode) + repli personne.tp_config,
-  // indisponibilité pilotée par la rotation datée (une semaine sur deux).
+  // Temps partiel : périodes datées + repli tp_config, indisponibilité pilotée
+  // par la rotation datée (une semaine sur deux).
   const equipeDe = new Map((persD ?? []).map((p) => [p.id, p.equipe_id]));
   const quartFixe = new Map((equipesD ?? []).map((e) => [e.id, e.quart_fixe]));
   const quartCreneau = new Map((quartsD ?? []).map((q) => [q.code, q.creneau]));
@@ -281,7 +305,7 @@ export async function chargerCouvertureConges(
     return false;
   };
 
-  // Postes qu'une personne peut potentiellement tenir (niveau de fond, sans date).
+  // Postes qu'une personne peut potentiellement tenir (niveau de fond).
   const postesPotentiels = new Map<string, string[]>();
   for (const r of matD) {
     if (!besoinPosteIds.has(r.poste_id)) continue;
@@ -291,25 +315,24 @@ export async function chargerCouvertureConges(
 
   const allPersonnes = (persD ?? []).map((p) => p.id);
   const servicesIds = [...new Set(postesBesoin.map((p) => p.atelierId))];
-  const besoinService = new Map<string, number>();
-  for (const p of postesBesoin) besoinService.set(p.atelierId, (besoinService.get(p.atelierId) ?? 0) + p.effectifRequis);
 
-  // Accumulateurs par service et par (poste, colonne).
+  // Accumulateurs.
   const jourParService = new Map<string, ServiceJour[]>();
-  for (const sid of servicesIds) jourParService.set(sid, cols.map(() => ({ besoin: besoinService.get(sid) ?? 0, deficit: 0, reserve: 0 })));
-  const deficitParPoste = new Map<string, number[]>();
-  for (const p of postesBesoin) deficitParPoste.set(p.id, cols.map(() => 0));
+  for (const sid of servicesIds) jourParService.set(sid, cols.map(() => ({ besoin: 0, deficit: 0, reserve: 0 })));
+  const casesPoste = new Map<string, PosteJourCase[]>();
+  for (const p of postesBesoin) casesPoste.set(p.id, cols.map(() => ({ ouvert: false, quarts: [], deficit: 0 })));
   const absentsHorizon = new Set<string>();
   const placesNonCouvertesJour = cols.map(() => 0);
 
-  // Boucle jour par jour : affectation optimale GLOBALE, puis ventilation.
   for (let ci = 0; ci < cols.length; ci++) {
     const iso = cols[ci].iso;
     const rotWeek = rotationForWeek(rotRefs, lundiDeCol[ci]);
     const absJour = absSet.get(iso);
+    const besoins = besoinsJour(iso);
+    const besoinsCles = new Set(besoins.map((b) => b.cle));
 
     const dispo: PersonneDispo[] = [];
-    const reserveCount = new Map<string, number>(); // service -> nb personnes présentes qualifiées
+    const reserveCount = new Map<string, number>();
     for (const pid of allPersonnes) {
       if (!present(pid, iso)) continue;
       if (absJour?.has(pid)) { absentsHorizon.add(pid); continue; }
@@ -318,51 +341,50 @@ export async function chargerCouvertureConges(
       const servicesCouvrables = new Set<string>();
       for (const posteId of postesPotentiels.get(pid) ?? []) {
         if (!qualifie(pid, posteId, iso)) continue;
-        peutTenir.push(posteId);
-        const sid = posteService.get(posteId);
-        if (sid) servicesCouvrables.add(sid);
+        let servable = false;
+        for (const q of quarts) { const cle = `${posteId}:${q}`; if (besoinsCles.has(cle)) { peutTenir.push(cle); servable = true; } }
+        if (servable) { const sid = posteService.get(posteId); if (sid) servicesCouvrables.add(sid); }
       }
       if (peutTenir.length) dispo.push({ id: pid, peutTenir });
       for (const sid of servicesCouvrables) reserveCount.set(sid, (reserveCount.get(sid) ?? 0) + 1);
     }
-    // absents comptés même s'ils n'auraient tenu aucun poste (KPI congés) :
     if (absJour) for (const pid of absJour) if (present(pid, iso)) absentsHorizon.add(pid);
 
     const flow = buildJourFlow(dispo, besoins);
+    const ruptureMap = new Map<string, number>();
+    for (const r of flow.ruptures) ruptureMap.set(r.cle, r.manque);
+
     let placesJour = 0;
-    for (const r of flow.ruptures) {
-      const arr = deficitParPoste.get(r.posteId);
-      if (arr) arr[ci] += r.manque;
-      const sid = posteService.get(r.posteId);
-      if (sid) jourParService.get(sid)![ci].deficit += r.manque;
-      placesJour += r.manque;
+    for (const b of besoins) {
+      const def = ruptureMap.get(b.cle) ?? 0;
+      const cell = casesPoste.get(b.posteId)![ci];
+      cell.ouvert = true;
+      cell.quarts.push({ quart: b.quart, label: labelDe.get(b.quart) ?? b.quart, besoin: b.effectifRequis, couvrable: b.effectifRequis - def, deficit: def });
+      cell.deficit += def;
+      const sid = posteService.get(b.posteId);
+      if (sid) { const sj = jourParService.get(sid)![ci]; sj.besoin += b.effectifRequis; sj.deficit += def; }
+      placesJour += def;
     }
     placesNonCouvertesJour[ci] = placesJour;
-    // Réserve indicative par service (seulement là où c'est couvert).
     for (const sid of servicesIds) {
       const sj = jourParService.get(sid)![ci];
       if (sj.deficit === 0) sj.reserve = Math.max(0, (reserveCount.get(sid) ?? 0) - sj.besoin);
     }
   }
 
-  // Montage des services (ordre : nom).
+  // Résumé de besoin (référentiel) par poste, pour la colonne « Besoin ».
+  const resumeDe = (p: PosteBesoin): { label: string; besoin: number }[] =>
+    quarts.filter((q) => !pqOff.has(`${p.id}:${q}`)).map((q) => ({ label: labelDe.get(q) ?? q, besoin: p.effectifRequis }));
+
   const services: ServiceCouverture[] = servicesIds
     .map((sid) => {
       const postesDuService = postesBesoin.filter((p) => p.atelierId === sid);
       const jours = jourParService.get(sid)!;
-      const enTension = jours.some((j) => j.deficit > 0);
-      const postesQuiCoincent: PosteQuiCoince[] = postesDuService
-        .map((p) => ({ id: p.id, nom: p.nom, categorie: p.categorie, besoin: p.effectifRequis, deficit: deficitParPoste.get(p.id) ?? cols.map(() => 0) }))
-        .filter((p) => p.deficit.some((d) => d > 0));
-      return {
-        atelierId: sid,
-        atelierNom: postesDuService[0]?.atelierNom ?? "Sans service",
-        besoinJour: besoinService.get(sid) ?? 0,
-        nbPostes: postesDuService.length,
-        jours,
-        enTension,
-        postesQuiCoincent,
-      };
+      const postes: PosteCouverture[] = postesDuService.map((p) => {
+        const cases = casesPoste.get(p.id)!;
+        return { id: p.id, nom: p.nom, categorie: p.categorie, besoinResume: resumeDe(p), jours: cases, enTension: cases.some((c) => c.deficit > 0) };
+      });
+      return { atelierId: sid, atelierNom: postesDuService[0]?.atelierNom ?? "Sans service", nbPostes: postesDuService.length, jours, enTension: jours.some((j) => j.deficit > 0), postes };
     })
     .sort((a, b) => a.atelierNom.localeCompare(b.atelierNom));
 
@@ -371,15 +393,7 @@ export async function chargerCouvertureConges(
   for (let i = 0; i < cols.length; i++) if (placesNonCouvertesJour[i] > pireJour.places) pireJour = { iso: cols[i].iso, places: placesNonCouvertesJour[i] };
   const joursSansTension = placesNonCouvertesJour.filter((p) => p === 0).length;
 
-  return {
-    cols,
-    services,
-    nbServices: services.length,
-    nbEnTension,
-    pireJour,
-    nbAbsents: absentsHorizon.size,
-    joursSansTension,
-  };
+  return { cols, services, nbServices: services.length, nbEnTension, pireJour, nbAbsents: absentsHorizon.size, joursSansTension };
 }
 
 type TpConfig = { off?: Record<string, string[]> } | null;
