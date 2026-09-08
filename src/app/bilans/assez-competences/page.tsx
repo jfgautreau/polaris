@@ -73,11 +73,12 @@ export default async function AssezCompetencesPage({ searchParams }: { searchPar
               une personne polyvalente ne tient qu&apos;<strong>une place à la fois</strong> (affectation optimale, jamais comptée deux fois)
             </div>
           </div>
-          <ReportActions>
-            <CouvertureSemaineNav lundiDepart={lundiDepart} label={navLabel} />
-          </ReportActions>
+          <ReportActions />
         </div>
 
+        <div className="noprint" style={{ margin: "2px 0 12px" }}>
+          <CouvertureSemaineNav lundiDepart={lundiDepart} label={navLabel} />
+        </div>
         <ReportAtelierFilter ateliers={atD ?? []} atelier={atelier} />
 
         {nbServices === 0 ? (

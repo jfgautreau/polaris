@@ -35,7 +35,7 @@ données, RLS), `tasks/handoff.md` (détail écran par écran), `tasks/lessons.m
    `supabase/migrations/` et **demande à l'utilisateur de l'exécuter** dans le SQL Editor.
    Pour de la *donnée* seulement, un script Node lisant `SUPABASE_SERVICE_ROLE_KEY`
    de `.env.local` est acceptable.
-   Projet Supabase : ref `stcxlsmmnplxpirrnefm`, eu-west-3. **Dernière migration appliquée : `0065`** (socle multi-site : `0043`–`0048` ; cycle de vie : `0049`–`0050` ; `parametre_affichage` multi-site : `0051` ; TP périodes : `0052` ; séparation totale des référentiels par site — `motif_absence`, `type_contrat`, `role_custom`, `role_permission`, `competence`, `competence_niveau_libelle`, `quart` tous en `site_id NOT NULL` : `0053` ; commentaire libre sur `personne_competence` : `0054` ; `app_user`/`audit_log` strictement scopés au site courant, retrait du passe-droit `OR is_super_admin()` : `0055` ; table `site_module` — masquage d'éléments par site depuis `/platform` : `0056` ; colonnes `quart.rotation` (quarts composant le cycle de rotation, explicites) + `quart.creneau` (`matin`/`aprem`/null, demi-journée pilotant le TP — fin du matin/apres_midi codé en dur) : `0057` ; `site_id` sur `tp_periode`, oubliée du lot 0053 alors que le code y écrivait déjà — provoquait « Could not find the 'site_id' column of 'tp_periode' » à l'enregistrement d'un temps partiel : `0058` ; `poste.remplacable` (PTR/PTNR — un PTNR est exclu des rapports de fragilité/relève et isolé dans les Compétences critiques) + `personne.poste_fixe_id` (poste fixe : pré-remplissage du planning via le bouton « Pré-remplir postes fixes » → `/api/placement/prefill`) : `0059` ; `motif_absence.non_planifie` (classification planifié/non planifié des absences, cochée dans `/admin/motifs` — source de vérité du rapport Absentéisme, repli sur l'heuristique de libellé tant que non renseigné) : `0060` ; `site.nb_niveaux` — nombre de niveaux positifs activés par site, 2..4, réglé dans `/admin/competences` ; le 0 blanc et la restriction restent toujours présents ; lecture `getNbNiveauxC()` repli 4 : `0061` ; `site.seuil_competent` — seuil « compétent » paramétrable par site, 1..4 borné à ≤ nb_niveaux, réglé dans `/admin/competences` ; n'affecte QUE les rapports : Cockpit, Polyvalence, Anticipation, Montée en compétence, ligne « Compétences ≥N » de la Matrice ; distinct de `poste.niveau_min_requis` ; lecture `getSeuilCompetentC()` repli 2 : `0062` ; `competence_niveau_libelle.couleur` — couleur paramétrable par niveau POSITIF, choisie dans `/admin/competences` parmi les 4 teintes historiques, CHECK verrouillant la palette ; niveau 0 toujours blanc/contour ; lecture résiliente `getCouleursNiveauxC()` + `couleursNiveau()`/`COULEUR_NIVEAU_DEFAUT` dans `src/lib/couleurs-niveau.ts` ; `FILL` dans `Pie.tsx` en dérive : `0063` ; `placement.tp` + table `tp_charge` — temps partiel MATÉRIALISÉ (le bouton « TP + postes fixes » du planning pose de vraies lignes `placement.tp`, déplaçables au glisser-déposer, puis pré-remplit les postes fixes) ; `tp_charge(site_id, semaine_lundi)` marque une semaine « chargée » → le calcul virtuel du TP s'éteint pour elle (repli calculé tant que non chargée). Le calcul virtuel s'éteint AUSSI dès qu'une vraie ligne de placement existe pour la case (un vrai TP est donc toujours draggable, marqueur ou pas) : `0064` ; ouverture de `competence_niveau_libelle.couleur` au **nuancier** — le CHECK verrouillé de 0063 (4 teintes) est remplacé par un simple contrôle de format hexadécimal, la liste fermée restant imposée côté application (`NUANCIER`/`HEX_NIVEAUX_AUTORISES` dans `src/lib/couleurs-niveau.ts`) ; migration idempotente qui rattrape aussi le cas « 0063 jamais appliquée » (colonne absente → PostgREST `PGRST204`, désormais capté par le repli d'enregistrement au même titre que `42703`) : `0065`). Cf. `tasks/multi-site.md` pour l'état complet du chantier multi-site.
+   Projet Supabase : ref `stcxlsmmnplxpirrnefm`, eu-west-3. **Dernière migration appliquée : `0065`** (socle multi-site : `0043`–`0048` ; cycle de vie : `0049`–`0050` ; `parametre_affichage` multi-site : `0051` ; TP périodes : `0052` ; séparation totale des référentiels par site — `motif_absence`, `type_contrat`, `role_custom`, `role_permission`, `competence`, `competence_niveau_libelle`, `quart` tous en `site_id NOT NULL` : `0053` ; commentaire libre sur `personne_competence` : `0054` ; `app_user`/`audit_log` strictement scopés au site courant, retrait du passe-droit `OR is_super_admin()` : `0055` ; table `site_module` — masquage d'éléments par site depuis `/platform` : `0056` ; colonnes `quart.rotation` (quarts composant le cycle de rotation, explicites) + `quart.creneau` (`matin`/`aprem`/null, demi-journée pilotant le TP — fin du matin/apres_midi codé en dur) : `0057` ; `site_id` sur `tp_periode`, oubliée du lot 0053 alors que le code y écrivait déjà — provoquait « Could not find the 'site_id' column of 'tp_periode' » à l'enregistrement d'un temps partiel : `0058` ; `poste.remplacable` (PTR/PTNR — un PTNR est exclu des rapports de fragilité/relève et isolé dans les Compétences critiques) + `personne.poste_fixe_id` (poste fixe : pré-remplissage du planning via le bouton « Pré-remplir postes fixes » → `/api/placement/prefill`) : `0059` ; `motif_absence.non_planifie` (classification planifié/non planifié des absences, cochée dans `/admin/motifs` — source de vérité du rapport Absentéisme, repli sur l'heuristique de libellé tant que non renseigné) : `0060` ; `site.nb_niveaux` — nombre de niveaux positifs activés par site, 2..4, réglé dans `/admin/competences` ; le 0 blanc et la restriction restent toujours présents ; lecture `getNbNiveauxC()` repli 4 : `0061` ; `site.seuil_competent` — seuil « compétent » paramétrable par site, 1..4 borné à ≤ nb_niveaux, réglé dans `/admin/competences` ; n'affecte QUE les rapports : Cockpit, Anticipation, ligne « Compétences ≥N » de la Matrice (depuis la fusion 2026-09-08, Polyvalence & compétences est passé à la lentille opérationnelle niveau_min + habilitation et n'utilise plus ce seuil) ; distinct de `poste.niveau_min_requis` ; lecture `getSeuilCompetentC()` repli 2 : `0062` ; `competence_niveau_libelle.couleur` — couleur paramétrable par niveau POSITIF, choisie dans `/admin/competences` parmi les 4 teintes historiques, CHECK verrouillant la palette ; niveau 0 toujours blanc/contour ; lecture résiliente `getCouleursNiveauxC()` + `couleursNiveau()`/`COULEUR_NIVEAU_DEFAUT` dans `src/lib/couleurs-niveau.ts` ; `FILL` dans `Pie.tsx` en dérive : `0063` ; `placement.tp` + table `tp_charge` — temps partiel MATÉRIALISÉ (le bouton « TP + postes fixes » du planning pose de vraies lignes `placement.tp`, déplaçables au glisser-déposer, puis pré-remplit les postes fixes) ; `tp_charge(site_id, semaine_lundi)` marque une semaine « chargée » → le calcul virtuel du TP s'éteint pour elle (repli calculé tant que non chargée). Le calcul virtuel s'éteint AUSSI dès qu'une vraie ligne de placement existe pour la case (un vrai TP est donc toujours draggable, marqueur ou pas) : `0064` ; ouverture de `competence_niveau_libelle.couleur` au **nuancier** — le CHECK verrouillé de 0063 (4 teintes) est remplacé par un simple contrôle de format hexadécimal, la liste fermée restant imposée côté application (`NUANCIER`/`HEX_NIVEAUX_AUTORISES` dans `src/lib/couleurs-niveau.ts`) ; migration idempotente qui rattrape aussi le cas « 0063 jamais appliquée » (colonne absente → PostgREST `PGRST204`, désormais capté par le repli d'enregistrement au même titre que `42703`) : `0065`). Cf. `tasks/multi-site.md` pour l'état complet du chantier multi-site.
 6. **PowerShell 5.1** : pour un message de commit multi-lignes, here-string `@'…'@`
    (le `'@` final en colonne 0), ou `git commit -F fichier`. Pas de `"` inline.
    ⚠️ **Jamais** de `Get-Content`/`Set-Content`/`Out-File` pour éditer un fichier
@@ -616,7 +616,7 @@ prochain gros chantier, pas une optimisation cosmétique.
   + `/api/roles` (création de rôles personnalisés, garde `utilisateurs: write`).
   Les rôles assignables viennent de `getAllRoles()` (`src/lib/roles-server.ts`) :
   intégrés + `role_custom`. Un rôle personnalisé naît sans droit.
-- Bilans : `src/app/bilans/*` (Cockpit + 9 rapports détaillés, impression PDF via
+- Bilans : `src/app/bilans/*` (Cockpit + 8 rapports détaillés, impression PDF via
   `@media print`). Liste des rapports centralisée dans `src/lib/bilans-rapports.ts`
   (partagée Cockpit ↔ `/platform` pour le masquage par site, cf. Plateforme).
   - **Synthèses hebdomadaires** (`/bilans/syntheses` + `SyntheseFilters`, `AgencePrintButton`,
@@ -639,12 +639,40 @@ prochain gros chantier, pas une optimisation cosmétique.
     tableaux imprimés, et la grille du calendrier porte `print-flow` pour se **scinder**
     naturellement entre pages (le `break-inside: avoid` global des `.card` sortait une 1re
     page quasi vide sur un tableau plus haut qu'une page).
+  - **Polyvalence & compétences** (`/bilans/polyvalence`, `src/lib/polyvalence-competences-data.ts`) :
+    **FUSION** (2026-09-08) des trois anciens rapports de compétences — Polyvalence,
+    Plan de montée en compétence, Compétences critiques — en une lecture RH unique
+    **constat → risque → action**, avec sous-navigation ancrée (imprimable d'un bloc).
+    Décision de cadrage : la couverture est mesurée **à l'opérationnel** — une personne
+    « tient » un poste si niveau ≥ `niveau_min_requis` **et** habilitation valide
+    aujourd'hui ; le **seuil « compétent » paramétrable n'est plus utilisé ici** (il
+    donnait trois définitions incohérentes de « poste fragile »). 4 blocs : ① polyvalence
+    moyenne par service (**interne** : postes du service d'affectation tenables aujourd'hui)
+    + personnes à développer ; ② postes critiques/fragiles par **relève sûre** (départs
+    ≤ 180 j + expirations d'habilitation ≤ 90 j déduits) + **PTNR isolés** ; ③ personnes
+    clés sur le départ + habilitations à échéance ; ④ plan de formation priorisé par
+    fragilité. Le moteur de relève opérationnelle vit dans la couche données dédiée.
+    ⚠️ `montee-competence` et `competences-critiques` ont été **supprimés** (pages + entrées
+    `RAPPORTS_BILAN`) ; d'anciens `site_module` `bilan:montee-competence` /
+    `bilan:competences-critiques` deviennent inertes.
+  - **Assez de compétences ?** (`/bilans/assez-competences`, `src/lib/assez-competences-data.ts`,
+    nav quinzaine `CouvertureSemaineNav`) : aide à la **validation des congés**, avant toute
+    affectation. Grille **service × jour ouvré × créneau** sur 2 semaines. **Affectation
+    optimale globale** chaque jour (`buildJourFlow`, une personne = une place, jamais
+    comptée deux fois — moteur partagé avec la Projection). **Besoin par (poste × quart
+    posté)** : source **référentiel** (`poste_quart`, défaut actif) par défaut, données
+    **ordonnancement** quand le jour est initialisé (`jour_quart`/`ouverture_quart`). ⚠️ La
+    **« journée »** (régulière) = agrégat pleine-journée (quart sans créneau au plus petit
+    ordre, comme reset-week) : **jamais ajoutée** à matin/après-midi ; comptée seulement si
+    c'est le **seul** quart du poste (`quartsEffectifs`). PTNR exclus. Présence = hors congé,
+    hors TP indisponible (rotation datée), dans l'effectif (contrats).
   - ⚠️ **PTR/PTNR dans les rapports** (`poste.remplacable`, migration 0059) : « nettoyer +
-    isoler ». Cockpit & Polyvalence **excluent** les PTNR des « postes fragiles / sans
-    relève / écart-cible » (un titulaire unique par conception n'est pas une anomalie).
-    Compétences critiques les **isole** dans « **Postes à titulaire unique (PTNR)** » + KPI
-    « Titulaire à risque » : le vrai risque n'est pas l'absence de relève mais le **départ
-    du titulaire** (fin de contrat, retraite) ou une **habilitation qui expire**.
+    isoler ». Cockpit, **Polyvalence & compétences** et **Assez de compétences ?**
+    **excluent** les PTNR des « postes fragiles / sans relève / écart-cible / besoin »
+    (un titulaire unique par conception n'est pas une anomalie). **Polyvalence & compétences**
+    les **isole** dans « **Postes à titulaire unique (PTNR)** » (bloc ②) : le vrai risque
+    n'est pas l'absence de relève mais le **départ du titulaire** (fin de contrat, retraite)
+    ou une **habilitation qui expire**.
 - Affichage TV : `src/app/affichage/atelier/[atelier]/page.tsx` (public, refresh 5 min,
   **vue par nom uniquement**). ⚠️ Depuis 2026-08-25, l'écran est rattaché à
   l'**atelier d'affectation** (`personne.atelier_id`), pas à l'atelier de placement :
@@ -717,7 +745,7 @@ prochain gros chantier, pas une optimisation cosmétique.
   d'autorisation est inchangé). En deux requêtes applicatives, un échec de la seconde
   perdait la donnée en silence — la rotation n'est pas reconstituable. Le même test
   interdit le retour au `delete` + `insert` applicatif sur ces tables.
-- Tests (Vitest, **223** au 2026-08-23) : règles pures + `permissions.test.ts`
+- Tests (Vitest, **253** au 2026-09-08) : règles pures + `permissions.test.ts`
   (droits par défaut, périmètre du chef d'équipe, anti-escalade), `roles.test.ts`
   (slugifyRole), `routes-gardees.test.ts` (inventaire : **toute route API porte
   une garde** — le proxy exclut `api/`, une route nouvelle serait publique — et
