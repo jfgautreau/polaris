@@ -82,7 +82,7 @@ export default async function ReferentielPage() {
     <>
       <AppHeader role={profile.role} active="/admin/referentiel" />
       <div className="container" style={{ maxWidth: "none" }}>
-        <PageTitle module="referentiel">Référentiel : ateliers, lignes, postes</PageTitle>
+        <PageTitle module="referentiel">Référentiel : services, lignes, postes</PageTitle>
         <p className="muted" style={{ marginBottom: 16 }}>
           Saisie directe : modifiez un champ, il s&apos;enregistre tout seul (aucun bouton
           à valider). Cochez « Actif » pour activer/désactiver. La <strong>catégorie</strong>{" "}

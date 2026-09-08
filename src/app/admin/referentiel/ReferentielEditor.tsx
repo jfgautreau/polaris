@@ -280,7 +280,7 @@ export default function ReferentielEditor({
 
       <div style={{ display: "flex", marginBottom: 12 }}>
         <button type="button" style={ADD_BTN} onClick={() => addAtelier("")} title="Ajouter un service (à compléter ensuite)">
-          ＋ Ajouter un atelier
+          ＋ Ajouter un service
         </button>
       </div>
 
