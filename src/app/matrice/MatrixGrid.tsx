@@ -158,10 +158,25 @@ export default function MatrixGrid({
     const k = key(pid, poid);
     setCells((prev) => {
       const cur = prev[k] ?? { a: 0, c: 0 };
-      const field = mode === "actuel" ? "a" : "c";
-      const idx = CYCLE.indexOf(cur[field]);
-      const nextVal = CYCLE[(((idx < 0 ? 0 : idx) + delta) % CYCLE.length + CYCLE.length) % CYCLE.length];
-      const next = { ...cur, [field]: nextVal };
+      let next: Cell;
+      if (mode === "actuel") {
+        const idx = CYCLE.indexOf(cur.a);
+        const nextA = CYCLE[(((idx < 0 ? 0 : idx) + delta) % CYCLE.length + CYCLE.length) % CYCLE.length];
+        // La cible ne peut jamais être sous l'actuel : on la remonte si besoin.
+        // La restriction ❌ est hors échelle, donc exclue de la comparaison.
+        let nextC = cur.c;
+        if (nextA !== RESTRICT && nextC !== RESTRICT && nextC < nextA) nextC = nextA;
+        next = { a: nextA, c: nextC };
+      } else {
+        // Mode cible : le cycle des valeurs autorisées démarre au niveau actuel
+        // (on ne vise pas plus bas que le niveau déjà tenu). La restriction ❌
+        // de l'actuel étant hors échelle, elle ne borne rien.
+        const min = cur.a !== RESTRICT && cur.a > 0 ? cur.a : 0;
+        const cycle = [...Array.from({ length: nbNiveaux - min + 1 }, (_, i) => i + min), RESTRICT];
+        const idx = cycle.indexOf(cur.c);
+        const nextC = cycle[(((idx < 0 ? 0 : idx) + delta) % cycle.length + cycle.length) % cycle.length];
+        next = { a: cur.a, c: nextC };
+      }
       save(k, next, pid, poid);
       return { ...prev, [k]: next };
     });
