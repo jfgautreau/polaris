@@ -315,17 +315,43 @@ export default async function PlanningPage({
     if (!paErr) for (const r of paData ?? []) persAtelier.set(r.id, r.atelier_id);
   }
 
+  // Mode AUTO : personnes EFFECTIVEMENT placees sur ce quart au moins un jour sur
+  // la fenetre 3 semaines affichee. On les ajoute a l'ensemble AUTO habituel
+  // (equipes du quart via rotation + fixe) : si tu affectes quelqu'un de l'equipe A
+  // sur nuit, il apparait quand tu cliques sur nuit meme si A tourne au matin cette
+  // semaine. `poste_id NOT NULL` : les absences/NT sont neutres (elles ne
+  // rattachent pas a un quart). Match du `quart_code` = egal, plus repli sur NULL
+  // si `quart` est le quart par defaut du site (memes regles que `memeQuart`).
+  // fetchAll obligatoire (L8) : les placements sur 3 semaines depassent 1000.
+  const autoPlacedIds = new Set<string>();
+  if (equipeMode === "auto" && visIsos.length) {
+    const defaultQ = quartParDefaut(quarts);
+    const orExpr =
+      quart === defaultQ ? `quart_code.eq.${quart},quart_code.is.null` : `quart_code.eq.${quart}`;
+    const rows = await fetchAll<{ personne_id: string }>(() =>
+      supabase
+        .from("placement")
+        .select("personne_id")
+        .not("poste_id", "is", null)
+        .in("jour", visIsos)
+        .or(orExpr)
+        .order("id")
+        .returns<{ personne_id: string }[]>()
+    );
+    for (const r of rows) autoPlacedIds.add(r.personne_id);
+  }
+
   // Predicat d'appartenance au filtre courant (equipe + atelier). Sert a determiner
   // les lignes affichees PAR DEFAUT ; la recherche par nom (client) passe outre pour
   // toujours retrouver quelqu'un.
-  const passeEquipe = (eqid: string | null): boolean => {
+  const passeEquipe = (pid: string, eqid: string | null): boolean => {
     if (equipeMode === "all") return true;
     if (equipeMode === "id") return eqid === equipeIdSel;
-    // auto : appartient a une equipe de l'ensemble AUTO.
-    return !!eqid && equipesAuto.has(eqid);
+    // auto : equipe theorique du quart OU personne effectivement placee sur ce quart.
+    return (!!eqid && equipesAuto.has(eqid)) || autoPlacedIds.has(pid);
   };
   const displayed = allActive.filter(
-    (p) => passeEquipe(p.equipe_id) && (!atelier || persAtelier.get(p.id) === atelier),
+    (p) => passeEquipe(p.id, p.equipe_id) && (!atelier || persAtelier.get(p.id) === atelier),
   );
   const displayedSet = new Set(displayed.map((p) => p.id));
 
