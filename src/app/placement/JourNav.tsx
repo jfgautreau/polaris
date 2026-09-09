@@ -85,17 +85,7 @@ export default function JourNav({
   return (
     <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 4 }}>
       {/* Flèches ◀ ▶ retirées (2026-09-09) — le calendrier suffit à naviguer.
-          Bouton « Aujourd'hui » à leur place : raccourci vers la date du jour. */}
-      <button
-        type="button"
-        className={s.navbtn}
-        onClick={() => onPick(aujourdhuiIso)}
-        title="Revenir à aujourd'hui"
-        disabled={jour === aujourdhuiIso}
-        style={{ fontWeight: 600, opacity: jour === aujourdhuiIso ? 0.55 : 1 }}
-      >
-        Aujourd&apos;hui
-      </button>
+          Bouton « Aujourd'hui » déplacé sous le calendrier (2026-09-09). */}
       <button type="button" className={s.navbtn} onClick={ouvrir} title="Choisir un jour" style={{ minWidth: 132, fontWeight: 600 }}>
         {fmtCourt(jour)}
       </button>
@@ -139,6 +129,7 @@ export default function JourNav({
                       const horsMois = !c.moisCourant;
                       const ferme = !openSet.has(c.iso);
                       const estJour = c.iso === jour;
+                      const estAuj = c.iso === aujourdhuiIso;
                       return (
                         <td key={c.iso} style={{ padding: 0, textAlign: "center" }}>
                           <button
@@ -146,7 +137,7 @@ export default function JourNav({
                             disabled={horsMois || ferme}
                             onClick={() => choisir(c.iso)}
                             title={!horsMois && ferme ? "Aucune ligne ouverte ce jour-là" : c.iso.split("-").reverse().join("/")}
-                            style={caseStyle(horsMois, ferme, estJour)}
+                            style={caseStyle(horsMois, ferme, estJour, estAuj)}
                           >
                             {c.jour}
                           </button>
@@ -160,6 +151,19 @@ export default function JourNav({
             <p className="muted" style={{ fontSize: 11, margin: "8px 2px 0", textAlign: "center" }}>
               Les jours sans ligne ouverte sont grisés.
             </p>
+            {/* Bouton « Aujourd'hui » placé sous le calendrier (2026-09-09). */}
+            <div style={{ display: "flex", justifyContent: "center", marginTop: 8 }}>
+              <button
+                type="button"
+                className={s.navbtn}
+                onClick={() => choisir(aujourdhuiIso)}
+                title="Revenir à aujourd'hui"
+                disabled={jour === aujourdhuiIso}
+                style={{ fontWeight: 600, opacity: jour === aujourdhuiIso ? 0.55 : 1 }}
+              >
+                Aujourd&apos;hui
+              </button>
+            </div>
           </div>
         </>
       )}
@@ -180,7 +184,7 @@ const mBtn = (dis: boolean): React.CSSProperties => ({
   lineHeight: 1,
 });
 
-const caseStyle = (horsMois: boolean, ferme: boolean, estJour: boolean): React.CSSProperties => {
+const caseStyle = (horsMois: boolean, ferme: boolean, estJour: boolean, estAuj: boolean): React.CSSProperties => {
   const base: React.CSSProperties = {
     height: 34,
     width: "100%",
@@ -195,6 +199,9 @@ const caseStyle = (horsMois: boolean, ferme: boolean, estJour: boolean): React.C
   };
   if (horsMois) return { ...base, color: "#e2e8f0", cursor: "default" };
   if (estJour) return { ...base, background: "#0d9488", color: "#fff", fontWeight: 700 };
+  // Aujourd'hui (non sélectionné) : contour teal + libellé teal, distinct du fond plein du jour choisi.
+  if (estAuj && !ferme) return { ...base, boxShadow: "inset 0 0 0 2px #0d9488", color: "#0d9488", fontWeight: 700 };
+  if (estAuj && ferme) return { ...base, boxShadow: "inset 0 0 0 2px #0d9488", color: "#cbd5e1", cursor: "not-allowed", background: "#f8fafc" };
   if (ferme) return { ...base, color: "#cbd5e1", cursor: "not-allowed", background: "#f8fafc" };
   return base;
 };
