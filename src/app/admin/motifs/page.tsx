@@ -18,7 +18,7 @@ import { CheckIcon, EditIcon } from "@/components/icons";
 type Motif = { id: string; libelle: string; code_court: string; couleur: string; actif: boolean; non_planifie: boolean; code_gt: string | null };
 type Agence = { id: string; nom: string; actif: boolean };
 type TypeContrat = { code: string; libelle: string; actif: boolean; ordre: number };
-type FenetreAffichage = { jours_avant: number; jours_apres: number };
+type FenetreAffichage = { mode?: "relatif" | "absolu"; jours_avant: number; jours_apres: number; nb_semaines?: number };
 
 // Règles d'écran de paramétrage (cf. CLAUDE.md — « Ossature des écrans de paramétrage »)
 // appliquées ici comme référence :
@@ -42,7 +42,7 @@ export default async function MotifsPage({
     supabase.from("motif_absence").select("id, libelle, code_court, couleur, actif, non_planifie, code_gt").order("libelle").returns<Motif[]>(),
     supabase.from("agence_interim").select("id, nom, actif").order("nom").returns<Agence[]>(),
     supabase.from("type_contrat").select("code, libelle, actif, ordre").order("ordre").returns<TypeContrat[]>(),
-    supabase.from("parametre_affichage").select("jours_avant, jours_apres").maybeSingle<FenetreAffichage>(),
+    supabase.from("parametre_affichage").select("mode, jours_avant, jours_apres, nb_semaines").maybeSingle<FenetreAffichage>(),
   ]);
   // Replis en cascade : code_gt (0066) puis non_planifie (0060) peuvent manquer
   // tant que la migration correspondante n'est pas jouée.
@@ -63,8 +63,18 @@ export default async function MotifsPage({
   const agencesIndispo = !!agencesR.error;
   const types = typesR.data ?? [];
   const typesIndispo = !!typesR.error;
-  const fenetre: FenetreAffichage = fenR.data ?? { jours_avant: 1, jours_apres: 4 };
-  const fenetreIndispo = !!fenR.error;
+  // Repli tolérant : la migration 0067 (colonnes mode/nb_semaines) peut ne pas
+  // être encore appliquée. En cas d'erreur, on retente avec les seules colonnes
+  // historiques pour ne pas bloquer l'écran.
+  let fenetre: FenetreAffichage = { mode: "relatif", jours_avant: 1, jours_apres: 4, nb_semaines: 2 };
+  let fenetreIndispo = false;
+  if (!fenR.error && fenR.data) {
+    fenetre = { mode: "relatif", nb_semaines: 2, ...fenR.data };
+  } else if (fenR.error) {
+    const r2 = await supabase.from("parametre_affichage").select("jours_avant, jours_apres").maybeSingle<{ jours_avant: number; jours_apres: number }>();
+    if (!r2.error) fenetre = { mode: "relatif", nb_semaines: 2, ...(r2.data ?? { jours_avant: 1, jours_apres: 4 }) };
+    else fenetreIndispo = true;
+  }
 
   return (
     <>

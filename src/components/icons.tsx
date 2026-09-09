@@ -144,6 +144,23 @@ export function OperateurIcon({ size = 18, color = "currentColor" }: P) {
   );
 }
 
+// Téléviseur — raccourci vers l'affichage TV d'un atelier. Écran de télé
+// posé sur ses deux pieds, un point d'allumage discret en bas à droite,
+// entièrement en trait pour cohabiter avec les autres icônes du bandeau.
+export function TvIcon({ size = 18, color = "currentColor" }: P) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke={color}
+      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ verticalAlign: "-3px" }}>
+      {/* Cadre de l'écran */}
+      <rect x="2.5" y="5" width="19" height="12.5" rx="2" />
+      {/* Antennes / pieds */}
+      <path d="M8 21l3.5-3.5M16 21l-3.5-3.5" />
+      {/* LED d'allumage */}
+      <circle cx="18.5" cy="14.5" r="0.7" fill={color} stroke="none" />
+    </svg>
+  );
+}
+
 // Corbeille — proposition retenue (variante « couvercle + fûts »).
 export function TrashIcon({ size = 15, color = "currentColor" }: P) {
   return (

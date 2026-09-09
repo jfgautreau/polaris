@@ -440,6 +440,84 @@ export default async function AtelierPlanning({
     .map((id) => ({ id, ...displayById.get(id)! }))
     .sort((a, b) => (a.nom + a.prenom).localeCompare(b.nom + b.prenom));
 
+  // Éclatement Matin / Après-midi (2026-09-09). But : réduire la liste par bloc
+  // pour un écran TV lisible. On classe CHAQUE personne dans UNE seule section :
+  //  1) créneau du placement le plus fréquent (matin/aprem) sur la fenêtre — respecte
+  //     la réalité du planning et la réponse choisie « quart du placement du jour » ;
+  //  2) à défaut (aucun placement matin/AM — nuit, journée, ou pas de placement du
+  //     tout : purement absence/TP) : créneau du quart de son ÉQUIPE cette semaine
+  //     via la rotation datée, sinon quart fixe ;
+  //  3) en dernier recours : matin par défaut.
+  // Un quart sans créneau (journée, nuit) ne compte pas pour le split.
+  const quartCreneau = new Map<string, "matin" | "aprem" | null>();
+  for (const q of quarts) {
+    const c = q.creneau === "matin" ? "matin" : q.creneau === "aprem" ? "aprem" : null;
+    quartCreneau.set(q.code, c);
+  }
+  // Lecture d'équipe pour repli. Une seule requête (postée par personne concernée).
+  const persEquipe = new Map<string, string | null>();
+  if (personList.length) {
+    const { data: pe } = await admin
+      .from("personne")
+      .select("id, equipe_id")
+      .eq("site_id", site.id)
+      .in("id", personList.map((p) => p.id))
+      .returns<{ id: string; equipe_id: string | null }[]>();
+    for (const r of pe ?? []) persEquipe.set(r.id, r.equipe_id);
+  }
+  // Quart d'équipe pour chaque lundi de la fenêtre (repli). Recalcule sur les
+  // rotations déjà chargées si le bloc TP n'était pas exécuté (posteIds vide).
+  const rotRefsAll = await getRotationRefsC();
+  const mondaySetAll = new Set(isos.map((iso) => isoDate(mondayOf(new Date(iso + "T00:00")))));
+  const rotByMondayAll = new Map<string, Record<string, string>>();
+  for (const m of mondaySetAll) rotByMondayAll.set(m, rotationForWeek(rotRefsAll, m));
+  const { data: equipesAll } = await admin
+    .from("equipe")
+    .select("id, quart_fixe")
+    .eq("site_id", site.id)
+    .eq("actif", true)
+    .returns<{ id: string; quart_fixe: string | null }[]>();
+  const quartFixeAll = new Map((equipesAll ?? []).map((e) => [e.id, e.quart_fixe]));
+
+  const creneauEquipe = (persId: string): "matin" | "aprem" | null => {
+    const eq = persEquipe.get(persId);
+    if (!eq) return null;
+    const qf = quartFixeAll.get(eq);
+    if (qf) return quartCreneau.get(qf) ?? null;
+    // Créneau majoritaire sur la fenêtre (peut varier d'une semaine à l'autre).
+    const compte = { matin: 0, aprem: 0 };
+    for (const m of mondaySetAll) {
+      const rot = rotByMondayAll.get(m) ?? {};
+      const q = rot[eq];
+      const c = q ? quartCreneau.get(q) ?? null : null;
+      if (c) compte[c] += 1;
+    }
+    return compte.matin >= compte.aprem ? (compte.matin > 0 ? "matin" : null) : "aprem";
+  };
+
+  const sectionDe = (persId: string): "matin" | "aprem" => {
+    // 1) Placement le plus fréquent avec un créneau exploitable.
+    const compte = { matin: 0, aprem: 0 };
+    for (const iso of isos) {
+      const rows = byPerson.get(`${persId}:${iso}`) ?? [];
+      for (const r of rows) {
+        const qc = quartOuDefaut(r.quart_code, quarts);
+        const c = quartCreneau.get(qc);
+        if (c === "matin") compte.matin += 1;
+        else if (c === "aprem") compte.aprem += 1;
+      }
+    }
+    if (compte.matin || compte.aprem) return compte.aprem > compte.matin ? "aprem" : "matin";
+    // 2) Repli équipe (rotation datée / quart fixe).
+    const c = creneauEquipe(persId);
+    if (c) return c;
+    // 3) Défaut.
+    return "matin";
+  };
+
+  const matinList = personList.filter((p) => sectionDe(p.id) === "matin");
+  const apremList = personList.filter((p) => sectionDe(p.id) === "aprem");
+
   return (
     <>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
@@ -456,54 +534,66 @@ export default async function AtelierPlanning({
           Vérifiez l’ouverture des lignes dans Ordonnancement.
         </p>
       ) : (
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 16, tableLayout: "fixed" }}>
-        <thead>
-          <tr>
-            <th style={{ width: 260, border: cellBorder, background: "#1e3a8a", color: "#fff", padding: "8px 10px" }}></th>
-            {shownDays.map((d) => (
-              <th
-                key={d.iso}
-                style={{
-                  border: cellBorder,
-                  padding: "8px 6px",
-                  textAlign: "center",
-                  fontSize: 20,
-                  background: colBg(d.iso) ?? "#1e3a8a",
-                  color: d.iso === todayIso ? "#000" : "#fff",
-                }}
-              >
-                {d.nom}
-                <div style={{ fontSize: 14, fontWeight: 400 }}>{d.num}</div>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {            personList.map((p) => {
-              const interim = p.type_contrat === "INTERIM";
-              return (
-                <tr key={p.id}>
-                  <td style={{ border: cellBorder, padding: "5px 10px", fontWeight: 600, whiteSpace: "nowrap" }}>
-                    <span style={{ background: interim ? INTERIM_BG : undefined, padding: interim ? "0 4px" : 0, borderRadius: 3 }}>
-                      {p.nom} {p.prenom}
-                    </span>
-                  </td>
-                  {shownDays.map((d) => (
-                    <td key={d.iso} style={{ border: cellBorder, padding: "4px 6px", verticalAlign: "top", overflowWrap: "anywhere", wordBreak: "break-word" }}>
-                      {cellNom(p.id, d.iso)}
-                    </td>
-                  ))}
-                </tr>
-              );
-            })}
-
-          {personList.length === 0 && (
-            <tr>
-              <td colSpan={shownDays.length + 1} className="muted" style={{ padding: 10 }}>Aucune affectation sur la période affichée.</td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+        <>
+          {/* Deux tableaux empilés : Matin, puis Après-midi. Chaque personne
+              apparaît dans une seule section — cf. `sectionDe()`. Un tableau
+              vide affiche un simple message discret. */}
+          {([
+            { titre: "Matin", liste: matinList, teinte: "#1e3a8a" },
+            { titre: "Après-midi", liste: apremList, teinte: "#7c2d12" },
+          ] as const).map(({ titre, liste, teinte }) => (
+            <section key={titre} style={{ marginBottom: 18 }}>
+              <h2 style={{ fontSize: 20, margin: "6px 0 8px", color: teinte }}>{titre}</h2>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 16, tableLayout: "fixed" }}>
+                <thead>
+                  <tr>
+                    <th style={{ width: 260, border: cellBorder, background: teinte, color: "#fff", padding: "8px 10px" }}></th>
+                    {shownDays.map((d) => (
+                      <th
+                        key={d.iso}
+                        style={{
+                          border: cellBorder,
+                          padding: "8px 6px",
+                          textAlign: "center",
+                          fontSize: 20,
+                          background: colBg(d.iso) ?? teinte,
+                          color: d.iso === todayIso ? "#000" : "#fff",
+                        }}
+                      >
+                        {d.nom}
+                        <div style={{ fontSize: 14, fontWeight: 400 }}>{d.num}</div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {liste.map((p) => {
+                    const interim = p.type_contrat === "INTERIM";
+                    return (
+                      <tr key={p.id}>
+                        <td style={{ border: cellBorder, padding: "5px 10px", fontWeight: 600, whiteSpace: "nowrap" }}>
+                          <span style={{ background: interim ? INTERIM_BG : undefined, padding: interim ? "0 4px" : 0, borderRadius: 3 }}>
+                            {p.nom} {p.prenom}
+                          </span>
+                        </td>
+                        {shownDays.map((d) => (
+                          <td key={d.iso} style={{ border: cellBorder, padding: "4px 6px", verticalAlign: "top", overflowWrap: "anywhere", wordBreak: "break-word" }}>
+                            {cellNom(p.id, d.iso)}
+                          </td>
+                        ))}
+                      </tr>
+                    );
+                  })}
+                  {liste.length === 0 && (
+                    <tr>
+                      <td colSpan={shownDays.length + 1} className="muted" style={{ padding: 10 }}>Aucune affectation {titre.toLowerCase()} sur la période affichée.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </section>
+          ))}
+        </>
       )}
 
       <div style={{ marginTop: 14, fontSize: 14, color: "#6b7280" }}>

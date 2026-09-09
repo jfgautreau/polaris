@@ -1,8 +1,8 @@
 import { getAdminClient } from "@/lib/supabase-server";
 import { getCurrentSite } from "@/lib/current-site";
 import { getQuartsC } from "@/lib/refdata";
-import { joursAutour, parseJour } from "@/lib/week";
-import { getFenetreAffichage } from "@/lib/parametres";
+import { parseJour } from "@/lib/week";
+import { getFenetreAffichage, joursDeFenetre } from "@/lib/parametres";
 import AtelierPlanning from "../atelier/[atelier]/AtelierPlanning";
 import ImpressionAuto from "./ImpressionAuto";
 
@@ -18,8 +18,8 @@ export default async function ImpressionTousLesPlannings({
   searchParams: Promise<{ date?: string }>;
 }) {
   const sp = await searchParams;
-  const { jours_avant, jours_apres } = await getFenetreAffichage();
-  const days = joursAutour(parseJour(sp.date), jours_avant, jours_apres);
+  const fen = await getFenetreAffichage();
+  const days = joursDeFenetre(fen, parseJour(sp.date));
 
   const site = await getCurrentSite();
   const quarts = await getQuartsC();

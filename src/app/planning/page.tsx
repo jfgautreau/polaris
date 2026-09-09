@@ -18,6 +18,7 @@ import PlanningFilters from "./PlanningFilters";
 import AtelierFilter from "./AtelierFilter";
 import QuartSelector from "./QuartSelector";
 import ConducteurToggle from "./ConducteurToggle";
+import { TvIcon } from "@/components/icons";
 import PlanningGrid from "./PlanningGrid";
 import { getRotationRefsC } from "@/lib/refdata";
 import { rotationForWeek } from "@/lib/rotation";
@@ -736,7 +737,23 @@ export default async function PlanningPage({
               remplissage a été déplacé dans l'entête de chaque semaine (grille).
               Libellé au survol via title. */}
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <div className="filterrow" style={{ justifyContent: "flex-end" }}>
+            {/* Rangée 1 : raccourci vers l'affichage TV de l'atelier sélectionné
+                (visible seulement si un atelier est filtré), puis Horaires
+                spécifiques. Le raccourci TV ouvre `/affichage/atelier/<id>`
+                dans un nouvel onglet, pour ne pas quitter le planning. */}
+            <div className="filterrow" style={{ justifyContent: "flex-end", gap: 6 }}>
+              {atelier && (
+                <Link
+                  href={`/affichage/atelier/${atelier}`}
+                  target="_blank"
+                  className="navlink"
+                  title={`Affichage TV — ${ateliersMap.get(atelier) ?? "service"}`}
+                  aria-label="Affichage TV du service"
+                  style={{ width: 30, height: 30, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", color: "#1d4ed8", border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}
+                >
+                  <TvIcon size={20} />
+                </Link>
+              )}
               <Link href="/horaires-specifiques" className="navlink" title="Horaires spécifiques" aria-label="Horaires spécifiques" style={{ width: 30, height: 30, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}>
                 🕐
               </Link>

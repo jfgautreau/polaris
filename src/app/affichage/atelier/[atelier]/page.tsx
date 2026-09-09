@@ -1,7 +1,7 @@
 import { getCurrentSite } from "@/lib/current-site";
 import { getQuartsC } from "@/lib/refdata";
-import { joursAutour, parseJour } from "@/lib/week";
-import { getFenetreAffichage } from "@/lib/parametres";
+import { parseJour } from "@/lib/week";
+import { getFenetreAffichage, joursDeFenetre } from "@/lib/parametres";
 import AutoRefresh from "@/components/AutoRefresh";
 import AffichageBarre from "./AffichageBarre";
 import AtelierPlanning from "./AtelierPlanning";
@@ -21,8 +21,8 @@ export default async function AffichageAtelier({
   // Param. RH (jours_avant / jours_apres). Un ecran de couloir sert a savoir ce
   // qui vient, pas a relire le lundi passe.
   // `?date` deplace le pivot (sans recalage sur le lundi).
-  const { jours_avant, jours_apres } = await getFenetreAffichage();
-  const days = joursAutour(parseJour(sp.date), jours_avant, jours_apres);
+  const fen = await getFenetreAffichage();
+  const days = joursDeFenetre(fen, parseJour(sp.date));
 
   // Multi-tenant : nom d'usine affiche en haut a droite pour qu'un ecran
   // couloir d'un site ne puisse pas etre confondu avec celui d'un autre.
