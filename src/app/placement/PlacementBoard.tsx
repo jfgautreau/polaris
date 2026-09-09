@@ -7,7 +7,7 @@ import { habValable, habManqueTxt } from "@/lib/habilitations";
 import { parseNumeros } from "@/lib/numeros-rotation";
 import { styleInterim, estInterim } from "@/lib/interim";
 import SlideSwitch from "@/components/SlideSwitch";
-import { PrintIcon } from "@/components/icons";
+import { PrintIcon, OperateurIcon } from "@/components/icons";
 import JourNav from "./JourNav";
 import s from "./placement.module.css";
 
@@ -496,6 +496,11 @@ export default function PlacementBoard({
   const inScope = (p: Personne) =>
     equipeOk(p) && (!p.atelier_id || !fAtelier || p.atelier_id === fAtelier);
 
+  // Set des personnes TP ce jour-là (indisponibles). Calculé une fois pour être
+  // partagé par le filtre « à placer » (les TP en sont retirés) et par la carte
+  // « Temps partiel » du volet Absences (où ils apparaissent regroupés).
+  const tpSetPourListe = useMemo(() => new Set(tpIds), [tpIds]);
+
   // Liste des noms filtree + regroupee : a placer -> absents -> sur poste -> autre quart.
   // Une recherche cherche dans TOUT l'effectif : les pre-filtres equipe/atelier ne sont
   // qu'un confort de depart, ils ne doivent pas cacher le nom qu'on tape.
@@ -510,6 +515,10 @@ export default function PlacementBoard({
         // Bascule Conducteurs : intersection avec équipe/atelier. La recherche
         // par nom (q) court-circuite ce filtre, cohérent avec les autres.
         if (onlyCond && !condSet.has(p.id)) return false;
+        // TP du jour SANS placement : indisponible → invisible dans « à placer »
+        // (elle apparaît dans la carte « Temps partiel » du volet Absences).
+        // Un TP DÉJÀ placé reste visible pour permettre le retrait (rank=2).
+        if (tpSetPourListe.has(p.id) && !place[p.id] && !autreQuart[p.id]) return false;
       }
       if (hidePlaced && (place[p.id] || autreQuart[p.id])) return false;
       return true;
@@ -522,7 +531,7 @@ export default function PlacementBoard({
       return 0; // a placer
     };
     return [...list].sort((a, b) => rank(a) - rank(b) || `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`));
-  }, [personnes, search, fEquipe, fAtelier, place, autreQuart, hidePlaced, onlyCond, condSet]);
+  }, [personnes, search, fEquipe, fAtelier, place, autreQuart, hidePlaced, onlyCond, condSet, tpSetPourListe]);
 
   // Vue Absences : une carte par motif d'absence, plus « Non travaillé ».
   // Restreinte a l'atelier affiche. Les personnes dont l'atelier n'est pas
@@ -531,20 +540,19 @@ export default function PlacementBoard({
   // Absents de l'atelier pour la FEUILLE IMPRIMEE : calcules quelle que soit la vue
   // a l'ecran (on imprime aussi bien depuis le plan), et motifs vides ecartes pour
   // ne pas gaspiller la colonne.
-  const tpSet = useMemo(() => new Set(tpIds), [tpIds]);
   const absPrint = useMemo(() => {
     const tri = (a: Personne, b: Personne) => `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`);
     const dansAtelier = (p: Personne) => !atelierId || !p.atelier_id || p.atelier_id === atelierId;
     const gensDe = (v: string) => personnes.filter((p) => place[p.id] === v && dansAtelier(p)).sort(tri);
     // Temps partiel : personnes indisponibles ce jour-là NON déjà placées ou
     // marquées absentes (celles-ci figurent déjà dans le plan ou sous leur motif).
-    const gensTp = personnes.filter((p) => tpSet.has(p.id) && dansAtelier(p) && !place[p.id]).sort(tri);
+    const gensTp = personnes.filter((p) => tpSetPourListe.has(p.id) && dansAtelier(p) && !place[p.id]).sort(tri);
     return [
       ...motifs.map((mo) => ({ key: mo.id, titre: mo.libelle, gens: gensDe(`m:${mo.id}`) })),
       { key: "X", titre: "Non travaillé", gens: gensDe("X") },
       { key: "TP", titre: "Temps partiel", gens: gensTp },
     ].filter((c) => c.gens.length > 0);
-  }, [motifs, personnes, place, atelierId, tpSet]);
+  }, [motifs, personnes, place, atelierId, tpSetPourListe]);
 
   const absCartes = useMemo(() => {
     if (!vueAbsences) return [];
@@ -559,8 +567,15 @@ export default function PlacementBoard({
       gens: gensDe(`m:${mo.id}`),
     }));
     cartes.push({ key: "X", titre: "Non travaillé", couleur: "#6b7280", drop: "X", gens: gensDe("X") });
+    // Carte « Temps partiel » (2026-09-09) : personnes TP du jour NON déjà placées
+    // ni absentes — mêmes règles que la feuille imprimée. Pas de `drop` (le TP
+    // est calculé automatiquement selon `tp_config` + rotation datée, on ne
+    // dépose pas manuellement dessus). Couleur violette, cohérente avec le
+    // marqueur TP du Planning.
+    const gensTp = personnes.filter((p) => tpSetPourListe.has(p.id) && dansAtelier(p) && !place[p.id]).sort(tri);
+    cartes.push({ key: "TP", titre: "Temps partiel", couleur: "#7c3aed", gens: gensTp });
     return cartes;
-  }, [vueAbsences, motifs, personnes, place, atelierId]);
+  }, [vueAbsences, motifs, personnes, place, atelierId, tpSetPourListe]);
 
   const searching = !!search.trim();
   const nbAplacer = personnes.filter((p) => inScope(p) && !place[p.id] && !autreQuart[p.id]).length;
@@ -673,7 +688,7 @@ export default function PlacementBoard({
             title="N'afficher que les personnes compétentes (niveau ≥ 1) sur au moins un poste conducteur"
           >
             <input type="checkbox" checked={onlyCond} onChange={(e) => setOnlyCond(e.target.checked)} style={{ width: "auto" }} />
-            🚛 Conducteurs
+            <OperateurIcon size={16} /> Conducteurs
           </label>
           <label
             style={{

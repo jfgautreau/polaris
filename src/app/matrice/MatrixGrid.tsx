@@ -162,10 +162,21 @@ export default function MatrixGrid({
       if (mode === "actuel") {
         const idx = CYCLE.indexOf(cur.a);
         const nextA = CYCLE[(((idx < 0 ? 0 : idx) + delta) % CYCLE.length + CYCLE.length) % CYCLE.length];
-        // La cible ne peut jamais être sous l'actuel : on la remonte si besoin.
-        // La restriction ❌ est hors échelle, donc exclue de la comparaison.
+        // Symétrie CONDITIONNELLE de la cible (2026-09-09) :
+        //  - Si la cible « collait » à l'actuel AVANT la modif (cur.c === cur.a),
+        //    on la fait suivre dans les deux sens (montée ET descente). Corrige
+        //    le bug historique : monter puis redescendre laissait la cible en
+        //    l'air.
+        //  - Sinon, la cible a été saisie plus haut volontairement → on la
+        //    préserve, mais on garantit toujours cible ≥ actuel (remontée forcée
+        //    si l'actuel dépasse la cible).
+        //  - La restriction ❌ reste hors échelle, exclue de la comparaison.
         let nextC = cur.c;
-        if (nextA !== RESTRICT && nextC !== RESTRICT && nextC < nextA) nextC = nextA;
+        if (nextA !== RESTRICT && nextC !== RESTRICT) {
+          const cibleCollait = cur.a !== RESTRICT && cur.c === cur.a;
+          if (cibleCollait) nextC = nextA;
+          else if (nextC < nextA) nextC = nextA;
+        }
         next = { a: nextA, c: nextC };
       } else {
         // Mode cible : le cycle des valeurs autorisées démarre au niveau actuel

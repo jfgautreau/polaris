@@ -122,6 +122,23 @@ export function FillIcon({ size = 15, color = "currentColor" }: P) {
   );
 }
 
+// « Opérateur qualifié » — silhouette + étoile (variante D, choix du 2026-09-09).
+// Utilisé par le bouton bascule « Conducteurs » du Planning et par la checkbox
+// équivalente du Placement (filtre : personnes ayant au moins une compétence
+// niveau ≥ 1 sur un poste `categorie = 'conducteur'` actif). Monochrome, suit
+// `currentColor` → passe naturellement du bleu (inactif, fond blanc) au blanc
+// (actif, fond bleu) sans configuration supplémentaire.
+export function OperateurIcon({ size = 18, color = "currentColor" }: P) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke={color}
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ verticalAlign: "-3px" }}>
+      <circle cx="10" cy="7" r="3.5" />
+      <path d="M3 21c0-4 3.5-7 7-7s7 3 7 7" />
+      <path d="M19 2.5 20.3 5l2.7.4-2 1.8.5 2.7-2.5-1.3-2.5 1.3.5-2.7-2-1.8 2.7-.4L19 2.5z" fill={color} stroke="none" />
+    </svg>
+  );
+}
+
 // Corbeille — proposition retenue (variante « couvercle + fûts »).
 export function TrashIcon({ size = 15, color = "currentColor" }: P) {
   return (

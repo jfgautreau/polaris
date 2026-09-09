@@ -57,11 +57,17 @@ export default function AbsencesEditor({
   motifs,
   ateliers,
   initial,
+  atelierInit = "",
+  nomInit = "",
 }: {
   personnes: Personne[];
   motifs: Motif[];
   ateliers: Atelier[];
   initial: PeriodeVue[];
+  // Valeurs initiales des filtres, transmises par l'URL depuis le Planning
+  // (bouton « 🤒 »). Vides = aucun filtre — comportement historique.
+  atelierInit?: string;
+  nomInit?: string;
 }) {
   const router = useRouter();
   const [edit, setEdit] = useState<Edition | null>(null);
@@ -71,9 +77,10 @@ export default function AbsencesEditor({
   const [conflit, setConflit] = useState<{ jours: string[]; poursuivre: () => void } | null>(null);
   const [rechPers, setRechPers] = useState("");
 
-  // Filtres (nom + atelier + période d'intersection).
-  const [fNom, setFNom] = useState("");
-  const [fAtelier, setFAtelier] = useState("");
+  // Filtres (nom + atelier + période d'intersection). Nom/atelier peuvent
+  // arriver depuis le Planning (préservation du contexte au clic sur « 🤒 »).
+  const [fNom, setFNom] = useState(nomInit);
+  const [fAtelier, setFAtelier] = useState(atelierInit);
   const [fDu, setFDu] = useState("");
   const [fAu, setFAu] = useState("");
 

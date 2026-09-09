@@ -15,8 +15,20 @@ type Atelier = { id: string; nom: string };
 // et non de la seule table `absence` : la quasi-totalité des absences est posée
 // jour par jour au planning sans période déclarée. On les regroupe en périodes
 // (grouperAbsences) pour TOUT l'effectif.
-export default async function AbsencesSpecifiquesPage() {
+//
+// `?atelier=<id>` et `?search=<texte>` : filtres transmis depuis le Planning
+// (bouton « 🤒 »). Servent de valeurs initiales aux filtres client de l'éditeur
+// et sont renvoyés au Planning via le lien de retour, pour que le contexte de
+// travail (recherche par nom, atelier filtré) soit préservé à l'aller-retour.
+export default async function AbsencesSpecifiquesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ atelier?: string; search?: string }>;
+}) {
   const { profile } = await requireModule("planning", "read");
+  const sp = await searchParams;
+  const atelierInit = sp.atelier ?? "";
+  const searchInit = sp.search ?? "";
 
   const supabase = await getServerClient();
   const [{ data: persData }, { data: motifData }, { data: ateliersData }, joursAll, { data: absData }] = await Promise.all([
@@ -81,7 +93,21 @@ export default async function AbsencesSpecifiquesPage() {
       <div className="container" style={{ maxWidth: 1500 }}>
         <div className="toolbar" style={{ justifyContent: "space-between", alignItems: "center" }}>
           <h1 style={{ margin: 0 }}>Absences spécifiques</h1>
-          <Link href="/planning" className="navlink">&larr; Planning</Link>
+          {/* Retour au Planning en préservant les filtres transmis à l'aller. */}
+          <Link
+            href={
+              (() => {
+                const p = new URLSearchParams();
+                if (atelierInit) p.set("atelier", atelierInit);
+                if (searchInit) p.set("search", searchInit);
+                const qs = p.toString();
+                return qs ? `/planning?${qs}` : "/planning";
+              })()
+            }
+            className="navlink"
+          >
+            &larr; Planning
+          </Link>
         </div>
         <p className="muted" style={{ marginBottom: 16 }}>
           Toutes les absences de l&apos;effectif, reconstruites à partir des jours posés au planning
@@ -93,6 +119,8 @@ export default async function AbsencesSpecifiquesPage() {
           motifs={motifs}
           ateliers={ateliers}
           initial={periodes}
+          atelierInit={atelierInit}
+          nomInit={searchInit}
         />
       </div>
     </>

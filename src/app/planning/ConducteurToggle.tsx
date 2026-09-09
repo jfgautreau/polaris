@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
+import { OperateurIcon } from "@/components/icons";
 
 // Bascule « Conducteurs » : ne montre que les personnes ayant au moins une
 // compétence (niveau ≥ 1) sur au moins un poste `categorie = 'conducteur'` actif.
@@ -42,20 +43,29 @@ export default function ConducteurToggle({
       <button
         type="button"
         onClick={go}
+        aria-label="Filtre Conducteurs"
+        aria-pressed={actif}
         title={actif ? "Filtre Conducteurs actif — cliquer pour tout afficher" : "N'afficher que les personnes compétentes sur au moins un poste conducteur"}
         style={{
+          // Même gabarit que les trois boutons icône du dessus (🕐 🤒 🖨) :
+          // 30×30, bordure grise, radius 8. Actif = fond bleu, icône blanche
+          // (héritée via currentColor). Icône seule pour ne pas déborder la
+          // colonne — la sémantique passe par le tooltip.
+          width: 30,
           height: 30,
-          padding: "0 10px",
-          fontSize: 12,
-          fontWeight: 600,
+          flex: "none",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
           border: "1px solid var(--border)",
           borderRadius: 8,
           background: actif ? "var(--primary)" : "#fff",
           color: actif ? "#fff" : "var(--text)",
           cursor: "pointer",
+          padding: 0,
         }}
       >
-        🚛 Cond.
+        <OperateurIcon size={20} />
       </button>
     </div>
   );

@@ -743,7 +743,20 @@ export default async function PlanningPage({
               </Link>
             </div>
             <div className="filterrow" style={{ justifyContent: "flex-end" }}>
-              <Link href="/absences-specifiques" className="navlink" title="Absences spécifiques" aria-label="Absences spécifiques" style={{ width: 30, height: 30, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}>
+              <Link
+                href={(() => {
+                  // Préserve atelier + recherche à l'aller (retour idem côté page cible).
+                  const p = new URLSearchParams();
+                  if (atelier) p.set("atelier", atelier);
+                  if (searchParam) p.set("search", searchParam);
+                  const qs = p.toString();
+                  return qs ? `/absences-specifiques?${qs}` : "/absences-specifiques";
+                })()}
+                className="navlink"
+                title="Absences spécifiques"
+                aria-label="Absences spécifiques"
+                style={{ width: 30, height: 30, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}
+              >
                 🤒
               </Link>
             </div>
