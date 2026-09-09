@@ -347,8 +347,13 @@ habilitations, référentiel…). Applique-la ici plutôt que d'inventer :
 - **Icônes SVG partagées** (`src/components/icons.tsx`) : `<EditIcon />` (crayon)
   pour Modifier, `<SaveIcon />` (disquette) pour Enregistrer, `<CheckIcon />`
   (coche verte) pour Valider une édition inline, `<TrashIcon />` pour Supprimer,
-  `<PrintIcon />` pour l'impression, `<AbsenceIcon />` pour Absences (Personnel),
-  `<SearchIcon />` / `<InfoIcon />` / `<GearIcon />` pour la colonne d'actions.
+  `<PrintIcon />` pour l'impression (**refonte 2026-09-09** : style trait pur, viewBox
+  24×24 avec marges internes [3,21], cohabite proprement avec les autres icônes du
+  bandeau Planning ; l'ancien style « plein bleu » causait un désalignement visuel
+  entre 🤒 et 🚛/OperateurIcon), `<AbsenceIcon />` pour Absences (Personnel),
+  `<SearchIcon />` / `<InfoIcon />` / `<GearIcon />` pour la colonne d'actions,
+  `<OperateurIcon />` (silhouette + étoile, choix 2026-09-09) pour le filtre
+  « Conducteurs » du Planning et du Placement.
   L'emoji rendait avec ses couleurs propres, illisible sur un fond coloré — le
   SVG en `currentColor` suit la couleur du bouton (blanc sur bleu, gris sur
   clair). Un `<SaveIcon default>` reste ré-exporté depuis `@/components/SaveIcon`
@@ -508,7 +513,26 @@ prochain gros chantier, pas une optimisation cosmétique.
   tournants), lignes par atelier, **journée dérivée** à part en bas (colonnes alignées par
   `colgroup` partagé). Le gabarit sert de base au bouton « Initialiser ». APIs
   `/api/ordonnancement/{semaine-type,semaine-type-ouverture,semaine-type-profil}` inchangées.
-- Planning : `src/app/planning/{page,PlanningGrid,PlanningFilters,AtelierFilter,QuartSelector}.tsx`.
+- Planning : `src/app/planning/{page,PlanningGrid,PlanningFilters,AtelierFilter,QuartSelector,ConducteurToggle}.tsx`.
+  ⚠️ **Filtre AUTO élargi aux personnes réellement placées** (2026-09-09) :
+  cliquer sur « Nuit » en mode AUTO remonte les équipes théoriquement de nuit
+  cette semaine (rotation + `quart_fixe`) **∪** les personnes ayant au moins
+  UN placement sur poste dans ce quart sur la fenêtre 3 semaines affichée
+  (`autoPlacedIds`, match `quart_code = quart` avec repli sur NULL si `quart`
+  est le quart par défaut du site, cohérent avec `memeQuart`). Sans cette union,
+  une personne d'une autre équipe affectée manuellement sur nuit restait invisible
+  tant qu'on ne basculait pas en « Toutes ». `poste_id NOT NULL` — les absences/NT
+  sont neutres. fetchAll obligatoire (3 semaines de placements dépassent 1000).
+  ⚠️ **Bascule « Conducteurs »** (icône `OperateurIcon` seule, 4e ligne colonne
+  droite du bandeau, à côté de 🕐 🤒 🖨) portée par `?cond=1` : `filtreConducteurs`
+  côté serveur restreint `displayed` aux personnes ayant `niveau_actuel ≥ 1` sur au
+  moins un poste `categorie='conducteur'` actif — même seuil que la pastille « sans
+  compétence » de la Matrice. Intersection avec les autres filtres ; la recherche
+  par nom court-circuite. Les 3 autres composants de filtre (`QuartSelector`,
+  `AtelierFilter`, `PlanningFilters`) propagent `cond` dans leurs URLs.
+  ⚠️ **Lien 🤒 vers `/absences-specifiques`** transmet `?atelier=` + `?search=`
+  pour préserver le contexte (le retour se fait via un lien client dans l'éditeur,
+  lisant l'URL LIVE — cf. section Absences).
   ⚠️ **Jours de semaine TOUJOURS affichés** (lundi→vendredi), même sur une semaine non
   initialisée : la colonne fermée (aucune ligne ouverte) porte alors, sur toute sa hauteur
   (cellule fusionnée `rowSpan`, alignée en haut), le message **« Jour sans production — pour
@@ -548,11 +572,25 @@ prochain gros chantier, pas une optimisation cosmétique.
   (feuille A4 paysage : plan + colonne « **Absents / TP du jour** » — motifs d'absence **et**
   bloc **Temps partiel** ; TP du jour calculé serveur `tpIds`, mêmes règles que Planning/TV ;
   mise à l'échelle mesurée).
-  **Navigation par jour** = `JourNav` (remplace `<input type="date">`) : flèches ◀/▶
-  **sautent** au jour ouvert précédent/suivant, calendrier déroulant **grise** les jours
-  sans ligne ouverte ; `openDays` calculé serveur sur fenêtre [-90;+150] j, borné quart+atelier.
-  Écrit via `/api/placement/{cell,copy,reset-week,prefill,move}` — même table que le Planning.
-  V2 prévue : vrai plan géographique (image + positions).
+  **Filtre « Conducteurs »** (checkbox à côté de « Masquer les placés », icône `OperateurIcon`) :
+  ne montre que les personnes ayant AU MOINS UNE compétence (`niveau_actuel ≥ 1`) sur AU
+  MOINS UN poste `categorie='conducteur'` actif — set `conducteurIds` calculé serveur
+  (fetchAll obligatoire, matrice > 1000 lignes). Intersection avec les autres filtres ; la
+  recherche par nom court-circuite. État local (comme « Masquer les placés »), non porté
+  en URL.
+  **TP hors « à placer »** (2026-09-09) : un TP du jour SANS placement disparaît de la
+  liste des noms (rank 0) — il apparaît dans la carte violette « **Temps partiel** » du
+  volet Absences (couleur `#7c3aed`, **non-droppable** : le TP est calculé auto). Un TP
+  DÉJÀ placé reste visible pour permettre le retrait (`rank=2`). Même règle que la
+  feuille imprimée (`absPrint`), cohérence garantie.
+  **Navigation par jour** = `JourNav` (remplace `<input type="date">`) : **bouton
+  « Aujourd'hui »** (2026-09-09, remplace les flèches ◀/▶ historiques — le calendrier
+  suffit à naviguer) grisé quand on est déjà sur aujourd'hui, puis pastille date, puis
+  calendrier déroulant qui **grise** les jours sans ligne ouverte ; `openDays` calculé
+  serveur sur fenêtre [-90;+150] j = jours où `jour_quart.actif=true` pour ce quart
+  (une ligne fermée par l'ordo ne grise plus le jour depuis 2026-09-09, cf. « Ouverture
+  des lignes »). Écrit via `/api/placement/{cell,copy,reset-week,prefill,move}` — même
+  table que le Planning. V2 prévue : vrai plan géographique (image + positions).
 - Matrice : `src/app/matrice/{page,MatricePanel,MatrixGrid,Pie,LegendeModal}.tsx` + `matrice.module.css`.
   L'en-tête (titre · recherche · légende · bascule Actuel/Cible · filtres) est dans
   `MatricePanel` ; `MatrixGrid` reçoit `search` en prop.
@@ -563,6 +601,13 @@ prochain gros chantier, pas une optimisation cosmétique.
   atelier filtré (ex. taper GAUTREAU / Condi alors qu'on a filtré FAB). Les **colonnes**
   (postes) restent bornées à l'atelier ; le **bilan** (`stats`) est calculé sur le seul
   sous-ensemble affiché (`bilanPersonnes`), pas sur tout l'effectif.
+  ⚠️ **Cible qui « colle » à l'actuel — symétrie CONDITIONNELLE** (2026-09-09,
+  correction du bug historique). Dans `bump()` mode actuel : si la cible collait à
+  l'actuel AVANT modif (`cur.c === cur.a`), on fait suivre la cible dans les DEUX
+  sens (montée ET descente — le bug était que descendre l'actuel à 0 laissait la
+  cible en l'air, ex. 3). Sinon (cible saisie plus haut volontairement), on la
+  préserve mais on garantit toujours `cible ≥ actuel` (remontée forcée si l'actuel
+  dépasse la cible). La restriction ❌ reste hors échelle, exclue de la comparaison.
   ⚠️ **Pastille orange `!` « sans compétence »** (devant le nom, comme la fiche
   incomplète du Personnel) : personne **ACTIVE** (les « À venir » sont exclues) sans
   **aucun** niveau actuel ≥ 1 sur **aucun poste actif, tous ateliers confondus**. Le
@@ -623,6 +668,14 @@ prochain gros chantier, pas une optimisation cosmétique.
   + `src/app/admin/habilitations-param/*` + `src/app/api/habilitations/route.ts`.
   Saisie **au clic sur une pastille** (modale pré-remplie) ; l'en-tête est rendu par
   `HabilitationsList`, pas par la page.
+  ⚠️ **Recherche transverse au filtre atelier/équipe** (2026-09-09, même pattern que
+  Matrice) : `page.tsx` ne borne PLUS les personnes par équipe/atelier en base — il
+  charge tout l'effectif actif et passe un `displayedIds` qui décide du sous-ensemble
+  affiché par défaut ; la recherche par nom balaie `personnes` en entier et fait
+  apparaître quelqu'un hors du filtre (ex. taper GAUTREAU / Condi alors qu'on a filtré
+  FAB). Le **bilan** (`bilan` dans `HabilitationsList`) est calculé sur
+  `displayedPersonnes` — un chef d'atelier veut le bilan de son atelier, pas celui du
+  site. La vue Liste (`shownRows`) suit la même règle.
 - Utilisateurs : `src/app/admin/users/{page,NouvelUtilisateur,NouveauRole,UserRoleSelect,UserRowActions,LienMotDePasse,DroitsMatrix}.tsx`
   + `src/app/api/users/{create,role,active,reset-password}/route.ts` + `/api/droits`
   + `/api/roles` (création de rôles personnalisés, garde `utilisateurs: write`).
@@ -719,6 +772,14 @@ prochain gros chantier, pas une optimisation cosmétique.
   (motif via palette, période au calendrier 2 mois, commentaire), crayon + corbeille,
   vérification de conflit avant écrasement. Popovers en `position: fixed` (piège
   `overflow: auto` de la carte modale, cf. patterns UI).
+  ⚠️ **Filtres nom + atelier SYNCHRONISÉS À L'URL** (2026-09-09, `?search=` / `?atelier=`) :
+  état local pour la réactivité de la frappe, `router.replace()` sans historique à chaque
+  modif. Sans cette sync, un `router.refresh()` ultérieur (déclenché par une écriture)
+  ré-appelait le server component qui relisait `?search=` inchangé → le nom effacé
+  localement « revenait » à l'écran (bug vécu). Le lien « ← Planning » vit dans
+  `AbsencesEditor` (client) et lit ces mêmes params → retour cohérent avec l'état visible.
+  Le lien 🤒 du Planning (`src/app/planning/page.tsx`) transmet `?atelier=` + `?search=`
+  pour préserver le contexte à l'aller.
 - Plateforme (super_admin) : `src/app/platform/*` — back-office multi-site.
   `/platform/[id]` porte la section **« Éléments visibles pour ce site »**
   (`ModulesMasquesEditor.tsx` + server action `setModuleMasque`) : masquage

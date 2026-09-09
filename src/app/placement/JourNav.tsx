@@ -51,26 +51,13 @@ export default function JourNav({
   const maxKey = keyIso(winEnd);
   const curKey = keyMois(an, m0);
 
-  // Jour ouvert précédent / suivant. Repli ±1 jour si aucun jour ouvert connu
-  // dans cette direction, pour que les flèches ne se bloquent jamais.
-  const prevOpen = () => {
-    let best: string | null = null;
-    for (const d of openDays) {
-      if (d < jour) best = d;
-      else break;
-    }
-    onPick(best ?? addDaysIso(jour, -1));
-  };
-  const nextOpen = () => {
-    let best: string | null = null;
-    for (const d of openDays) {
-      if (d > jour) {
-        best = d;
-        break;
-      }
-    }
-    onPick(best ?? addDaysIso(jour, 1));
-  };
+  // Aujourd'hui : ISO local. Un simple raccourci ; s'il n'est pas dans
+  // `openDays`, on l'ouvre quand même (l'écran s'adaptera avec son message
+  // « Jour sans production » côté grille).
+  const aujourdhuiIso = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  })();
 
   const reculerMois = () => {
     if (curKey <= minKey) return;
@@ -97,11 +84,21 @@ export default function JourNav({
 
   return (
     <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 4 }}>
-      <button type="button" className={s.navbtn} onClick={prevOpen} title="Jour ouvert précédent">◀</button>
+      {/* Flèches ◀ ▶ retirées (2026-09-09) — le calendrier suffit à naviguer.
+          Bouton « Aujourd'hui » à leur place : raccourci vers la date du jour. */}
+      <button
+        type="button"
+        className={s.navbtn}
+        onClick={() => onPick(aujourdhuiIso)}
+        title="Revenir à aujourd'hui"
+        disabled={jour === aujourdhuiIso}
+        style={{ fontWeight: 600, opacity: jour === aujourdhuiIso ? 0.55 : 1 }}
+      >
+        Aujourd&apos;hui
+      </button>
       <button type="button" className={s.navbtn} onClick={ouvrir} title="Choisir un jour" style={{ minWidth: 132, fontWeight: 600 }}>
         {fmtCourt(jour)}
       </button>
-      <button type="button" className={s.navbtn} onClick={nextOpen} title="Jour ouvert suivant">▶</button>
 
       {open && (
         <>

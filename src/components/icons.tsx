@@ -73,25 +73,30 @@ export function GearIcon({ size = 16, color = "currentColor" }: P) {
   );
 }
 
-// Impression / PDF — imprimante « pleine » (choix du 07/09/2026).
-// ⚠️ Toute la silhouette est en `currentColor` (bleu) : sur le fond BLANC du
-// bouton, évider la feuille de sortie en blanc rendait la moitié basse de
-// l'imprimante invisible → elle paraissait minuscule. Les détails (LED, lignes
-// de texte, fente) sont donc dessinés en `hole` (blanc) PAR-DESSUS le bleu,
-// sans jamais creuser la silhouette.
-export function PrintIcon({ size = 16, hole = "#fff" }: { size?: number; hole?: string }) {
+// Impression / PDF — imprimante « ligne » (choix du 2026-09-09, refonte).
+// Style trait pur (comme EditIcon/SearchIcon/GearIcon), pour cohabiter sans
+// heurt avec les autres icônes du bandeau Planning. ViewBox 24×24 pleinement
+// occupé mais avec des marges internes (x∈[3,21], y∈[3,21]) qui protègent
+// contre le rognage du bouton parent 30×30. Trois parties empilées verticalement,
+// mêmes largeurs de traits, symétriques :
+//   1. feuille d'entrée en haut (rectangle plus étroit)
+//   2. corps de l'imprimante (rectangle plus large, avec LED)
+//   3. feuille de sortie en bas (rectangle plus étroit, 2 lignes de « texte »)
+// `hole` conservé pour compatibilité mais inutilisé (rendu 100% en trait).
+export function PrintIcon({ size = 16, color = "currentColor" }: P & { hole?: string }) {
   return (
-    <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden="true" style={{ verticalAlign: "-3px" }}>
-      {/* feuille du haut */}
-      <path fill="currentColor" d="M6.5 2.5h11v5.5h-11z" />
-      {/* corps de l'imprimante */}
-      <rect fill="currentColor" x="2" y="8" width="20" height="9" rx="2.2" />
-      {/* feuille de sortie : bleue, dépasse sous le corps (visible sur fond blanc) */}
-      <path fill="currentColor" d="M6 13h12v7.3c0 .4-.3.7-.7.7H6.7c-.4 0-.7-.3-.7-.7V13Z" />
-      {/* détails clairs PAR-DESSUS : fente, LED, deux lignes de « texte » */}
-      <path stroke={hole} fill="none" strokeWidth="1.4" strokeLinecap="round" d="M5 10.4h6" />
-      <circle fill={hole} cx="18.2" cy="10.6" r="1.05" />
-      <path stroke={hole} fill="none" strokeWidth="1.4" strokeLinecap="round" d="M8.7 16h6.6M8.7 18.4h4.6" />
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke={color}
+      strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ verticalAlign: "-3px" }}>
+      {/* Feuille d'entrée */}
+      <path d="M7 3h10v6H7z" />
+      {/* Corps de l'imprimante */}
+      <path d="M5 9h14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-1v-4H6v4H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2z" />
+      {/* LED (petit point plein) */}
+      <circle cx="17.5" cy="12.5" r="0.8" fill={color} stroke="none" />
+      {/* Feuille de sortie */}
+      <path d="M6 14h12v7H6z" />
+      {/* Lignes de texte sur la feuille de sortie */}
+      <path d="M8.5 17h7M8.5 19h4.5" strokeWidth="1.3" />
     </svg>
   );
 }

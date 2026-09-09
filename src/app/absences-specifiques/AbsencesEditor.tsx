@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import ModaleDeplacable from "@/components/ModaleDeplacable";
 import DateRangePicker from "@/components/DateRangePicker";
 import { libellePeriode } from "@/lib/absences-periodes";
@@ -70,6 +71,7 @@ export default function AbsencesEditor({
   nomInit?: string;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [edit, setEdit] = useState<Edition | null>(null);
   const [ouvertPop, setOuvertPop] = useState<null | "motif" | "cal" | "personne">(null);
   const [enCours, setEnCours] = useState(false);
@@ -77,12 +79,38 @@ export default function AbsencesEditor({
   const [conflit, setConflit] = useState<{ jours: string[]; poursuivre: () => void } | null>(null);
   const [rechPers, setRechPers] = useState("");
 
-  // Filtres (nom + atelier + période d'intersection). Nom/atelier peuvent
-  // arriver depuis le Planning (préservation du contexte au clic sur « 🤒 »).
-  const [fNom, setFNom] = useState(nomInit);
-  const [fAtelier, setFAtelier] = useState(atelierInit);
+  // Filtres nom + atelier : SYNCHRONISÉS À L'URL (?search= / ?atelier=). État
+  // local pour la réactivité de la frappe ; à chaque modif, on répercute dans
+  // l'URL via `router.replace()` (sans historique). Sans ça, un `router.refresh()`
+  // ultérieur (déclenché par une écriture ailleurs, ou par un router.push interne)
+  // ré-appelait le server component qui relisait `?search=` inchangé → le nom
+  // effacé localement « revenait » à l'écran. Le lien « ← Planning » lit ces
+  // mêmes params, donc le retour reste cohérent avec l'état visible.
+  const [fNom, _setFNom] = useState(nomInit);
+  const [fAtelier, _setFAtelier] = useState(atelierInit);
   const [fDu, setFDu] = useState("");
   const [fAu, setFAu] = useState("");
+  const syncUrl = (patch: Partial<{ search: string; atelier: string }>) => {
+    const p = new URLSearchParams(searchParams?.toString() ?? "");
+    for (const [k, v] of Object.entries(patch)) {
+      if (v) p.set(k, v);
+      else p.delete(k);
+    }
+    const qs = p.toString();
+    router.replace(qs ? `/absences-specifiques?${qs}` : "/absences-specifiques", { scroll: false });
+  };
+  const setFNom = (v: string) => { _setFNom(v); syncUrl({ search: v }); };
+  const setFAtelier = (v: string) => { _setFAtelier(v); syncUrl({ atelier: v }); };
+  // Lien de retour Planning : lit l'URL LIVE (pas nomInit qui reste figé à
+  // l'initialisation) → l'utilisateur revient avec les filtres qu'il vient
+  // d'ajuster, pas ceux d'arrivée.
+  const retourHref = (() => {
+    const p = new URLSearchParams();
+    if (fNom) p.set("search", fNom);
+    if (fAtelier) p.set("atelier", fAtelier);
+    const qs = p.toString();
+    return qs ? `/planning?${qs}` : "/planning";
+  })();
 
   const popRef = useRef<HTMLDivElement>(null);
   // Popover ancré au bouton en `position: fixed` : dans une carte `overflow:auto`,
@@ -391,6 +419,11 @@ export default function AbsencesEditor({
           <span className="muted" style={{ marginLeft: "auto", fontSize: 12, fontWeight: 600 }}>
             {filtered.length === initial.length ? `${initial.length} absence${initial.length > 1 ? "s" : ""}` : `${filtered.length} / ${initial.length}`}
           </span>
+          {/* Retour Planning avec les filtres LIVE (URL-syncés). Reste dans le
+              client component : un lien côté serveur serait figé à l'arrivée. */}
+          <Link href={retourHref} className="navlink" style={{ marginLeft: 12 }}>
+            &larr; Planning
+          </Link>
         </div>
       </div>
 

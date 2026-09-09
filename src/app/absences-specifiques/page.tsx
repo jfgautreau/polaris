@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { getServerClient } from "@/lib/supabase-server";
 import AppHeader from "@/components/AppHeader";
 import { requireModule } from "@/lib/permissions";
@@ -93,21 +92,8 @@ export default async function AbsencesSpecifiquesPage({
       <div className="container" style={{ maxWidth: 1500 }}>
         <div className="toolbar" style={{ justifyContent: "space-between", alignItems: "center" }}>
           <h1 style={{ margin: 0 }}>Absences spécifiques</h1>
-          {/* Retour au Planning en préservant les filtres transmis à l'aller. */}
-          <Link
-            href={
-              (() => {
-                const p = new URLSearchParams();
-                if (atelierInit) p.set("atelier", atelierInit);
-                if (searchInit) p.set("search", searchInit);
-                const qs = p.toString();
-                return qs ? `/planning?${qs}` : "/planning";
-              })()
-            }
-            className="navlink"
-          >
-            &larr; Planning
-          </Link>
+          {/* Retour Planning rendu par l'éditeur (client) pour lire les filtres
+              LIVE, pas ceux d'arrivée — cf. AbsencesEditor.tsx. */}
         </div>
         <p className="muted" style={{ marginBottom: 16 }}>
           Toutes les absences de l&apos;effectif, reconstruites à partir des jours posés au planning
