@@ -6,7 +6,7 @@ import { getAteliersC, getEquipesC } from "@/lib/refdata";
 import HabilitationsList from "./HabilitationsList";
 
 type Comp = { id: string; nom: string; duree_validite_mois: number | null; categorie: string | null; groupe: string | null; ordre: number; a_autorisation_conduite: boolean };
-type Personne = { id: string; nom: string; prenom: string };
+type Personne = { id: string; nom: string; prenom: string; equipe_id: string | null; atelier_id: string | null };
 type Row = {
   id: string;
   personne_id: string;
@@ -29,10 +29,12 @@ export default async function HabilitationsPage({
   const canEdit = canWrite(perms, "habilitations");
 
   const supabase = await getServerClient();
-  // Personnes filtrees par atelier / equipe, comme la Matrice de polyvalence.
-  let persQ = supabase.from("personne").select("id, nom, prenom, type_contrat").eq("statut", "ACTIF").order("nom");
-  if (sp.equipe) persQ = persQ.eq("equipe_id", sp.equipe);
-  if (sp.atelier) persQ = persQ.eq("atelier_id", sp.atelier);
+  // On charge TOUT l'effectif actif — les filtres atelier/equipe ne sont PAS
+  // appliques en base. Ils decident seulement du sous-ensemble affiche PAR DEFAUT
+  // (`displayedIds` plus bas) ; la recherche par nom, cote client, balaie
+  // l'effectif complet et retrouve donc quelqu'un hors filtre — meme pattern que
+  // Matrice de polyvalence, cf. src/app/matrice/page.tsx.
+  const persQ = supabase.from("personne").select("id, nom, prenom, type_contrat, equipe_id, atelier_id").eq("statut", "ACTIF").order("nom");
 
   const [{ data: compsD }, { data: persD }, pcD, ateliers, equipes] = await Promise.all([
     supabase
@@ -57,11 +59,18 @@ export default async function HabilitationsPage({
 
   const comps = compsD ?? [];
   const personnes = persD ?? [];
-  // La vue « Liste » doit suivre le meme perimetre que la grille, sinon elle
-  // afficherait des personnes que le filtre vient d'ecarter.
-  const visibles = new Set(personnes.map((p) => p.id));
+  // Sous-ensemble affiche par defaut (filtres equipe + atelier). La recherche par
+  // nom (client) passe outre et balaie `personnes` en entier — meme pattern que
+  // la Matrice. Toutes les personnes actives sont dans `personnes`, si bien que
+  // taper le nom d'un intermittent hors atelier filtre le remonte.
+  const displayedIds = personnes
+    .filter((p) => (!sp.equipe || p.equipe_id === sp.equipe) && (!sp.atelier || p.atelier_id === sp.atelier))
+    .map((p) => p.id);
+  // La vue « Liste » repose sur les personnes actives (toutes) ; le filtre par
+  // sous-ensemble se fait cote client via `displayedIds`, hors recherche.
+  const actifsIds = new Set(personnes.map((p) => p.id));
   const rows = pcD
-    .filter((r) => r.competence?.a_recycler && visibles.has(r.personne_id))
+    .filter((r) => r.competence?.a_recycler && actifsIds.has(r.personne_id))
     .sort((a, b) => (a.date_expiration ?? "9999").localeCompare(b.date_expiration ?? "9999"));
 
   return (
@@ -74,6 +83,7 @@ export default async function HabilitationsPage({
         <HabilitationsList
           rows={rows}
           personnes={personnes}
+          displayedIds={displayedIds}
           comps={comps}
           canEdit={canEdit}
           ateliers={ateliers.map((a) => ({ id: a.id, label: a.nom }))}

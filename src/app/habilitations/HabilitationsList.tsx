@@ -161,6 +161,7 @@ function Kpi({ n, label, color }: { n: number; label: string; color: string }) {
 export default function HabilitationsList({
   rows,
   personnes,
+  displayedIds = null,
   comps,
   canEdit = false,
   ateliers = [],
@@ -171,6 +172,10 @@ export default function HabilitationsList({
 }: {
   rows: Row[];
   personnes: Personne[];
+  // Sous-ensemble affiche par defaut (filtres equipe + atelier, calcules cote
+  // serveur). `null` = pas de filtre, on affiche tout. La recherche par nom passe
+  // outre et scanne `personnes` en entier — meme pattern que Matrice.
+  displayedIds?: string[] | null;
   comps: Comp[];
   canEdit?: boolean;
   ateliers?: { id: string; label: string }[];
@@ -188,6 +193,15 @@ export default function HabilitationsList({
 
   const compById = useMemo(() => new Map(comps.map((c) => [c.id, c])), [comps]);
 
+  // Sous-ensemble affiche PAR DEFAUT (filtres equipe/atelier serveur). Sert de
+  // base a `shownPersonnes` hors recherche, et au bilan (qui doit refleter le
+  // perimetre affiche, pas tout l'effectif).
+  const displayedSet = useMemo(() => (displayedIds ? new Set(displayedIds) : null), [displayedIds]);
+  const displayedPersonnes = useMemo(
+    () => (displayedSet ? personnes.filter((p) => displayedSet.has(p.id)) : personnes),
+    [personnes, displayedSet],
+  );
+
   const q = search.trim();
   // Recherche multi-critères : nom de personne, mais aussi formation / groupe / catégorie.
   const personMatch = (p: { nom: string; prenom: string }) => norm(`${p.nom} ${p.prenom}`).includes(norm(q));
@@ -202,9 +216,11 @@ export default function HabilitationsList({
 
   // Bilan (global + par formation), independant de la recherche. Base sur recMap
   // (etat courant : une entree par personne x formation, comme la grille) pour ne
-  // pas compter deux fois un recyclage. Restreint aux personnes actives.
+  // pas compter deux fois un recyclage. Restreint au SOUS-ENSEMBLE affiche
+  // (filtres equipe/atelier), pas a tout l'effectif — un chef d'atelier veut le
+  // bilan de son atelier, pas celui du site.
   const bilan = useMemo(() => {
-    const actifs = new Set(personnes.map((p) => p.id));
+    const actifs = new Set(displayedPersonnes.map((p) => p.id));
     const formeesSet = new Set<string>();
     let valables = 0;
     let expirees = 0;
@@ -232,7 +248,7 @@ export default function HabilitationsList({
       }
     }
     return { global: { formees: formeesSet.size, valables, expirees, autorNonDelivrees }, parComp };
-  }, [recMap, personnes, comps, compById]);
+  }, [recMap, displayedPersonnes, comps, compById]);
 
   // Colonnes ordonnées.
   const ordered = useMemo(
@@ -246,13 +262,20 @@ export default function HabilitationsList({
   // Filtrage : si la recherche touche des personnes on filtre les lignes ; si elle
   // touche des formations on filtre les colonnes ; sinon on garde tout (ou rien si
   // la recherche ne correspond à rien).
+  // ⚠️ La recherche par NOM balaie `personnes` (tout l'effectif actif), pas
+  // `displayedPersonnes` — meme pattern que la Matrice : taper GAUTREAU alors
+  // qu'on a filtre sur FAB doit remonter la personne meme si son atelier est
+  // Condi. Hors recherche, on retombe sur `displayedPersonnes` (le sous-ensemble
+  // du filtre atelier/equipe). Meme regle pour `shownRows` de la vue Liste :
+  // hors recherche, cadree par displayedIds ; en recherche, sur toutes les lignes
+  // dont la personne est active.
   const hasPersonHit = q ? personnes.some(personMatch) : false;
   const hasCompHit = q ? ordered.some(compMatch) : false;
   const noHit = !!q && !hasPersonHit && !hasCompHit;
-  const shownPersonnes = !q ? personnes : noHit ? [] : hasPersonHit ? personnes.filter(personMatch) : personnes;
+  const shownPersonnes = !q ? displayedPersonnes : noHit ? [] : hasPersonHit ? personnes.filter(personMatch) : personnes;
   const shownOrdered = !q ? ordered : noHit ? [] : hasCompHit ? ordered.filter(compMatch) : ordered;
   const shownRows = !q
-    ? rows
+    ? (displayedSet ? rows.filter((r) => displayedSet.has(r.personne_id)) : rows)
     : rows.filter((r) => {
         const p = r.personne ? personMatch(r.personne) : false;
         const c = compById.get(r.competence_id);
