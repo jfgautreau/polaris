@@ -123,7 +123,6 @@ export default async function AtelierPlanning({
   type TpCfg = { demi?: { source?: string; matin?: TpHM; aprem?: TpHM }; horaires?: TpHM };
   const tpCfgMap = new Map<string, TpCfg>(); // personne_id -> tp_config (temps partiel)
   const actMap = new Map<string, boolean>(); // `${quart}:${iso}`
-  const ouvMap = new Map<string, boolean>(); // `${quart}:${ligne}:${iso}`
   const byPerson = new Map<string, PlacementRow[]>(); // `${personne_id}:${iso}`
   const openDays = new Set<string>();   // jours (iso) ouverts par l Ordonnancement
   const tpSet = new Set<string>();      // `${personne_id}:${iso}` bloque par temps partiel
@@ -175,10 +174,12 @@ export default async function AtelierPlanning({
 
     // Les autres lectures couvrent une SEMAINE ENTIERE, tous quarts confondus, et
     // peuvent dépasser 1000 lignes (cf. L8) → fetchAll avec `.order()` déterministe
-    // (`horaire_poste` et `ouverture_quart` n'ont pas d'`id`, on trie sur la clé
-    // composite). Écran non surveillé : une troncature y afficherait des horaires
-    // faux ou des postes manquants sans que personne ne s'en aperçoive.
-    const [hor, { data: jq }, ov, { data: exc }, { data: tpH }] = await Promise.all([
+    // (`horaire_poste` n'a pas d'`id`, on trie sur la clé composite). Écran non
+    // surveillé : une troncature y afficherait des horaires faux ou des postes
+    // manquants sans que personne ne s'en aperçoive.
+    // NB : `ouverture_quart` n'est plus lu ici depuis 2026-09-09 — la TV n'utilise
+    // plus la fermeture de ligne (qui pilote seulement le besoin dans Placement).
+    const [hor, { data: jq }, { data: exc }, { data: tpH }] = await Promise.all([
       fetchAll<HoraireRow>(() =>
         admin
           .from("horaire_poste")
@@ -188,23 +189,14 @@ export default async function AtelierPlanning({
           .order("poste_id").order("quart_code").order("jour")
           .returns<HoraireRow[]>()
       ),
-      // MULTI-SITE : jour_quart, ouverture_quart, horaire_exception et la liste
-      // des personnes TP sont bornés par site_id — le service_role bypass la RLS.
+      // MULTI-SITE : jour_quart, horaire_exception et la liste des personnes TP
+      // sont bornés par site_id — le service_role bypass la RLS.
       admin
         .from("jour_quart")
         .select("jour, quart_code, actif")
         .eq("site_id", site.id)
         .in("jour", isos)
         .returns<{ jour: string; quart_code: string; actif: boolean }[]>(),
-      fetchAll<{ jour: string; ligne_id: string; quart_code: string; ouverte: boolean }>(() =>
-        admin
-          .from("ouverture_quart")
-          .select("jour, ligne_id, quart_code, ouverte")
-          .eq("site_id", site.id)
-          .in("jour", isos)
-          .order("jour").order("ligne_id").order("quart_code")
-          .returns<{ jour: string; ligne_id: string; quart_code: string; ouverte: boolean }[]>()
-      ),
       admin
         .from("horaire_exception")
         .select("personne_id, jour, debut, fin, motif")
@@ -314,27 +306,22 @@ export default async function AtelierPlanning({
       }
     }
     for (const r of jq ?? []) actMap.set(`${r.quart_code}:${r.jour}`, r.actif);
-    for (const r of ov) ouvMap.set(`${r.quart_code}:${r.ligne_id}:${r.jour}`, r.ouverte);
 
-    // Une cellule est affichee seulement si la ligne est ouverte ce jour-la pour ce
-    // quart (coherent avec le planning / l'ordonnancement).
-    const isOpen = (ligneId: string, quart: string, iso: string) => {
-      const a = actMap.has(`${quart}:${iso}`) ? actMap.get(`${quart}:${iso}`)! : false;
-      if (!a) return false;
-      const k = `${quart}:${ligneId}:${iso}`;
-      return ouvMap.has(k) ? ouvMap.get(k)! : true;
-    };
+    // Une cellule est affichée dès que le QUART est actif ce jour-là. Depuis
+    // 2026-09-09, une ligne fermée par Ordonnancement (`ouverture_quart`) ne masque
+    // plus le placement : sa fermeture ne joue que sur le compteur de besoin
+    // (Planning / Placement), pas sur ce que voient les opérateurs à la TV. Sinon
+    // un manager qui place quelqu'un sur une ligne fermée verrait la case remplie
+    // dans Placement mais rien à l'écran de production — trou d'information.
+    const isOpen = (_ligneId: string, quart: string, iso: string) =>
+      actMap.has(`${quart}:${iso}`) ? actMap.get(`${quart}:${iso}`)! : false;
 
-    // Jours OUVERTS au sens de l'Ordonnancement : au moins une ligne de cet
-    // atelier ouverte sur au moins un quart. C'est ce qui decide des colonnes
-    // affichees — auparavant on ne gardait que les jours ou quelqu'un etait deja
-    // PLACE, si bien qu'une journee ouverte mais pas encore remplie disparaissait.
+    // Jours OUVERTS : au moins un quart actif ce jour-là (jour_quart). Auparavant
+    // conditionné à la présence d'une ligne ouverte — la nouvelle règle rend cette
+    // condition inutile puisque toutes les lignes sont visibles quand le quart l'est.
     for (const iso of isos) {
       for (const q of quarts) {
-        if (lignes.some((l) => isOpen(l.id, q.code, iso))) {
-          openDays.add(iso);
-          break;
-        }
+        if (isOpen("", q.code, iso)) { openDays.add(iso); break; }
       }
     }
 
@@ -343,7 +330,7 @@ export default async function AtelierPlanning({
       const info = posteInfo.get(r.poste_id);
       if (info && !info.actif) continue; // poste desactive : ne pas ressortir un placement residuel
       const qc = quartOuDefaut(r.quart_code, quarts);
-      if (info && !isOpen(info.ligneId, qc, r.jour)) continue; // jour/ligne ferme -> on n'affiche pas
+      if (info && !isOpen(info.ligneId, qc, r.jour)) continue; // quart fermé ce jour -> on n'affiche pas
       const pk = `${r.personne_id}:${r.jour}`;
       (byPerson.get(pk) ?? byPerson.set(pk, []).get(pk)!).push(r);
     }

@@ -138,13 +138,17 @@ export default async function PlacementPage({
   const ligneOuverte = (id: string) => quartOuvert && (ouvMap.get(id) ?? true);
 
   // Postes ouverts pour ce quart (poste actif + non desactive sur le quart), groupes par ligne.
+  // Depuis 2026-09-09 : une ligne fermée par Ordonnancement (`ouverture_quart`) reste
+  // affichée et plaçable — sa fermeture ne fait plus disparaître la ligne, elle rend
+  // seulement son BESOIN nul (compteur « X/0 »). Le drapeau `fermee` par groupe est
+  // relayé à `PlacementBoard`, qui pilote l'affichage du dénominateur et la couverture.
   const pqOff = new Set((pqOffD ?? []).map((r) => `${r.poste_id}:${r.quart_code}`));
   const groups = (lignesD ?? [])
-    .filter((l) => ligneOuverte(l.id)) // ligne fermee dans l'Ordonnancement -> pas de plan
     .map((l) => ({
       ligneId: l.id,
       ligneNom: l.nom,
       ligneOrdre: l.ordre_affichage ?? 0,
+      fermee: !ligneOuverte(l.id), // ordonnancement : ligne fermée -> besoin 0
       postes: [...(l.poste ?? [])]
         .filter((p) => p.actif && !pqOff.has(`${p.id}:${quart}`))
         .sort(ordreThenNom)
@@ -247,43 +251,26 @@ export default async function PlacementPage({
   const rotWeek = rotationForWeek(await getRotationRefsC(), isoDate(mondayOf(new Date(jour + "T00:00"))));
   const parQuart = equipesParQuart(equipes, rotWeek);
 
-  // Jours OUVERTS (au moins une ligne de l'atelier ouverte sur le quart courant),
-  // sur une fenêtre autour du jour affiché. Sert à la navigation par jour du
-  // Placement : les flèches sautent les jours fermés, et le calendrier grise
-  // ces jours. Mêmes règles que `ligneOuverte` (jour_quart.actif + ouverture_quart,
-  // défaut ouvert). Bornées au quart -> tables petites (≤ 240 lignes) : pas de
-  // fetchAll. RLS (getServerClient) borne déjà au site courant.
+  // Jours OUVERTS (quart actif) sur une fenêtre autour du jour affiché. Sert à la
+  // navigation par jour du Placement : les flèches sautent les jours fermés, et le
+  // calendrier grise ces jours. Depuis 2026-09-09, seule la fermeture du quart entier
+  // (`jour_quart.actif = false`) grise un jour — une ligne fermée par Ordonnancement
+  // laisse le jour navigable, avec ses lignes affichées et besoin à 0.
+  // Bornée au quart -> ≤ 240 lignes : pas de fetchAll. RLS (getServerClient) borne
+  // déjà au site courant.
   const winStart = isoDate(addDays(new Date(jour + "T00:00"), -90));
   const winEnd = isoDate(addDays(new Date(jour + "T00:00"), 150));
   const atelierLigneIds = (lignesD ?? []).map((l) => l.id);
   const openDays: string[] = [];
   if (atelierLigneIds.length) {
-    const [{ data: jqWin }, { data: ovWin }] = await Promise.all([
-      supabase
-        .from("jour_quart")
-        .select("jour, actif")
-        .eq("quart_code", quart)
-        .gte("jour", winStart)
-        .lte("jour", winEnd)
-        .returns<{ jour: string; actif: boolean }[]>(),
-      supabase
-        .from("ouverture_quart")
-        .select("jour, ligne_id, ouverte")
-        .eq("quart_code", quart)
-        .gte("jour", winStart)
-        .lte("jour", winEnd)
-        .returns<{ jour: string; ligne_id: string; ouverte: boolean }[]>(),
-    ]);
-    // Fermetures explicites par jour (une ligne absente = ouverte par défaut).
-    const fermByDay = new Map<string, Set<string>>();
-    for (const r of ovWin ?? [])
-      if (!r.ouverte) (fermByDay.get(r.jour) ?? fermByDay.set(r.jour, new Set()).get(r.jour)!).add(r.ligne_id);
-    for (const r of jqWin ?? []) {
-      if (!r.actif) continue; // quart fermé ce jour-là
-      const ferm = fermByDay.get(r.jour);
-      // Ouvert s'il reste au moins une ligne de l'atelier non fermée.
-      if (!ferm || atelierLigneIds.some((id) => !ferm.has(id))) openDays.push(r.jour);
-    }
+    const { data: jqWin } = await supabase
+      .from("jour_quart")
+      .select("jour, actif")
+      .eq("quart_code", quart)
+      .gte("jour", winStart)
+      .lte("jour", winEnd)
+      .returns<{ jour: string; actif: boolean }[]>();
+    for (const r of jqWin ?? []) if (r.actif) openDays.push(r.jour);
     openDays.sort();
   }
 

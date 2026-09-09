@@ -15,7 +15,12 @@ type Atelier = { id: string; nom: string };
 type Equipe = { id: string; nom: string; couleur: string | null };
 type Quart = { code: string; libelle: string };
 type Poste = { id: string; nom: string; nomCourt: string | null; effectifRequis: number; niveauMin: number; numeroRotation: string | null };
-type Group = { ligneId: string; ligneNom: string; postes: Poste[] };
+// `fermee` = ligne fermée dans Ordonnancement (`ouverture_quart.ouverte = false`).
+// Depuis 2026-09-09, la ligne reste affichée et plaçable, mais son BESOIN vaut 0 :
+// le compteur des tuiles devient « X/0 » et la couverture globale n'en tient plus
+// compte. La fermeture ne bloque plus la saisie (l'ordo pilote un besoin, pas une
+// visibilité). Optionnel : `undefined` = ligne ouverte (rétro-compatibilité).
+type Group = { ligneId: string; ligneNom: string; postes: Poste[]; fermee?: boolean };
 type Personne = { id: string; nom: string; prenom: string; equipe_id: string | null; atelier_id: string | null; type_contrat: string; couleur: string | null; editable: boolean };
 type Motif = { id: string; code: string; libelle: string; couleur: string };
 
@@ -399,15 +404,20 @@ export default function PlacementBoard({
   }
 
   // Couverture : positions pourvues / requises (un poste en surnombre ne compte pas double).
+  // Une ligne fermée par Ordonnancement compte pour 0 dans le besoin (les personnes
+  // déjà placées dessus restent visibles dans leurs tuiles, mais ne comptent pas non
+  // plus dans « pourvues » — sinon la couverture pourrait dépasser 100 %).
   const coverage = useMemo(() => {
     let req = 0;
     let cov = 0;
-    for (const g of groups)
+    for (const g of groups) {
+      if (g.fermee) continue;
       for (const po of g.postes) {
         req += po.effectifRequis;
         const n = personnes.filter((p) => place[p.id] === po.id).length;
         cov += Math.min(n, po.effectifRequis);
       }
+    }
     return { req, cov };
   }, [groups, personnes, place]);
 
@@ -742,14 +752,28 @@ export default function PlacementBoard({
           ) : (
             groupsAffiches.map((g) => (
               <div key={g.ligneId} className={s.ligne}>
-                <div className={s.ligneNom}>{g.ligneNom}</div>
+                <div className={s.ligneNom}>
+                  {g.ligneNom}
+                  {g.fermee && (
+                    <span className="muted" style={{ fontWeight: 400, fontSize: 12, marginLeft: 8 }} title="Ligne fermée dans Ordonnancement : besoin à 0. Placement autorisé quand même.">
+                      · fermée par ordo
+                    </span>
+                  )}
+                </div>
                 <div className={s.postes}>
                   {g.postes.map((po) => {
                     const occ = occupants(po.id);
-                    const complet = occ.length >= po.effectifRequis && po.effectifRequis > 0;
-                    const manque = occ.length < po.effectifRequis;
+                    // Ligne fermée dans Ordonnancement -> besoin effectif = 0
+                    // (compteur « X/0 »). Le placement reste autorisé ; les cases
+                    // pré-existantes restent draggables et supprimables comme avant.
+                    const effReq = g.fermee ? 0 : po.effectifRequis;
+                    const complet = occ.length >= effReq && effReq > 0;
+                    const manque = occ.length < effReq;
                     // Sureffectif : plus de monde que l'abaque ne demande (3/2).
-                    const surEffectif = po.effectifRequis > 0 && occ.length > po.effectifRequis;
+                    // On garde le vieux guard `effReq > 0` : sur une ligne fermée (besoin 0)
+                    // ou un poste au besoin nul, ne PAS peindre le liseré orange —
+                    // le compteur « X/0 » signale déjà l'anomalie sans surenchérir.
+                    const surEffectif = effReq > 0 && occ.length > effReq;
                     const cs = active ? compState(active, po) : null;
                     const isOver = over === `po:${po.id}`;
                     return (
@@ -765,9 +789,9 @@ export default function PlacementBoard({
                           <span
                             className={s.eff}
                             style={{ color: surEffectif ? "#b45309" : complet ? "var(--ok)" : manque ? "#b91c1c" : "var(--muted)" }}
-                            title={surEffectif ? `Sureffectif : ${occ.length} personnes pour ${po.effectifRequis} place(s)` : undefined}
+                            title={surEffectif ? `Sureffectif : ${occ.length} personnes pour ${effReq} place(s)` : g.fermee ? "Ligne fermée dans Ordonnancement — besoin 0" : undefined}
                           >
-                            {occ.length}/{po.effectifRequis}
+                            {occ.length}/{effReq}
                           </span>
                         </div>
                         {/* Une case par numero de rotation, puis les places restantes
@@ -970,14 +994,16 @@ export default function PlacementBoard({
                 <div className={s.printPostes}>
                   {g.postes.map((po) => {
                     const occ = occupants(po.id);
-                    const sur = po.effectifRequis > 0 && occ.length > po.effectifRequis;
-                    const trou = occ.length < po.effectifRequis;
+                    // Impression : même règle que la tuile écran (besoin 0 sur ligne fermée).
+                    const effReq = g.fermee ? 0 : po.effectifRequis;
+                    const sur = effReq > 0 && occ.length > effReq;
+                    const trou = occ.length < effReq;
                     return (
                       <div key={po.id} className={`${s.printPoste} ${sur ? s.printSur : ""}`}>
                         <div className={s.printPosteHead}>
                           <span className={s.printPosteNom}>{po.nom}</span>
                           <span className={trou ? s.printTrou : sur ? s.printSurNb : s.printOk}>
-                            {occ.length}/{po.effectifRequis}
+                            {occ.length}/{effReq}
                           </span>
                         </div>
                         {occ.length === 0 ? (

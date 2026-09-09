@@ -185,10 +185,22 @@ données, RLS), `tasks/handoff.md` (détail écran par écran), `tasks/lessons.m
 - **`poste_quart`** : activation poste×quart, **défaut actif** → la table ne stocke que
   les *désactivations*.
 - **Ouverture des lignes** (`jour_quart`, `ouverture_quart`) : décidée dans Ordonnancement.
-  ⚠️ Asymétrie : un quart **absent** de `jour_quart` est **fermé** (rien n'est ouvert tant
-  que la semaine n'a pas été « initialisée ») ; une ligne absente d'`ouverture_quart` est
-  **ouverte**. Planning **et** Placement appliquent cette règle — d'où un plan vide, avec
-  message explicite, sur une semaine non initialisée.
+  Deux canaux, deux effets **distincts** — à ne surtout pas confondre :
+  - **`jour_quart` = visibilité du jour** (arrêt d'usine, semaine non initialisée). Absent
+    ou `actif = false` ⇒ colonne **fermée** dans Planning/Placement/TV, avec le message
+    « Jour sans production — pour l'activer, contacter l'ordo ». Aucune saisie possible.
+  - **`ouverture_quart` = besoin par ligne** (depuis 2026-09-09 — avant, la ligne fermée
+    disparaissait). Ligne absente ⇒ ouverte ; ligne présente avec `ouverte = false` ⇒
+    **besoin = 0** mais la ligne **reste visible et plaçable** partout. Dans Placement,
+    la tuile affiche « X/0 » avec mention « · fermée par ordo » et le sureffectif orange
+    est désactivé (le compteur « /0 » signale déjà l'anomalie). Dans le bilan Planning,
+    catRequis et besoin global tombent à 0 pour ces lignes — Delta devient négatif si des
+    gens y sont placés. `/bilans/assez-competences` était déjà cohérent (`besoinsJour`
+    exclut poste × quart d'une ligne fermée). TV : le placement s'affiche normalement
+    (retrait du filtre `isOpen(ligneId,…)` → seul `jour_quart` masque). Ordonnancement
+    est donc un **règleur de besoins**, pas une visibilité — le pré-remplissage
+    `/api/placement/prefill` remplit y compris sur lignes fermées (décision assumée : si
+    le manager les rouvrira, autant partir des postes fixes).
   ⚠️ **Activation « Journée » DÉRIVÉE** : le quart *journée* (pleine journée — détecté sans
   code en dur comme le quart **sans `creneau` au plus petit `ordre`**) n'a plus de bascule
   propre dans l'écran. Son `jour_quart.actif` est **maintenu en base = OU(quarts tournants

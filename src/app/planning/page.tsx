@@ -244,27 +244,36 @@ export default async function PlanningPage({
   // production » plutôt que de disparaître — sans quoi une semaine non initialisée
   // donnait l'impression d'un bug d'affichage. Les week-ends restent masqués tant
   // qu'ils ne produisent pas (une éventuelle production le samedi reste visible).
+  //
+  // Depuis 2026-09-09 : « jour fermé » = `jour_quart.actif = false` UNIQUEMENT.
+  // Une ligne fermée dans Ordonnancement (`ouverture_quart.ouverte = false`) NE
+  // ferme plus la colonne et NE masque plus la ligne — elle ne fait que retirer son
+  // besoin du bilan (elle vaut 0). Le rendu de la grille reste identique
+  // (toutes les lignes visibles) ; l'écran de saisie garde la case active. La règle
+  // « une semaine non initialisée = colonne avec message » n'est déclenchée que par
+  // `jour_quart` (arrêt d'usine, semaine non initialisée), pas par les fermetures
+  // de ligne granulaires — celles-ci pilotent le compteur, plus la visibilité.
   const visible = rawDays
     .map((d) => {
-      const openIds = quartActif(d.iso) ? groups.filter((g) => lineOpen(d.iso, g.ligneId)).map((g) => g.ligneId) : [];
+      const qa = quartActif(d.iso);
+      const openIds = qa ? groups.filter((g) => lineOpen(d.iso, g.ligneId)).map((g) => g.ligneId) : [];
       const besoin = openIds.reduce((s, lid) => s + (lineEffectif[lid] ?? 0), 0);
-      return { ...d, open: openIds.length > 0, besoin, openIds };
+      // open (= not-closed) ne dépend plus que du quart : une colonne où toutes les
+      // lignes sont fermées par l'ordo reste ouverte, avec besoin/catRequis à 0.
+      return { ...d, open: qa, besoin, openIds };
     })
     .filter((d) => dowMon(d.iso) < 5 || d.open);
 
   const openByIso: Record<string, string[]> = {};
   for (const d of visible) openByIso[d.iso] = d.openIds;
 
-  // Ouverture des lignes sur TOUS les ateliers (indépendante du filtre atelier) :
-  // sert au panneau d'affectation qui propose toute l'usine (bouton « Voir tous »).
-  // Le filtre atelier ne cadre que la grille et les indicateurs, pas les postes
-  // sur lesquels on peut placer quelqu'un (un prêt vers un autre atelier reste
-  // possible). Mêmes règles d'ouverture (`lineOpen`).
+  // Lignes proposées par le panneau d'affectation (bouton « Voir tous ») : TOUTES
+  // les lignes de l'usine dès que le quart est actif ce jour-là. Depuis 2026-09-09,
+  // une ligne fermée dans Ordonnancement reste plaçable — sa fermeture ne joue plus
+  // que sur le compteur de besoin, pas sur ce qu'on peut choisir dans le panneau.
   const openAllByIso: Record<string, string[]> = {};
   for (const d of visible)
-    openAllByIso[d.iso] = quartActif(d.iso)
-      ? groupsAll.filter((g) => lineOpen(d.iso, g.ligneId)).map((g) => g.ligneId)
-      : [];
+    openAllByIso[d.iso] = quartActif(d.iso) ? groupsAll.map((g) => g.ligneId) : [];
 
   const days = visible.map((d) => ({ iso: d.iso, nom: d.nom, num: d.num, firstOfWeek: d.firstOfWeek, closed: !d.open }));
   const besoin = visible.map((d) => d.besoin);
