@@ -18,6 +18,7 @@ export default function PlanningFilters({
   quart = "",
   atelier = "",
   search = "",
+  cond = false,
 }: {
   equipes?: Opt[];
   equipe?: string;
@@ -25,6 +26,7 @@ export default function PlanningFilters({
   quart?: string;
   atelier?: string;
   search?: string;
+  cond?: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -36,6 +38,7 @@ export default function PlanningFilters({
     if (semaine) p.set("semaine", semaine);
     if (quart) p.set("quart", quart);
     if (search) p.set("search", search);
+    if (cond) p.set("cond", "1");
     const qs = p.toString();
     start(() => router.push(qs ? `/planning?${qs}` : "/planning"));
   }

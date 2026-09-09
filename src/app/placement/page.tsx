@@ -78,6 +78,27 @@ export default async function PlacementPage({
   });
   const motifs = motifsD ?? [];
 
+  // Set des personnes « Conducteur » : au moins une compétence (niveau ≥ 1) sur
+  // au moins un poste `categorie = 'conducteur'` actif. Utilisé par le filtre
+  // client dans PlacementBoard (bascule optionnelle, cumulée aux autres filtres ;
+  // la recherche par nom passe outre). fetchAll : matrice > 1000 lignes (L8).
+  const conducteurIds: string[] = [];
+  {
+    const rows = await fetchAll<{ personne_id: string }>(() =>
+      supabase
+        .from("matrice")
+        .select("personne_id, poste!inner(categorie, actif)")
+        .eq("poste.categorie", "conducteur")
+        .eq("poste.actif", true)
+        .gte("niveau_actuel", 1)
+        .order("id")
+        .returns<{ personne_id: string }[]>()
+    );
+    const uniq = new Set<string>();
+    for (const r of rows) uniq.add(r.personne_id);
+    conducteurIds.push(...uniq);
+  }
+
   const quart = sp.quart && quartCodes.includes(sp.quart) ? sp.quart : quartParDefaut(quarts);
   // Bascule Plan / Absences portee par ?vue : l'atelier reste selectionne dans les
   // deux cas, c'est lui qui filtre les absences affichees.
@@ -355,6 +376,7 @@ export default async function PlacementPage({
         openDays={openDays}
         winStart={winStart}
         winEnd={winEnd}
+        conducteurIds={conducteurIds}
       />
     </div>
   );

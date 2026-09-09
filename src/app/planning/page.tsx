@@ -17,6 +17,7 @@ import { requireModule, canWrite } from "@/lib/permissions";
 import PlanningFilters from "./PlanningFilters";
 import AtelierFilter from "./AtelierFilter";
 import QuartSelector from "./QuartSelector";
+import ConducteurToggle from "./ConducteurToggle";
 import PlanningGrid from "./PlanningGrid";
 import { getRotationRefsC } from "@/lib/refdata";
 import { rotationForWeek } from "@/lib/rotation";
@@ -61,7 +62,7 @@ type Motif = { id: string; code_court: string; libelle: string; couleur: string 
 export default async function PlanningPage({
   searchParams,
 }: {
-  searchParams: Promise<{ equipe?: string; semaine?: string; quart?: string; atelier?: string; search?: string }>;
+  searchParams: Promise<{ equipe?: string; semaine?: string; quart?: string; atelier?: string; search?: string; cond?: string }>;
 }) {
   const { profile, perms } = await requireModule("planning", "read");
   // Droit "planning: write" (hors chef) : édition complète ; le chef garde son périmètre.
@@ -81,6 +82,12 @@ export default async function PlanningPage({
     spEquipe === "" ? "auto" : spEquipe === "all" ? "all" : "id";
   const equipeIdSel = equipeMode === "id" ? spEquipe : "";
   const atelier = sp.atelier ?? "";
+  // Filtre Conducteurs (?cond=1) : personnes ayant AU MOINS UNE compétence
+  // (niveau_actuel ≥ 1) sur AU MOINS UN poste `categorie = 'conducteur'` actif.
+  // Même seuil que la pastille orange « sans compétence » de la Matrice. Combiné
+  // aux autres filtres (intersection) ; la recherche par nom passe outre (comme
+  // pour atelier/équipe).
+  const filtreConducteurs = sp.cond === "1";
 
   const weekMondays = [addDays(center, -7), center, addDays(center, 7)];
   const todayMondayIso = isoDate(mondayOf());
@@ -315,6 +322,25 @@ export default async function PlanningPage({
     if (!paErr) for (const r of paData ?? []) persAtelier.set(r.id, r.atelier_id);
   }
 
+  // Filtre Conducteurs : personnes ayant au moins une compétence (niveau_actuel ≥ 1)
+  // sur au moins un poste `categorie = 'conducteur'` actif. Requête indépendante du
+  // filtre atelier — c'est un critère orthogonal (« sait conduire », partout dans
+  // l'usine). fetchAll : `matrice` dépasse 1000 lignes (L8).
+  const conducteurIds = new Set<string>();
+  if (filtreConducteurs) {
+    const rows = await fetchAll<{ personne_id: string }>(() =>
+      supabase
+        .from("matrice")
+        .select("personne_id, poste!inner(categorie, actif)")
+        .eq("poste.categorie", "conducteur")
+        .eq("poste.actif", true)
+        .gte("niveau_actuel", 1)
+        .order("id")
+        .returns<{ personne_id: string }[]>()
+    );
+    for (const r of rows) conducteurIds.add(r.personne_id);
+  }
+
   // Mode AUTO : personnes EFFECTIVEMENT placees sur ce quart au moins un jour sur
   // la fenetre 3 semaines affichee. On les ajoute a l'ensemble AUTO habituel
   // (equipes du quart via rotation + fixe) : si tu affectes quelqu'un de l'equipe A
@@ -351,7 +377,10 @@ export default async function PlanningPage({
     return (!!eqid && equipesAuto.has(eqid)) || autoPlacedIds.has(pid);
   };
   const displayed = allActive.filter(
-    (p) => passeEquipe(p.id, p.equipe_id) && (!atelier || persAtelier.get(p.id) === atelier),
+    (p) =>
+      passeEquipe(p.id, p.equipe_id) &&
+      (!atelier || persAtelier.get(p.id) === atelier) &&
+      (!filtreConducteurs || conducteurIds.has(p.id)),
   );
   const displayedSet = new Set(displayed.map((p) => p.id));
 
@@ -675,6 +704,7 @@ export default async function PlanningPage({
   if (spEquipe) extra.equipe = spEquipe;
   if (atelier) extra.atelier = atelier;
   if (searchParam) extra.search = searchParam;
+  if (filtreConducteurs) extra.cond = "1";
 
   return (
     <>
@@ -690,8 +720,8 @@ export default async function PlanningPage({
               32 px par .planning-top .filterrow -> alignée avec la colonne de
               gauche (Année/Mois/Semaine). */}
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <QuartSelector quarts={quarts} current={quart} semaine={centerIso} atelier={atelier} equipe={spEquipe} search={searchParam} />
-            <AtelierFilter ateliers={ateliers} atelier={atelier} equipe={spEquipe} quart={quart} semaine={centerIso} search={searchParam} />
+            <QuartSelector quarts={quarts} current={quart} semaine={centerIso} atelier={atelier} equipe={spEquipe} search={searchParam} cond={filtreConducteurs} />
+            <AtelierFilter ateliers={ateliers} atelier={atelier} equipe={spEquipe} quart={quart} semaine={centerIso} search={searchParam} cond={filtreConducteurs} />
             <PlanningFilters
               equipes={(equipesD ?? []).map((e) => ({ id: e.id, label: e.nom, couleur: e.couleur }))}
               equipe={spEquipe}
@@ -699,6 +729,7 @@ export default async function PlanningPage({
               quart={quart}
               atelier={atelier}
               search={searchParam}
+              cond={filtreConducteurs}
             />
           </div>
           {/* Partie droite : boutons icône (Horaires / Absences spécifiques), une
@@ -724,6 +755,17 @@ export default async function PlanningPage({
                 <PrintIcon size={22} />
               </Link>
             </div>
+            {/* Bascule « Conducteurs » : n'affiche que les personnes compétentes
+                sur au moins un poste de catégorie conducteur (intersection avec
+                les autres filtres ; la recherche par nom passe outre). */}
+            <ConducteurToggle
+              actif={filtreConducteurs}
+              semaine={centerIso}
+              quart={quart}
+              atelier={atelier}
+              equipe={spEquipe}
+              search={searchParam}
+            />
           </div>
         </div>
         </div>

@@ -64,6 +64,7 @@ export default function PlacementBoard({
   openDays = [],
   winStart,
   winEnd,
+  conducteurIds = [],
 }: {
   title?: ReactNode;
   jour: string;
@@ -92,6 +93,11 @@ export default function PlacementBoard({
   openDays?: string[]; // jours (iso) avec au moins une ligne ouverte (quart courant)
   winStart?: string; // borne basse de la fenêtre d'ouverture (calendrier)
   winEnd?: string; // borne haute
+  // Personnes ayant AU MOINS UNE compétence (niveau ≥ 1) sur AU MOINS UN poste
+  // `categorie = 'conducteur'` actif — calcul serveur. Utilisé par la bascule
+  // « Conducteurs » du filtre : quand elle est active, on ne montre que ces
+  // personnes. La recherche par nom passe outre, comme pour équipe/atelier.
+  conducteurIds?: string[];
 }) {
   const router = useRouter();
   const [place, setPlace] = useState<Record<string, string>>(placeInit);
@@ -111,6 +117,11 @@ export default function PlacementBoard({
   // Pre-filtre atelier : celui du plan affiche (elargissable pour aller chercher un renfort).
   const [fAtelier, setFAtelier] = useState(atelierId);
   const [hidePlaced, setHidePlaced] = useState(true);
+  // Bascule « Conducteurs » : ne montre que les personnes de `conducteurIds`
+  // (au moins une compétence sur un poste conducteur actif). Intersection avec
+  // les autres filtres ; la recherche par nom la court-circuite.
+  const [onlyCond, setOnlyCond] = useState(false);
+  const condSet = useMemo(() => new Set(conducteurIds), [conducteurIds]);
   // Filtre visuel : quand une personne est active (glissee/selectionnee),
   // n'afficher que les postes ou elle est competente (niveau >= min, hors
   // restriction). On garde toujours visibles les postes deja occupes pour
@@ -496,6 +507,9 @@ export default function PlacementBoard({
       } else {
         if (!equipeOk(p)) return false;
         if (p.atelier_id && fAtelier && p.atelier_id !== fAtelier) return false;
+        // Bascule Conducteurs : intersection avec équipe/atelier. La recherche
+        // par nom (q) court-circuite ce filtre, cohérent avec les autres.
+        if (onlyCond && !condSet.has(p.id)) return false;
       }
       if (hidePlaced && (place[p.id] || autreQuart[p.id])) return false;
       return true;
@@ -508,7 +522,7 @@ export default function PlacementBoard({
       return 0; // a placer
     };
     return [...list].sort((a, b) => rank(a) - rank(b) || `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`));
-  }, [personnes, search, fEquipe, fAtelier, place, autreQuart, hidePlaced]);
+  }, [personnes, search, fEquipe, fAtelier, place, autreQuart, hidePlaced, onlyCond, condSet]);
 
   // Vue Absences : une carte par motif d'absence, plus « Non travaillé ».
   // Restreinte a l'atelier affiche. Les personnes dont l'atelier n'est pas
@@ -653,6 +667,13 @@ export default function PlacementBoard({
           <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
             <input type="checkbox" checked={hidePlaced} onChange={(e) => setHidePlaced(e.target.checked)} style={{ width: "auto" }} />
             Masquer les placés
+          </label>
+          <label
+            style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+            title="N'afficher que les personnes compétentes (niveau ≥ 1) sur au moins un poste conducteur"
+          >
+            <input type="checkbox" checked={onlyCond} onChange={(e) => setOnlyCond(e.target.checked)} style={{ width: "auto" }} />
+            🚛 Conducteurs
           </label>
           <label
             style={{
