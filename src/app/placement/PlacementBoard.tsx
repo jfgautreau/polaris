@@ -344,8 +344,13 @@ export default function PlacementBoard({
   // etroite qu'une page permet a l'inverse d'AGRANDIR un petit plan pour qu'il
   // remplisse la feuille au lieu de se tasser dans le coin superieur gauche.
   const LARGEURS_ESSAI = [700, 820, 940, 1060, 1300, 1600, 1900, 2200];
-  const PAGE_L = 1060;
-  const PAGE_H = 730;
+  // A4 paysage avec marges 8mm (cf. @page globals.css) = ~1061 × 733 px @ 96dpi.
+  // On garde ~4 % de marge de sécurité (1020 × 700) : l'aperçu Chrome/Edge rogne
+  // dès que le rendu déborde d'un pixel, et un `scale()` calé au ras du max fait
+  // sortir la dernière ligne de la zone imprimable. `.printSheet` recadre en
+  // conséquence (cf. placement.module.css).
+  const PAGE_L = 1020;
+  const PAGE_H = 700;
   // Borne haute de l'agrandissement : au-dela, un plan de deux lignes donne des
   // pavés demesurés pour rien.
   const ECHELLE_MAX = 1.6;

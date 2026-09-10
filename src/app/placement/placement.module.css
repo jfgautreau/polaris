@@ -500,15 +500,19 @@
   position: fixed;
   left: -20000px;
   top: 0;
-  width: 1060px;
-  height: 730px;
+  /* A4 paysage @ 96dpi avec marges 8mm = ~1061 × 733 px. On garde ~4 % de marge
+     de sécurité (1020 × 700) : sans elle, l'aperçu du navigateur rogne la
+     dernière ligne dès que le rendu déborde d'un pixel. Doit rester ALIGNÉ sur
+     PAGE_L / PAGE_H de `ajusterFeuille()` dans PlacementBoard.tsx. */
+  width: 1020px;
+  height: 700px;
   overflow: hidden;
   font-size: 10px;
   color: #000;
   background: #fff;
 }
 .printInner {
-  width: 1060px;
+  width: 1020px;
   transform-origin: top left;
 }
 
