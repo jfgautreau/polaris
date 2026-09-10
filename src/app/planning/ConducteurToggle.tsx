@@ -63,6 +63,10 @@ export default function ConducteurToggle({
           display: "inline-flex",
           alignItems: "center",
           justifyContent: "center",
+          // ⚠️ Le `button` global de globals.css impose `margin-top: 18px` +
+          // `width: 100%` : sans l'annuler, ce bouton se retrouve décalé vers
+          // le bas des 3 <a> voisins (bug vécu 2026-09-10).
+          margin: 0,
           padding: 0,
           lineHeight: 1,
           border: "1px solid var(--border)",
