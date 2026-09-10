@@ -28,8 +28,11 @@ données, RLS), `tasks/handoff.md` (détail écran par écran), `tasks/lessons.m
    matricules/noms/emails/absences réels. Avant tout `git add -A`, vérifier
    la staging list et refuser tout fichier > 100 Ko dont le contenu n'est
    pas légitime au repo. `.gitignore` bloque `backup*.sql`, `*.pgdump`,
-   `dump-*.sql`, `pg_dump-*.sql`, `.env*.local`. Cf.
-   [[interdit-donnees-sensibles]].
+   `dump-*.sql`, `pg_dump-*.sql`, `.env*.local` **et les scripts jetables**
+   (`_tmp_*.js`, `_tmp_*.ts`, `scratch_*.js`, `scratch_*.ts`, `inject_*.js`).
+   Ces scripts d'injection ponctuelle lisent `SUPABASE_SERVICE_ROLE_KEY` et
+   portent souvent des UUID de site en dur — ils ne doivent JAMAIS atterrir
+   dans le repo public (audit S1, 2026-09-10). Cf. [[interdit-donnees-sensibles]].
 5. **Base de données : jamais de DDL par l'agent.** `SUPABASE_DB_URL` est vide et le
    MCP Supabase pointe sur un autre compte. Écris la migration dans
    `supabase/migrations/` et **demande à l'utilisateur de l'exécuter** dans le SQL Editor.
@@ -125,6 +128,12 @@ données, RLS), `tasks/handoff.md` (détail écran par écran), `tasks/lessons.m
   pour tout autre qu'un admin (vérifié sur les données réelles).
 - **`is_active` est vérifié par `getCurrentProfile()`** (pas seulement par la RLS) :
   un compte désactivé n'a plus de profil, donc plus de navigation.
+- ⚠️ **`app_user.site_id` absent = refus de session** (audit S6, 2026-09-10). Depuis
+  0043 la colonne est `NOT NULL` ; le fallback historique « retomber sur `SITE_LEBIGNON_ID` »
+  a été retiré de `current-user.ts` — il masquerait une régression en fuite cross-tenant
+  silencieuse. Une ligne `app_user` sans site est désormais loggée en erreur et la session
+  refusée. Idem pour le bloc « pré-0043 » qui retentait un SELECT sans `site_id` / `est_super_admin` :
+  supprimé (0043 en prod depuis 2026-08).
 - **Les 8 écrans de réglage s'ouvrent en LECTURE** (`requireModule(mod, "read")`) et
   passent en consultation seule via `<LectureSeule>` — un `<fieldset disabled>` neutralise
   tous les champs d'un coup. Le menu apparaît dès la lecture. Seul **Placement** fait
@@ -175,8 +184,9 @@ données, RLS), `tasks/handoff.md` (détail écran par écran), `tasks/lessons.m
   (rotation cyclique du vecteur de quarts), jamais stockée. Pour une semaine cible, la
   référence active est la plus récente ≤ cette semaine → changer la rotation = **ajouter une
   nouvelle référence datée**, le passé n'est jamais recalculé. Avant toute référence : pas de
-  rotation. L'ancienne table `equipe_quart_semaine` (saisie semaine-par-semaine) est conservée
-  mais **plus lue/écrite**. Défaut planning = `matin`. Sur `/planning`, choisir un quart
+  rotation. L'ancienne table `equipe_quart_semaine` (saisie semaine-par-semaine) a été
+  **droppée en 0038** — plus aucune trace en base ; un test statique interdit toute
+  lecture qui la ferait ressurgir. Défaut planning = `matin`. Sur `/planning`, choisir un quart
   auto-sélectionne l'équipe de la rotation de la semaine (forçage possible via le filtre Équipe).
   ⚠️ **Quels quarts composent le cycle = colonne `quart.rotation`** (0057), cochée par quart
   dans « Horaires des quarts » (`/admin/equipes`). Le formulaire *Référence de rotation*
@@ -480,6 +490,15 @@ Acquis à préserver : région `cdg1` + Fluid Compute · options de `<select>` c
 référence (`src/lib/refdata.ts`, `unstable_cache` 30 s) · `loading.tsx` sur les gros écrans ·
 compteurs du bilan matrice agrégés **en une passe** (`useMemo`, pas un balayage par cellule).
 
+⚠️ **Invalidation immédiate du cache refdata** : toutes les entrées portent un tag
+exporté (`ATELIERS_TAG`, `EQUIPES_TAG`, `QUARTS_TAG`, `MOTIFS_TAG`, `NIVEAUX_TAG`,
+`NB_NIVEAUX_TAG`, `SEUIL_COMPETENT_TAG`, `ROTATION_TAG`). **Toute server action ou
+route API qui écrit dans une de ces tables doit appeler `updateTag(TAG)`** (Next 16,
+`next/cache`) — sinon la donnée n'apparaît qu'après expiration 30 s dans les menus
+déroulants du planning. Sans cette invalidation, créer un atelier / une équipe / un
+motif donne une expérience « le clic n'a rien fait » pendant une demi-minute. Cf.
+audit P2 (2026-09-10).
+
 ⚠️ **Plafond connu** : `/matrice` sans filtre atelier construit **~22 000 cellules**
 (268 personnes × 82 postes), chacune un `<button>` + un `<svg>` ; le HTML dépasse 1,8 Mo
 et l'hydratation devient très lourde. Les habilitations sont dans le même ordre de grandeur
@@ -487,7 +506,16 @@ et l'hydratation devient très lourde. Les habilitations sont dans le même ordr
 prochain gros chantier, pas une optimisation cosmétique.
 
 ## Carte des fichiers
-- Socle : `src/lib/{permissions,roles,roles-server,current-user,current-site,site-modules,week,refdata,parametres,habilitations,horaires,supabase-server,fetch-all,numeros-rotation,password-link,placement-helpers,rotation,password,erreurs,absence,absences-periodes,calendrier,quarts,semaine-type,interim,noms,bilans-rapports,synthese-data}.ts`, `src/proxy.ts`.
+- Socle : `src/lib/{permissions,roles,roles-server,current-user,current-site,site-modules,week,refdata,parametres,habilitations,horaires,supabase-server,fetch-all,numeros-rotation,password-link,placement-helpers,rotation,password,erreurs,absence,absences-periodes,calendrier,quarts,semaine-type,interim,noms,bilans-rapports,synthese-data,verifier-site}.ts`, `src/proxy.ts`.
+  - `verifier-site.ts` : `verifierIdSite()` + `verifierFksSite()` — valide qu'un UUID
+    de rattachement (equipe_id, atelier_id, poste_id, motif_absence_id…) appartient
+    bien au site de l'appelant AVANT d'écrire. **Obligatoire dès qu'une route accepte
+    un UUID venu du client et écrit via `getAdminClient()`** : les FK du schéma ne
+    portent pas `site_id`, le service_role bypass la RLS, un patch forgé injecterait
+    silencieusement un rattachement cross-site (grille cassée côté lecture — cellules
+    grises, pas d'erreur SQL). Appliqué sur `/api/personnel` (create + update),
+    `/api/matrice/cell`, `/api/placement/cell` (audit S2, 2026-09-10). À étendre à
+    toute nouvelle route qui écrit un UUID de FK venu du client.
   - `placement-helpers.ts` : `habManquantes()` + `premierNumeroLibre()`, partagés par
     `/api/placement/cell` **et** `/api/placement/move` (contrôle d'habilitation et numéro
     de rotation libre) pour ne pas diverger entre saisie et déplacement.
@@ -912,7 +940,7 @@ prochain gros chantier, pas une optimisation cosmétique.
   d'autorisation est inchangé). En deux requêtes applicatives, un échec de la seconde
   perdait la donnée en silence — la rotation n'est pas reconstituable. Le même test
   interdit le retour au `delete` + `insert` applicatif sur ces tables.
-- Tests (Vitest, **253** au 2026-09-08) : règles pures + `permissions.test.ts`
+- Tests (Vitest, **268** au 2026-09-10) : règles pures + `permissions.test.ts`
   (droits par défaut, périmètre du chef d'équipe, anti-escalade), `roles.test.ts`
   (slugifyRole), `routes-gardees.test.ts` (inventaire : **toute route API porte
   une garde** — le proxy exclut `api/`, une route nouvelle serait publique — et
