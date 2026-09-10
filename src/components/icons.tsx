@@ -144,19 +144,20 @@ export function OperateurIcon({ size = 18, color = "currentColor" }: P) {
   );
 }
 
-// Téléviseur — raccourci vers l'affichage TV d'un atelier. Écran de télé
-// posé sur ses deux pieds, un point d'allumage discret en bas à droite,
-// entièrement en trait pour cohabiter avec les autres icônes du bandeau.
+// Téléviseur — raccourci vers l'affichage TV d'un atelier. Refonte
+// 2026-09-10 : écran plein cadre pour rester LISIBLE à 20 px, deux
+// antennes en V au-dessus (silhouette « poste de télé »). Trait épais
+// (currentColor) pour se voir sur fond blanc du bouton.
 export function TvIcon({ size = 18, color = "currentColor" }: P) {
   return (
     <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke={color}
-      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ verticalAlign: "-3px" }}>
-      {/* Cadre de l'écran */}
-      <rect x="2.5" y="5" width="19" height="12.5" rx="2" />
-      {/* Antennes / pieds */}
-      <path d="M8 21l3.5-3.5M16 21l-3.5-3.5" />
-      {/* LED d'allumage */}
-      <circle cx="18.5" cy="14.5" r="0.7" fill={color} stroke="none" />
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ verticalAlign: "-3px" }}>
+      {/* Antennes en V */}
+      <path d="M8 3l4 4 4-4" />
+      {/* Écran (grand cadre bien lisible) */}
+      <rect x="3" y="7" width="18" height="13" rx="2.5" />
+      {/* Reflet discret pour donner du volume */}
+      <path d="M6.5 10.5h4" strokeWidth="1.4" />
     </svg>
   );
 }

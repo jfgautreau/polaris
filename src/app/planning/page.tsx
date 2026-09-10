@@ -782,20 +782,30 @@ export default async function PlanningPage({
           weekNav={<WeekNav base="/planning" semaine={centerIso} extra={extra} />}
           initialSearch={searchParam}
           actions={
+            /* 4 boutons uniformes 30×30 (2026-09-10) : ne PAS utiliser
+               `.navlink` (padding CSS écrasait la taille et cassait
+               l'alignement contre ConducteurToggle). Style inline
+               strictement identique sur les 4, `padding: 0`, `boxSizing:
+               border-box` pour compter la bordure dans les 30 px, `line-height: 1`
+               pour neutraliser l'ascender des emoji. */
             <>
               {atelier && (
                 <Link
                   href={`/affichage/atelier/${atelier}`}
                   target="_blank"
-                  className="navlink"
                   title={`Affichage TV — ${ateliersMap.get(atelier) ?? "service"}`}
                   aria-label="Affichage TV du service"
-                  style={{ width: 30, height: 30, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", color: "#1d4ed8", border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}
+                  style={{ width: 30, height: 30, boxSizing: "border-box", flex: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", padding: 0, lineHeight: 1, color: "#1d4ed8", border: "1px solid var(--border)", borderRadius: 8, background: "#fff", textDecoration: "none" }}
                 >
-                  <TvIcon size={20} />
+                  <TvIcon size={18} />
                 </Link>
               )}
-              <Link href="/horaires-specifiques" className="navlink" title="Horaires spécifiques" aria-label="Horaires spécifiques" style={{ width: 30, height: 30, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}>
+              <Link
+                href="/horaires-specifiques"
+                title="Horaires spécifiques"
+                aria-label="Horaires spécifiques"
+                style={{ width: 30, height: 30, boxSizing: "border-box", flex: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", padding: 0, lineHeight: 1, fontSize: 15, border: "1px solid var(--border)", borderRadius: 8, background: "#fff", textDecoration: "none" }}
+              >
                 🕐
               </Link>
               <Link
@@ -806,10 +816,9 @@ export default async function PlanningPage({
                   const qs = p.toString();
                   return qs ? `/absences-specifiques?${qs}` : "/absences-specifiques";
                 })()}
-                className="navlink"
                 title="Absences spécifiques"
                 aria-label="Absences spécifiques"
-                style={{ width: 30, height: 30, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}
+                style={{ width: 30, height: 30, boxSizing: "border-box", flex: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", padding: 0, lineHeight: 1, fontSize: 15, border: "1px solid var(--border)", borderRadius: 8, background: "#fff", textDecoration: "none" }}
               >
                 🤒
               </Link>

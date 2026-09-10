@@ -51,22 +51,25 @@ export default function ConducteurToggle({
         style={{
           opacity: pending ? 0.5 : 1,
           transition: "opacity .1s",
-          // Même gabarit que les trois boutons icône du dessus (🕐 🤒 🖨) :
-          // 30×30, bordure grise, radius 8. Actif = fond bleu, icône blanche
-          // (héritée via currentColor). Icône seule pour ne pas déborder la
-          // colonne — la sémantique passe par le tooltip.
+          // Gabarit STRICTEMENT identique aux 3 autres boutons icône (TV, 🕐, 🤒)
+          // pour l'alignement horizontal : 30×30, box-sizing border-box (la
+          // bordure est comptée dans les 30 px), padding 0, line-height 1
+          // (neutralise l'ascender). Actif = fond bleu, icône blanche
+          // (via currentColor).
           width: 30,
           height: 30,
+          boxSizing: "border-box",
           flex: "none",
-          display: "flex",
+          display: "inline-flex",
           alignItems: "center",
           justifyContent: "center",
+          padding: 0,
+          lineHeight: 1,
           border: "1px solid var(--border)",
           borderRadius: 8,
           background: actif ? "var(--primary)" : "#fff",
           color: actif ? "#fff" : "var(--text)",
           cursor: "pointer",
-          padding: 0,
         }}
       >
         <OperateurIcon size={20} />
