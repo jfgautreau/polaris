@@ -18,7 +18,7 @@
 --
 -- Idempotente : la seconde exécution ne modifie plus rien.
 
-update public.personne_competence
+update public.matrice
    set niveau_cible = niveau_actuel
  where niveau_actuel > 0
    and niveau_cible >= 0
