@@ -38,10 +38,18 @@ export default function LegendeModal({
           </li>
         </ul>
         <p className="muted" style={{ marginTop: 10 }}>
-          Le petit chiffre dans le coin d&apos;une case = l&apos;autre niveau (la cible quand vous saisissez l&apos;actuel, et inversement).
+          <strong>Le petit chiffre en haut à droite d&apos;une case rappelle l&apos;autre niveau</strong> :
+          en mode <em>Actuel</em>, la pastille montre le niveau actuel et le petit
+          chiffre est la <strong>cible</strong> visée ; en mode <em>Cible</em>, la
+          pastille montre la cible et le petit chiffre est le <strong>niveau actuel</strong>.
+          On voit ainsi d&apos;un coup d&apos;œil l&apos;écart à combler.
+          Un <span style={{ color: "#b91c1c", fontWeight: 700 }}>✕</span> à cette place
+          signale une restriction sur l&apos;autre niveau. Le petit chiffre n&apos;apparaît
+          qu&apos;à partir de 1 (une cible à 0 reste implicite).
         </p>
         <p className="muted" style={{ marginTop: 6, fontWeight: 600 }}>
           Saisie : clic = +1 · clic droit = −1 · enregistrement automatique.
+          En mode <em>Actuel</em>, la cible suit automatiquement pour rester ≥ actuel.
         </p>
     </ModaleDeplacable>
   );

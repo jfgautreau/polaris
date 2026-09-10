@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import ModaleDeplacable from "@/components/ModaleDeplacable";
 import { FillIcon } from "@/components/icons";
@@ -46,6 +46,38 @@ export default function OrdoGrid({
   canEdit?: boolean;
 }) {
   const router = useRouter();
+  // Refs vers les tables Activation / Corps / Journée : le survol d'une case
+  // peint le même <col> dans les trois → croix de navigation (colonne + ligne)
+  // identique à la Matrice de polyvalence. Écriture directe dans le DOM (aucun
+  // rendu React déclenché), gratuit sur des centaines de cellules.
+  const activationRef = useRef<HTMLTableElement>(null);
+  const bodyRef = useRef<HTMLTableElement>(null);
+  const journeeRef = useRef<HTMLTableElement>(null);
+  const hoverCol = useRef(-1);
+  const paintCol = (index: number, on: boolean) => {
+    for (const t of [activationRef.current, bodyRef.current, journeeRef.current]) {
+      const col = t?.querySelector("colgroup")?.children[index] as HTMLElement | undefined;
+      if (col) col.style.background = on ? "#f6f8fb" : "";
+    }
+  };
+  const onCellOver = (e: React.MouseEvent) => {
+    const td = (e.target as HTMLElement).closest("td");
+    if (!td) return;
+    // Index dans le colgroup partagé : colonne 0 = libellé, puis N colonnes.
+    const idx = td.cellIndex;
+    // Sur la table Journée, une case couvre ncq colonnes (colSpan). On
+    // développe : le cellIndex donne l'index de la 1re col couverte. Pour un
+    // survol, on peint la 1re col du jour — plus explicite qu'un halo qui
+    // s'élargit inutilement.
+    if (idx === hoverCol.current) return;
+    if (hoverCol.current > 0) paintCol(hoverCol.current, false);
+    hoverCol.current = idx;
+    if (idx > 0) paintCol(idx, true);
+  };
+  const onLeave = () => {
+    if (hoverCol.current > 0) paintCol(hoverCol.current, false);
+    hoverCol.current = -1;
+  };
   const [jq, setJq] = useState<Record<string, boolean>>(jourQuartState);
   const [ov, setOv] = useState<Record<string, boolean>>(ouvertureState);
   const [saving, setSaving] = useState(false);
@@ -311,9 +343,9 @@ export default function OrdoGrid({
       ) : (
         <>
           {/* --- Carte d'en-tête FIGÉE : dates/quarts + ligne « Activation ». --- */}
-          <div className="card" style={{ position: "relative", overflowX: "hidden", overflowY: "auto", scrollbarGutter: "stable", flex: "0 0 auto", padding: "6px 12px" }}>
+          <div className="card ordo-cross" style={{ position: "relative", overflowX: "hidden", overflowY: "auto", scrollbarGutter: "stable", flex: "0 0 auto", padding: "6px 12px" }} onMouseOver={onCellOver} onMouseLeave={onLeave}>
             <div style={{ position: "absolute", top: 6, right: 16, fontSize: 12, zIndex: 2 }} className="muted">{saving ? "enregistrement…" : ""}</div>
-            <table className="matrix rowh" style={gridStyle}>
+            <table className="matrix rowh" ref={activationRef} style={gridStyle}>
               <ColsGrid />
               {gridHead}
               <tbody>
@@ -336,8 +368,8 @@ export default function OrdoGrid({
           </div>
 
           {/* --- Carte de corps DÉFILANTE : lignes par atelier + journée en dessous. --- */}
-          <div className="card grow" style={{ overflowX: "hidden", overflowY: "auto", scrollbarGutter: "stable", flex: "1 1 auto", minHeight: 120, padding: "0 12px 12px" }}>
-            <table className="matrix rowh" style={gridStyle}>
+          <div className="card grow ordo-cross" style={{ overflowX: "hidden", overflowY: "auto", scrollbarGutter: "stable", flex: "1 1 auto", minHeight: 120, padding: "0 12px 12px" }} onMouseOver={onCellOver} onMouseLeave={onLeave}>
+            <table className="matrix rowh" ref={bodyRef} style={gridStyle}>
               <ColsGrid />
               <tbody>
                 {groupsFrom(gridLignes).map((g) => (
@@ -369,7 +401,7 @@ export default function OrdoGrid({
               return (
                 <div style={{ marginTop: 22 }}>
                   <h2 style={{ margin: "0 0 2px" }}>{journeeQuart.libelle} <span className="muted" style={{ fontSize: 12, fontWeight: 400 }}>(pleine journée — active dès qu&apos;un quart tourne)</span></h2>
-                  <table className="matrix rowh" style={gridStyle}>
+                  <table className="matrix rowh" ref={journeeRef} style={gridStyle}>
                     <ColsGrid />
                     <thead>
                       <tr>

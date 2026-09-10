@@ -155,7 +155,12 @@ export default function PlacementBoard({
   const printRef = useRef<HTMLDivElement>(null);
   // La feuille n'est montee QU'AU moment d'imprimer : la garder en permanence
   // doublerait le cout de rendu du plan, deja l'ecran le plus lourd.
-  const [prepImpression, setPrepImpression] = useState(false);
+  // Deux modes d'impression :
+  //  - "ce"    : version « chef d'équipe » (colonne Absents / TP à droite) ;
+  //  - "simple": version courte (plan seul, pas de colonne à droite) — utilisée
+  //              pour un affichage passé de main en main où la liste des
+  //              absents n'a pas d'intérêt et volerait de la place au plan.
+  const [prepImpression, setPrepImpression] = useState<false | "ce" | "simple">(false);
 
   const persById = useMemo(() => new Map(personnes.map((p) => [p.id, p])), [personnes]);
   const posteNom = useMemo(() => {
@@ -367,7 +372,7 @@ export default function PlacementBoard({
     setPrepImpression(false);
   });
 
-  const imprimer = () => setPrepImpression(true);
+  const imprimer = (mode: "ce" | "simple" = "ce") => setPrepImpression(mode);
 
   const copyImpossible = copying || !copySrc || !copyDst || copySrc === copyDst;
 
@@ -679,8 +684,17 @@ export default function PlacementBoard({
           <button
             type="button"
             className={s.navbtn}
-            onClick={imprimer}
-            title="Imprimer le plan de ce service (1 page A4 paysage)"
+            onClick={() => imprimer("ce")}
+            title="PDF chef d'équipe : plan + colonne « Absents / TP » à droite (1 page A4 paysage)"
+            style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+          >
+            <PrintIcon size={15} /> PDF CE
+          </button>
+          <button
+            type="button"
+            className={s.navbtn}
+            onClick={() => imprimer("simple")}
+            title="PDF simple : plan seul, sans la colonne des absents (1 page A4 paysage)"
             style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
           >
             <PrintIcon size={15} /> PDF
@@ -1018,7 +1032,7 @@ export default function PlacementBoard({
           meme non pourvus.
           ------------------------------------------------------------------ */}
       {prepImpression && (
-      <div className={s.printSheet} aria-hidden="true">
+      <div className={s.printSheet} data-mode={prepImpression} aria-hidden="true">
       {/* Cadre exterieur = une page exactement ; ce bloc interieur porte le
           contenu et la mise a l'echelle (cf. placement.module.css). */}
       <div className={s.printInner} ref={printRef}>
@@ -1074,6 +1088,7 @@ export default function PlacementBoard({
             {groups.length === 0 && <p className={s.printVide}>Aucune ligne ouverte ce jour-là sur ce quart.</p>}
           </div>
 
+          {prepImpression === "ce" && (
           <div className={s.printAbs}>
             <div className={s.printAbsTitre}>Absents / TP du jour</div>
             {absPrint.map((c) => (
@@ -1090,6 +1105,7 @@ export default function PlacementBoard({
             ))}
             {absPrint.length === 0 && <div className={s.printVide}>Aucun absent ni TP.</div>}
           </div>
+          )}
         </div>
       </div>
       {siteNom && (
