@@ -1,10 +1,11 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireModuleWrite } from "@/lib/permissions";
 import { getCurrentSite } from "@/lib/current-site";
 import { messageErreur, urlAvecErreur, type ErreurPg } from "@/lib/erreurs";
+import { MOTIFS_TAG } from "@/lib/refdata";
 
 const PATH = "/admin/motifs";
 const s = (fd: FormData, k: string) => String(fd.get(k) ?? "").trim();
@@ -12,9 +13,15 @@ const s = (fd: FormData, k: string) => String(fd.get(k) ?? "").trim();
 // Fin d'action. `err` non nul -> le message repart dans l'URL et la page
 // l'affiche (BandeauErreur) : sans cela, un code court en double se solde par un
 // rechargement silencieux ou rien n'a change.
+//
+// Invalide aussi le cache refdata des motifs (audit P2, 2026-09-10) : sans ca,
+// un nouveau motif n'apparait dans les menus deroulants du planning qu'apres
+// expiration du cache 30 s. On invalide sur toute action de la page (create /
+// update / toggle / delete) — cout nul, gain UX immediat.
 function done(err: ErreurPg = null): never {
   const msg = messageErreur(err);
   revalidatePath(PATH);
+  updateTag(MOTIFS_TAG);
   redirect(urlAvecErreur(PATH, msg));
 }
 

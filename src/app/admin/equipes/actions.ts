@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/current-user";
 import { getAdminClient } from "@/lib/supabase-server";
 import { canWriteModule } from "@/lib/permissions";
-import { ROTATION_TAG } from "@/lib/refdata";
+import { ROTATION_TAG, EQUIPES_TAG, QUARTS_TAG } from "@/lib/refdata";
 import { slugifyQuart } from "@/lib/quarts";
 import { parseMonday, isoDate } from "@/lib/week";
 import { messageErreur, urlAvecErreur, type ErreurPg } from "@/lib/erreurs";
@@ -14,9 +14,14 @@ const PATH = "/admin/equipes";
 const s = (fd: FormData, k: string) => String(fd.get(k) ?? "").trim();
 
 // `err` non nul -> message remonte a l'ecran via l'URL (cf. BandeauErreur).
+// Invalide aussi les caches refdata equipes + quarts (audit P2, 2026-09-10) :
+// cet ecran gere les 2. On ratisse large — cout nul, gain UX (les menus se
+// mettent a jour tout de suite au lieu d'attendre 30 s).
 function done(err: ErreurPg = null): never {
   const msg = messageErreur(err);
   revalidatePath(PATH);
+  updateTag(EQUIPES_TAG);
+  updateTag(QUARTS_TAG);
   redirect(urlAvecErreur(PATH, msg));
 }
 

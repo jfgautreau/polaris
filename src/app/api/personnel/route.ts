@@ -4,6 +4,8 @@ import { getAdminClient } from "@/lib/supabase-server";
 import { getCurrentProfile } from "@/lib/current-user";
 import { canWriteModule } from "@/lib/permissions";
 import { normaliseNom, normalisePrenom } from "@/lib/noms";
+import { messageErreur } from "@/lib/erreurs";
+import { verifierFksSite, verifierIdSite } from "@/lib/verifier-site";
 
 // POST /api/personnel { op, ... }
 // Saisie inline du personnel. Ecriture admin (RLS personne).
@@ -200,13 +202,21 @@ export async function POST(req: NextRequest) {
       // elle est simplement traduite en date_debut de la periode initiale.
       const dateDebutContrat =
         orNull(s(body.date_arrivee)) ?? orNull(s(body.date_debut)) ?? new Date().toISOString().slice(0, 10);
+      const equipe_id = orNull(s(body.equipe_id));
+      const atelier_id = orNull(s(body.atelier_id));
+      // Validation cross-site (audit S2) sur les FKs saisies au formulaire.
+      const errFkCreate = await verifierFksSite(supabase, { equipe_id, atelier_id }, site_id, [
+        { champ: "equipe_id", table: "equipe", libelle: "Equipe" },
+        { champ: "atelier_id", table: "atelier", libelle: "Atelier" },
+      ]);
+      if (errFkCreate) return NextResponse.json({ error: errFkCreate }, { status: 400 });
       const { data, error } = await supabase
         .from("personne")
         .insert({
           nom,
           prenom,
-          equipe_id: orNull(s(body.equipe_id)),
-          atelier_id: orNull(s(body.atelier_id)),
+          equipe_id,
+          atelier_id,
           type_contrat,
           matricule,
           agence_interim: type_contrat === "INTERIM" ? orNull(s(body.agence_interim)) : null,
@@ -283,6 +293,16 @@ export async function POST(req: NextRequest) {
         }
       }
       if (Object.keys(patch).length === 0) return NextResponse.json({ error: "Rien à modifier" }, { status: 400 });
+      // Validation cross-site (audit S2) : le service_role bypass la RLS, une
+      // valeur d'un autre site rattacherait silencieusement la personne a une
+      // equipe/atelier/poste inconnu de sa grille (cellules vides). On refuse
+      // en 400 avant l'update.
+      const errFk = await verifierFksSite(supabase, patch, site_id, [
+        { champ: "equipe_id", table: "equipe", libelle: "Equipe" },
+        { champ: "atelier_id", table: "atelier", libelle: "Atelier" },
+        { champ: "poste_fixe_id", table: "poste", libelle: "Poste fixe" },
+      ]);
+      if (errFk) return NextResponse.json({ error: errFk }, { status: 400 });
       const { error } = await supabase.from("personne").update(patch).eq("id", id).eq("site_id", site_id);
       if (error) throw error;
       return NextResponse.json({ ok: true });
@@ -547,9 +567,22 @@ export async function POST(req: NextRequest) {
     // Les erreurs Supabase ne sont PAS des instances de Error : ce sont des
     // objets plats { code, message, details, hint }. `e instanceof Error`
     // renvoyait false et laissait tomber le message reel derriere « Erreur ».
+    //
+    // Statut choisi selon le code Postgres (cf. audit S8) plutot que 403 pour
+    // tout : un conflit d'unicite (23505), une contrainte (23503, 23502, 23514)
+    // ne sont pas des refus d'acces et meritent 400/409 avec un message clair.
+    // Cf. lib/erreurs.ts qui traduit les codes en francais.
     const err = e as { message?: string; details?: string | null; hint?: string | null; code?: string };
-    const msg = err?.message ?? (e instanceof Error ? e.message : "Erreur");
-    const complet = [msg, err?.details, err?.hint].filter(Boolean).join(" — ");
-    return NextResponse.json({ error: complet || "Erreur" }, { status: 403 });
+    const msg = messageErreur({ code: err?.code, message: err?.message ?? "Erreur", details: err?.details ?? null })
+      ?? err?.message
+      ?? "Erreur";
+    const code = err?.code ?? "";
+    const status =
+      code === "23505" ? 409 // unique_violation
+      : code === "23503" || code === "23502" || code === "23514" ? 400 // FK / NOT NULL / CHECK
+      : code === "42501" ? 403 // insufficient_privilege
+      : code === "PGRST116" ? 404 // resultat unique attendu, aucune ligne
+      : 400;
+    return NextResponse.json({ error: msg }, { status });
   }
 }

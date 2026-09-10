@@ -22,6 +22,14 @@ async function siteId(): Promise<string> {
   return (await getCurrentSite()).id;
 }
 
+// Tags exposes pour permettre l'invalidation IMMEDIATE (revalidateTag /
+// updateTag) apres une mutation, plutot que d'attendre l'expiration a 30 s.
+// Cf. audit P2 (2026-09-10).
+export const ATELIERS_TAG = "refdata-ateliers";
+export const EQUIPES_TAG = "refdata-equipes";
+export const QUARTS_TAG = "refdata-quarts";
+export const MOTIFS_TAG = "refdata-motifs";
+
 // -------- Ateliers -------------------------------------------------
 
 const getAteliersBySite = unstable_cache(
@@ -35,7 +43,7 @@ const getAteliersBySite = unstable_cache(
     return (data ?? []) as { id: string; nom: string }[];
   },
   ["refdata-ateliers"],
-  OPTS
+  { ...OPTS, tags: [ATELIERS_TAG] }
 );
 export async function getAteliersC() {
   return getAteliersBySite(await siteId());
@@ -61,7 +69,7 @@ const getEquipesBySite = unstable_cache(
     return (data ?? []) as EquipeRow[];
   },
   ["refdata-equipes"],
-  OPTS
+  { ...OPTS, tags: [EQUIPES_TAG] }
 );
 export async function getEquipesC() {
   return getEquipesBySite(await siteId());
@@ -82,7 +90,7 @@ const getQuartsBySite = unstable_cache(
     return (data ?? []) as { code: string; libelle: string; ordre: number }[];
   },
   ["refdata-quarts"],
-  OPTS
+  { ...OPTS, tags: [QUARTS_TAG] }
 );
 export async function getQuartsC() {
   return getQuartsBySite(await siteId());
@@ -110,7 +118,7 @@ const getMotifsBySite = unstable_cache(
     return (data ?? []) as MotifRow[];
   },
   ["refdata-motifs"],
-  OPTS
+  { ...OPTS, tags: [MOTIFS_TAG] }
 );
 export async function getMotifsC() {
   return getMotifsBySite(await siteId());

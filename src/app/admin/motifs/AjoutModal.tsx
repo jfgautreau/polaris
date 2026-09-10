@@ -1,11 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import ModaleDeplacable from "@/components/ModaleDeplacable";
 
 // Bouton « Ajouter » + fenetre modale portant le formulaire de creation.
 // Le formulaire lui-meme reste rendu cote SERVEUR et arrive ici en `children` :
 // il garde donc sa server action, et l'on n'a pas a rapatrier la logique
 // d'ecriture dans un composant client.
+//
+// La modale utilise <ModaleDeplacable> : le bandeau titre porte `.mdd-drag`,
+// l'utilisateur peut deplacer la fenetre pour verifier la liste sous-jacente
+// avant de creer un doublon (regle CLAUDE.md « toute modale doit etre
+// deplacable »). Cf. audit S5 (2026-09-10).
 export default function AjoutModal({
   libelle,
   titre,
@@ -26,36 +32,30 @@ export default function AjoutModal({
       </div>
 
       {ouvert && (
-        <div
-          onClick={() => setOuvert(false)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 100,
-            background: "rgba(15,23,42,0.45)",
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "center",
-            padding: "10vh 16px",
-            overflow: "auto",
-          }}
-        >
-          <div className="card" onClick={(e) => e.stopPropagation()} style={{ margin: 0, width: "100%", maxWidth: 520 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <h2 style={{ margin: 0, fontSize: 18 }}>{titre}</h2>
-              <button
-                type="button"
-                className="btn-sm btn-ghost"
-                onClick={() => setOuvert(false)}
-                title="Fermer"
-                style={{ width: "auto" }}
-              >
-                ✕
-              </button>
-            </div>
-            {children}
+        <ModaleDeplacable onClose={() => setOuvert(false)} largeur={520}>
+          <div
+            className="mdd-drag"
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: 12,
+              cursor: "move",
+            }}
+          >
+            <h2 style={{ margin: 0, fontSize: 18 }}>{titre}</h2>
+            <button
+              type="button"
+              className="btn-sm btn-ghost"
+              onClick={() => setOuvert(false)}
+              title="Fermer"
+              style={{ width: "auto" }}
+            >
+              ✕
+            </button>
           </div>
-        </div>
+          {children}
+        </ModaleDeplacable>
       )}
     </>
   );

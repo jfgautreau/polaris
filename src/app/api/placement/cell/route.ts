@@ -5,6 +5,7 @@ import { canWritePlacementData } from "@/lib/permissions";
 import { getQuartsC } from "@/lib/refdata";
 import { quartOuDefaut } from "@/lib/quarts";
 import { habManquantes, premierNumeroLibre } from "@/lib/placement-helpers";
+import { verifierIdSite } from "@/lib/verifier-site";
 
 // POST /api/placement/cell { personne_id, jour, equipe_id, value, forcer }
 //   value = ""  -> efface le placement
@@ -59,6 +60,25 @@ export async function POST(req: NextRequest) {
   else if (value === "TP") tp = true;
   else if (value.startsWith("m:")) motif_absence_id = value.slice(2);
   else poste_id = value;
+
+  // Validation cross-site (audit S2) : les UUID injectes par le client doivent
+  // appartenir au site de l'appelant. Sans ca, le service_role ecrirait un
+  // placement rattache a un poste/equipe d'un autre site (grille silencieusement
+  // cassee cote lecture).
+  const errPers = await verifierIdSite(supabase, "personne", personne_id, profile.siteId, "Personne");
+  if (errPers) return NextResponse.json({ error: errPers }, { status: 400 });
+  if (poste_id) {
+    const errPo = await verifierIdSite(supabase, "poste", poste_id, profile.siteId, "Poste");
+    if (errPo) return NextResponse.json({ error: errPo }, { status: 400 });
+  }
+  if (body?.equipe_id) {
+    const errEq = await verifierIdSite(supabase, "equipe", body.equipe_id, profile.siteId, "Equipe");
+    if (errEq) return NextResponse.json({ error: errEq }, { status: 400 });
+  }
+  if (motif_absence_id) {
+    const errMo = await verifierIdSite(supabase, "motif_absence", motif_absence_id, profile.siteId, "Motif");
+    if (errMo) return NextResponse.json({ error: errMo }, { status: 400 });
+  }
 
   // Le quart ne s'applique qu'a un placement sur poste (une absence/NT vaut
   // pour toute la journee, tous quarts). Idem pour le numero de rotation.

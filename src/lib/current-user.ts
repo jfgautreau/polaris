@@ -1,6 +1,5 @@
 import { cache } from "react";
 import { getServerClient, getAdminClient } from "@/lib/supabase-server";
-import { SITE_LEBIGNON_ID } from "@/lib/current-site";
 
 export type CurrentProfile = {
   authId: string;
@@ -18,14 +17,11 @@ export type CurrentProfile = {
 // - `cache()` deduplique l'appel sur toute la requete (requireModule + page).
 //
 // MULTI-SITE (cf. tasks/multi-site.md) : le profil porte `siteId` et
-// `estSuperAdmin`. Les colonnes sont ajoutées à app_user par la migration
-// 0043. En V1a, siteId vaut toujours l'UUID du site historique lebignon.
-//
-// FALLBACK PRÉ-MIGRATION : tant que 0043 n'est pas appliquée, les colonnes
-// `site_id` et `est_super_admin` n'existent pas. On retente alors la
-// requête sans ces colonnes pour ne pas casser le déploiement pendant la
-// fenêtre code-poussé/migration-non-encore-jouée. Ce bloc de fallback
-// pourra être retiré une fois la 0043 en prod.
+// `estSuperAdmin`. Les colonnes sont posees sur app_user par la migration
+// 0043, appliquee en prod depuis 2026-08 — le fallback pre-0043 et le repli
+// sur SITE_LEBIGNON_ID ont ete retires (audit O2 / S6, 2026-09-10). Une
+// ligne app_user sans site_id est desormais un bug : on refuse la session
+// avec un log d'erreur plutot que de rattacher silencieusement a Lebignon.
 export const getCurrentProfile = cache(async function getCurrentProfile(): Promise<CurrentProfile | null> {
   const supabase = await getServerClient();
   const { data: claimsData } = await supabase.auth.getClaims();
@@ -43,38 +39,25 @@ export const getCurrentProfile = cache(async function getCurrentProfile(): Promi
   // le site consulté. current-user.ts est whitelisté (admin-client / isolation).
   const admin = getAdminClient();
 
-  const modernSel = "email, name, role, is_active, site_id, est_super_admin";
-  const legacySel = "email, name, role, is_active";
-
   type Row = {
     email: string;
     name: string;
     role: string;
     is_active: boolean;
-    site_id?: string | null;
-    est_super_admin?: boolean | null;
+    site_id: string | null;
+    est_super_admin: boolean | null;
   };
-  let row: Row | null = null;
 
-  {
-    const { data, error } = await admin
-      .from("app_user")
-      .select(modernSel)
-      .eq("user_id", userId)
-      .single();
-    if (error) {
-      // Colonnes site_id / est_super_admin absentes (pré-0043) : on
-      // retente avec l'ancien SELECT et on comble par les défauts V1a.
-      const legacy = await admin
-        .from("app_user")
-        .select(legacySel)
-        .eq("user_id", userId)
-        .single<{ email: string; name: string; role: string; is_active: boolean }>();
-      row = legacy.data ?? null;
-    } else {
-      row = (data as unknown as Row) ?? null;
-    }
+  const { data, error } = await admin
+    .from("app_user")
+    .select("email, name, role, is_active, site_id, est_super_admin")
+    .eq("user_id", userId)
+    .single<Row>();
+  if (error) {
+    console.error(`app_user introuvable pour user_id=${userId}: ${error.message}`);
+    return null;
   }
+  const row = data;
 
   // `is_active` etait lu par la RLS (is_admin / has_role) mais JAMAIS par
   // l'application : un compte desactive directement en base gardait toute sa
@@ -83,7 +66,15 @@ export const getCurrentProfile = cache(async function getCurrentProfile(): Promi
   // profil, donc redirection vers /login par requireModule.
   if (!row || !row.is_active) return null;
 
-  let siteId = row.site_id ?? SITE_LEBIGNON_ID;
+  // Un app_user sans site_id est un bug : depuis 0043, la colonne est NOT
+  // NULL et le trigger handle_new_user la remplit. On REFUSE la session
+  // plutot que de retomber silencieusement sur Lebignon (fuite cross-tenant
+  // potentielle, cf. audit S6).
+  if (!row.site_id) {
+    console.error(`app_user.user_id=${userId} sans site_id — session refusee`);
+    return null;
+  }
+  let siteId = row.site_id;
   const estSuperAdmin = row.est_super_admin ?? false;
 
   // IMPERSONATION : un super_admin « entré » dans un site agit DANS ce site.

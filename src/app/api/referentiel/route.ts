@@ -1,7 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { updateTag } from "next/cache";
 import { getAdminClient } from "@/lib/supabase-server";
 import { getCurrentProfile } from "@/lib/current-user";
 import { canWriteModule } from "@/lib/permissions";
+import { ATELIERS_TAG } from "@/lib/refdata";
 
 // POST /api/referentiel  { op, ... }
 // Saisie inline du referentiel (ateliers / lignes / postes). Ecriture admin (RLS).
@@ -108,6 +110,9 @@ export async function POST(req: NextRequest) {
           .select("id, nom, actif")
           .single();
         if (error) throw error;
+        // Cache refdata ateliers invalide (audit P2) : le nouveau apparait
+        // immediatement dans les filtres du planning au lieu d'attendre 30 s.
+        updateTag(ATELIERS_TAG);
         return NextResponse.json({ ok: true, row: { ...data, ligne: [] } });
       }
       case "create-ligne": {
@@ -145,6 +150,7 @@ export async function POST(req: NextRequest) {
       case "update-atelier": {
         const { error } = await supabase.from("atelier").update({ nom: s(body.nom) }).eq("id", s(body.id)).eq("site_id", site_id);
         if (error) throw error;
+        updateTag(ATELIERS_TAG);
         return NextResponse.json({ ok: true });
       }
       case "update-ligne": {
@@ -257,6 +263,7 @@ export async function POST(req: NextRequest) {
           .eq("id", s(body.id))
           .eq("site_id", site_id);
         if (error) throw error;
+        if (entity === "atelier") updateTag(ATELIERS_TAG);
         return NextResponse.json({ ok: true });
       }
       default:

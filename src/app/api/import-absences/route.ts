@@ -1,12 +1,18 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { moduleWriteGuard } from "@/lib/permissions";
 import { messageErreur } from "@/lib/erreurs";
+import { fetchAll } from "@/lib/fetch-all";
 import {
   parseFichierAbsencesRh,
   apparier,
   type PersonnePolaris,
   type EquivalenceApprise,
 } from "@/lib/import-absences-rh";
+
+// Un export RH mensuel fait quelques centaines de Ko au maximum. On borne a
+// 5 Mo pour se proteger d'un upload accidentel de 500 Mo (OOM Vercel Function).
+// Cf. audit S3 (2026-09-10).
+const TAILLE_MAX_OCTETS = 5 * 1024 * 1024;
 
 // POST /api/import-absences  (multipart/form-data)
 //   op=preview  { fichier }                        -> aperçu (appariement, motifs à créer)
@@ -66,6 +72,17 @@ export async function POST(req: NextRequest) {
   const { supabase, profile } = garde;
   const siteId = profile.siteId;
 
+  // Refuse tot un upload trop gros AVANT que `formData()` ne charge tout en RAM.
+  // Content-Length couvre le body entier (fichier + champs) : borne large mais
+  // deterministe. Cf. audit S3.
+  const cl = Number(req.headers.get("content-length") ?? "0");
+  if (cl > TAILLE_MAX_OCTETS) {
+    return NextResponse.json(
+      { error: `Fichier trop volumineux (max ${(TAILLE_MAX_OCTETS / 1024 / 1024).toFixed(0)} Mo).` },
+      { status: 413 }
+    );
+  }
+
   let form: FormData;
   try {
     form = await req.formData();
@@ -77,6 +94,13 @@ export async function POST(req: NextRequest) {
   if (!(fichier instanceof File)) {
     return NextResponse.json({ error: "Fichier manquant." }, { status: 400 });
   }
+  // Deuxieme rempart : si Content-Length manquait (streaming), on verifie ici.
+  if (fichier.size > TAILLE_MAX_OCTETS) {
+    return NextResponse.json(
+      { error: `Fichier trop volumineux (max ${(TAILLE_MAX_OCTETS / 1024 / 1024).toFixed(0)} Mo).` },
+      { status: 413 }
+    );
+  }
   const texte = decoder(await fichier.arrayBuffer());
   const parse = parseFichierAbsencesRh(texte);
 
@@ -86,19 +110,32 @@ export async function POST(req: NextRequest) {
 
   try {
     // Référentiels du site : effectif, motifs (code GT), équivalences apprises.
-    const [persR, motR, apprR] = await Promise.all([
-      supabase.from("personne").select("id, nom, prenom, statut").eq("site_id", siteId).order("nom"),
+    // ⚠️ `personne` peut depasser 1000 lignes → fetchAll obligatoire, sinon
+    // l'appariement rate silencieusement les personnes au-dela. Cf. S4.
+    let personnes: (PersonnePolaris & { statut: string | null })[] = [];
+    try {
+      personnes = await fetchAll<PersonnePolaris & { statut: string | null }>(() =>
+        supabase.from("personne").select("id, nom, prenom, statut").eq("site_id", siteId).order("nom")
+      );
+    } catch (e) {
+      const code = (e as { code?: string; message?: string }).code;
+      if (CODES_UNDEF.has(code ?? "")) {
+        return NextResponse.json({ error: MSG_MIGRATION }, { status: 400 });
+      }
+      throw e;
+    }
+
+    const [motR, apprR] = await Promise.all([
       supabase.from("motif_absence").select("id, libelle, code_court, code_gt").eq("site_id", siteId),
       supabase.from("import_absence_personne").select("matricule_rh, personne_id, ignorer").eq("site_id", siteId),
     ]);
-    for (const r of [persR, motR, apprR]) {
+    for (const r of [motR, apprR]) {
       if (r.error && CODES_UNDEF.has((r.error as { code?: string }).code ?? "")) {
         return NextResponse.json({ error: MSG_MIGRATION }, { status: 400 });
       }
       if (r.error) throw r.error;
     }
 
-    const personnes = (persR.data ?? []) as (PersonnePolaris & { statut: string | null })[];
     const motifs = (motR.data ?? []) as { id: string; libelle: string; code_court: string; code_gt: string | null }[];
     const apprises: Record<string, EquivalenceApprise> = {};
     for (const a of (apprR.data ?? []) as { matricule_rh: string; personne_id: string | null; ignorer: boolean }[]) {

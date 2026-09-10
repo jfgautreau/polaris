@@ -22,7 +22,16 @@ export async function POST(req: NextRequest) {
   }
 
   const admin = garde.supabase;
-  const { error: dbErr } = await admin.from("app_user").update({ is_active: active }).eq("user_id", user_id);
+  // MULTI-SITE (defense en profondeur, audit S7) : userAdminGuard a deja
+  // valide que la cible est sur le site de l'appelant (sauf super_admin),
+  // mais l'update lui-meme portait uniquement sur user_id. On borne aussi
+  // par site pour rester coherent avec le pattern « lecture + ecriture
+  // toujours bornees sur site_id » du reste de la base.
+  let updateQ = admin.from("app_user").update({ is_active: active }).eq("user_id", user_id);
+  if (!garde.profile.estSuperAdmin) {
+    updateQ = updateQ.eq("site_id", garde.profile.siteId);
+  }
+  const { error: dbErr } = await updateQ;
   if (dbErr) return NextResponse.json({ error: dbErr.message }, { status: 400 });
 
   const { error: authErr } = await admin.auth.admin.updateUserById(user_id, { ban_duration: active ? "none" : BAN_LONG });

@@ -31,6 +31,15 @@ backup*.dump
 dump-*.sql
 pg_dump-*.sql
 
+# scripts jetables (injection ponctuelle, migration de donnees ad-hoc). Ils
+# lisent SUPABASE_SERVICE_ROLE_KEY et contiennent souvent des UUID de sites
+# en dur ; JAMAIS a commiter. Cf. audit S1 (2026-09-10).
+_tmp_*.js
+_tmp_*.ts
+scratch_*.js
+scratch_*.ts
+inject_*.js
+
 # prisma
 /prisma/*.db
 

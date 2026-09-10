@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getServerClient, getAdminClient } from "@/lib/supabase-server";
 import { getCurrentProfile } from "@/lib/current-user";
 import { canWriteModule } from "@/lib/permissions";
+import { verifierIdSite } from "@/lib/verifier-site";
 
 // POST /api/matrice/cell { personne_id, poste_id, niveau_actuel, niveau_cible }
 // Upsert d'une cellule de matrice. La RLS (can_edit_personne) autorise admin
@@ -34,6 +35,17 @@ export async function POST(req: NextRequest) {
   // Sinon RLS : admin ou chef de l'équipe de la personne (périmètre).
   // MULTI-SITE : site_id explicite pour le cas admin client (service_role).
   const supabase = (await canWriteModule(profile.role, "matrice")) ? getAdminClient() : await getServerClient();
+
+  // Validation cross-site (audit S2) : personne_id ET poste_id doivent
+  // appartenir au site de l'appelant. Sans ca, un patch forge injecterait
+  // un poste_id d'un autre site, la ligne matrice ne se rattacherait a rien
+  // de visible. Chef d'equipe : la RLS bloque deja les personne_id hors
+  // perimetre, mais le poste_id passait sans controle.
+  const errPers = await verifierIdSite(supabase, "personne", personne_id, profile.siteId, "Personne");
+  if (errPers) return NextResponse.json({ error: errPers }, { status: 400 });
+  const errPoste = await verifierIdSite(supabase, "poste", poste_id, profile.siteId, "Poste");
+  if (errPoste) return NextResponse.json({ error: errPoste }, { status: 400 });
+
   const { error } = await supabase.from("matrice").upsert(
     {
       personne_id,
