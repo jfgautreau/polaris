@@ -833,11 +833,12 @@ export default function PlacementBoard({
                     const effReq = g.fermee ? 0 : po.effectifRequis;
                     const complet = occ.length >= effReq && effReq > 0;
                     const manque = occ.length < effReq;
-                    // Sureffectif : plus de monde que l'abaque ne demande (3/2).
-                    // On garde le vieux guard `effReq > 0` : sur une ligne fermée (besoin 0)
-                    // ou un poste au besoin nul, ne PAS peindre le liseré orange —
-                    // le compteur « X/0 » signale déjà l'anomalie sans surenchérir.
-                    const surEffectif = effReq > 0 && occ.length > effReq;
+                    // Sureffectif : plus de monde que l'abaque ne demande (3/2, ou
+                    // 1/0 sur une ligne fermée par ordo alors que des personnes y
+                    // restent affectées — décision 2026-09-10, la fermeture ne
+                    // désaffecte plus). C'est désormais le SEUL signal visuel de
+                    // cette anomalie, il doit peindre le liseré orange.
+                    const surEffectif = occ.length > effReq;
                     const cs = active ? compState(active, po) : null;
                     const isOver = over === `po:${po.id}`;
                     return (
@@ -1060,7 +1061,7 @@ export default function PlacementBoard({
                     const occ = occupants(po.id);
                     // Impression : même règle que la tuile écran (besoin 0 sur ligne fermée).
                     const effReq = g.fermee ? 0 : po.effectifRequis;
-                    const sur = effReq > 0 && occ.length > effReq;
+                    const sur = occ.length > effReq;
                     const trou = occ.length < effReq;
                     return (
                       <div key={po.id} className={`${s.printPoste} ${sur ? s.printSur : ""}`}>

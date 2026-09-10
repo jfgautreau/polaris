@@ -83,11 +83,14 @@ export default function OrdoGrid({
   const [saving, setSaving] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const [initIsos, setInitIsos] = useState<string[] | null>(null);
-  const [conflit, setConflit] = useState<{
-    affectes: { nom: string; prenom: string }[];
-    body: object;
-    reapply: () => void;
-    rollback: () => void;
+  // Bandeau d'information après une fermeture qui laisse des affectations en
+  // place (décision 2026-09-10) : l'ordo n'a JAMAIS le pouvoir de retirer les
+  // gens du planning ; on prévient les ateliers concernés (Condi, Fab…) qu'ils
+  // ont un sureffectif à régler. Placement / Planning peignent le compteur en
+  // orange sureffectif dès que besoin passe à 0 avec des personnes affectées.
+  const [notice, setNotice] = useState<{
+    affectes: { nom: string; prenom: string; atelier: string }[];
+    ateliers: string[];
     quart: boolean;
   } | null>(null);
   const [conflitReset, setConflitReset] = useState<{
@@ -172,7 +175,7 @@ export default function OrdoGrid({
   const ligneOuverte = (code: string, lg: string, iso: string) =>
     quartActif(code, iso) ? (ov[`${code}:${lg}:${iso}`] ?? true) : false;
 
-  async function post(body: object, rollback: () => void, reapply: () => void, quart: boolean) {
+  async function post(body: object, rollback: () => void, quart: boolean) {
     setSaving(true);
     setErreur(null);
     try {
@@ -181,33 +184,27 @@ export default function OrdoGrid({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      if (res.status === 409) {
-        const j = (await res.json().catch(() => ({}))) as { conflit?: boolean; affectes?: { nom: string; prenom: string }[]; error?: string };
-        rollback();
-        if (j.conflit && Array.isArray(j.affectes)) {
-          setConflit({ affectes: j.affectes, body, reapply, rollback, quart });
-        } else {
-          setErreur(j.error ?? "Échec.");
-        }
-        return;
-      }
       if (!res.ok) {
         const j = (await res.json().catch(() => ({}))) as { error?: string };
         rollback();
         setErreur(j.error ?? "Échec.");
         return;
       }
+      // Fermeture réussie : la réponse peut porter une liste d'affectations
+      // désormais en sureffectif → on affiche un bandeau d'info pour prévenir
+      // les ateliers concernés. Ce n'est PAS une erreur, la fermeture est
+      // appliquée ; les affectations elles-mêmes ne sont plus supprimées.
+      const j = (await res.json().catch(() => ({}))) as {
+        affectes?: { nom: string; prenom: string; atelier: string }[];
+        ateliers?: string[];
+      };
+      if (Array.isArray(j.affectes) && j.affectes.length > 0) {
+        setNotice({ affectes: j.affectes, ateliers: j.ateliers ?? [], quart });
+      }
       router.refresh();
     } finally {
       setSaving(false);
     }
-  }
-  async function forcerFermeture() {
-    const c = conflit;
-    setConflit(null);
-    if (!c) return;
-    c.reapply();
-    await post({ ...c.body, force: true }, c.rollback, c.reapply, c.quart);
   }
   function toggleQuart(code: string, iso: string) {
     if (!canEdit) return;
@@ -217,7 +214,7 @@ export default function OrdoGrid({
     const apply = () => setJq((s) => recomputeJournee({ ...s, [cle]: next }, iso));
     const rollback = () => setJq((s) => recomputeJournee({ ...s, [cle]: prev }, iso));
     apply();
-    post({ type: "quart", quart_code: code, jour: iso, value: next }, rollback, apply, true);
+    post({ type: "quart", quart_code: code, jour: iso, value: next }, rollback, true);
   }
   function toggleLigne(code: string, lg: string, iso: string) {
     if (!canEdit || !quartActif(code, iso)) return;
@@ -227,7 +224,7 @@ export default function OrdoGrid({
     const apply = () => setOv((s) => ({ ...s, [cle]: next }));
     const rollback = () => setOv((s) => ({ ...s, [cle]: prev }));
     apply();
-    post({ type: "ligne", quart_code: code, ligne_id: lg, jour: iso, value: next }, rollback, apply, false);
+    post({ type: "ligne", quart_code: code, ligne_id: lg, jour: iso, value: next }, rollback, false);
   }
 
   const currentSet = new Set(currentWeekIsos);
@@ -474,26 +471,38 @@ export default function OrdoGrid({
         </ModaleDeplacable>
       )}
 
-      {/* Fermeture bloquee par des affectations : proposer de fermer quand meme. */}
-      {conflit && (
-        <ModaleDeplacable onClose={() => setConflit(null)} largeur={460}>
+      {/* Bandeau d'information après une fermeture qui laisse des affectations en
+          place. AUCUNE désaffectation : on prévient les ateliers concernés qu'ils
+          verront un sureffectif dans Placement / Planning et qu'ils doivent
+          adapter leur planning. Rien à confirmer, un seul bouton « OK ». */}
+      {notice && (
+        <ModaleDeplacable onClose={() => setNotice(null)} largeur={500}>
           <div className="toolbar mdd-drag" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 6, cursor: "grab" }}>
-            <h2 style={{ margin: 0, color: "#b45309" }}>⚠ {conflit.quart ? "Quart occupé" : "Ligne occupée"}</h2>
-            <button type="button" className="btn-sm btn-ghost" onClick={() => setConflit(null)} style={{ width: "auto" }}>✕</button>
+            <h2 style={{ margin: 0, color: "#b45309" }}>ℹ Prévenir l&apos;atelier</h2>
+            <button type="button" className="btn-sm btn-ghost" onClick={() => setNotice(null)} style={{ width: "auto" }}>✕</button>
           </div>
           <p style={{ margin: "0 0 8px", fontSize: 14 }}>
-            {conflit.affectes.length === 1 ? "Une personne est affectée" : `${conflit.affectes.length} personnes sont affectées`}{" "}
-            sur {conflit.quart ? "ce quart" : "cette ligne"} ce jour-là. Fermer{" "}
-            {conflit.quart ? "le quart" : "la ligne"} retirera {conflit.affectes.length === 1 ? "son affectation" : "leurs affectations"} (les absences sont conservées) :
+            {notice.quart ? "Ce quart a été fermé" : "Cette ligne a été fermée"} alors que{" "}
+            {notice.affectes.length === 1 ? "une personne y était affectée" : `${notice.affectes.length} personnes y étaient affectées`}.
+            Les affectations sont conservées : elles apparaissent désormais en <strong>sureffectif</strong> dans Placement et Planning.
           </p>
+          {notice.ateliers.length > 0 && (
+            <p style={{ margin: "0 0 10px", fontSize: 14, fontWeight: 700 }}>
+              Prévenir {notice.ateliers.length === 1 ? "l'atelier" : "les ateliers"}{" "}
+              <span style={{ color: "#b45309" }}>{notice.ateliers.join(" et ")}</span>{" "}
+              de modifier leur planning en conséquence.
+            </p>
+          )}
           <ul style={{ margin: "0 0 12px", paddingLeft: 20, fontSize: 13, maxHeight: 220, overflowY: "auto" }}>
-            {conflit.affectes.map((p, i) => (
-              <li key={i}>{p.nom} {p.prenom}</li>
+            {notice.affectes.map((p, i) => (
+              <li key={i}>
+                {p.nom} {p.prenom}
+                {p.atelier && <span className="muted"> — {p.atelier}</span>}
+              </li>
             ))}
           </ul>
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-            <button type="button" className="btn-sm btn-ghost" style={{ width: "auto" }} onClick={() => setConflit(null)}>Annuler</button>
-            <button type="button" className="btn-sm" style={{ width: "auto", background: "#b45309", border: "1px solid #b45309" }} onClick={forcerFermeture}>Fermer quand même et retirer</button>
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <button type="button" className="btn-sm" style={{ width: "auto" }} onClick={() => setNotice(null)}>OK</button>
           </div>
         </ModaleDeplacable>
       )}
