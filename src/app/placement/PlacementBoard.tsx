@@ -65,6 +65,7 @@ export default function PlacementBoard({
   winStart,
   winEnd,
   conducteurIds = [],
+  quartBandeau,
 }: {
   title?: ReactNode;
   jour: string;
@@ -98,6 +99,11 @@ export default function PlacementBoard({
   // « Conducteurs » du filtre : quand elle est active, on ne montre que ces
   // personnes. La recherche par nom passe outre, comme pour équipe/atelier.
   conducteurIds?: string[];
+  // Bandeau plein-largeur de rappel du QUART en cours d'édition (même composant
+  // que le Planning, cf. src/app/planning/QuartBandeau.tsx) : couleur = quart.couleur
+  // (migration 0068). Rendu pré-calculé côté serveur et passé en prop, comme le
+  // Planning — le board ne lit pas quart.couleur lui-même.
+  quartBandeau?: ReactNode;
 }) {
   const router = useRouter();
   const [place, setPlace] = useState<Record<string, string>>(placeInit);
@@ -717,6 +723,9 @@ export default function PlacementBoard({
           <span style={{ fontSize: 12, fontWeight: 700, minWidth: 90, textAlign: "right", color: saveColor }}>{msg ?? saveTxt}</span>
         </div>
       </div>
+
+      {/* Rappel du quart en cours d'édition (couleur du quart, migration 0068) */}
+      {quartBandeau && <div style={{ flex: "0 0 auto", padding: "0 16px" }}>{quartBandeau}</div>}
 
       {/* Corps : plan (gauche) + noms (droite) */}
       <div className={s.body}>

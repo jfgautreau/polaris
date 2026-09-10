@@ -11,10 +11,11 @@ import { rotationForWeek, equipesParQuart } from "@/lib/rotation";
 import { addMonthsIso } from "@/lib/habilitations";
 import { estAuTravailLe, deriverArriveeDepart } from "@/lib/personne-statut";
 import PlacementBoard from "./PlacementBoard";
+import QuartBandeau from "../planning/QuartBandeau";
 
 type Atelier = { id: string; nom: string };
 type Equipe = { id: string; nom: string; couleur: string | null; quart_fixe?: string | null };
-type Quart = { code: string; libelle: string; ordre: number; creneau: string | null };
+type Quart = { code: string; libelle: string; ordre: number; creneau: string | null; couleur?: string | null };
 type Personne = { id: string; nom: string; prenom: string; equipe_id: string | null; atelier_id: string | null; type_contrat: string };
 type PosteRow = { id: string; nom: string; nom_court: string | null; actif: boolean; effectif_requis: number; niveau_min_requis: number; ordre_affichage: number; numero_rotation: string | null };
 type LigneRow = { id: string; nom: string; ordre_affichage: number; atelier_id: string; poste: PosteRow[] };
@@ -39,17 +40,24 @@ export default async function PlacementPage({
   const supabase = await getServerClient();
   const jour = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) ? sp.date : isoDate(new Date());
 
-  const [{ data: ateliersD }, { data: equipesD }, { data: quartsD }, { data: persD }, { data: motifsD }] = await Promise.all([
+  const [{ data: ateliersD }, { data: equipesD }, { data: quartsD, error: quartsErr }, { data: persD }, { data: motifsD }] = await Promise.all([
     supabase.from("atelier").select("id, nom").eq("actif", true).order("nom").returns<Atelier[]>(),
     supabase.from("equipe").select("id, nom, couleur, quart_fixe").eq("actif", true).order("nom").returns<Equipe[]>(),
-    supabase.from("quart").select("code, libelle, ordre, creneau").order("ordre").returns<Quart[]>(),
+    // Migration 0068 : la colonne `couleur` peut ne pas encore exister — repli
+    // silencieux plus bas (relecture sans `couleur`) pour ne pas planter la page.
+    supabase.from("quart").select("code, libelle, ordre, creneau, couleur").order("ordre").returns<Quart[]>(),
     supabase.from("personne").select("id, nom, prenom, equipe_id, atelier_id, type_contrat").in("statut", ["ACTIF", "A_VENIR"]).order("nom").returns<Personne[]>(),
     supabase.from("motif_absence").select("id, code_court, libelle, couleur").eq("actif", true).order("libelle").returns<Motif[]>(),
   ]);
 
   const ateliers = ateliersD ?? [];
   const equipes = equipesD ?? [];
-  const quarts = quartsD ?? [];
+  // Repli si migration 0068 (colonne `couleur`) non appliquée : on relit sans.
+  let quarts: Quart[] = quartsD ?? [];
+  if (quartsErr && (quartsErr.code === "42703" || quartsErr.code === "PGRST204")) {
+    const { data: q2 } = await supabase.from("quart").select("code, libelle, ordre, creneau").order("ordre").returns<Omit<Quart, "couleur">[]>();
+    quarts = (q2 ?? []).map((q) => ({ ...q, couleur: null }));
+  }
   const quartCodes = quarts.map((q) => q.code);
   // Cycle de vie (0049 + 0050) : on masque du placement les personnes qui ne
   // sont pas effectivement au travail le jour choisi — hors fenetre d'activite
@@ -377,6 +385,7 @@ export default async function PlacementPage({
         winStart={winStart}
         winEnd={winEnd}
         conducteurIds={conducteurIds}
+        quartBandeau={<QuartBandeau quart={quart} quarts={quarts} />}
       />
     </div>
   );
