@@ -19,6 +19,7 @@ import AtelierFilter from "./AtelierFilter";
 import QuartSelector from "./QuartSelector";
 import ConducteurToggle from "./ConducteurToggle";
 import { TvIcon } from "@/components/icons";
+import QuartBandeau from "./QuartBandeau";
 import PlanningGrid from "./PlanningGrid";
 import { getRotationRefsC } from "@/lib/refdata";
 import { rotationForWeek } from "@/lib/rotation";
@@ -38,7 +39,7 @@ type PosteRow = {
 };
 type LigneRow = { id: string; nom: string; ordre_affichage: number; atelier: { id: string; nom: string } | null; poste: PosteRow[] };
 type Equipe = { id: string; nom: string; couleur: string; quart_fixe: string | null };
-type Quart = { code: string; libelle: string; ordre: number; creneau: string | null };
+type Quart = { code: string; libelle: string; ordre: number; creneau: string | null; couleur?: string | null };
 type Personne = {
   id: string;
   nom: string;
@@ -104,7 +105,7 @@ export default async function PlanningPage({
     { data: equipesD },
     { data: lignesD },
     { data: motifsD },
-    { data: quartsD },
+    { data: quartsD, error: quartsErr },
     { data: allActiveD },
     { data: chefData },
     { data: pqOffD },
@@ -122,7 +123,9 @@ export default async function PlanningPage({
       .eq("actif", true)
       .order("libelle")
       .returns<Motif[]>(),
-    supabase.from("quart").select("code, libelle, ordre, creneau").order("ordre").returns<Quart[]>(),
+    // Migration 0068 : la colonne `couleur` peut ne pas encore exister — repli
+    // silencieux plus bas (relecture sans `couleur`) pour ne pas planter la page.
+    supabase.from("quart").select("code, libelle, ordre, creneau, couleur").order("ordre").returns<Quart[]>(),
     supabase.from("personne").select("id, nom, prenom, equipe_id, type_contrat").in("statut", ["ACTIF", "A_VENIR"]).order("nom").returns<Personne[]>(),
     canEditPlanningFull
       ? Promise.resolve({ data: [] as { equipe_id: string }[] })
@@ -130,7 +133,12 @@ export default async function PlanningPage({
     supabase.from("poste_quart").select("poste_id, quart_code").eq("actif", false).returns<{ poste_id: string; quart_code: string }[]>(),
   ]);
   const motifs = motifsD ?? [];
-  const quarts = quartsD ?? [];
+  // Repli si migration 0068 (colonne `couleur`) non appliquée : on relit sans.
+  let quarts: Quart[] = quartsD ?? [];
+  if (quartsErr && (quartsErr.code === "42703" || quartsErr.code === "PGRST204")) {
+    const { data: q2 } = await supabase.from("quart").select("code, libelle, ordre, creneau").order("ordre").returns<Omit<Quart, "couleur">[]>();
+    quarts = (q2 ?? []).map((q) => ({ ...q, couleur: null }));
+  }
   const quartCodes = quarts.map((q) => q.code);
 
   // Rotation calculee (reference datee) : { equipe -> quart }. `rotWeek` pour la
@@ -732,62 +740,10 @@ export default async function PlanningPage({
               cond={filtreConducteurs}
             />
           </div>
-          {/* Partie droite : boutons icône (Horaires / Absences spécifiques), une
-              par rangée .filterrow -> alignés sur Quart / Atelier. Le bouton de
-              remplissage a été déplacé dans l'entête de chaque semaine (grille).
-              Libellé au survol via title. */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            {/* Rangée 1 : raccourci vers l'affichage TV de l'atelier sélectionné
-                (visible seulement si un atelier est filtré), puis Horaires
-                spécifiques. Le raccourci TV ouvre `/affichage/atelier/<id>`
-                dans un nouvel onglet, pour ne pas quitter le planning. */}
-            <div className="filterrow" style={{ justifyContent: "flex-end", gap: 6 }}>
-              {atelier && (
-                <Link
-                  href={`/affichage/atelier/${atelier}`}
-                  target="_blank"
-                  className="navlink"
-                  title={`Affichage TV — ${ateliersMap.get(atelier) ?? "service"}`}
-                  aria-label="Affichage TV du service"
-                  style={{ width: 30, height: 30, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", color: "#1d4ed8", border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}
-                >
-                  <TvIcon size={20} />
-                </Link>
-              )}
-              <Link href="/horaires-specifiques" className="navlink" title="Horaires spécifiques" aria-label="Horaires spécifiques" style={{ width: 30, height: 30, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}>
-                🕐
-              </Link>
-            </div>
-            <div className="filterrow" style={{ justifyContent: "flex-end" }}>
-              <Link
-                href={(() => {
-                  // Préserve atelier + recherche à l'aller (retour idem côté page cible).
-                  const p = new URLSearchParams();
-                  if (atelier) p.set("atelier", atelier);
-                  if (searchParam) p.set("search", searchParam);
-                  const qs = p.toString();
-                  return qs ? `/absences-specifiques?${qs}` : "/absences-specifiques";
-                })()}
-                className="navlink"
-                title="Absences spécifiques"
-                aria-label="Absences spécifiques"
-                style={{ width: 30, height: 30, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}
-              >
-                🤒
-              </Link>
-            </div>
-            {/* Bascule « Conducteurs » : n'affiche que les personnes compétentes
-                sur au moins un poste de catégorie conducteur (intersection avec
-                les autres filtres ; la recherche par nom passe outre). */}
-            <ConducteurToggle
-              actif={filtreConducteurs}
-              semaine={centerIso}
-              quart={quart}
-              atelier={atelier}
-              equipe={spEquipe}
-              search={searchParam}
-            />
-          </div>
+          {/* La colonne d'icônes à droite du bandeau a été retirée le 2026-09-10 :
+              ces 4 boutons (TV, Horaires, Absences, Conducteurs) sont désormais
+              rendus en HORIZONTAL, à droite de la barre de recherche, via la
+              prop `actions` de <PlanningGrid> (cf. plus bas). */}
         </div>
         </div>
 
@@ -825,6 +781,49 @@ export default async function PlanningPage({
           horaireStd={horaireStd}
           weekNav={<WeekNav base="/planning" semaine={centerIso} extra={extra} />}
           initialSearch={searchParam}
+          actions={
+            <>
+              {atelier && (
+                <Link
+                  href={`/affichage/atelier/${atelier}`}
+                  target="_blank"
+                  className="navlink"
+                  title={`Affichage TV — ${ateliersMap.get(atelier) ?? "service"}`}
+                  aria-label="Affichage TV du service"
+                  style={{ width: 30, height: 30, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", color: "#1d4ed8", border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}
+                >
+                  <TvIcon size={20} />
+                </Link>
+              )}
+              <Link href="/horaires-specifiques" className="navlink" title="Horaires spécifiques" aria-label="Horaires spécifiques" style={{ width: 30, height: 30, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}>
+                🕐
+              </Link>
+              <Link
+                href={(() => {
+                  const p = new URLSearchParams();
+                  if (atelier) p.set("atelier", atelier);
+                  if (searchParam) p.set("search", searchParam);
+                  const qs = p.toString();
+                  return qs ? `/absences-specifiques?${qs}` : "/absences-specifiques";
+                })()}
+                className="navlink"
+                title="Absences spécifiques"
+                aria-label="Absences spécifiques"
+                style={{ width: 30, height: 30, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}
+              >
+                🤒
+              </Link>
+              <ConducteurToggle
+                actif={filtreConducteurs}
+                semaine={centerIso}
+                quart={quart}
+                atelier={atelier}
+                equipe={spEquipe}
+                search={searchParam}
+              />
+            </>
+          }
+          quartBandeau={<QuartBandeau quart={quart} quarts={quarts} />}
         />
         </div>
       </div>

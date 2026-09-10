@@ -38,8 +38,10 @@ export default function ConducteurToggle({
     start(() => router.push(qs ? `/planning?${qs}` : "/planning"));
   }
 
+  // 2026-09-10 : le bouton est désormais rendu en ligne (à droite de la barre
+  // de recherche), donc plus dans une `.filterrow`. On garde juste le bouton
+  // pour composition libre par le parent.
   return (
-    <div className="filterrow" style={{ opacity: pending ? 0.5 : 1, transition: "opacity .1s", justifyContent: "flex-end" }}>
       <button
         type="button"
         onClick={go}
@@ -47,6 +49,8 @@ export default function ConducteurToggle({
         aria-pressed={actif}
         title={actif ? "Filtre Conducteurs actif — cliquer pour tout afficher" : "N'afficher que les personnes compétentes sur au moins un poste conducteur"}
         style={{
+          opacity: pending ? 0.5 : 1,
+          transition: "opacity .1s",
           // Même gabarit que les trois boutons icône du dessus (🕐 🤒 🖨) :
           // 30×30, bordure grise, radius 8. Actif = fond bleu, icône blanche
           // (héritée via currentColor). Icône seule pour ne pas déborder la
@@ -67,6 +71,5 @@ export default function ConducteurToggle({
       >
         <OperateurIcon size={20} />
       </button>
-    </div>
   );
 }

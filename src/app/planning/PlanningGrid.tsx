@@ -67,6 +67,8 @@ export default function PlanningGrid({
   formationMotifId = null,
   weekNav = null,
   initialSearch,
+  actions = null,
+  quartBandeau = null,
 }: {
   days: Jour[];
   weekBlocks?: WeekBlock[];
@@ -110,6 +112,12 @@ export default function PlanningGrid({
   weekNav?: React.ReactNode;
   /** Recherche initiale (portee par l'URL, pour survivre a la navigation). */
   initialSearch?: string;
+  /** Boutons d'action rendus à droite de la barre de recherche (2026-09-10) :
+   *  raccourci TV, Horaires spécifiques, Absences spécifiques, Conducteurs. */
+  actions?: React.ReactNode;
+  /** Bandeau plein-largeur du quart courant, glissé sous la ligne de recherche
+   *  pour rappeler visuellement au manager quel quart il édite. */
+  quartBandeau?: React.ReactNode;
 }) {
   const [vals, setVals] = useState<Record<string, string>>(initial);
   const [saving, setSaving] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -619,8 +627,13 @@ export default function PlanningGrid({
 
   return (
     <>
-      {/* Recherche par nom (entre les filtres et la grille) */}
-      <div style={{ margin: "2px 0 6px", display: "flex", justifyContent: "center" }}>
+      {/* Ligne « recherche + actions » (entre les filtres et la grille).
+          2026-09-10 : la recherche est CENTRÉE sur la largeur utile ; les 4
+          boutons (TV, Horaires, Absences, Conducteurs) sont posés en HORIZONTAL
+          à sa DROITE, sortis de la colonne du bandeau. `position: relative` +
+          actions en position absolue à droite pour que la recherche reste
+          centrée quel que soit le nombre de boutons. */}
+      <div style={{ margin: "2px 0 6px", position: "relative", display: "flex", justifyContent: "center", alignItems: "center", minHeight: 34 }}>
         <span style={{ position: "relative", display: "inline-block", width: "100%", maxWidth: 320 }}>
           <input
             value={search}
@@ -632,7 +645,17 @@ export default function PlanningGrid({
             <button type="button" onClick={() => setSearch("")} title="Effacer" style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", width: "auto", margin: 0, padding: 0, border: "none", background: "transparent", cursor: "pointer", color: "var(--muted)", fontSize: 13 }}>✕</button>
           )}
         </span>
+        {actions && (
+          <div style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", gap: 6 }}>
+            {actions}
+          </div>
+        )}
       </div>
+
+      {/* Bandeau plein-largeur du quart courant : rappel visuel pour éviter
+          les affectations au mauvais quart. Rendu SOUS la ligne recherche+actions,
+          au-dessus de la grille. */}
+      {quartBandeau}
 
       {/* Tableau 1 : en-tetes (dates) + bilan/alertes retractable (fixe) */}
       <div className="card" style={{ overflowX: "hidden", overflowY: "auto", scrollbarGutter: "stable", position: "relative", padding: "6px 12px" }}>

@@ -5,6 +5,7 @@ import PageTitle from "@/components/PageTitle";
 import ReportActions from "@/app/bilans/ReportActions";
 import Bars from "@/app/bilans/Bars";
 import ReportAtelierFilter from "@/app/bilans/ReportAtelierFilter";
+import ReportEquipeFilter from "@/app/bilans/ReportEquipeFilter";
 import { requireRapportBilan } from "@/lib/permissions";
 import { chargerPolyvalenceCompetences, H_DEPART, H_HAB, type Verdict } from "@/lib/polyvalence-competences-data";
 
@@ -28,15 +29,17 @@ const NAV = [
   { id: "action", n: "4", t: "Qui former" },
 ];
 
-export default async function PolyvalenceReport({ searchParams }: { searchParams: Promise<{ atelier?: string }> }) {
+export default async function PolyvalenceReport({ searchParams }: { searchParams: Promise<{ atelier?: string; equipe?: string }> }) {
   const { profile } = await requireRapportBilan("polyvalence");
   const sp = await searchParams;
   const atelier = sp.atelier ?? "";
+  const equipe = sp.equipe ?? "";
 
   const supabase = await getServerClient();
-  const [{ data: atD }, r] = await Promise.all([
+  const [{ data: atD }, { data: eqD }, r] = await Promise.all([
     supabase.from("atelier").select("id, nom").eq("actif", true).order("nom").returns<{ id: string; nom: string }[]>(),
-    chargerPolyvalenceCompetences(supabase, { atelier }),
+    supabase.from("equipe").select("id, nom, couleur").eq("actif", true).order("nom").returns<{ id: string; nom: string; couleur: string | null }[]>(),
+    chargerPolyvalenceCompetences(supabase, { atelier, equipe }),
   ]);
 
   const polyMax = Math.max(1, ...r.polyParService.map((s) => s.moyenne));
@@ -59,6 +62,7 @@ export default async function PolyvalenceReport({ searchParams }: { searchParams
         </div>
 
         <ReportAtelierFilter ateliers={atD ?? []} atelier={atelier} />
+        <ReportEquipeFilter equipes={eqD ?? []} equipe={equipe} />
 
         {/* Sous-navigation par ancres */}
         <nav className="noprint" style={{ display: "flex", gap: 4, flexWrap: "wrap", margin: "6px 0 16px", paddingBottom: 10, borderBottom: "1px solid var(--border)" }}>

@@ -127,6 +127,7 @@ export async function createQuart(fd: FormData) {
   const fin = s(fd, "fin") || null;
   const rotation = fd.get("rotation") === "on";
   const creneau = normaliserCreneau(s(fd, "creneau"));
+  const couleur = normaliserCouleur(s(fd, "couleur"));
 
   const { data: last } = await supabase
     .from("quart")
@@ -137,10 +138,22 @@ export async function createQuart(fd: FormData) {
     .maybeSingle<{ ordre: number }>();
   const ordre = (last?.ordre ?? 0) + 1;
 
-  const { error } = await supabase
-    .from("quart")
-    .insert({ code, libelle, ordre, debut, fin, rotation, creneau, site_id: siteId });
+  // On tente d'écrire `couleur` seulement si fournie ; sur une base sans la
+  // migration 0068, Postgres renvoie 42703 et on retente sans (best-effort).
+  const payload: Record<string, unknown> = { code, libelle, ordre, debut, fin, rotation, creneau, site_id: siteId };
+  if (couleur) payload.couleur = couleur;
+  const { error } = await supabase.from("quart").insert(payload);
+  if (error && (error.code === "42703" || error.code === "PGRST204") && couleur) {
+    const { error: e2 } = await supabase.from("quart").insert({ code, libelle, ordre, debut, fin, rotation, creneau, site_id: siteId });
+    done(e2);
+    return;
+  }
   done(error);
+}
+
+function normaliserCouleur(v: string | null | undefined): string | null {
+  if (!v) return null;
+  return /^#[0-9a-fA-F]{6}$/.test(v.trim()) ? v.trim().toLowerCase() : null;
 }
 
 // Créneau borné à la demi-journée matin/aprem (ou null). Sert le calcul du
@@ -163,12 +176,22 @@ export async function saveQuartHoraires(fd: FormData) {
     const fin = s(fd, `fin_${code}`) || null;
     const rotation = fd.get(`rot_${code}`) === "on";
     const creneau = normaliserCreneau(s(fd, `creneau_${code}`));
+    const couleur = normaliserCouleur(s(fd, `couleur_${code}`));
     if (libelle) {
-      const { error } = await supabase
+      const payload: Record<string, unknown> = { libelle, debut, fin, rotation, creneau, couleur };
+      let { error } = await supabase
         .from("quart")
-        .update({ libelle, debut, fin, rotation, creneau })
+        .update(payload)
         .eq("code", code)
         .eq("site_id", siteId);
+      if (error && (error.code === "42703" || error.code === "PGRST204")) {
+        // Migration 0068 non appliquée : retente sans la colonne `couleur`.
+        ({ error } = await supabase
+          .from("quart")
+          .update({ libelle, debut, fin, rotation, creneau })
+          .eq("code", code)
+          .eq("site_id", siteId));
+      }
       if (error) done(error);
     }
   }

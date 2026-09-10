@@ -118,6 +118,9 @@ export default function ReferentielEditor({
   // Poste dont on edite les habilitations requises (modale).
   const [reqFor, setReqFor] = useState<{ id: string; nom: string } | null>(null);
   const [save, setSave] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  // Message d'erreur circonstancié (409 unicité, 400, etc.) : affiché à côté de
+  // l'indicateur global. Réinitialisé au succès suivant.
+  const [saveMsg, setSaveMsg] = useState<string>("");
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -129,16 +132,22 @@ export default function ReferentielEditor({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ op, ...payload }),
       });
-      if (!res.ok) throw new Error();
-      const j = await res.json().catch(() => ({}));
+      const j = await res.json().catch(() => ({} as { error?: string; ok?: boolean; row?: unknown }));
+      if (!res.ok) {
+        setSaveMsg(typeof j.error === "string" ? j.error : "Échec");
+        throw new Error();
+      }
       setSave("saved");
+      setSaveMsg("");
       return j as { ok?: boolean; row?: unknown };
     } catch {
       setSave("error");
       return null;
     } finally {
       if (savedTimer.current) clearTimeout(savedTimer.current);
-      savedTimer.current = setTimeout(() => setSave("idle"), 1500);
+      // On garde un peu plus longtemps un message d'erreur : sinon le message
+      // d'unicité disparaît avant que l'utilisateur ait pu le lire.
+      savedTimer.current = setTimeout(() => setSave("idle"), 4000);
     }
   }
   function schedule(key: string, fn: () => void, delay: number) {
@@ -254,7 +263,13 @@ export default function ReferentielEditor({
   }
 
   const saveLabel =
-    save === "saving" ? "Enregistrement…" : save === "saved" ? "Enregistré ✓" : save === "error" ? "Échec d'enregistrement" : "";
+    save === "saving"
+      ? "Enregistrement…"
+      : save === "saved"
+        ? "Enregistré ✓"
+        : save === "error"
+          ? saveMsg || "Échec d'enregistrement"
+          : "";
   const saveColor = save === "error" ? "var(--danger)" : save === "saved" ? "var(--ok)" : "var(--muted)";
 
   const num = (v: number) => (Number.isFinite(v) ? v : 0);

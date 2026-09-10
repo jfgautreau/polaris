@@ -45,6 +45,33 @@ function posteValue(key: string, value: unknown) {
   }
 }
 
+// Unicité d'un « code » de nom sur le site (insensible à la casse), parmi les
+// lignes actives. Un champ vide/null n'est jamais compté comme doublon — les
+// entités créées vides (nom à saisir en inline) doivent pouvoir coexister.
+// Renvoie `null` si tout va bien, sinon un message d'erreur prêt à retourner.
+async function verifierUniciteNom(
+  supabase: ReturnType<typeof getAdminClient>,
+  table: "ligne" | "poste",
+  champ: "nom" | "nom_court",
+  valeur: string | null,
+  site_id: string,
+  idException?: string | null,
+): Promise<string | null> {
+  if (!valeur || !valeur.trim()) return null;
+  const q = supabase
+    .from(table)
+    .select("id, nom, nom_court")
+    .eq("site_id", site_id)
+    .eq("actif", true)
+    .ilike(champ, valeur.trim());
+  const { data, error } = await q.returns<{ id: string; nom: string | null; nom_court?: string | null }[]>();
+  if (error) return null; // en cas d'échec de lecture, on laisse passer plutôt que de bloquer une saisie légitime
+  const doublon = (data ?? []).find((r) => r.id !== idException);
+  if (!doublon) return null;
+  const libChamp = table === "ligne" ? "nom de ligne" : champ === "nom" ? "nom de poste" : "nom court";
+  return `Ce ${libChamp} (« ${valeur.trim()} ») est déjà utilisé sur ce site.`;
+}
+
 export async function POST(req: NextRequest) {
   const profile = await getCurrentProfile();
   if (!profile) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
@@ -88,6 +115,9 @@ export async function POST(req: NextRequest) {
         const nom = s(body.nom);
         const atelier_id = s(body.atelier_id);
         if (!atelier_id) return NextResponse.json({ error: "Atelier requis" }, { status: 400 });
+        // Bloque une ligne créée directement avec un nom en doublon.
+        const uErr = await verifierUniciteNom(supabase, "ligne", "nom", nom, site_id);
+        if (uErr) return NextResponse.json({ error: uErr }, { status: 409 });
         const { data, error } = await supabase
           .from("ligne")
           .insert({ nom, atelier_id, site_id })
@@ -102,6 +132,8 @@ export async function POST(req: NextRequest) {
         // nom facultatif à la création : la ligne apparaît vide (placeholder gris),
         // l'utilisateur saisit le nom ensuite.
         if (!ligne_id) return NextResponse.json({ error: "Champs requis" }, { status: 400 });
+        const uErr = await verifierUniciteNom(supabase, "poste", "nom", nom, site_id);
+        if (uErr) return NextResponse.json({ error: uErr }, { status: 409 });
         const { data, error } = await supabase
           .from("poste")
           .insert({ ligne_id, nom, site_id })
@@ -120,6 +152,12 @@ export async function POST(req: NextRequest) {
         if (body.nom !== undefined) patch.nom = s(body.nom);
         if (body.ordre_affichage !== undefined) patch.ordre_affichage = Math.max(0, Math.floor(Number(body.ordre_affichage) || 0));
         if (Object.keys(patch).length === 0) return NextResponse.json({ error: "Rien à modifier" }, { status: 400 });
+        // Unicité du nom : bloque un renommage qui produirait un doublon parmi
+        // les autres lignes actives du site (l'id courant est exclu).
+        if (typeof patch.nom === "string") {
+          const uErr = await verifierUniciteNom(supabase, "ligne", "nom", patch.nom as string, site_id, s(body.id));
+          if (uErr) return NextResponse.json({ error: uErr }, { status: 409 });
+        }
         const { error } = await supabase.from("ligne").update(patch).eq("id", s(body.id)).eq("site_id", site_id);
         if (error) throw error;
         return NextResponse.json({ ok: true });
@@ -132,6 +170,15 @@ export async function POST(req: NextRequest) {
           if (v !== undefined) patch[k] = v;
         }
         if (Object.keys(patch).length === 0) return NextResponse.json({ error: "Rien à modifier" }, { status: 400 });
+        // Unicité nom + nom_court parmi les autres postes actifs du site.
+        if (typeof patch.nom === "string") {
+          const uErr = await verifierUniciteNom(supabase, "poste", "nom", patch.nom as string, site_id, s(body.id));
+          if (uErr) return NextResponse.json({ error: uErr }, { status: 409 });
+        }
+        if (typeof patch.nom_court === "string") {
+          const uErr = await verifierUniciteNom(supabase, "poste", "nom_court", patch.nom_court as string, site_id, s(body.id));
+          if (uErr) return NextResponse.json({ error: uErr }, { status: 409 });
+        }
         const { error } = await supabase.from("poste").update(patch).eq("id", s(body.id)).eq("site_id", site_id);
         if (error) throw error;
         return NextResponse.json({ ok: true });

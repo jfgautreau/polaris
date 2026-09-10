@@ -25,7 +25,7 @@ import BandeauErreur from "@/components/BandeauErreur";
 type Chef = { id: string; app_user_id: string };
 type Equipe = { id: string; nom: string; actif: boolean; couleur: string; quart_fixe: string | null; equipe_chef: Chef[] };
 type AppUser = { user_id: string; name: string; email: string };
-type Quart = { code: string; libelle: string; debut: string | null; fin: string | null; rotation: boolean; creneau: string | null };
+type Quart = { code: string; libelle: string; debut: string | null; fin: string | null; rotation: boolean; creneau: string | null; couleur: string | null };
 
 const NB_APERCU = 8;
 
@@ -48,7 +48,7 @@ export default async function EquipesPage({
   const canRota = canWrite(perms, "ordonnancement");
 
   const supabase = await getServerClient();
-  const [{ data: equipesData }, { data: usersData }, { data: quartsData }, { data: refsD }] = await Promise.all([
+  const [{ data: equipesData }, { data: usersData }, { data: quartsData, error: quartsErr }, { data: refsD }] = await Promise.all([
     supabase
       .from("equipe")
       .select("id, nom, actif, couleur, quart_fixe, equipe_chef(id, app_user_id)")
@@ -59,10 +59,15 @@ export default async function EquipesPage({
       .select("user_id, name, email")
       .order("name")
       .returns<AppUser[]>(),
-    supabase.from("quart").select("code, libelle, debut, fin, rotation, creneau").order("ordre").returns<Quart[]>(),
+    // Migration 0068 : `couleur` peut ne pas exister — repli plus bas.
+    supabase.from("quart").select("code, libelle, debut, fin, rotation, creneau, couleur").order("ordre").returns<Quart[]>(),
     supabase.from("rotation_reference").select("semaine, equipe_id, quart_code").order("semaine").returns<RotationRef[]>(),
   ]);
-  const quarts = quartsData ?? [];
+  let quarts: Quart[] = quartsData ?? [];
+  if (quartsErr && (quartsErr.code === "42703" || quartsErr.code === "PGRST204")) {
+    const { data: q2 } = await supabase.from("quart").select("code, libelle, debut, fin, rotation, creneau").order("ordre").returns<Omit<Quart, "couleur">[]>();
+    quarts = (q2 ?? []).map((q) => ({ ...q, couleur: null }));
+  }
   // Quarts composant le cycle de rotation : seuls ceux-ci sont proposés dans le
   // formulaire de référence (le « quart fixe » d'une équipe, lui, peut être
   // n'importe quel quart).
@@ -237,6 +242,20 @@ export default async function EquipesPage({
                     <option value="aprem">Après-midi</option>
                   </select>
                 </div>
+                {/* Couleur du bandeau de rappel dans le Planning (0068). Palette
+                    libre en hex #rrggbb — un carré cliquable. La couleur sert au
+                    manager à identifier le quart édité, pas à un algorithme. */}
+                <div className="field">
+                  <span>Couleur (bandeau)</span>
+                  <input
+                    name="couleur"
+                    type="text"
+                    placeholder="#fde68a"
+                    pattern="^#[0-9a-fA-F]{6}$"
+                    title="Couleur hexadécimale, ex. #fde68a"
+                    style={{ width: 110, fontFamily: "monospace" }}
+                  />
+                </div>
                 <button type="submit" style={{ width: "auto", padding: "9px 20px" }}>Ajouter le quart</button>
               </form>
 
@@ -270,6 +289,25 @@ export default async function EquipesPage({
                         <option value="matin">Matin</option>
                         <option value="aprem">Après-midi</option>
                       </select>
+                    </div>
+                    <div className="field">
+                      <span>Couleur (bandeau)</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <input
+                          name={`couleur_${q.code}`}
+                          type="text"
+                          defaultValue={q.couleur ?? ""}
+                          placeholder="#fde68a"
+                          pattern="^#[0-9a-fA-F]{6}$"
+                          title="Couleur hexadécimale, ex. #fde68a"
+                          style={{ width: 100, fontFamily: "monospace" }}
+                        />
+                        <span
+                          aria-hidden
+                          title="Aperçu"
+                          style={{ display: "inline-block", width: 22, height: 22, borderRadius: 4, background: q.couleur ?? "#f1f5f9", border: "1px solid var(--border)" }}
+                        />
+                      </div>
                     </div>
                   </div>
                 ))}

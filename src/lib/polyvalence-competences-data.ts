@@ -29,7 +29,7 @@ import { deriverArriveeDepart, type Periode } from "@/lib/personne-statut";
 export const H_DEPART = 180; // jours : horizon de vigilance sur les départs
 export const H_HAB = 90; // jours : horizon de vigilance sur les habilitations
 
-type Named = { id: string; nom: string; prenom: string; type_contrat: string; atelier_id: string | null };
+type Named = { id: string; nom: string; prenom: string; type_contrat: string; atelier_id: string | null; equipe_id: string | null };
 type LigneRow = { id: string; nom: string; atelier_id: string | null; poste: { id: string; nom: string; actif: boolean; categorie: string | null; remplacable: boolean; niveau_min_requis: number }[] };
 type Mat = { personne_id: string; poste_id: string; niveau_actuel: number; niveau_cible: number };
 type Pcr = { poste_id: string; competence_id: string; competence: { nom: string; duree_validite_mois: number | null } | null };
@@ -91,16 +91,17 @@ const fmt = (d: string | null) => (d ? d.split("-").reverse().join("/") : "—")
 
 export async function chargerPolyvalenceCompetences(
   supabase: SupabaseClient,
-  opts: { atelier?: string }
+  opts: { atelier?: string; equipe?: string }
 ): Promise<PolyvalenceCompetencesResult> {
   const atelier = opts.atelier ?? "";
+  const equipe = opts.equipe ?? "";
   const todayIso = isoDate(new Date());
   const limDepart = isoDate(addDays(new Date(), H_DEPART));
   const limHab = isoDate(addDays(new Date(), H_HAB));
   const in30 = isoDate(addDays(new Date(), 30));
 
   const [{ data: persD }, { data: lignesD }, matD, { data: pcrD }, { data: compD }, { data: atD }, contratD] = await Promise.all([
-    supabase.from("personne").select("id, nom, prenom, type_contrat, atelier_id").eq("statut", "ACTIF").order("nom").returns<Named[]>(),
+    supabase.from("personne").select("id, nom, prenom, type_contrat, atelier_id, equipe_id").eq("statut", "ACTIF").order("nom").returns<Named[]>(),
     supabase.from("ligne").select("id, nom, atelier_id, poste(id, nom, actif, categorie, remplacable, niveau_min_requis)").eq("actif", true).order("nom").returns<LigneRow[]>(),
     fetchAll<Mat>(() => supabase.from("matrice").select("personne_id, poste_id, niveau_actuel, niveau_cible").order("id").returns<Mat[]>()),
     supabase.from("poste_competence_requise").select("poste_id, competence_id, competence:competence_id(nom, duree_validite_mois)").returns<Pcr[]>(),
@@ -112,6 +113,12 @@ export async function chargerPolyvalenceCompetences(
   const active = persD ?? [];
   const activeIds = new Set(active.map((p) => p.id));
   const persById = new Map(active.map((p) => [p.id, p]));
+  // Filtre Équipe : sous-ensemble de personnes visées par les blocs qui listent
+  // des PERSONNES (polyvalence, personnes à développer, personnes clés,
+  // habilitations, plan de formation, titulaires PTNR). L'analyse structurelle
+  // des postes (relèves, verdicts) reste GLOBALE — un poste avec 3 relèves ne
+  // devient pas fragile parce qu'une seule est de l'équipe filtrée.
+  const dansEquipe = (pid: string) => !equipe || persById.get(pid)?.equipe_id === equipe;
   const persNom = (id: string) => { const p = persById.get(id); return p ? `${p.nom} ${p.prenom ?? ""}`.trim() : "?"; };
   const atelierNom = new Map((atD ?? []).map((a) => [a.id, a.nom]));
 
@@ -198,8 +205,14 @@ export async function chargerPolyvalenceCompetences(
   const nbSansReleveSure = analyseRempl.filter((a) => a.verdict === "critique").length;
   const nbFragiles = analyseRempl.filter((a) => a.verdict === "fragile").length;
 
+  // PTNR : les titulaires listés sont ceux QUI PEUVENT tenir le poste ; sous
+  // filtre équipe on ne montre que ceux de l'équipe. `vacant`/`aRisque` se
+  // recalculent sur la liste filtrée pour rester cohérents.
   const ptnr = analysePtnr
-    .map((a) => ({ ...a, vacant: a.releve.length === 0, aRisque: a.releve.length === 0 || a.releve.some((m) => m.risque) }))
+    .map((a) => {
+      const releve = a.releve.filter((m) => dansEquipe(m.id));
+      return { ...a, releve, vacant: releve.length === 0, aRisque: releve.length === 0 || releve.some((m) => m.risque) };
+    })
     .sort((a, b) => Number(b.aRisque) - Number(a.aRisque) || a.nom.localeCompare(b.nom));
 
   // ---- Bloc 1 : polyvalence interne par service + personnes à développer ----
@@ -212,9 +225,12 @@ export async function chargerPolyvalenceCompetences(
     for (const p of l.poste ?? []) if (p.actif) (postesParService.get(sid) ?? postesParService.set(sid, []).get(sid)!).push({ id: p.id, min: p.niveau_min_requis ?? 0 });
   }
   // Polyvalence d'une personne = nb de postes de SON service tenables aujourd'hui.
+  // Filtre équipe : la population EN COMPTE est bornée à l'équipe sélectionnée
+  // (chaque personne hors équipe est simplement absente du calcul).
   const polyDe = new Map<string, number>();
   for (const p of active) {
     if (!p.atelier_id) continue; // sans service d'affectation : hors polyvalence interne
+    if (!dansEquipe(p.id)) continue;
     const ps = postesParService.get(p.atelier_id) ?? [];
     let n = 0;
     for (const q of ps) if (peutTenir(p.id, q.id, q.min)) n++;
@@ -222,7 +238,7 @@ export async function chargerPolyvalenceCompetences(
   }
   const polyParService: PolyService[] = (atD ?? [])
     .map((a) => {
-      const membres = active.filter((p) => p.atelier_id === a.id);
+      const membres = active.filter((p) => p.atelier_id === a.id && dansEquipe(p.id));
       const avec = membres.filter((p) => polyDe.has(p.id));
       const moyenne = avec.length ? avec.reduce((s, p) => s + (polyDe.get(p.id) ?? 0), 0) / avec.length : 0;
       return { atelierId: a.id, nom: a.nom, moyenne, nbPersonnes: avec.length };
@@ -241,6 +257,7 @@ export async function chargerPolyvalenceCompetences(
   const soloDe = new Map<string, string[]>();
   for (const a of analyse) if (a.releve.length === 1) (soloDe.get(a.releve[0].id) ?? soloDe.set(a.releve[0].id, []).get(a.releve[0].id)!).push(a.nom);
   const clesARisque: CleARisque[] = [...soloDe.entries()]
+    .filter(([id]) => dansEquipe(id))
     .map(([id, postesSolo]) => ({ id, dep: departDe.get(id), postes: postesSolo }))
     .filter((x) => x.dep && x.dep.date <= limDepart)
     .map((x) => ({ id: x.id, nom: persNom(x.id), contrat: persById.get(x.id)?.type_contrat ?? "", date: x.dep!.date, retraite: estRetraite(x.dep!.motif), postes: x.postes }))
@@ -251,6 +268,7 @@ export async function chargerPolyvalenceCompetences(
   const echeances: Echeance[] = [];
   const vus = new Set<string>();
   for (const id of activeIds) {
+    if (!dansEquipe(id)) continue;
     for (const cid of compInteret) {
       const key = `${id}:${cid}`;
       const exp = habExp.get(key);
@@ -266,7 +284,7 @@ export async function chargerPolyvalenceCompetences(
   const scopedPosteIds = new Set(postes.map((p) => p.id));
   const posteInfo = new Map(postes.map((p) => [p.id, p]));
   const toutesFormations = matD
-    .filter((r) => activeIds.has(r.personne_id) && scopedPosteIds.has(r.poste_id) && r.niveau_actuel < r.niveau_cible)
+    .filter((r) => activeIds.has(r.personne_id) && dansEquipe(r.personne_id) && scopedPosteIds.has(r.poste_id) && r.niveau_actuel < r.niveau_cible)
     .map((r) => {
       const p = posteInfo.get(r.poste_id)!;
       return { personne: persNom(r.personne_id), poste: p.nom, ligne: p.ligne, atelierNom: p.atelierNom, actuel: r.niveau_actuel, cible: r.niveau_cible, fragilite: verdictDe.get(r.poste_id) ?? "ok" as Verdict };
