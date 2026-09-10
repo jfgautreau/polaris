@@ -345,12 +345,14 @@ export default function PlacementBoard({
   // remplisse la feuille au lieu de se tasser dans le coin superieur gauche.
   const LARGEURS_ESSAI = [700, 820, 940, 1060, 1300, 1600, 1900, 2200];
   // A4 paysage avec marges 8mm (cf. @page globals.css) = ~1061 × 733 px @ 96dpi.
-  // On garde ~4 % de marge de sécurité (1020 × 700) : l'aperçu Chrome/Edge rogne
+  // On garde ~7 % de marge de sécurité (1020 × 680) : l'aperçu Chrome/Edge rogne
   // dès que le rendu déborde d'un pixel, et un `scale()` calé au ras du max fait
-  // sortir la dernière ligne de la zone imprimable. `.printSheet` recadre en
-  // conséquence (cf. placement.module.css).
+  // sortir la dernière ligne de la zone imprimable. La version « simple » (plan
+  // seul, sans la colonne des absents) exigeait une hauteur plus courte que la
+  // version CE au ras des 700 px — on aligne les deux modes sur 680 pour ne pas
+  // avoir à distinguer par mode. `.printSheet` recadre en conséquence.
   const PAGE_L = 1020;
-  const PAGE_H = 700;
+  const PAGE_H = 680;
   // Borne haute de l'agrandissement : au-dela, un plan de deux lignes donne des
   // pavés demesurés pour rien.
   const ECHELLE_MAX = 1.6;
@@ -1046,9 +1048,10 @@ export default function PlacementBoard({
           <strong className={s.printTitre}>{ateliers.find((a) => a.id === atelierId)?.nom ?? "Service"}</strong>
           <span>{quartLib[quart] ?? quart}</span>
           <span>{jourLabel(jour)}</span>
-          <span className={s.printCouv}>
-            Couverture {coverage.cov}/{coverage.req}
-          </span>
+          {/* Mention « Couverture X/Y » retirée du PDF le 2026-09-10 : la
+              couverture globale sature à un chiffre agrégé peu utile sur la
+              feuille imprimée, et les compteurs par poste (X/Y en tête de
+              chaque tuile) portent déjà l'information au bon niveau de détail. */}
         </div>
 
         <div className={s.printBody}>
