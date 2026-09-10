@@ -35,7 +35,7 @@ données, RLS), `tasks/handoff.md` (détail écran par écran), `tasks/lessons.m
    `supabase/migrations/` et **demande à l'utilisateur de l'exécuter** dans le SQL Editor.
    Pour de la *donnée* seulement, un script Node lisant `SUPABASE_SERVICE_ROLE_KEY`
    de `.env.local` est acceptable.
-   Projet Supabase : ref `stcxlsmmnplxpirrnefm`, eu-west-3. **Dernière migration appliquée : `0066`** (socle multi-site : `0043`–`0048` ; cycle de vie : `0049`–`0050` ; `parametre_affichage` multi-site : `0051` ; TP périodes : `0052` ; séparation totale des référentiels par site — `motif_absence`, `type_contrat`, `role_custom`, `role_permission`, `competence`, `competence_niveau_libelle`, `quart` tous en `site_id NOT NULL` : `0053` ; commentaire libre sur `personne_competence` : `0054` ; `app_user`/`audit_log` strictement scopés au site courant, retrait du passe-droit `OR is_super_admin()` : `0055` ; table `site_module` — masquage d'éléments par site depuis `/platform` : `0056` ; colonnes `quart.rotation` (quarts composant le cycle de rotation, explicites) + `quart.creneau` (`matin`/`aprem`/null, demi-journée pilotant le TP — fin du matin/apres_midi codé en dur) : `0057` ; `site_id` sur `tp_periode`, oubliée du lot 0053 alors que le code y écrivait déjà — provoquait « Could not find the 'site_id' column of 'tp_periode' » à l'enregistrement d'un temps partiel : `0058` ; `poste.remplacable` (PTR/PTNR — un PTNR est exclu des rapports de fragilité/relève et isolé dans les Compétences critiques) + `personne.poste_fixe_id` (poste fixe : pré-remplissage du planning via le bouton « Pré-remplir postes fixes » → `/api/placement/prefill`) : `0059` ; `motif_absence.non_planifie` (classification planifié/non planifié des absences, cochée dans `/admin/motifs` — source de vérité du rapport Absentéisme, repli sur l'heuristique de libellé tant que non renseigné) : `0060` ; `site.nb_niveaux` — nombre de niveaux positifs activés par site, 2..4, réglé dans `/admin/competences` ; le 0 blanc et la restriction restent toujours présents ; lecture `getNbNiveauxC()` repli 4 : `0061` ; `site.seuil_competent` — seuil « compétent » paramétrable par site, 1..4 borné à ≤ nb_niveaux, réglé dans `/admin/competences` ; n'affecte QUE les rapports : Cockpit, Anticipation, ligne « Compétences ≥N » de la Matrice (depuis la fusion 2026-09-08, Polyvalence & compétences est passé à la lentille opérationnelle niveau_min + habilitation et n'utilise plus ce seuil) ; distinct de `poste.niveau_min_requis` ; lecture `getSeuilCompetentC()` repli 2 : `0062` ; `competence_niveau_libelle.couleur` — couleur paramétrable par niveau POSITIF, choisie dans `/admin/competences` parmi les 4 teintes historiques, CHECK verrouillant la palette ; niveau 0 toujours blanc/contour ; lecture résiliente `getCouleursNiveauxC()` + `couleursNiveau()`/`COULEUR_NIVEAU_DEFAUT` dans `src/lib/couleurs-niveau.ts` ; `FILL` dans `Pie.tsx` en dérive : `0063` ; `placement.tp` + table `tp_charge` — temps partiel MATÉRIALISÉ (le bouton « TP + postes fixes » du planning pose de vraies lignes `placement.tp`, déplaçables au glisser-déposer, puis pré-remplit les postes fixes) ; `tp_charge(site_id, semaine_lundi)` marque une semaine « chargée » → le calcul virtuel du TP s'éteint pour elle (repli calculé tant que non chargée). Le calcul virtuel s'éteint AUSSI dès qu'une vraie ligne de placement existe pour la case (un vrai TP est donc toujours draggable, marqueur ou pas) : `0064` ; ouverture de `competence_niveau_libelle.couleur` au **nuancier** — le CHECK verrouillé de 0063 (4 teintes) est remplacé par un simple contrôle de format hexadécimal, la liste fermée restant imposée côté application (`NUANCIER`/`HEX_NIVEAUX_AUTORISES` dans `src/lib/couleurs-niveau.ts`) ; migration idempotente qui rattrape aussi le cas « 0063 jamais appliquée » (colonne absente → PostgREST `PGRST204`, désormais capté par le repli d'enregistrement au même titre que `42703`) : `0065` ; `motif_absence.code_gt` (code du logiciel RH rattaché à un motif, colonne « Code GT » dans Param RH) + table `import_absence_personne` (équivalence apprise *matricule fichier RH → personne*) — socle de l'**import des absences RH** depuis Param RH : `0066`). Cf. `tasks/multi-site.md` pour l'état complet du chantier multi-site.
+   Projet Supabase : ref `stcxlsmmnplxpirrnefm`, eu-west-3. **Dernière migration appliquée : `0068`** (socle multi-site : `0043`–`0048` ; cycle de vie : `0049`–`0050` ; `parametre_affichage` multi-site : `0051` ; TP périodes : `0052` ; séparation totale des référentiels par site — `motif_absence`, `type_contrat`, `role_custom`, `role_permission`, `competence`, `competence_niveau_libelle`, `quart` tous en `site_id NOT NULL` : `0053` ; commentaire libre sur `personne_competence` : `0054` ; `app_user`/`audit_log` strictement scopés au site courant, retrait du passe-droit `OR is_super_admin()` : `0055` ; table `site_module` — masquage d'éléments par site depuis `/platform` : `0056` ; colonnes `quart.rotation` (quarts composant le cycle de rotation, explicites) + `quart.creneau` (`matin`/`aprem`/null, demi-journée pilotant le TP — fin du matin/apres_midi codé en dur) : `0057` ; `site_id` sur `tp_periode`, oubliée du lot 0053 alors que le code y écrivait déjà — provoquait « Could not find the 'site_id' column of 'tp_periode' » à l'enregistrement d'un temps partiel : `0058` ; `poste.remplacable` (PTR/PTNR — un PTNR est exclu des rapports de fragilité/relève et isolé dans les Compétences critiques) + `personne.poste_fixe_id` (poste fixe : pré-remplissage du planning via le bouton « Pré-remplir postes fixes » → `/api/placement/prefill`) : `0059` ; `motif_absence.non_planifie` (classification planifié/non planifié des absences, cochée dans `/admin/motifs` — source de vérité du rapport Absentéisme, repli sur l'heuristique de libellé tant que non renseigné) : `0060` ; `site.nb_niveaux` — nombre de niveaux positifs activés par site, 2..4, réglé dans `/admin/competences` ; le 0 blanc et la restriction restent toujours présents ; lecture `getNbNiveauxC()` repli 4 : `0061` ; `site.seuil_competent` — seuil « compétent » paramétrable par site, 1..4 borné à ≤ nb_niveaux, réglé dans `/admin/competences` ; n'affecte QUE les rapports : Cockpit, Anticipation, ligne « Compétences ≥N » de la Matrice (depuis la fusion 2026-09-08, Polyvalence & compétences est passé à la lentille opérationnelle niveau_min + habilitation et n'utilise plus ce seuil) ; distinct de `poste.niveau_min_requis` ; lecture `getSeuilCompetentC()` repli 2 : `0062` ; `competence_niveau_libelle.couleur` — couleur paramétrable par niveau POSITIF, choisie dans `/admin/competences` parmi les 4 teintes historiques, CHECK verrouillant la palette ; niveau 0 toujours blanc/contour ; lecture résiliente `getCouleursNiveauxC()` + `couleursNiveau()`/`COULEUR_NIVEAU_DEFAUT` dans `src/lib/couleurs-niveau.ts` ; `FILL` dans `Pie.tsx` en dérive : `0063` ; `placement.tp` + table `tp_charge` — temps partiel MATÉRIALISÉ (le bouton « TP + postes fixes » du planning pose de vraies lignes `placement.tp`, déplaçables au glisser-déposer, puis pré-remplit les postes fixes) ; `tp_charge(site_id, semaine_lundi)` marque une semaine « chargée » → le calcul virtuel du TP s'éteint pour elle (repli calculé tant que non chargée). Le calcul virtuel s'éteint AUSSI dès qu'une vraie ligne de placement existe pour la case (un vrai TP est donc toujours draggable, marqueur ou pas) : `0064` ; ouverture de `competence_niveau_libelle.couleur` au **nuancier** — le CHECK verrouillé de 0063 (4 teintes) est remplacé par un simple contrôle de format hexadécimal, la liste fermée restant imposée côté application (`NUANCIER`/`HEX_NIVEAUX_AUTORISES` dans `src/lib/couleurs-niveau.ts`) ; migration idempotente qui rattrape aussi le cas « 0063 jamais appliquée » (colonne absente → PostgREST `PGRST204`, désormais capté par le repli d'enregistrement au même titre que `42703`) : `0065` ; `motif_absence.code_gt` (code du logiciel RH rattaché à un motif, colonne « Code GT » dans Param RH) + table `import_absence_personne` (équivalence apprise *matricule fichier RH → personne*) — socle de l'**import des absences RH** depuis Param RH : `0066` ; `parametre_affichage.mode` (`'relatif' | 'absolu'`) + `nb_semaines` (1..6) — **mode d'affichage TV** paramétrable dans Param RH : *relatif* (X jours avant/Y jours après aujourd'hui, historique) OU *absolu* (N semaines calendaires à partir du lundi de la semaine courante — S, S+1…) ; `getFenetreAffichage()` + `joursDeFenetre()` dans `src/lib/parametres.ts` ; lecture/écriture tolèrent une base sans les colonnes (repli sur `jours_avant`/`jours_apres`) : `0067` ; `quart.couleur` (hex `^#[0-9a-f]{6}$`) — **bandeau de rappel du quart** en tête du Planning (`QuartBandeau`, `src/app/planning/QuartBandeau.tsx`) pour éviter aux managers de se tromper de quart ; réglée par site dans `/admin/equipes` « Horaires des quarts » (input hex + aperçu) ; seeds « doux » matin/après-midi/nuit/journée ; en mode AUTO le bandeau devient gris neutre « Tous quarts affichés » — le manager sait qu'il n'est plus sur un quart précis : `0068`). Cf. `tasks/multi-site.md` pour l'état complet du chantier multi-site.
 6. **PowerShell 5.1** : pour un message de commit multi-lignes, here-string `@'…'@`
    (le `'@` final en colonne 0), ou `git commit -F fichier`. Pas de `"` inline.
    ⚠️ **Jamais** de `Get-Content`/`Set-Content`/`Out-File` pour éditer un fichier
@@ -353,7 +353,10 @@ habilitations, référentiel…). Applique-la ici plutôt que d'inventer :
   entre 🤒 et 🚛/OperateurIcon), `<AbsenceIcon />` pour Absences (Personnel),
   `<SearchIcon />` / `<InfoIcon />` / `<GearIcon />` pour la colonne d'actions,
   `<OperateurIcon />` (silhouette + étoile, choix 2026-09-09) pour le filtre
-  « Conducteurs » du Planning et du Placement.
+  « Conducteurs » du Planning et du Placement, `<TvIcon />` (2026-09-10, refonte
+  plein cadre : antennes en V + écran 4:3, trait 2 px, taille 18 px dans un bouton
+  30×30 pour la marge visuelle) pour le raccourci « Affichage TV » du bandeau
+  Planning.
   L'emoji rendait avec ses couleurs propres, illisible sur un fond coloré — le
   SVG en `currentColor` suit la couleur du bouton (blanc sur bleu, gris sur
   clair). Un `<SaveIcon default>` reste ré-exporté depuis `@/components/SaveIcon`
@@ -413,6 +416,16 @@ hauteur de rangée constante : `.refpostes` sur la table des postes,
 - ⚠️ **Bouton à fond clair = poser aussi `color`** : le style global `button` impose
   `color: var(--primary-text)` (blanc) → un bouton qui passe son `background` en blanc
   devient un bouton « vide » (texte blanc sur blanc). Cf. `tasks/lessons.md` L11.
+- ⚠️ **Boutons icône alignés côte à côte : DEUX pièges globaux à annuler** (2026-09-10) :
+  1) `.navlink` (globals.css) porte `padding: 8px 12px` — mise sur un lien 30×30 elle
+     ÉCRASE la taille (`box-sizing: content-box` par défaut, le padding s'ajoute) et
+     désaligne le lien contre les autres icônes ; **ne PAS combiner `.navlink` avec une
+     taille fixe** — écrire un style inline propre à la place.
+  2) `button` (globals.css) impose `margin-top: 18px` (héritage des boutons de
+     formulaire) : un `<button>` icône ajouté à une rangée d'`<a>` DESCEND de 18 px.
+     Annuler avec `margin: 0` inline. Ces deux pièges expliquent le décalage des 4
+     boutons d'actions du Planning (TV / 🕐 / 🤒 / Conducteurs) — cf. leur style inline
+     unifié : `boxSizing: border-box`, `padding: 0`, `margin: 0`, `lineHeight: 1`.
 - **Bouton « + Bilan » rose** (`#e11d48`, couleur du menu Bilans) : classe partagée
   `persongrid.module.css .bilanToggle`, utilisée par Matrice et Habilitations ; le Planning
   reprend le même style en inline.
@@ -487,7 +500,7 @@ prochain gros chantier, pas une optimisation cosmétique.
   `UserMenu` porte aussi le lien vers le **guide utilisateur** (`public/guide.html`,
   document autonome ouvert dans un onglet, mais servi derrière l'authentification).
 - Composants partagés : `src/components/{SlideSwitch,ToggleSwitch,AtelierEquipeFiltres,LectureSeule,PageTitle,PrintButton,AutoRefresh,BandeauErreur,ConfirmForm,DateRangePicker,ActifCheckbox,ModaleDeplacable,InfoBulle,icons,SaveIcon,persongrid.module.css,usePersonGrid.ts}`.
-  Icônes toutes centralisées dans `icons.tsx` (`SaveIcon`, `EditIcon`, `CheckIcon`, `TrashIcon`, `PrintIcon`, `AbsenceIcon`, `SearchIcon`, `InfoIcon`, `GearIcon`, `FillIcon` pot de peinture = pré-remplissage). `SaveIcon.tsx` reste comme shim d'import historique.
+  Icônes toutes centralisées dans `icons.tsx` (`SaveIcon`, `EditIcon`, `CheckIcon`, `TrashIcon`, `PrintIcon`, `AbsenceIcon`, `SearchIcon`, `InfoIcon`, `GearIcon`, `FillIcon` pot de peinture = pré-remplissage, `OperateurIcon`, `TvIcon`). `SaveIcon.tsx` reste comme shim d'import historique.
 - Ordonnancement : `src/app/ordonnancement/{page,OrdoGrid,OrdoQuinzaineNav,semaine-type/*}.tsx`.
   **Fenêtre 15 jours** (2 semaines + le lundi suivant) à partir du lundi de la semaine
   choisie ; nav `OrdoQuinzaineNav` (`?debut=<lundiISO>`, flèches par 14 j). ⚠️ `weekDays()`
@@ -513,7 +526,27 @@ prochain gros chantier, pas une optimisation cosmétique.
   tournants), lignes par atelier, **journée dérivée** à part en bas (colonnes alignées par
   `colgroup` partagé). Le gabarit sert de base au bouton « Initialiser ». APIs
   `/api/ordonnancement/{semaine-type,semaine-type-ouverture,semaine-type-profil}` inchangées.
-- Planning : `src/app/planning/{page,PlanningGrid,PlanningFilters,AtelierFilter,QuartSelector,ConducteurToggle}.tsx`.
+- Planning : `src/app/planning/{page,PlanningGrid,PlanningFilters,AtelierFilter,QuartSelector,ConducteurToggle,QuartBandeau}.tsx`.
+  ⚠️ **Bandeau plein-largeur de rappel du quart** (2026-09-10, `QuartBandeau`) rendu
+  SOUS la ligne recherche+actions, AU-DESSUS de la grille — couleur = `quart.couleur`
+  (migration 0068, réglée dans `/admin/equipes` « Horaires des quarts »), texte
+  noir/blanc décidé par luminance ; en mode AUTO le bandeau devient **gris neutre
+  « Tous quarts affichés »** (bug vécu : managers affectaient au mauvais quart). Le
+  bandeau est **passé en prop `quartBandeau`** à `<PlanningGrid>` — la grille ne lit
+  pas `quart.couleur` elle-même.
+  ⚠️ **Les 4 boutons du bandeau (TV, 🕐, 🤒, Conducteurs) sont RENDUS EN HORIZONTAL**
+  (2026-09-10) à droite de la barre de recherche, dans `PlanningGrid` (prop `actions`).
+  L'ancienne colonne à droite du `.headband` (une `.filterrow` par bouton) est
+  supprimée. La barre reste centrée par `position: absolute` sur le bloc `actions`
+  → décorrélé du nombre de boutons visibles (le raccourci TV disparaît sans atelier
+  sélectionné, sans décentrer la recherche). **Gabarit strictement identique** sur les
+  4 : 30×30, `boxSizing: border-box`, `padding: 0`, `lineHeight: 1`, `display:
+  inline-flex`. ⚠️ **Ne PAS utiliser `.navlink`** sur ces Links : son `padding: 8px 12px`
+  écrase les 30×30 et casse l'alignement. ⚠️ `ConducteurToggle` étant le seul `<button>`,
+  il subit le sélecteur global `button { margin-top: 18px }` de `globals.css` — l'annuler
+  avec `margin: 0` inline sinon décalage vers le bas (bug vécu 2026-09-10).
+  ⚠️ **Raccourci TV** (`TvIcon`, 2026-09-09) : visible seulement si un atelier est
+  sélectionné, cible `/affichage/atelier/<atelierId>` dans un nouvel onglet.
   ⚠️ **Filtre AUTO élargi aux personnes réellement placées** (2026-09-09) :
   cliquer sur « Nuit » en mode AUTO remonte les équipes théoriquement de nuit
   cette semaine (rotation + `quart_fixe`) **∪** les personnes ayant au moins
@@ -523,8 +556,9 @@ prochain gros chantier, pas une optimisation cosmétique.
   une personne d'une autre équipe affectée manuellement sur nuit restait invisible
   tant qu'on ne basculait pas en « Toutes ». `poste_id NOT NULL` — les absences/NT
   sont neutres. fetchAll obligatoire (3 semaines de placements dépassent 1000).
-  ⚠️ **Bascule « Conducteurs »** (icône `OperateurIcon` seule, 4e ligne colonne
-  droite du bandeau, à côté de 🕐 🤒 🖨) portée par `?cond=1` : `filtreConducteurs`
+  ⚠️ **Bascule « Conducteurs »** (icône `OperateurIcon` seule, rangée d'actions
+  horizontale à droite de la barre de recherche, à côté de TV / 🕐 / 🤒) portée par
+  `?cond=1` : `filtreConducteurs`
   côté serveur restreint `displayed` aux personnes ayant `niveau_actuel ≥ 1` sur au
   moins un poste `categorie='conducteur'` actif — même seuil que la pastille « sans
   compétence » de la Matrice. Intersection avec les autres filtres ; la recherche
@@ -553,9 +587,11 @@ prochain gros chantier, pas une optimisation cosmétique.
   ne couvrant pas le jour). ⚠️ La grille garde son état local (`useState(initial)`) et ignore
   `router.refresh()` : le bouton **recharge la vue** (`window.location.reload()`) après
   succès (sauf si 0 case créée), sinon l'écran ne se met à jour qu'au F5. Modèle « comme
-  Ordonnancement » (un bouton par entête de semaine). L'entête des 3 colonnes du bandeau
-  (Année/Mois/Semaine · Quart/Atelier/Équipe · boutons 🕐/🤒) s'aligne via
-  `.planning-top .filterrow { min-height }` (rangées de hauteur commune).
+  Ordonnancement » (un bouton par entête de semaine). L'entête des DEUX colonnes du
+  bandeau (Année/Mois/Semaine · Quart/Atelier/Équipe) s'aligne via
+  `.planning-top .filterrow { min-height }` (rangées de hauteur commune) ; la colonne
+  d'icônes à droite du bandeau a été supprimée le 2026-09-10, les 4 boutons vivent
+  désormais à côté de la barre de recherche.
   ⚠️ **Glisser-déposer des affectations** (DnD natif HTML5, comme le Placement) : on
   **DÉPLACE** une case remplie (**poste, NT, ou TP réel** — jamais une **absence**, jamais
   le vide) vers une case **VIDE**, entre jours et/ou entre personnes. **Déplacement
@@ -583,13 +619,15 @@ prochain gros chantier, pas une optimisation cosmétique.
   volet Absences (couleur `#7c3aed`, **non-droppable** : le TP est calculé auto). Un TP
   DÉJÀ placé reste visible pour permettre le retrait (`rank=2`). Même règle que la
   feuille imprimée (`absPrint`), cohérence garantie.
-  **Navigation par jour** = `JourNav` (remplace `<input type="date">`) : **bouton
-  « Aujourd'hui »** (2026-09-09, remplace les flèches ◀/▶ historiques — le calendrier
-  suffit à naviguer) grisé quand on est déjà sur aujourd'hui, puis pastille date, puis
-  calendrier déroulant qui **grise** les jours sans ligne ouverte ; `openDays` calculé
-  serveur sur fenêtre [-90;+150] j = jours où `jour_quart.actif=true` pour ce quart
-  (une ligne fermée par l'ordo ne grise plus le jour depuis 2026-09-09, cf. « Ouverture
-  des lignes »). Écrit via `/api/placement/{cell,copy,reset-week,prefill,move}` — même
+  **Navigation par jour** = `JourNav` (remplace `<input type="date">`) : pastille date
+  puis calendrier déroulant qui **grise** les jours sans ligne ouverte ; **la date
+  d'aujourd'hui** apparaît en **surbrillance** (contour teal) dans le calendrier même
+  quand elle n'est pas la date sélectionnée (2026-09-09). **Bouton « Aujourd'hui »**
+  DÉPLACÉ SOUS le calendrier (2026-09-09, remplace les flèches ◀/▶ historiques et
+  l'ancien bouton à côté de la pastille — le calendrier suffit à naviguer) : grisé
+  quand on est déjà sur aujourd'hui ; `openDays` calculé serveur sur fenêtre
+  [-90;+150] j = jours où `jour_quart.actif=true` pour ce quart (une ligne fermée par
+  l'ordo ne grise plus le jour depuis 2026-09-09, cf. « Ouverture des lignes »). Écrit via `/api/placement/{cell,copy,reset-week,prefill,move}` — même
   table que le Planning. V2 prévue : vrai plan géographique (image + positions).
 - Matrice : `src/app/matrice/{page,MatricePanel,MatrixGrid,Pie,LegendeModal}.tsx` + `matrice.module.css`.
   L'en-tête (titre · recherche · légende · bascule Actuel/Cible · filtres) est dans
@@ -664,6 +702,17 @@ prochain gros chantier, pas une optimisation cosmétique.
   comme les Habil. requises (avec recherche) : un poste peut avoir **plusieurs titulaires** ;
   une personne n'a qu'**un seul** poste fixe (colonne mono-valuée), donc la cocher ici la
   **détache** de son poste fixe précédent (la modale le signale : « titulaire de X »).
+  ⚠️ **Unicité des codes par site** (2026-09-10, `verifierUniciteNom` dans
+  `/api/referentiel`) : les écritures sur `poste.nom`, `poste.nom_court` et
+  `ligne.nom` refusent (**HTTP 409**) tout doublon parmi les entités **actives** du
+  site courant, insensible à la casse. L'id courant est exclu (un renommage à
+  l'identique reste permis) ; un champ vide/null n'est jamais compté (les entités
+  créées vides pour saisie inline restent supportées). `atelier.nom` **n'est pas**
+  contraint (décision assumée : très peu d'ateliers, doublon improbable et sans
+  risque de confusion). Le message serveur (« Ce nom court est déjà utilisé… ») est
+  relayé par le champ `error` du JSON et affiché par `ReferentielEditor` à côté de
+  l'indicateur d'enregistrement, gardé 4 s (contre 1,5 s en succès) pour laisser le
+  temps de lire.
 - Habilitations : `src/app/habilitations/{page,HabilitationsList,HabMark,HabLegendeModal,HabMajModal,AutorisationMark}.tsx`
   + `src/app/admin/habilitations-param/*` + `src/app/api/habilitations/route.ts`.
   Saisie **au clic sur une pastille** (modale pré-remplie) ; l'en-tête est rendu par
@@ -720,6 +769,15 @@ prochain gros chantier, pas une optimisation cosmétique.
     ⚠️ `montee-competence` et `competences-critiques` ont été **supprimés** (pages + entrées
     `RAPPORTS_BILAN`) ; d'anciens `site_module` `bilan:montee-competence` /
     `bilan:competences-critiques` deviennent inertes.
+    ⚠️ **Filtre Équipe** (2026-09-10, `ReportEquipeFilter`, `?equipe=`) sous le
+    filtre Service : restreint la POPULATION analysée — polyvalence, personnes à
+    développer, personnes clés partantes, habilitations à échéance, plan de
+    formation, titulaires PTNR listés. **L'analyse structurelle des postes**
+    (relèves, verdicts, fragilité) reste **GLOBALE** — un poste avec 3 relèves ne
+    devient pas fragile parce qu'une seule est de l'équipe filtrée (décision
+    assumée : sinon la lecture « qui est en danger » deviendrait fausse). Impl.
+    dans `chargerPolyvalenceCompetences({ atelier, equipe })` via le prédicat
+    `dansEquipe(pid)`.
   - **Assez de compétences ?** (`/bilans/assez-competences`, `src/lib/assez-competences-data.ts`,
     nav quinzaine `CouvertureSemaineNav`) : aide à la **validation des congés**, avant toute
     affectation. Grille **service × jour ouvré × créneau** sur 2 semaines. **Affectation
@@ -758,13 +816,30 @@ prochain gros chantier, pas une optimisation cosmétique.
   où au moins une personne affichée est **placée** (`placementDays`) : ce second
   terme fait apparaître la feuille même quand l'atelier maison est fermé ce jour-là
   mais que des gens sont **prêtés** ailleurs.
+  ⚠️ **Éclatement Matin / Après-midi** (2026-09-09) : deux tableaux EMPILÉS, en-têtes
+  teal foncé (Matin) puis brun-rouge (Après-midi). Chaque personne est classée dans
+  UNE SEULE section, d'après (dans l'ordre) : (1) créneau du quart de son placement
+  **le plus fréquent** sur la fenêtre affichée (matin/aprem, `quart.creneau`) ; (2)
+  à défaut (nuit, journée, ou aucun placement matin/AM) créneau du quart de son
+  **équipe** cette semaine via rotation datée / quart fixe ; (3) matin par défaut.
+  Objectif : réduire la longueur de chaque section pour un écran de couloir.
+  ⚠️ **Fenêtre paramétrable en Param RH** : mode *relatif* (jours autour d'aujourd'hui,
+  historique) ou *absolu* (N semaines calendaires à partir du lundi de la semaine
+  courante — S, S+1…) — migration 0067, `getFenetreAffichage()` + `joursDeFenetre()`
+  dans `src/lib/parametres.ts`. La page passe TOUJOURS par `joursDeFenetre(fen, pivot)`
+  — plus d'appel direct à `joursAutour()`.
 - Param. RH (clé de droit toujours `motifs`, route toujours `/admin/motifs`) :
   `src/app/admin/motifs/{page,actions,FenetreAffichageInline}.tsx(ts)`. L'écran regroupe
   désormais **quatre sections** : Motifs d'absence, Agences d'intérim (menu Agence de
   `PeriodesEditor`), Types de contrat (menu Contrat de `PersonnelEditor` et
   `PeriodesEditor`, alimenté par la table `type_contrat`), Fenêtre d'affichage du
-  planning (jours avant/après pour l'écran TV, auto-save via `/api/param-affichage` —
-  cf. `src/lib/parametres.ts`, `getFenetreAffichage()`).
+  planning (auto-save via `/api/param-affichage` — cf. `src/lib/parametres.ts`,
+  `getFenetreAffichage()`). ⚠️ **Deux MODES** (2026-09-10, migration 0067) :
+  *relatif* (jours avant J / jours après J autour d'aujourd'hui, historique) ou
+  *absolu* (N semaines calendaires 1..6 à partir du lundi de la semaine courante —
+  S, S+1…). Radio dans le formulaire, un seul jeu d'inputs affiché à la fois. La
+  fenêtre calculée passe par `joursDeFenetre(fen, pivot)` — utilisé par
+  `/affichage/atelier/[atelier]` et `/affichage/impression`.
 - Absences (écran Planning) : `src/app/absences-specifiques/{page,AbsencesEditor}.tsx`
   — reconstruit les périodes de TOUT l'effectif à partir des jours d'absence
   (`grouperAbsences`), pas de la seule table `absence` (401 jours sur 421 saisis au
@@ -800,8 +875,18 @@ prochain gros chantier, pas une optimisation cosmétique.
   si le rapport est masqué). Réglage **indépendant** du masquage du menu Bilans.
   `setModuleMasque` accepte une clé de `MODULE_KEYS`, de `CLES_MASQUABLES_EXTRA`
   **ou** de `CLES_RAPPORTS_BILAN`.
-- Migrations : `supabase/migrations/0001..0066` (dernière appliquée : **0066** —
-  `motif_absence.code_gt`
+- Migrations : `supabase/migrations/0001..0068` (dernière appliquée : **0068** —
+  `quart.couleur` (hex `^#[0-9a-f]{6}$`) : **bandeau de rappel du quart** en tête du
+  Planning, réglé par site dans `/admin/equipes` « Horaires des quarts » (input hex +
+  aperçu) ; seeds « doux » matin/après-midi/nuit/journée ; en mode AUTO le bandeau
+  devient gris neutre « Tous quarts affichés » — le manager sait qu'il n'est plus sur
+  un quart précis. Cf. `src/app/planning/QuartBandeau.tsx`, actions serveur et
+  lectures tolèrent l'absence de la colonne. **`0067`** = `parametre_affichage.mode`
+  (`'relatif' | 'absolu'`) + `nb_semaines` (1..6) : **mode d'affichage TV**
+  paramétrable dans Param RH — *relatif* (X jours avant/Y jours après aujourd'hui,
+  historique) OU *absolu* (N semaines calendaires à partir du lundi de la semaine
+  courante — S, S+1…) ; API `getFenetreAffichage()` + `joursDeFenetre()` dans
+  `src/lib/parametres.ts`, lecture/écriture tolérantes. **`0066`** = `motif_absence.code_gt`
   (code du logiciel RH rattaché à un motif, colonne « Code GT » dans Param RH) + table
   `import_absence_personne` (équivalence apprise *matricule fichier RH → personne*, les
   matricules RH ne correspondant pas à Polaris). Support de l'**import des absences RH**
@@ -809,15 +894,15 @@ prochain gros chantier, pas une optimisation cosmétique.
   d'après leur Code GT) → écriture qui **remplace** les jours d'absence sur la fenêtre du
   fichier. Parser/appariement purs et testés dans `src/lib/import-absences-rh.ts` ;
   route `/api/import-absences` (garde `motifs`), UI `src/app/admin/motifs/ImportAbsences.tsx`.
-  Chaque ligne datée = **journée entière** d'absence),
+  Chaque ligne datée = **journée entière** d'absence. **`0065`** =
   ouverture de `competence_niveau_libelle.couleur` au **nuancier** — CHECK de format
   hexadécimal en remplacement du verrou 4 teintes de 0063, liste fermée imposée côté
-  app ; migration idempotente rattrapant « 0063 jamais appliquée » ; `0064` =
+  app ; migration idempotente rattrapant « 0063 jamais appliquée » ; **`0064`** =
   `placement.tp` + table `tp_charge` — temps partiel MATÉRIALISÉ dans le planning,
   déplaçable au glisser-déposer ; `tp_charge` marque une semaine « chargée » et
-  éteint le calcul virtuel du TP ; `0063` = `competence_niveau_libelle.couleur` —
-  couleur paramétrable par niveau ; `0062` = `site.seuil_competent`, seuil
-  « compétent » ; `0061` = `site.nb_niveaux`, nombre de niveaux activés par site).
+  éteint le calcul virtuel du TP ; **`0063`** = `competence_niveau_libelle.couleur` —
+  couleur paramétrable par niveau ; **`0062`** = `site.seuil_competent`, seuil
+  « compétent » ; **`0061`** = `site.nb_niveaux`, nombre de niveaux activés par site).
 - **Écritures : lire l'erreur, toujours.** `messageErreur()` (`src/lib/erreurs.ts`) traduit
   les codes Postgres ; les server actions repassent le message par l'URL
   (`urlAvecErreur` → `?err=`) et la page l'affiche via `<BandeauErreur>`. Un test
