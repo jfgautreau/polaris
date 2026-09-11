@@ -17,7 +17,7 @@ type Poste = {
   remplacable: boolean;
   actif: boolean;
 };
-type Ligne = { id: string; nom: string; actif: boolean; ordre_affichage: number; poste: Poste[] };
+type Ligne = { id: string; nom: string; actif: boolean; ordre_affichage: number; regroupement: string | null; poste: Poste[] };
 type Atelier = { id: string; nom: string; actif: boolean; ligne: Ligne[] };
 type Quart = { code: string; libelle: string };
 type Comp = { id: string; nom: string; a_recycler: boolean };
@@ -92,6 +92,7 @@ export default function ReferentielEditor({
   persons = [],
   titulaires = {},
   nbNiveaux = 4,
+  regroupements = [],
 }: {
   initial: Atelier[];
   quarts?: Quart[];
@@ -101,6 +102,7 @@ export default function ReferentielEditor({
   persons?: Titulaire[];
   titulaires?: Record<string, Titulaire[]>;
   nbNiveaux?: number;
+  regroupements?: string[];
 }) {
   const [tree, setTree] = useState<Atelier[]>(initial);
   // Titulaire(s) par poste (poste fixe). Modifiable ici comme dans la fiche
@@ -206,6 +208,13 @@ export default function ReferentielEditor({
     setLigne(aid, lid, (l) => ({ ...l, ordre_affichage }));
     schedule(`l:${lid}:ordre`, () => post("update-ligne", { id: lid, ordre_affichage }), 500);
   }
+  // Regroupement (0069) : étiquette de reporting. Auto-enregistrée, réutilisée
+  // via l'autocomplétion (datalist) — figée « de facto » par le vocabulaire déjà
+  // saisi sur le site. Vide = pas de regroupement.
+  function renameRegroupement(aid: string, lid: string, regroupement: string) {
+    setLigne(aid, lid, (l) => ({ ...l, regroupement }));
+    schedule(`l:${lid}:reg`, () => post("update-ligne", { id: lid, regroupement }), 500);
+  }
   function toggleLigne(aid: string, lid: string, actif: boolean) {
     setLigne(aid, lid, (l) => ({ ...l, actif }));
     post("toggle", { entity: "ligne", id: lid, actif });
@@ -274,8 +283,23 @@ export default function ReferentielEditor({
 
   const num = (v: number) => (Number.isFinite(v) ? v : 0);
 
+  // Valeurs proposées à l'autocomplétion du champ Regroupement : union du
+  // vocabulaire chargé (prop, SSR) et de ce qui est saisi dans l'état courant
+  // (une valeur tapée sur une ligne apparaît aussitôt sur les autres).
+  const regroupementOptions = Array.from(
+    new Set([
+      ...regroupements,
+      ...tree.flatMap((a) => a.ligne.map((l) => (l.regroupement ?? "").trim()).filter(Boolean)),
+    ])
+  ).sort((x, y) => x.localeCompare(y));
+
   return (
     <div>
+      <datalist id="ref-regroupements">
+        {regroupementOptions.map((r) => (
+          <option key={r} value={r} />
+        ))}
+      </datalist>
       <div
         style={{
           position: "sticky",
@@ -333,6 +357,16 @@ export default function ReferentielEditor({
                     value={num(l.ordre_affichage)}
                     onChange={(e) => ligneOrdre(a.id, l.id, Number(e.target.value))}
                     style={{ width: 60 }}
+                  />
+                </label>
+                <label style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--muted)" }} title="Regroupement de lignes pour les bilans (étiquette libre). Réutilisez une valeur existante dans la liste. Sert aussi de choix « Service » dans le Personnel.">
+                  Regroup.
+                  <input
+                    list="ref-regroupements"
+                    value={l.regroupement ?? ""}
+                    placeholder="—"
+                    onChange={(e) => renameRegroupement(a.id, l.id, e.target.value)}
+                    style={{ width: 150 }}
                   />
                 </label>
                 <ToggleSwitch on={l.actif} onChange={(v) => toggleLigne(a.id, l.id, v)} title="Activer / désactiver la ligne" />

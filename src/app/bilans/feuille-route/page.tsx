@@ -32,6 +32,7 @@ const CAT_COULEUR: Record<string, { fg: string; bg: string }> = {
 type LigneAtelier = {
   id: string;
   atelier_id: string | null;
+  regroupement: string | null;
   poste: { id: string; actif: boolean; categorie: string | null; effectif_requis: number | null }[];
 };
 
@@ -71,10 +72,10 @@ export default async function FeuilleRouteReport({
   const [{ data: atD }, { data: eqD }, { data: persD }, { data: lignesD }, matD, plD, cpD, pcD, { data: pcrD }, { data: quartsD }, { data: pqOffD }] = await Promise.all([
     supabase.from("atelier").select("id, nom").eq("actif", true).order("nom").returns<Atelier[]>(),
     supabase.from("equipe").select("id, nom, couleur").eq("actif", true).order("nom").returns<{ id: string; nom: string; couleur: string | null }[]>(),
-    supabase.from("personne").select("id, atelier_id, equipe_id").eq("statut", "ACTIF").returns<Personne[]>(),
+    supabase.from("personne").select("id, atelier_id, equipe_id, regroupement").eq("statut", "ACTIF").returns<Personne[]>(),
     supabase
       .from("ligne")
-      .select("id, atelier_id, poste(id, actif, categorie, effectif_requis)")
+      .select("id, atelier_id, regroupement, poste(id, actif, categorie, effectif_requis)")
       .eq("actif", true)
       .returns<LigneAtelier[]>(),
     fetchAll<MatCell>(() =>
@@ -128,6 +129,7 @@ export default async function FeuilleRouteReport({
         categorie: p.categorie ?? "operateur",
         effectif_requis: p.effectif_requis ?? 0,
         nbQuartsPostes: nbQuartsDe(p.id),
+        regroupement: l.regroupement,
       });
     }
   }
@@ -392,6 +394,53 @@ export default async function FeuilleRouteReport({
                             );
                           })}
                         </tr>
+                        {/* Sous-totaux par regroupement de lignes (0069) : « en
+                            plus », sous chaque catégorie. Effectif ventilé par
+                            personne.regroupement, besoin par ligne.regroupement.
+                            Rendu seulement si le service a des regroupements. */}
+                        {(() => {
+                          const regs = (bloc.regroupements ?? []).filter((e) => e.besoin > 0 || e.parSemaine.some((v) => v > 0));
+                          if (regs.length === 0) return null;
+                          return (
+                            <>
+                              <tr>
+                                <td colSpan={grille.semaines.length + 1} style={{ padding: "6px 8px 2px", fontSize: 11, color: "var(--muted)", fontStyle: "italic" }}>
+                                  Détail par regroupement
+                                </td>
+                              </tr>
+                              {regs.map((e) => (
+                                <tr key={`${svc.atelierId}:${bloc.cat}:reg:${e.nom ?? "_sans"}`}>
+                                  <td
+                                    style={{ padding: "2px 8px 2px 18px", fontSize: 11, whiteSpace: "nowrap", color: e.nom ? "#334155" : "var(--muted)" }}
+                                    title={e.besoin > 0 ? `Besoin ${e.besoin} pour ce regroupement` : undefined}
+                                  >
+                                    ↳ {e.label}
+                                    {e.besoin > 0 ? <span style={{ color: "var(--muted)", fontWeight: 400 }}> (bes.&nbsp;{e.besoin})</span> : null}
+                                  </td>
+                                  {e.parSemaine.map((v, wi) => {
+                                    const couleur = e.besoin > 0 ? (v >= e.besoin ? "#15803d" : "#b91c1c") : "#64748b";
+                                    return (
+                                      <td
+                                        key={wi}
+                                        style={{
+                                          textAlign: "center",
+                                          fontSize: 11,
+                                          fontWeight: v > 0 ? 700 : 400,
+                                          color: v > 0 ? couleur : "#cbd5e1",
+                                          background: grille.semaines[wi].lundi === todayLundi ? "#eff6ff" : undefined,
+                                          borderLeft: wi === 0 ? "1px solid var(--border)" : "1px solid #eef2f7",
+                                        }}
+                                        title={e.besoin > 0 ? `${v} / besoin ${e.besoin}` : `${v}`}
+                                      >
+                                        {v || "·"}
+                                      </td>
+                                    );
+                                  })}
+                                </tr>
+                              ))}
+                            </>
+                          );
+                        })()}
                       </Fragment>
                     );
                   })}

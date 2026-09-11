@@ -20,7 +20,7 @@ type Poste = {
   remplacable: boolean;
   actif: boolean;
 };
-type Ligne = { id: string; nom: string; actif: boolean; ordre_affichage: number; poste: Poste[] };
+type Ligne = { id: string; nom: string; actif: boolean; ordre_affichage: number; regroupement: string | null; poste: Poste[] };
 type Atelier = { id: string; nom: string; actif: boolean; ligne: Ligne[] };
 type Quart = { code: string; libelle: string };
 type Comp = { id: string; nom: string; a_recycler: boolean };
@@ -33,7 +33,7 @@ export default async function ReferentielPage() {
     supabase
       .from("atelier")
       .select(
-        "id, nom, actif, ligne(id, nom, actif, ordre_affichage, poste(id, nom, nom_court, categorie, effectif_requis, difficulte_formation, niveau_min_requis, ordre_affichage, numero_rotation, remplacable, actif))"
+        "id, nom, actif, ligne(id, nom, actif, ordre_affichage, regroupement, poste(id, nom, nom_court, categorie, effectif_requis, difficulte_formation, niveau_min_requis, ordre_affichage, numero_rotation, remplacable, actif))"
       )
       .order("nom")
       .returns<Atelier[]>(),
@@ -69,6 +69,14 @@ export default async function ReferentielPage() {
   }));
   const pqOff = (pqD ?? []).map((r) => `${r.poste_id}:${r.quart_code}`);
   const pcr = pcrD.map((r) => `${r.poste_id}:${r.competence_id}`);
+  // Regroupements déjà saisis sur le site (0069) : alimentent l'autocomplétion
+  // du champ « Regroupement » de chaque ligne (réutiliser une valeur = zéro
+  // faute de frappe, donc regroupement fiable dans le bilan).
+  const regroupements = Array.from(
+    new Set(
+      ateliers.flatMap((a) => a.ligne.map((l) => (l.regroupement ?? "").trim()).filter(Boolean))
+    )
+  ).sort((x, y) => x.localeCompare(y));
 
   // Titulaire(s) par poste (poste fixe des personnes) + liste pour le sélecteur.
   const persons = (persD ?? []).map((p) => ({ id: p.id, label: `${p.nom} ${p.prenom}`.trim() }));
@@ -100,7 +108,7 @@ export default async function ReferentielPage() {
         </p>
 
         <LectureSeule actif={!canWrite(perms, "referentiel")}>
-          <ReferentielEditor initial={ateliers} quarts={quartsD ?? []} pqOff={pqOff} comps={compsD ?? []} pcr={pcr} persons={persons} titulaires={titulaires} nbNiveaux={nbNiveaux} />
+          <ReferentielEditor initial={ateliers} quarts={quartsD ?? []} pqOff={pqOff} comps={compsD ?? []} pcr={pcr} persons={persons} titulaires={titulaires} nbNiveaux={nbNiveaux} regroupements={regroupements} />
         </LectureSeule>
       </div>
     </>

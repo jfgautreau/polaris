@@ -32,6 +32,10 @@ export type Personne = {
   id: string;
   atelier_id: string | null;
   equipe_id: string | null;
+  // Affectation à un regroupement de lignes (migration 0069). Optionnel :
+  // absent = comportement d'avant (aucun sous-total). Sert à ventiler
+  // l'effectif du service par regroupement, sans double compte.
+  regroupement?: string | null;
 };
 
 export type Poste = {
@@ -45,6 +49,9 @@ export type Poste = {
   // besoin d'un poste = effectif_requis × nbQuartsPostes : 1 manager sur
   // matin + après-midi = besoin 2. Calculé au chargement (référentiel).
   nbQuartsPostes: number;
+  // Regroupement de la LIGNE du poste (migration 0069, hérité au chargement).
+  // Sert à ventiler le Besoin par regroupement. Optionnel.
+  regroupement?: string | null;
 };
 
 export type MatCell = { personne_id: string; poste_id: string; niveau_actuel: number };
@@ -62,6 +69,16 @@ export const CATEGORIES = [
 export type Categorie = (typeof CATEGORIES)[number]["key"];
 
 export type LigneNiveau = { niveau: number; parSemaine: number[] };
+// Sous-total par regroupement de lignes (migration 0069), « en plus » du
+// bloc catégorie. `nom = null` = bucket « Sans regroupement ». L'effectif
+// (parSemaine) vient de personne.regroupement (une personne = un groupe, pas
+// de double compte) ; le besoin de ligne.regroupement.
+export type SousTotalRegroupement = {
+  nom: string | null;
+  label: string;
+  besoin: number;
+  parSemaine: number[];
+};
 export type BlocCategorie = {
   cat: Categorie;
   catLabel: string;
@@ -70,6 +87,10 @@ export type BlocCategorie = {
   // semaines : c'est un abaque de référentiel, pas une charge datée.
   besoin: number;
   niveaux: LigneNiveau[]; // 1..nbNiveaux
+  // Sous-totaux par regroupement — présent SEULEMENT si le service a au moins
+  // un regroupement (sur ses lignes ou l'affectation de ses personnes). Sinon
+  // absent → le rapport s'affiche exactement comme avant.
+  regroupements?: SousTotalRegroupement[];
 };
 export type BlocService = {
   atelierId: string;
@@ -268,7 +289,24 @@ export function calculerGrille(p: Params): Grille {
   // catégorie rattachés à l'atelier via leur ligne (poste.atelier_id hérité
   // au chargement). Un atelier sans poste d'une catégorie n'aura pas de besoin
   // pour cette catégorie — c'est le comportement voulu.
+  // Sentinelle du bucket « sans regroupement » (clé de map — un   ne peut
+  // pas être un vrai nom de regroupement saisi).
+  const SANS = " sans";
+  const regKeyDe = (r?: string | null) => (r ?? "").trim() || SANS;
+
   const besoinParCle = new Map<string, number>(); // "atelierId|cat" → int
+  // Besoin ventilé par regroupement : "atelierId|cat|regKey" → int (0069).
+  const besoinParCleReg = new Map<string, number>();
+  // Noms de regroupement présents par atelier (sur les postes ET, plus bas, sur
+  // les affectations de personnes) : décide si un service a des sous-totaux.
+  const regParAtelier = new Map<string, Set<string>>();
+  const ajouteReg = (atelierId: string, reg?: string | null) => {
+    const nom = (reg ?? "").trim();
+    if (!nom) return;
+    let set = regParAtelier.get(atelierId);
+    if (!set) { set = new Set(); regParAtelier.set(atelierId, set); }
+    set.add(nom);
+  };
   for (const po of postes) {
     if (!po.actif) continue;
     if (!catValides.has(po.categorie)) continue;
@@ -276,7 +314,15 @@ export function calculerGrille(p: Params): Grille {
     const cle = `${po.atelier_id}|${po.categorie}`;
     // Besoin = effectif_requis × nombre de quarts postés (matin + après-midi
     // = 2, etc.). Un poste sans quart posté (nbQuartsPostes 0) ne contribue pas.
-    besoinParCle.set(cle, (besoinParCle.get(cle) ?? 0) + (po.effectif_requis ?? 0) * (po.nbQuartsPostes ?? 0));
+    const contrib = (po.effectif_requis ?? 0) * (po.nbQuartsPostes ?? 0);
+    besoinParCle.set(cle, (besoinParCle.get(cle) ?? 0) + contrib);
+    besoinParCleReg.set(`${cle}|${regKeyDe(po.regroupement)}`, (besoinParCleReg.get(`${cle}|${regKeyDe(po.regroupement)}`) ?? 0) + contrib);
+    ajouteReg(po.atelier_id, po.regroupement);
+  }
+  // Regroupements portés par l'AFFECTATION des personnes retenues (même s'ils
+  // ne correspondent à aucune ligne — p. ex. après renommage d'un côté seul).
+  for (const pe of persRetenues) {
+    if (pe.atelier_id) ajouteReg(pe.atelier_id, pe.regroupement);
   }
 
   const services: BlocService[] = Array.from(atelierIdsRetenus)
@@ -284,12 +330,23 @@ export function calculerGrille(p: Params): Grille {
     .sort((a, b) => a.nom.localeCompare(b.nom))
     .map(({ id, nom }) => {
       const persAtelier = persRetenues.filter((pe) => pe.atelier_id === id);
+      // Regroupements du service (triés). Vide → aucun sous-total : le service
+      // s'affiche exactement comme avant.
+      const regNames = Array.from(regParAtelier.get(id) ?? []).sort((a, b) => a.localeCompare(b));
+      const hasReg = regNames.length > 0;
 
       const blocs: BlocCategorie[] = CATEGORIES.map((c) => {
         const niveaux: LigneNiveau[] = Array.from({ length: nbNiveaux }, (_, i) => ({
           niveau: i + 1,
           parSemaine: Array(semaines.length).fill(0),
         }));
+        // Effectif par regroupement (clé regKey → parSemaine). Le bucket SANS
+        // capte les personnes non affectées à un regroupement.
+        const stParSemaine = new Map<string, number[]>();
+        if (hasReg) {
+          for (const rn of regNames) stParSemaine.set(rn, Array(semaines.length).fill(0));
+          stParSemaine.set(SANS, Array(semaines.length).fill(0));
+        }
 
         for (let wi = 0; wi < semaines.length; wi++) {
           const lundi = semaines[wi].lundi;
@@ -305,6 +362,10 @@ export function calculerGrille(p: Params): Grille {
             const n = maxParCat.get(c.key);
             if (n !== undefined && n >= 1 && n <= nbNiveaux) {
               niveaux[n - 1].parSemaine[wi]++;
+              if (hasReg) {
+                const arr = stParSemaine.get(regKeyDe(pe.regroupement)) ?? stParSemaine.get(SANS)!;
+                arr[wi]++;
+              }
             }
           }
         }
@@ -312,7 +373,25 @@ export function calculerGrille(p: Params): Grille {
         const cle = `${id}|${c.key}`;
         const besoin = besoinParCle.get(cle) ?? 0;
 
-        return { cat: c.key as Categorie, catLabel: c.label, besoin, niveaux };
+        let regroupements: SousTotalRegroupement[] | undefined;
+        if (hasReg) {
+          regroupements = [
+            ...regNames.map((rn) => ({
+              nom: rn,
+              label: rn,
+              besoin: besoinParCleReg.get(`${cle}|${rn}`) ?? 0,
+              parSemaine: stParSemaine.get(rn)!,
+            })),
+            {
+              nom: null,
+              label: "Sans regroupement",
+              besoin: besoinParCleReg.get(`${cle}|${SANS}`) ?? 0,
+              parSemaine: stParSemaine.get(SANS)!,
+            },
+          ];
+        }
+
+        return { cat: c.key as Categorie, catLabel: c.label, besoin, niveaux, regroupements };
       });
 
       return { atelierId: id, atelierNom: nom, blocs };

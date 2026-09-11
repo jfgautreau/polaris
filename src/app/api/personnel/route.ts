@@ -280,6 +280,11 @@ export async function POST(req: NextRequest) {
           case "commentaire":
             patch[k] = orNull(s(v));
             break;
+          // Regroupement (0069) : affectation fine dans le service, posée via la
+          // colonne « Service » du Personnel. Texte libre borné, vide = null.
+          case "regroupement":
+            patch.regroupement = orNull(s(v).slice(0, 60));
+            break;
           // date_arrivee / date_depart_prevu / motif_depart ont ete supprimes
           // (0050) : ce sont maintenant MIN/MAX(contrat_periode) et le motif_fin
           // du dernier contrat. Toute ecriture sur ces clefs est ignoree en silence

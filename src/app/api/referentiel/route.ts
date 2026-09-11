@@ -126,7 +126,7 @@ export async function POST(req: NextRequest) {
         const { data, error } = await supabase
           .from("ligne")
           .insert({ nom, atelier_id, site_id })
-          .select("id, nom, actif, ordre_affichage")
+          .select("id, nom, actif, ordre_affichage, regroupement")
           .single();
         if (error) throw error;
         return NextResponse.json({ ok: true, row: { ...data, poste: [] } });
@@ -157,6 +157,8 @@ export async function POST(req: NextRequest) {
         const patch: Record<string, unknown> = {};
         if (body.nom !== undefined) patch.nom = s(body.nom);
         if (body.ordre_affichage !== undefined) patch.ordre_affichage = Math.max(0, Math.floor(Number(body.ordre_affichage) || 0));
+        // Regroupement (0069) : étiquette de reporting, texte libre borné, vide = null.
+        if (body.regroupement !== undefined) patch.regroupement = s(body.regroupement).slice(0, 60) || null;
         if (Object.keys(patch).length === 0) return NextResponse.json({ error: "Rien à modifier" }, { status: 400 });
         // Unicité du nom : bloque un renommage qui produirait un doublon parmi
         // les autres lignes actives du site (l'id courant est exclu).

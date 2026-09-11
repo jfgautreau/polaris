@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import PageTitle from "@/components/PageTitle";
 import ConfirmForm from "@/components/ConfirmForm";
@@ -25,6 +25,7 @@ type Row = {
   prenom: string;
   equipe_id: string | null;
   atelier_id: string | null;
+  regroupement: string | null;
   sexe: string | null;
   numero_badge: string | null;
   date_livret_accueil: string | null;
@@ -163,6 +164,7 @@ export default function PersonnelEditor({
   initial,
   equipes,
   ateliers,
+  regroupementsParAtelier = {},
   postes = [],
   canEdit,
   canRgpd,
@@ -175,6 +177,9 @@ export default function PersonnelEditor({
   initial: Row[];
   equipes: Equipe[];
   ateliers: Atelier[];
+  // Regroupements de lignes par service (0069) : proposés dans la colonne
+  // « Service » comme entrées « Atelier — Regroupement ».
+  regroupementsParAtelier?: Record<string, string[]>;
   postes?: PosteOpt[];
   canEdit: boolean;
   // Droit RGPD (write) : gouverne le bouton roue crantée (export / anonymiser /
@@ -247,6 +252,21 @@ export default function PersonnelEditor({
 
   const equipeNom = (id: string | null) => (id ? equipes.find((e) => e.id === id)?.nom ?? "" : "");
   const atelierNom = (id: string | null) => (id ? ateliers.find((a) => a.id === id)?.nom ?? "" : "");
+  // Colonne « Service » (0069) : le service seul OU « Service — Regroupement ».
+  // Séparateur de contrôle (jamais dans un UUID ni saisi) pour encoder le choix.
+  const SVC_SEP = "";
+  const encSvc = (aid: string | null, reg: string | null) => (reg ? `${aid ?? ""}${SVC_SEP}${reg}` : aid ?? "");
+  // Libellé affiché en lecture : « Atelier — Regroupement » si regroupement posé.
+  const serviceLabel = (r: Row) => {
+    const a = atelierNom(r.atelier_id);
+    if (!a) return "";
+    return r.regroupement ? `${a} — ${r.regroupement}` : a;
+  };
+  function setService(id: string, raw: string) {
+    if (!raw) { fields(id, { atelier_id: null, regroupement: null }, true); return; }
+    const [aid, reg] = raw.split(SVC_SEP);
+    fields(id, { atelier_id: aid || null, regroupement: reg ?? null }, true);
+  }
   const eqStyle = (id: string | null): React.CSSProperties => {
     const c = id ? equipes.find((e) => e.id === id)?.couleur : null;
     return c ? { background: c, color: "#1e293b", fontWeight: 600 } : {};
@@ -323,6 +343,12 @@ export default function PersonnelEditor({
     setRow(id, (r) => ({ ...r, [key]: value }));
     schedule(`${id}:${key}`, () => post("update", { id, patch: { [key]: value } }), instant ? 0 : 500);
   }
+  // Écrit PLUSIEURS colonnes en un seul patch (colonne « Service » : atelier_id
+  // + regroupement changent ensemble selon l'option choisie).
+  function fields(id: string, patch: Partial<Pick<Row, "atelier_id" | "regroupement">>, instant = false) {
+    setRow(id, (r) => ({ ...r, ...patch }));
+    schedule(`${id}:svc`, () => post("update", { id, patch }), instant ? 0 : 500);
+  }
   // Rafraichissement initial du cache statut : rattrape les bascules
   // automatiques du jour (A_VENIR -> ACTIF a l'arrivee, ACTIF -> PARTI le
   // lendemain du depart). Idempotent, no-op si tout est deja a jour.
@@ -378,7 +404,7 @@ export default function PersonnelEditor({
     });
     if (j?.row) {
       const created: Row = {
-        ...(j.row as Row), atelier_id: at || null, sexe: sexe || null, numero_badge: badge || null,
+        ...(j.row as Row), atelier_id: at || null, regroupement: null, sexe: sexe || null, numero_badge: badge || null,
         date_livret_accueil: livret || null,
         date_arrivee: dateArrivee || today,
         date_debut: dateDebutContrat, contrat_debut: dateDebutContrat,
@@ -411,7 +437,7 @@ export default function PersonnelEditor({
       case "prenom": return r.prenom.toLowerCase();
       case "sexe": return (r.sexe ?? "").toLowerCase();
       case "equipe": return equipeNom(r.equipe_id).toLowerCase();
-      case "atelier": return atelierNom(r.atelier_id).toLowerCase();
+      case "atelier": return `${atelierNom(r.atelier_id)} ${r.regroupement ?? ""}`.toLowerCase();
       case "pointure": return (r.pointure ?? "").toLowerCase();
       case "commentaire": return (r.commentaire ?? "").toLowerCase();
       case "statut": {
@@ -681,7 +707,25 @@ export default function PersonnelEditor({
                       <td><input value={r.prenom} onChange={(e) => field(r.id, "prenom", e.target.value)} style={inp} /></td>
                       <td><select id={champId(r.id, "sexe")} value={r.sexe ?? ""} onChange={(e) => field(r.id, "sexe", e.target.value, true)} style={{ ...inp, ...C("sexe"), background: sexeBg(r.sexe), color: sexeFg(r.sexe), fontWeight: 600 }}><option value="">-</option><option value="H">H</option><option value="F">F</option></select></td>
                       <td><select id={champId(r.id, "equipe_id")} value={r.equipe_id ?? ""} onChange={(e) => field(r.id, "equipe_id", e.target.value, true)} style={{ ...inp, ...C("equipe"), ...eqStyle(r.equipe_id) }}><option value="">-</option>{equipes.map((x) => (<option key={x.id} value={x.id}>{x.nom}</option>))}</select></td>
-                      <td><select id={champId(r.id, "atelier_id")} value={r.atelier_id ?? ""} onChange={(e) => field(r.id, "atelier_id", e.target.value, true)} style={{ ...inp, ...C("atelier") }}><option value="">-</option>{ateliers.map((x) => (<option key={x.id} value={x.id}>{x.nom}</option>))}</select></td>
+                      <td><select id={champId(r.id, "atelier_id")} value={encSvc(r.atelier_id, r.regroupement)} onChange={(e) => setService(r.id, e.target.value)} style={{ ...inp, ...C("atelier") }} title={serviceLabel(r) || undefined}>
+                        <option value="">-</option>
+                        {ateliers.map((x) => {
+                          const regs = regroupementsParAtelier[x.id] ?? [];
+                          return (
+                            <Fragment key={x.id}>
+                              <option value={x.id}>{x.nom}</option>
+                              {regs.map((rg) => (
+                                <option key={`${x.id}:${rg}`} value={encSvc(x.id, rg)}>{x.nom} — {rg}</option>
+                              ))}
+                            </Fragment>
+                          );
+                        })}
+                        {/* Regroupement « orphelin » (posé puis renommé/supprimé au
+                            Référentiel) : on garde l'option pour ne pas vider le select. */}
+                        {r.regroupement && r.atelier_id && !(regroupementsParAtelier[r.atelier_id] ?? []).includes(r.regroupement) && (
+                          <option value={encSvc(r.atelier_id, r.regroupement)}>{atelierNom(r.atelier_id)} — {r.regroupement}</option>
+                        )}
+                      </select></td>
                       <td><input id={champId(r.id, "date_livret_accueil")} type="date" value={r.date_livret_accueil ?? ""} onChange={(e) => field(r.id, "date_livret_accueil", e.target.value, true)} style={inp} /></td>
                       <td style={{ textAlign: "center", ...tightPad }}><BoutonAbsences row={r} onOpen={() => setAbsFor(r)} /></td>
                       <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
@@ -738,7 +782,7 @@ export default function PersonnelEditor({
                           ? <span className="sexe-pill" style={eqStyle(r.equipe_id)}>{equipeNom(r.equipe_id)}</span>
                           : "-"}
                       </td>
-                      <td style={{ textAlign: "center" }}>{atelierNom(r.atelier_id) || "-"}</td>
+                      <td style={{ textAlign: "center" }}>{serviceLabel(r) || "-"}</td>
                       <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>{fmtDate(r.date_livret_accueil)}</td>
                       <td style={{ textAlign: "center", ...tightPad }}><BoutonAbsences row={r} onOpen={() => setAbsFor(r)} /></td>
                       <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>

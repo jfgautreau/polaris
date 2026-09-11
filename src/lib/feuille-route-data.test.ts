@@ -250,4 +250,82 @@ describe("calculerGrille — intégration", () => {
     expect(cond.niveaux[2].parSemaine[0]).toBe(1); // S1 encore présent (fin le 10)
     expect(cond.niveaux[2].parSemaine[1]).toBe(0); // S2 (14/09) contrat fini
   });
+
+  it("aucun regroupement → blocs.regroupements absent (rapport inchangé)", () => {
+    const g = calculerGrille(base);
+    for (const svc of g.services) {
+      for (const bloc of svc.blocs) {
+        expect(bloc.regroupements).toBeUndefined();
+      }
+    }
+  });
+});
+
+describe("calculerGrille — sous-totaux par regroupement (0069)", () => {
+  const base: Params = {
+    personnes: [
+      { id: "p1", atelier_id: "at-condi", equipe_id: "eq-a", regroupement: "Façonnage" },
+      { id: "p2", atelier_id: "at-condi", equipe_id: "eq-a", regroupement: "Cuisson" },
+      { id: "p3", atelier_id: "at-condi", equipe_id: "eq-a", regroupement: null }, // sans regroupement
+    ],
+    postes: [
+      // Deux lignes taguées + une non taguée, toutes conducteur.
+      { id: "po-fac", atelier_id: "at-condi", actif: true, categorie: "conducteur", effectif_requis: 2, nbQuartsPostes: 1, regroupement: "Façonnage" },
+      { id: "po-cui", atelier_id: "at-condi", actif: true, categorie: "conducteur", effectif_requis: 1, nbQuartsPostes: 1, regroupement: "Cuisson" },
+      { id: "po-nul", atelier_id: "at-condi", actif: true, categorie: "conducteur", effectif_requis: 3, nbQuartsPostes: 1, regroupement: null },
+    ],
+    matrice: [
+      { personne_id: "p1", poste_id: "po-fac", niveau_actuel: 2 },
+      { personne_id: "p2", poste_id: "po-cui", niveau_actuel: 1 },
+      { personne_id: "p3", poste_id: "po-nul", niveau_actuel: 3 },
+    ],
+    contratsParPersonne: new Map([
+      ["p1", [{ personne_id: "p1", date_debut: "2026-01-01", date_fin: null }]],
+      ["p2", [{ personne_id: "p2", date_debut: "2026-01-01", date_fin: null }]],
+      ["p3", [{ personne_id: "p3", date_debut: "2026-01-01", date_fin: null }]],
+    ]),
+    absencesParPersonne: new Map(),
+    posteCompRequise: new Map(),
+    competencesPersonne: new Map(),
+    ateliers: [{ id: "at-condi", nom: "Conditionnement" }],
+    semaines: construireSemaines("2026-09-07", 2),
+    nbNiveaux: 4,
+    habilitationStricte: false,
+  };
+
+  it("besoin ventilé par regroupement (Façonnage 2, Cuisson 1, Sans 3)", () => {
+    const g = calculerGrille(base);
+    const cond = g.services[0].blocs.find((b) => b.cat === "conducteur")!;
+    expect(cond.besoin).toBe(6); // 2 + 1 + 3
+    const regs = cond.regroupements!;
+    expect(regs.find((r) => r.nom === "Façonnage")!.besoin).toBe(2);
+    expect(regs.find((r) => r.nom === "Cuisson")!.besoin).toBe(1);
+    expect(regs.find((r) => r.nom === null)!.besoin).toBe(3);
+  });
+
+  it("effectif ventilé par affectation, sans double compte", () => {
+    const g = calculerGrille(base);
+    const cond = g.services[0].blocs.find((b) => b.cat === "conducteur")!;
+    const regs = cond.regroupements!;
+    // Une personne par groupe, comptée une seule fois.
+    expect(regs.find((r) => r.nom === "Façonnage")!.parSemaine[0]).toBe(1); // p1
+    expect(regs.find((r) => r.nom === "Cuisson")!.parSemaine[0]).toBe(1); // p2
+    expect(regs.find((r) => r.nom === null)!.parSemaine[0]).toBe(1); // p3
+    // La somme des sous-totaux = le total du bloc.
+    const somme = regs.reduce((a, r) => a + r.parSemaine[0], 0);
+    const total = cond.niveaux.reduce((a, n) => a + n.parSemaine[0], 0);
+    expect(somme).toBe(total);
+  });
+
+  it("regroupement porté par une personne mais aucune ligne : bucket besoin 0 présent", () => {
+    const perso = [
+      ...base.personnes.slice(0, 2),
+      { id: "p3", atelier_id: "at-condi", equipe_id: "eq-a", regroupement: "Emballage" },
+    ];
+    const g = calculerGrille({ ...base, personnes: perso });
+    const cond = g.services[0].blocs.find((b) => b.cat === "conducteur")!;
+    const emb = cond.regroupements!.find((r) => r.nom === "Emballage");
+    expect(emb).toBeDefined();
+    expect(emb!.besoin).toBe(0); // aucune ligne taguée Emballage
+  });
 });
