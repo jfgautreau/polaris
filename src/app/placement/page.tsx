@@ -5,6 +5,7 @@ import PageTitle from "@/components/PageTitle";
 import { requireModule, canWritePlacementData } from "@/lib/permissions";
 import { fetchAll } from "@/lib/fetch-all";
 import { quartParDefaut, quartOuDefaut, memeQuart } from "@/lib/quarts";
+import { chargerPosteQuart, tourneSurQuart, effectifSurQuart } from "@/lib/poste-quart";
 import { isoDate, mondayOf, addDays } from "@/lib/week";
 import { getRotationRefsC } from "@/lib/refdata";
 import { rotationForWeek, equipesParQuart } from "@/lib/rotation";
@@ -114,7 +115,7 @@ export default async function PlacementPage({
   const atelierId = ateliers.find((a) => a.id === sp.atelier)?.id ?? ateliers[0]?.id ?? "";
 
   // Postes de l'atelier + desactivations poste x quart + placements du jour + matrice.
-  const [{ data: lignesD }, { data: pqOffD }, { data: plD }, mat] = await Promise.all([
+  const [{ data: lignesD }, pq, { data: plD }, mat] = await Promise.all([
     atelierId
       ? supabase
           .from("ligne")
@@ -124,7 +125,7 @@ export default async function PlacementPage({
           .order("nom")
           .returns<LigneRow[]>()
       : Promise.resolve({ data: [] as LigneRow[] }),
-    supabase.from("poste_quart").select("poste_id, quart_code").eq("actif", false).returns<{ poste_id: string; quart_code: string }[]>(),
+    chargerPosteQuart(supabase),
     supabase.from("placement").select("personne_id, poste_id, motif_absence_id, non_travaille, quart_code, numero_rotation").eq("jour", jour).returns<Placement[]>(),
     (async () => {
       const posteIds = ((await supabase
@@ -171,7 +172,8 @@ export default async function PlacementPage({
   // affichée et plaçable — sa fermeture ne fait plus disparaître la ligne, elle rend
   // seulement son BESOIN nul (compteur « X/0 »). Le drapeau `fermee` par groupe est
   // relayé à `PlacementBoard`, qui pilote l'affichage du dénominateur et la couverture.
-  const pqOff = new Set((pqOffD ?? []).map((r) => `${r.poste_id}:${r.quart_code}`));
+  // Effectif par quart (trois états, cf. src/lib/poste-quart.ts) : un poste qui ne
+  // tourne pas sur le quart (« – ») est masqué ; sinon son besoin = effectif du quart.
   const groups = (lignesD ?? [])
     .map((l) => ({
       ligneId: l.id,
@@ -179,13 +181,13 @@ export default async function PlacementPage({
       ligneOrdre: l.ordre_affichage ?? 0,
       fermee: !ligneOuverte(l.id), // ordonnancement : ligne fermée -> besoin 0
       postes: [...(l.poste ?? [])]
-        .filter((p) => p.actif && !pqOff.has(`${p.id}:${quart}`))
+        .filter((p) => p.actif && tourneSurQuart(pq, p.id, quart, p.effectif_requis))
         .sort(ordreThenNom)
         .map((p) => ({
           id: p.id,
           nom: p.nom,
           nomCourt: p.nom_court,
-          effectifRequis: p.effectif_requis,
+          effectifRequis: effectifSurQuart(pq, p.id, quart, p.effectif_requis),
           niveauMin: p.niveau_min_requis,
           numeroRotation: p.numero_rotation,
         })),

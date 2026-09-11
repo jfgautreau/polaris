@@ -6,6 +6,7 @@ import PageTitle from "@/components/PageTitle";
 import { requireModule, canWrite } from "@/lib/permissions";
 import { parseMonday, weekDays, isoDate, mondayOf, addDays, isoWeekNumber, dowMon, type Jour } from "@/lib/week";
 import { getProfils } from "@/lib/semaine-type";
+import { chargerPosteQuart, tourneSurQuart } from "@/lib/poste-quart";
 import OrdoGrid from "./OrdoGrid";
 import OrdoQuinzaineNav from "./OrdoQuinzaineNav";
 
@@ -55,7 +56,7 @@ export default async function OrdonnancementPage({
   }
 
   const supabase = await getServerClient();
-  const [{ data: quartsD }, { data: lignesD }, { data: jq }, ov, { data: pqOffD }, profils] = await Promise.all([
+  const [{ data: quartsD }, { data: lignesD }, { data: jq }, ov, pq, profils] = await Promise.all([
     supabase.from("quart").select("code, libelle, ordre, creneau").order("ordre").returns<Quart[]>(),
     supabase
       .from("ligne")
@@ -75,7 +76,7 @@ export default async function OrdonnancementPage({
         .order("jour").order("ligne_id").order("quart_code")
         .returns<{ jour: string; ligne_id: string; quart_code: string; ouverte: boolean }[]>()
     ),
-    supabase.from("poste_quart").select("poste_id, quart_code").eq("actif", false).returns<{ poste_id: string; quart_code: string }[]>(),
+    chargerPosteQuart(supabase),
     getProfils(supabase),
   ]);
 
@@ -99,12 +100,11 @@ export default async function OrdonnancementPage({
     (a.ordre_affichage ?? 0) - (b.ordre_affichage ?? 0) ||
     a.nom.localeCompare(b.nom);
 
-  // Une ligne « tourne » sur un quart si elle a au moins un poste actif non
-  // désactivé pour ce quart (référentiel poste_quart, défaut actif).
-  const pqOff = new Set((pqOffD ?? []).map((r) => `${r.poste_id}:${r.quart_code}`));
+  // Une ligne « tourne » sur un quart si elle a au moins un poste actif qui tourne
+  // sur ce quart (effectif par quart, cf. src/lib/poste-quart.ts — « – » = ne tourne pas).
   const quartsDeLigne = (l: Ligne) =>
     quarts
-      .filter((q) => (l.poste ?? []).some((p) => p.actif && !pqOff.has(`${p.id}:${q.code}`)))
+      .filter((q) => (l.poste ?? []).some((p) => p.actif && tourneSurQuart(pq, p.id, q.code)))
       .map((q) => q.code);
 
   const lignes = (lignesD ?? [])

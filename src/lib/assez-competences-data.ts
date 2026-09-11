@@ -31,6 +31,7 @@ import { addMonthsIso, habValable } from "@/lib/habilitations";
 import { rotationForWeek, type RotationRef } from "@/lib/rotation";
 import { contratCouvreLe, type Periode } from "@/lib/personne-statut";
 import { isoDate, isoWeekNumber } from "@/lib/week";
+import { chargerPosteQuart, etatQuart } from "@/lib/poste-quart";
 import { buildJourFlow, type BesoinPoste, type PersonneDispo } from "@/lib/projection-capacite";
 
 export type JourCol = {
@@ -144,7 +145,7 @@ export async function chargerCouvertureConges(
     { data: pcrD },
     { data: equipesD },
     { data: quartsD },
-    { data: pqOffD },
+    pq,
     { data: jqD },
     ovD,
     { data: rr },
@@ -163,7 +164,7 @@ export async function chargerCouvertureConges(
     supabase.from("poste_competence_requise").select("poste_id, competence_id, competence:competence_id(duree_validite_mois)").returns<{ poste_id: string; competence_id: string; competence: { duree_validite_mois: number | null } | null }[]>(),
     supabase.from("equipe").select("id, quart_fixe").eq("actif", true).returns<{ id: string; quart_fixe: string | null }[]>(),
     supabase.from("quart").select("code, creneau, ordre").order("ordre").returns<{ code: string; creneau: string | null; ordre: number }[]>(),
-    supabase.from("poste_quart").select("poste_id, quart_code").eq("actif", false).returns<{ poste_id: string; quart_code: string }[]>(),
+    chargerPosteQuart(supabase),
     supabase.from("jour_quart").select("jour, quart_code, actif").in("jour", horizonIsos).returns<{ jour: string; quart_code: string; actif: boolean }[]>(),
     fetchAll<{ jour: string; ligne_id: string; quart_code: string; ouverte: boolean }>(() =>
       supabase.from("ouverture_quart").select("jour, ligne_id, quart_code, ouverte").in("jour", horizonIsos).order("jour").order("ligne_id").order("quart_code").returns<{ jour: string; ligne_id: string; quart_code: string; ouverte: boolean }[]>()
@@ -176,7 +177,6 @@ export async function chargerCouvertureConges(
   const atelierNom = new Map((atD ?? []).map((a) => [a.id, a.nom]));
   const quarts = (quartsD ?? []).map((q) => q.code); // triés par ordre
   const labelDe = new Map((quartsD ?? []).map((q) => [q.code, labelQuart(q.code, q.creneau)]));
-  const pqOff = new Set((pqOffD ?? []).map((r) => `${r.poste_id}:${r.quart_code}`));
 
   // « Journée » (pleine journée / régulière) = quart sans créneau au plus petit
   // ordre — MÊME détection que l'ordonnancement (reset-week). C'est l'AGRÉGAT de
@@ -190,8 +190,10 @@ export async function chargerCouvertureConges(
     return postes.length > 0 ? postes : ouverts; // journée seule = régulière
   };
 
-  // Postes du besoin : actifs, remplaçables (PTNR exclus), effectif_requis > 0.
-  type PosteBesoin = { id: string; nom: string; categorie: string; ligneId: string; atelierId: string; atelierNom: string; effectifRequis: number };
+  // Postes du besoin : actifs, remplaçables (PTNR exclus), et qui tournent avec un
+  // effectif > 0 sur AU MOINS UN quart (effectif par quart, cf. src/lib/poste-quart.ts).
+  // `posteEff` = effectif par défaut du poste, repli du helper.
+  type PosteBesoin = { id: string; nom: string; categorie: string; ligneId: string; atelierId: string; atelierNom: string; posteEff: number };
   const postesBesoin: PosteBesoin[] = [];
   const posteMin = new Map<string, number>();
   const posteService = new Map<string, string>();
@@ -201,9 +203,10 @@ export async function chargerCouvertureConges(
       if (!p.actif) continue;
       posteMin.set(p.id, p.niveau_min_requis);
       if (p.remplacable === false) continue;
-      const eff = p.effectif_requis ?? 0;
-      if (eff <= 0) continue;
-      postesBesoin.push({ id: p.id, nom: p.nom, categorie: p.categorie ?? "operateur", ligneId: l.id, atelierId: aid, atelierNom: l.atelier_id ? atelierNom.get(l.atelier_id) ?? "—" : "Sans service", effectifRequis: eff });
+      const posteEff = p.effectif_requis ?? 0;
+      const aBesoin = quarts.some((q) => { const e = etatQuart(pq, p.id, q, posteEff); return e.tourne && e.effectif > 0; });
+      if (!aBesoin) continue;
+      postesBesoin.push({ id: p.id, nom: p.nom, categorie: p.categorie ?? "operateur", ligneId: l.id, atelierId: aid, atelierNom: l.atelier_id ? atelierNom.get(l.atelier_id) ?? "—" : "Sans service", posteEff });
       posteService.set(p.id, aid);
     }
   }
@@ -224,13 +227,14 @@ export async function chargerCouvertureConges(
     for (const p of postesBesoin) {
       const ouverts: string[] = [];
       for (const q of quarts) {
-        if (pqOff.has(`${p.id}:${q}`)) continue; // poste ne tourne jamais sur ce quart
+        const { tourne, effectif } = etatQuart(pq, p.id, q, p.posteEff);
+        if (!tourne || effectif <= 0) continue; // ne tourne pas (« – ») ou besoin 0
         const ouvert = ordonnance
           ? (actMap.get(`${q}:${iso}`) ?? false) && (ouvMap.get(`${q}:${p.ligneId}:${iso}`) ?? true)
-          : true; // référentiel : chaque quart activé du poste compte
+          : true; // référentiel : chaque quart posté du poste compte
         if (ouvert) ouverts.push(q);
       }
-      for (const q of quartsEffectifs(ouverts)) out.push({ cle: `${p.id}:${q}`, posteId: p.id, quart: q, effectifRequis: p.effectifRequis });
+      for (const q of quartsEffectifs(ouverts)) out.push({ cle: `${p.id}:${q}`, posteId: p.id, quart: q, effectifRequis: etatQuart(pq, p.id, q, p.posteEff).effectif });
     }
     return out;
   };
@@ -390,7 +394,8 @@ export async function chargerCouvertureConges(
 
   // Résumé de besoin (référentiel) par poste, pour la colonne « Besoin ».
   const resumeDe = (p: PosteBesoin): { label: string; besoin: number }[] =>
-    quartsEffectifs(quarts.filter((q) => !pqOff.has(`${p.id}:${q}`))).map((q) => ({ label: labelDe.get(q) ?? q, besoin: p.effectifRequis }));
+    quartsEffectifs(quarts.filter((q) => { const e = etatQuart(pq, p.id, q, p.posteEff); return e.tourne && e.effectif > 0; }))
+      .map((q) => ({ label: labelDe.get(q) ?? q, besoin: etatQuart(pq, p.id, q, p.posteEff).effectif }));
 
   const services: ServiceCouverture[] = servicesIds
     .map((sid) => {

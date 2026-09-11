@@ -86,7 +86,7 @@ type Titulaire = { id: string; label: string };
 export default function ReferentielEditor({
   initial,
   quarts = [],
-  pqOff = [],
+  pq = {},
   comps = [],
   pcr = [],
   persons = [],
@@ -96,7 +96,7 @@ export default function ReferentielEditor({
 }: {
   initial: Atelier[];
   quarts?: Quart[];
-  pqOff?: string[];
+  pq?: Record<string, { actif: boolean; effectif: number | null }>;
   comps?: Comp[];
   pcr?: string[];
   persons?: Titulaire[];
@@ -113,8 +113,10 @@ export default function ReferentielEditor({
   // habilitations requises) + recherche (des centaines de personnes possibles).
   const [tituFor, setTituFor] = useState<{ id: string; nom: string } | null>(null);
   const [tituSearch, setTituSearch] = useState("");
-  // Desactivations poste x quart (cle `${poste}:${quart}`). Absent = actif.
-  const [off, setOff] = useState<Set<string>>(new Set(pqOff));
+  // Effectif par quart (cle `${poste}:${quart}`). Trois états : absent = repli sur
+  // l'effectif par défaut du poste ; { actif:false } = « – » (ne tourne pas) ;
+  // { actif:true, effectif } = tourne à N (0 ou N). Cf. src/lib/poste-quart.ts.
+  const [pqState, setPqState] = useState<Record<string, { actif: boolean; effectif: number | null }>>(pq);
   // Habilitations requises (cle `${poste}:${competence}`). Presente = exigee.
   const [req, setReq] = useState<Set<string>>(new Set(pcr));
   // Poste dont on edite les habilitations requises (modale).
@@ -240,17 +242,22 @@ export default function ReferentielEditor({
     setPoste(aid, lid, pid, (p) => ({ ...p, actif }));
     post("toggle", { entity: "poste", id: pid, actif });
   }
-  // Activation poste x quart (coche = actif). Defaut actif : on ne stocke que les off.
-  const quartOn = (pid: string, q: string) => !off.has(`${pid}:${q}`);
-  function toggleQuart(pid: string, q: string, on: boolean) {
-    setOff((s) => {
-      const n = new Set(s);
-      const k = `${pid}:${q}`;
-      if (on) n.delete(k);
-      else n.add(k);
-      return n;
-    });
-    post("poste-quart", { poste_id: pid, quart_code: q, actif: on });
+  // Effectif par quart — valeur affichée dans la case : "" si le poste ne tourne
+  // pas (« – »), sinon l'effectif (0 ou N). Repli sur l'effectif par défaut du
+  // poste tant qu'aucune ligne n'existe pour ce quart.
+  function quartVal(p: Poste, q: string): string {
+    const r = pqState[`${p.id}:${q}`];
+    if (r === undefined) return String(num(p.effectif_requis)); // repli défaut
+    if (!r.actif) return ""; // « – » : ne tourne pas
+    return String(r.effectif ?? num(p.effectif_requis));
+  }
+  function setQuart(p: Poste, q: string, raw: string) {
+    const k = `${p.id}:${q}`;
+    const t = raw.trim();
+    const tourne = t !== "";
+    const effectif = tourne ? Math.max(0, Math.floor(Number(t) || 0)) : null;
+    setPqState((s) => ({ ...s, [k]: { actif: tourne, effectif } }));
+    schedule(`pq:${k}`, () => post("poste-quart", { poste_id: p.id, quart_code: q, effectif: tourne ? effectif : "" }), 500);
   }
   // Habilitations exigees par un poste. Presente = requise : on insere / supprime.
   const compRequise = (pid: string, cid: string) => req.has(`${pid}:${cid}`);
@@ -386,7 +393,6 @@ export default function ReferentielEditor({
                 <colgroup>
                   <col style={{ width: 190 }} />{/* Poste */}
                   <col style={{ width: 92 }} />{/* Code */}
-                  <col style={{ width: 76 }} />{/* Effectif */}
                   <col style={{ width: 118 }} />{/* Categorie */}
                   <col style={{ width: 80 }} />{/* Rempl. (PTR/PTNR) */}
                   <col style={{ width: 62 }} />{/* Diff. */}
@@ -396,7 +402,7 @@ export default function ReferentielEditor({
                   <col style={{ width: 200 }} />{/* Habil. requises */}
                   <col style={{ width: 150 }} />{/* Titulaire */}
                   {quarts.map((q) => (
-                    <col key={q.code} style={{ width: 52 }} />
+                    <col key={q.code} style={{ width: 58 }} />
                   ))}
                   <col style={{ width: 56 }} />{/* Actif */}
                 </colgroup>
@@ -404,7 +410,6 @@ export default function ReferentielEditor({
                   <tr>
                     <th>Poste</th>
                     <th>Code</th>
-                    <th>Effectif</th>
                     <th>Catégorie</th>
                     <th title="PTR = remplaçable. PTNR = Position de Travail Non Remplaçable (un seul titulaire par conception). Un PTNR est exclu des rapports de fragilité/relève et isolé dans les compétences critiques.">Rempl.</th>
                     <th>Diff.</th>
@@ -414,7 +419,7 @@ export default function ReferentielEditor({
                     <th title="Habilitations exigées pour tenir ce poste">Habil. requises</th>
                     <th title="Titulaire(s) du poste (poste fixe). Cocher une ou plusieurs personnes, comme les habilitations requises. Même donnée que le sélecteur « Poste fixe » de la fiche Personnel : chaque titulaire est pré-rempli sur ce poste dans le planning.">Titulaire</th>
                     {quarts.map((q) => (
-                      <th key={q.code} title={`Tourne en ${q.libelle}`} style={{ fontSize: 11 }}>
+                      <th key={q.code} title={`Effectif requis en ${q.libelle} — « – » (vide) = ne tourne pas, 0 = tourne à 0, N = N personnes`} style={{ fontSize: 11 }}>
                         {q.libelle.slice(0, 4)}
                       </th>
                     ))}
@@ -434,15 +439,6 @@ export default function ReferentielEditor({
                           maxLength={6}
                           onChange={(e) => posteField(a.id, l.id, p.id, "nom_court", e.target.value)}
                           style={{ width: 80 }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          min={0}
-                          value={num(p.effectif_requis)}
-                          onChange={(e) => posteField(a.id, l.id, p.id, "effectif_requis", Number(e.target.value))}
-                          style={{ width: 64 }}
                         />
                       </td>
                       <td>
@@ -541,11 +537,13 @@ export default function ReferentielEditor({
                       {quarts.map((q) => (
                         <td key={q.code} style={{ textAlign: "center" }}>
                           <input
-                            type="checkbox"
-                            checked={quartOn(p.id, q.code)}
-                            onChange={(e) => toggleQuart(p.id, q.code, e.target.checked)}
-                            style={{ width: "auto" }}
-                            title={`${p.nom} tourne en ${q.libelle}`}
+                            type="number"
+                            min={0}
+                            value={quartVal(p, q.code)}
+                            placeholder="–"
+                            onChange={(e) => setQuart(p, q.code, e.target.value)}
+                            style={{ width: 46, textAlign: "center", minWidth: 0 }}
+                            title={`Effectif requis en ${q.libelle} — vide « – » = ne tourne pas, 0 = tourne à 0, N = N personnes`}
                           />
                         </td>
                       ))}
@@ -561,7 +559,7 @@ export default function ReferentielEditor({
                   ))}
                   {l.poste.length === 0 && (
                     <tr>
-                      <td colSpan={12 + quarts.length} className="muted">Aucun poste.</td>
+                      <td colSpan={11 + quarts.length} className="muted">Aucun poste.</td>
                     </tr>
                   )}
                 </tbody>

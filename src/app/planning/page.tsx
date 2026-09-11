@@ -25,6 +25,7 @@ import { getRotationRefsC } from "@/lib/refdata";
 import { rotationForWeek } from "@/lib/rotation";
 import { addMonthsIso } from "@/lib/habilitations";
 import { quartParDefaut, quartOuDefaut, memeQuart } from "@/lib/quarts";
+import { chargerPosteQuart, tourneSurQuart, effectifSurQuart } from "@/lib/poste-quart";
 import { estAuTravailLe, deriverArriveeDepart } from "@/lib/personne-statut";
 
 type PosteRow = {
@@ -108,7 +109,7 @@ export default async function PlanningPage({
     { data: quartsD, error: quartsErr },
     { data: allActiveD },
     { data: chefData },
-    { data: pqOffD },
+    pq,
   ] = await Promise.all([
     supabase.from("equipe").select("id, nom, couleur, quart_fixe").eq("actif", true).order("nom").returns<Equipe[]>(),
     supabase
@@ -130,7 +131,7 @@ export default async function PlanningPage({
     canEditPlanningFull
       ? Promise.resolve({ data: [] as { equipe_id: string }[] })
       : supabase.from("equipe_chef").select("equipe_id").eq("app_user_id", profile.authId).returns<{ equipe_id: string }[]>(),
-    supabase.from("poste_quart").select("poste_id, quart_code").eq("actif", false).returns<{ poste_id: string; quart_code: string }[]>(),
+    chargerPosteQuart(supabase),
   ]);
   const motifs = motifsD ?? [];
   // Repli si migration 0068 (colonne `couleur`) non appliquée : on relit sans.
@@ -210,18 +211,18 @@ export default async function PlanningPage({
       posteNomAll[p.id] = p.nom;
     }
 
-  // Filtre poste x quart : un poste desactive pour le quart affiche n'apparait pas
-  // (et n'est pas compte). Defaut actif : pqOff ne contient que les desactivations.
-  const pqOff = new Set((pqOffD ?? []).map((r) => `${r.poste_id}:${r.quart_code}`));
-  const posteActifQuart = (pid: string) => !pqOff.has(`${pid}:${quart}`);
-
+  // Filtre poste x quart : un poste qui ne tourne pas sur le quart affiché (« – »)
+  // n'apparaît pas. Un poste « tourne à 0 » reste visible (besoin 0). Effectif par
+  // quart, cf. src/lib/poste-quart.ts.
   const groups = (atelier ? groupsAll.filter((g) => g.atelierId === atelier) : groupsAll)
-    .map((g) => ({ ...g, postes: g.postes.filter((p) => posteActifQuart(p.id)) }))
+    .map((g) => ({ ...g, postes: g.postes.filter((p) => tourneSurQuart(pq, p.id, quart, p.effectif_requis)) }))
     .filter((g) => g.postes.length > 0);
 
+  // Besoin de ligne = somme des effectifs requis SUR LE QUART AFFICHÉ (et non plus
+  // l'effectif unique du poste, qui ignorait le quart).
   const lineEffectif: Record<string, number> = {};
   for (const g of groups)
-    lineEffectif[g.ligneId] = g.postes.reduce((s, p) => s + (p.effectif_requis ?? 0), 0);
+    lineEffectif[g.ligneId] = g.postes.reduce((s, p) => s + effectifSurQuart(pq, p.id, quart, p.effectif_requis), 0);
 
   // Ouverture par quart selectionne.
   // `ouverture_quart` passe par fetchAll : 3 semaines x 1 quart x N lignes, soit
@@ -653,7 +654,7 @@ export default async function PlanningPage({
       id: p.id,
       nom: (p.nom_court || p.nom).slice(0, 6),
       niveauMin: p.niveau_min_requis,
-      effectif: p.effectif_requis,
+      effectif: effectifSurQuart(pq, p.id, quart, p.effectif_requis),
       categorie: p.categorie,
     })),
   });
@@ -661,7 +662,7 @@ export default async function PlanningPage({
   // Tous les ateliers (indépendant du filtre atelier), même filtrage poste×quart :
   // alimente le panneau d'affectation « Voir tous » -> toute l'usine.
   const allGridGroups = groupsAll
-    .map((g) => ({ ...g, postes: g.postes.filter((p) => posteActifQuart(p.id)) }))
+    .map((g) => ({ ...g, postes: g.postes.filter((p) => tourneSurQuart(pq, p.id, quart, p.effectif_requis)) }))
     .filter((g) => g.postes.length > 0)
     .map(mapGroup);
 

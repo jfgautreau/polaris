@@ -3,6 +3,7 @@ import { getServerClient } from "@/lib/supabase-server";
 import AppHeader from "@/components/AppHeader";
 import { requireModule } from "@/lib/permissions";
 import { getSemaineType, getSemaineOuverture, getProfils } from "@/lib/semaine-type";
+import { chargerPosteQuart, tourneSurQuart } from "@/lib/poste-quart";
 import SemaineTypeEditor from "./SemaineTypeEditor";
 
 type Quart = { code: string; libelle: string; ordre: number; creneau: string | null };
@@ -19,14 +20,14 @@ export default async function SemaineTypePage({ searchParams }: { searchParams: 
       ? sp.profil
       : (profils.find((p) => p.par_defaut) ?? profils[0])?.id ?? null;
 
-  const [{ data: quartsD }, { data: lignesD }, { data: pqOffD }, type, ouverture] = await Promise.all([
+  const [{ data: quartsD }, { data: lignesD }, pq, type, ouverture] = await Promise.all([
     supabase.from("quart").select("code, libelle, ordre, creneau").order("ordre").returns<Quart[]>(),
     supabase
       .from("ligne")
       .select("id, nom, ordre_affichage, atelier:atelier_id(nom), poste(id, actif)")
       .eq("actif", true)
       .returns<Ligne[]>(),
-    supabase.from("poste_quart").select("poste_id, quart_code").eq("actif", false).returns<{ poste_id: string; quart_code: string }[]>(),
+    chargerPosteQuart(supabase),
     selectedId ? getSemaineType(supabase, selectedId) : Promise.resolve({}),
     selectedId ? getSemaineOuverture(supabase, selectedId) : Promise.resolve({}),
   ]);
@@ -37,10 +38,9 @@ export default async function SemaineTypePage({ searchParams }: { searchParams: 
   const journeeQuart = [...quarts].filter((q) => !q.creneau).sort((a, b) => a.ordre - b.ordre)[0] ?? null;
   const columnQuarts = quarts.filter((q) => q.code !== journeeQuart?.code);
 
-  // poste_quart ne stocke que les DESACTIVATIONS (defaut actif). Une ligne tourne
-  // sur un quart si elle a au moins un poste actif, actif sur ce quart -> coherent
-  // avec le referentiel. Lignes triées comme au Référentiel : atelier -> ordre -> nom.
-  const pqOff = new Set((pqOffD ?? []).map((r) => `${r.poste_id}:${r.quart_code}`));
+  // Une ligne tourne sur un quart si elle a au moins un poste actif qui tourne sur
+  // ce quart (effectif par quart, cf. src/lib/poste-quart.ts — « – » = ne tourne
+  // pas). Lignes triées comme au Référentiel : atelier -> ordre -> nom.
   const lignes = (lignesD ?? [])
     .slice()
     .sort(
@@ -51,7 +51,7 @@ export default async function SemaineTypePage({ searchParams }: { searchParams: 
     )
     .map((l) => {
       const actifs = (l.poste ?? []).filter((p) => p.actif);
-      const runsOn = quarts.filter((q) => actifs.some((p) => !pqOff.has(`${p.id}:${q.code}`))).map((q) => q.code);
+      const runsOn = quarts.filter((q) => actifs.some((p) => tourneSurQuart(pq, p.id, q.code))).map((q) => q.code);
       return { id: l.id, nom: l.nom, atelierNom: l.atelier?.nom ?? "—", quarts: runsOn };
     })
     .filter((l) => l.quarts.length > 0);

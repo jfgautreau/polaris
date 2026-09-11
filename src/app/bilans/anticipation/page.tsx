@@ -7,6 +7,7 @@ import OrdoMonthNav from "@/app/ordonnancement/OrdoMonthNav";
 import { requireRapportBilan } from "@/lib/permissions";
 import { fetchAll } from "@/lib/fetch-all";
 import { getSeuilCompetentC } from "@/lib/refdata";
+import { chargerPosteQuart, effectifSurQuart } from "@/lib/poste-quart";
 import { isoDate, isoWeekNumber, parseMois, monthDays, monthLabel } from "@/lib/week";
 import { buildJourFlow, type BesoinPoste, type PersonneDispo } from "@/lib/projection-capacite";
 
@@ -38,7 +39,7 @@ export default async function AnticipationReport({ searchParams }: { searchParam
   const supabase = await getServerClient();
   // Seuil « compétent » paramétrable par site (0062, repli 2).
   const SEUIL = await getSeuilCompetentC();
-  const [{ data: lignesD }, { data: quartsD }, { data: jqD }, ovD, { data: pqOffD }, { data: persD }, plD, matD, { data: atD }] =
+  const [{ data: lignesD }, { data: quartsD }, { data: jqD }, ovD, pq, { data: persD }, plD, matD, { data: atD }] =
     await Promise.all([
       supabase.from("ligne").select("id, nom, atelier_id, poste(id, nom, actif, effectif_requis, categorie)").eq("actif", true).returns<LigneRow[]>(),
       supabase.from("quart").select("code").returns<{ code: string }[]>(),
@@ -46,7 +47,7 @@ export default async function AnticipationReport({ searchParams }: { searchParam
       fetchAll<{ jour: string; ligne_id: string; quart_code: string; ouverte: boolean }>(() =>
         supabase.from("ouverture_quart").select("jour, ligne_id, quart_code, ouverte").in("jour", horizonIsos).order("jour").order("ligne_id").order("quart_code").returns<{ jour: string; ligne_id: string; quart_code: string; ouverte: boolean }[]>()
       ),
-      supabase.from("poste_quart").select("poste_id, quart_code").eq("actif", false).returns<{ poste_id: string; quart_code: string }[]>(),
+      chargerPosteQuart(supabase),
       supabase.from("personne").select("id, nom, prenom, type_contrat, date_fin").eq("statut", "ACTIF").returns<Personne[]>(),
       fetchAll<Placement>(() =>
         supabase.from("placement").select("personne_id, jour, motif_absence_id").in("jour", horizonIsos).order("id").returns<Placement[]>()
@@ -56,7 +57,6 @@ export default async function AnticipationReport({ searchParams }: { searchParam
     ]);
 
   const quarts = (quartsD ?? []).map((q) => q.code);
-  const pqOff = new Set((pqOffD ?? []).map((r) => `${r.poste_id}:${r.quart_code}`));
   const actMap = new Map<string, boolean>();
   for (const r of jqD ?? []) actMap.set(`${r.quart_code}:${r.jour}`, r.actif);
   const ouvMap = new Map<string, boolean>();
@@ -71,7 +71,7 @@ export default async function AnticipationReport({ searchParams }: { searchParam
       if (!quartActif(q, iso)) continue;
       for (const l of lignes) {
         if (!ligneOuverte(l.id, q, iso)) continue;
-        for (const p of l.poste ?? []) if (p.actif && !pqOff.has(`${p.id}:${q}`)) b += p.effectif_requis ?? 0;
+        for (const p of l.poste ?? []) if (p.actif) b += effectifSurQuart(pq, p.id, q, p.effectif_requis);
       }
     }
     return b;
@@ -117,7 +117,7 @@ export default async function AnticipationReport({ searchParams }: { searchParam
       if (!quartActif(q, iso)) continue;
       for (const l of lignes) {
         if (!ligneOuverte(l.id, q, iso)) continue;
-        for (const p of l.poste ?? []) if (p.actif && (p.categorie ?? "operateur") === cat && !pqOff.has(`${p.id}:${q}`)) b += p.effectif_requis ?? 0;
+        for (const p of l.poste ?? []) if (p.actif && (p.categorie ?? "operateur") === cat) b += effectifSurQuart(pq, p.id, q, p.effectif_requis);
       }
     }
     return b;

@@ -9,6 +9,7 @@ import { requireRapportBilan } from "@/lib/permissions";
 import { fetchAll } from "@/lib/fetch-all";
 import { getNbNiveauxC, getCouleursNiveauxC } from "@/lib/refdata";
 import { couleursNiveau } from "@/lib/couleurs-niveau";
+import { chargerPosteQuart, etatQuart, tourneSurQuart } from "@/lib/poste-quart";
 import HabilitationsToggle from "./HabilitationsToggle";
 import {
   calculerGrille,
@@ -69,7 +70,7 @@ export default async function FeuilleRouteReport({
   const couleursCfg = await getCouleursNiveauxC();
   const couleurs = couleursNiveau(couleursCfg);
 
-  const [{ data: atD }, { data: eqD }, { data: persD }, { data: lignesD }, matD, plD, cpD, pcD, { data: pcrD }, { data: quartsD }, { data: pqOffD }] = await Promise.all([
+  const [{ data: atD }, { data: eqD }, { data: persD }, { data: lignesD }, matD, plD, cpD, pcD, { data: pcrD }, { data: quartsD }, pq] = await Promise.all([
     supabase.from("atelier").select("id, nom").eq("actif", true).order("nom").returns<Atelier[]>(),
     supabase.from("equipe").select("id, nom, couleur").eq("actif", true).order("nom").returns<{ id: string; nom: string; couleur: string | null }[]>(),
     supabase.from("personne").select("id, atelier_id, equipe_id, regroupement").eq("statut", "ACTIF").returns<Personne[]>(),
@@ -101,7 +102,7 @@ export default async function FeuilleRouteReport({
     // Quarts du site + désactivations poste×quart : servent à compter les
     // quarts POSTÉS de chaque poste pour le besoin (matin + après-midi = 2).
     supabase.from("quart").select("code, creneau, ordre").order("ordre").returns<{ code: string; creneau: string | null; ordre: number }[]>(),
-    supabase.from("poste_quart").select("poste_id, quart_code").eq("actif", false).returns<{ poste_id: string; quart_code: string }[]>(),
+    chargerPosteQuart(supabase),
   ]);
 
   // Quarts postés par poste (référentiel) : tous les quarts du site sauf ceux
@@ -109,10 +110,17 @@ export default async function FeuilleRouteReport({
   // journée (sans créneau, plus petit ordre) — même détection que l'ordo.
   const quartCodes = (quartsD ?? []).map((q) => q.code);
   const journeeCode = [...(quartsD ?? [])].filter((q) => !q.creneau).sort((a, b) => a.ordre - b.ordre)[0]?.code ?? null;
-  const pqOff = new Set((pqOffD ?? []).map((r) => `${r.poste_id}:${r.quart_code}`));
   const nbQuartsDe = (posteId: string): number => {
-    const actifs = quartCodes.filter((q) => !pqOff.has(`${posteId}:${q}`));
+    const actifs = quartCodes.filter((q) => tourneSurQuart(pq, posteId, q));
     return nbQuartsPostesDe(actifs, journeeCode);
+  };
+  // Besoin d'un poste = SOMME des effectifs par quart posté (matin 2 + après-midi 1
+  // = 3), avec la même règle « journée » que nbQuartsPostesDe (la journée pleine ne
+  // se cumule pas avec matin/après-midi). Remplace l'ancien effectif × nb quarts.
+  const besoinPosteDe = (posteId: string, posteEff: number): number => {
+    const running = quartCodes.filter((q) => { const e = etatQuart(pq, posteId, q, posteEff); return e.tourne && e.effectif > 0; });
+    const effectifs = journeeCode && running.some((q) => q !== journeeCode) ? running.filter((q) => q !== journeeCode) : running;
+    return effectifs.reduce((s, q) => s + etatQuart(pq, posteId, q, posteEff).effectif, 0);
   };
 
   // Postes actifs indexés + rattachement à leur atelier (via ligne). L'atelier_id
@@ -129,6 +137,7 @@ export default async function FeuilleRouteReport({
         categorie: p.categorie ?? "operateur",
         effectif_requis: p.effectif_requis ?? 0,
         nbQuartsPostes: nbQuartsDe(p.id),
+        besoinPoste: besoinPosteDe(p.id, p.effectif_requis ?? 0),
         regroupement: l.regroupement,
       });
     }

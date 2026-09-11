@@ -5,6 +5,7 @@ import { requireModule , canWrite } from "@/lib/permissions";
 import LectureSeule from "@/components/LectureSeule";
 import { fetchAll } from "@/lib/fetch-all";
 import { getNbNiveauxC } from "@/lib/refdata";
+import { chargerPosteQuart } from "@/lib/poste-quart";
 import ReferentielEditor from "./ReferentielEditor";
 
 type Poste = {
@@ -29,7 +30,7 @@ export default async function ReferentielPage() {
   const { profile, perms } = await requireModule("referentiel", "read");
 
   const supabase = await getServerClient();
-  const [{ data }, { data: quartsD }, { data: pqD }, { data: compsD }, pcrD, { data: persD }, nbNiveaux] = await Promise.all([
+  const [{ data }, { data: quartsD }, pqMap, { data: compsD }, pcrD, { data: persD }, nbNiveaux] = await Promise.all([
     supabase
       .from("atelier")
       .select(
@@ -38,11 +39,7 @@ export default async function ReferentielPage() {
       .order("nom")
       .returns<Atelier[]>(),
     supabase.from("quart").select("code, libelle").order("ordre").returns<Quart[]>(),
-    supabase
-      .from("poste_quart")
-      .select("poste_id, quart_code")
-      .eq("actif", false)
-      .returns<{ poste_id: string; quart_code: string }[]>(),
+    chargerPosteQuart(supabase),
     supabase.from("competence").select("id, nom, a_recycler").eq("actif", true).order("nom").returns<Comp[]>(),
     fetchAll<{ poste_id: string; competence_id: string }>(() =>
       supabase
@@ -67,7 +64,9 @@ export default async function ReferentielPage() {
         poste: [...(l.poste ?? [])].sort((x, y) => (x.ordre_affichage ?? 0) - (y.ordre_affichage ?? 0) || x.nom.localeCompare(y.nom)),
       })),
   }));
-  const pqOff = (pqD ?? []).map((r) => `${r.poste_id}:${r.quart_code}`);
+  // Effectif par quart (trois états) transmis au client sous forme d'objet simple.
+  const pq: Record<string, { actif: boolean; effectif: number | null }> = {};
+  for (const [k, v] of pqMap) pq[k] = v;
   const pcr = pcrD.map((r) => `${r.poste_id}:${r.competence_id}`);
   // Regroupements déjà saisis sur le site (0069) : alimentent l'autocomplétion
   // du champ « Regroupement » de chaque ligne (réutiliser une valeur = zéro
@@ -97,8 +96,9 @@ export default async function ReferentielPage() {
           (Manager / Conducteur / Opérateur) sert aux bilans. <strong>Rempl.</strong>{" "}
           marque un poste <strong>PTNR</strong> (non remplaçable, un seul titulaire par
           conception) : il est alors exclu des rapports de fragilité/relève et isolé dans les
-          compétences critiques. Les colonnes de quart cochent
-          sur quels quarts le poste tourne (tout coché par défaut). Le <strong>N° Rot</strong>{" "}
+          compétences critiques. Les <strong>colonnes de quart</strong> portent l&apos;
+          <strong>effectif requis par quart</strong> : vide « – » = le poste ne tourne pas
+          sur ce quart, 0 = tourne à 0, N = N personnes. Le <strong>N° Rot</strong>{" "}
           est libre : un poste à plusieurs positions porte plusieurs numéros (« 12, 13 »).
           Les <strong>habilitations requises</strong>{" "}
           déclenchent une demande de confirmation au placement d&apos;une personne qui ne
@@ -108,7 +108,7 @@ export default async function ReferentielPage() {
         </p>
 
         <LectureSeule actif={!canWrite(perms, "referentiel")}>
-          <ReferentielEditor initial={ateliers} quarts={quartsD ?? []} pqOff={pqOff} comps={compsD ?? []} pcr={pcr} persons={persons} titulaires={titulaires} nbNiveaux={nbNiveaux} regroupements={regroupements} />
+          <ReferentielEditor initial={ateliers} quarts={quartsD ?? []} pq={pq} comps={compsD ?? []} pcr={pcr} persons={persons} titulaires={titulaires} nbNiveaux={nbNiveaux} regroupements={regroupements} />
         </LectureSeule>
       </div>
     </>

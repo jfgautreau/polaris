@@ -6,6 +6,7 @@ import ReportActions from "@/app/bilans/ReportActions";
 import { requireRapportBilan } from "@/lib/permissions";
 import { fetchAll } from "@/lib/fetch-all";
 import { quartOuDefaut } from "@/lib/quarts";
+import { chargerPosteQuart, effectifSurQuart } from "@/lib/poste-quart";
 import { parseMois, monthDays, monthLabel } from "@/lib/week";
 
 type LigneRow = { id: string; atelier_id: string | null; poste: { id: string; actif: boolean; effectif_requis: number; niveau_min_requis: number }[] };
@@ -24,7 +25,7 @@ export default async function CouvertureReport({ searchParams }: { searchParams:
   const isos = days.map((d) => d.iso);
 
   const supabase = await getServerClient();
-  const [{ data: lignesD }, { data: quartsD }, { data: jqD }, ovD, { data: pqOffD }, plD, matD, { data: persD }, { data: atD }] =
+  const [{ data: lignesD }, { data: quartsD }, { data: jqD }, ovD, pq, plD, matD, { data: persD }, { data: atD }] =
     await Promise.all([
       supabase.from("ligne").select("id, atelier_id, poste(id, actif, effectif_requis, niveau_min_requis)").eq("actif", true).returns<LigneRow[]>(),
       supabase.from("quart").select("code, libelle, ordre").order("ordre").returns<{ code: string; libelle: string; ordre: number }[]>(),
@@ -32,7 +33,7 @@ export default async function CouvertureReport({ searchParams }: { searchParams:
       fetchAll<{ jour: string; ligne_id: string; quart_code: string; ouverte: boolean }>(() =>
         supabase.from("ouverture_quart").select("jour, ligne_id, quart_code, ouverte").in("jour", isos).order("jour").order("ligne_id").order("quart_code").returns<{ jour: string; ligne_id: string; quart_code: string; ouverte: boolean }[]>()
       ),
-      supabase.from("poste_quart").select("poste_id, quart_code").eq("actif", false).returns<{ poste_id: string; quart_code: string }[]>(),
+      chargerPosteQuart(supabase),
       fetchAll<Placement>(() =>
         supabase.from("placement").select("personne_id, jour, poste_id, quart_code, motif_absence_id").in("jour", isos).order("id").returns<Placement[]>()
       ),
@@ -50,7 +51,6 @@ export default async function CouvertureReport({ searchParams }: { searchParams:
 
   const quartList = quartsD ?? [];
   const quarts = quartList.map((q) => q.code);
-  const pqOff = new Set((pqOffD ?? []).map((r) => `${r.poste_id}:${r.quart_code}`));
   const actMap = new Map<string, boolean>();
   for (const r of jqD ?? []) actMap.set(`${r.quart_code}:${r.jour}`, r.actif);
   const ouvMap = new Map<string, boolean>();
@@ -69,7 +69,7 @@ export default async function CouvertureReport({ searchParams }: { searchParams:
       for (const l of lignes) {
         if (!ligneOuverte(l.id, q, iso)) continue;
         for (const p of l.poste ?? []) {
-          if (p.actif && !pqOff.has(`${p.id}:${q}`)) b += p.effectif_requis ?? 0;
+          if (p.actif) b += effectifSurQuart(pq, p.id, q, p.effectif_requis);
         }
       }
     }
@@ -82,7 +82,7 @@ export default async function CouvertureReport({ searchParams }: { searchParams:
     let b = 0;
     for (const l of lignes) {
       if (!ligneOuverte(l.id, q, iso)) continue;
-      for (const p of l.poste ?? []) if (p.actif && !pqOff.has(`${p.id}:${q}`)) b += p.effectif_requis ?? 0;
+      for (const p of l.poste ?? []) if (p.actif) b += effectifSurQuart(pq, p.id, q, p.effectif_requis);
     }
     return b;
   };

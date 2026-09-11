@@ -2,6 +2,7 @@ import { getServerClient } from "@/lib/supabase-server";
 import AppHeader from "@/components/AppHeader";
 import { requireModule, canWrite } from "@/lib/permissions";
 import LectureSeule from "@/components/LectureSeule";
+import { chargerPosteQuart, tourneSurQuart } from "@/lib/poste-quart";
 import HoraireEditor from "./HoraireEditor";
 
 type PosteRow = { id: string; nom: string; actif: boolean; ordre_affichage: number };
@@ -13,7 +14,7 @@ export default async function HorairesPage() {
   const { profile, perms } = await requireModule("horaires", "read");
 
   const supabase = await getServerClient();
-  const [{ data: lignesD }, { data: quartsD }, { data: pqOffD }] = await Promise.all([
+  const [{ data: lignesD }, { data: quartsD }, pq] = await Promise.all([
     supabase
       .from("ligne")
       .select("id, nom, ordre_affichage, atelier:atelier_id(id, nom), poste(id, nom, actif, ordre_affichage)")
@@ -21,12 +22,12 @@ export default async function HorairesPage() {
       .order("nom")
       .returns<LigneRow[]>(),
     supabase.from("quart").select("code, libelle").order("ordre").returns<Quart[]>(),
-    // Desactivations poste x quart (defaut actif : la table ne stocke que les off).
-    supabase.from("poste_quart").select("poste_id, quart_code").eq("actif", false).returns<{ poste_id: string; quart_code: string }[]>(),
+    // Effectif par quart (trois états) : on n'édite les horaires que sur les quarts
+    // où le poste tourne (cf. src/lib/poste-quart.ts).
+    chargerPosteQuart(supabase),
   ]);
 
   const quarts = (quartsD ?? []).map((q) => ({ code: q.code, libelle: q.libelle }));
-  const pqOff = new Set((pqOffD ?? []).map((r) => `${r.poste_id}:${r.quart_code}`));
 
   // Lignes (avec leurs postes actifs), triees par atelier puis par N° d'affichage
   // (comme le referentiel, le planning et les TV) ; le nom ne departage que les ex aequo.
@@ -43,7 +44,7 @@ export default async function HorairesPage() {
       postes: [...(l.poste ?? [])]
         .filter((p) => p.actif)
         .sort((a, b) => ordreThenNom({ ordre: a.ordre_affichage ?? 0, nom: a.nom }, { ordre: b.ordre_affichage ?? 0, nom: b.nom }))
-        .map((p) => ({ id: p.id, nom: p.nom, quarts: quarts.filter((q) => !pqOff.has(`${p.id}:${q.code}`)).map((q) => q.code) })),
+        .map((p) => ({ id: p.id, nom: p.nom, quarts: quarts.filter((q) => tourneSurQuart(pq, p.id, q.code)).map((q) => q.code) })),
     }))
     .filter((l) => l.postes.length > 0)
     .sort(

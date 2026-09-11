@@ -45,10 +45,12 @@ export type Poste = {
   categorie: string; // manager | conducteur | operateur
   effectif_requis: number; // abaque (besoin) par poste et PAR QUART
   // Nombre de quarts POSTÉS du poste (matin/après-midi/nuit… — la journée ne
-  // compte que si c'est le seul quart, cf. `quartsEffectifs` du loader). Le
-  // besoin d'un poste = effectif_requis × nbQuartsPostes : 1 manager sur
-  // matin + après-midi = besoin 2. Calculé au chargement (référentiel).
+  // compte que si c'est le seul quart, cf. `quartsEffectifs` du loader).
   nbQuartsPostes: number;
+  // Besoin du poste = SOMME des effectifs par quart posté (effectif par quart,
+  // migration 0070). Ex. matin 2 + après-midi 1 = 3. Calculé au chargement.
+  // Repli (base pré-0070) : effectif_requis × nbQuartsPostes.
+  besoinPoste?: number;
   // Regroupement de la LIGNE du poste (migration 0069, hérité au chargement).
   // Sert à ventiler le Besoin par regroupement. Optionnel.
   regroupement?: string | null;
@@ -312,9 +314,9 @@ export function calculerGrille(p: Params): Grille {
     if (!catValides.has(po.categorie)) continue;
     if (!po.atelier_id) continue;
     const cle = `${po.atelier_id}|${po.categorie}`;
-    // Besoin = effectif_requis × nombre de quarts postés (matin + après-midi
-    // = 2, etc.). Un poste sans quart posté (nbQuartsPostes 0) ne contribue pas.
-    const contrib = (po.effectif_requis ?? 0) * (po.nbQuartsPostes ?? 0);
+    // Besoin = somme des effectifs par quart posté (effectif par quart, 0070) ;
+    // repli sur effectif_requis × nombre de quarts postés (base pré-0070).
+    const contrib = po.besoinPoste ?? ((po.effectif_requis ?? 0) * (po.nbQuartsPostes ?? 0));
     besoinParCle.set(cle, (besoinParCle.get(cle) ?? 0) + contrib);
     besoinParCleReg.set(`${cle}|${regKeyDe(po.regroupement)}`, (besoinParCleReg.get(`${cle}|${regKeyDe(po.regroupement)}`) ?? 0) + contrib);
     ajouteReg(po.atelier_id, po.regroupement);

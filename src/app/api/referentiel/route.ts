@@ -192,26 +192,27 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true });
       }
       case "poste-quart": {
-        // Activation poste x quart. Defaut actif : actif=true -> on supprime la ligne,
-        // actif=false -> on insere/maj une ligne de desactivation.
+        // Effectif par quart — TROIS états (cf. src/lib/poste-quart.ts). Le champ
+        // `effectif` du corps vaut :
+        //   • "" / null   → le poste NE TOURNE PAS sur ce quart (« – ») : ligne actif=false ;
+        //   • un nombre N → le poste tourne à N (0 = tourne à 0, N = N personnes) : ligne actif=true.
+        // On matérialise toujours une ligne (effectif explicite par quart).
         const poste_id = s(body.poste_id);
         const quart_code = s(body.quart_code);
         if (!poste_id || !quart_code) return NextResponse.json({ error: "Champs requis" }, { status: 400 });
-        const actif = body.actif === true || body.actif === "true";
-        if (actif) {
-          const { error } = await supabase
+        const brut = body.effectif;
+        const tourne = !(brut === "" || brut === null || brut === undefined);
+        const eff = tourne ? Math.max(0, Math.floor(Number(brut) || 0)) : null;
+        let { error } = await supabase
+          .from("poste_quart")
+          .upsert({ poste_id, quart_code, actif: tourne, effectif_requis: eff, site_id }, { onConflict: "poste_id,quart_code" });
+        // Repli si la migration 0070 (colonne effectif_requis) n'est pas encore passée.
+        if (error && (error.code === "42703" || error.code === "PGRST204")) {
+          ({ error } = await supabase
             .from("poste_quart")
-            .delete()
-            .eq("poste_id", poste_id)
-            .eq("quart_code", quart_code)
-            .eq("site_id", site_id);
-          if (error) throw error;
-        } else {
-          const { error } = await supabase
-            .from("poste_quart")
-            .upsert({ poste_id, quart_code, actif: false, site_id }, { onConflict: "poste_id,quart_code" });
-          if (error) throw error;
+            .upsert({ poste_id, quart_code, actif: tourne, site_id }, { onConflict: "poste_id,quart_code" }));
         }
+        if (error) throw error;
         return NextResponse.json({ ok: true });
       }
       case "poste-competence": {

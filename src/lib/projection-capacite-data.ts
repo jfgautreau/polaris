@@ -20,6 +20,7 @@ import { getSemaineType, getSemaineOuverture, typeQuartActif, typeLigneOuverte }
 import { rotationForWeek, type RotationRef } from "@/lib/rotation";
 import { contratCouvreLe, type Periode } from "@/lib/personne-statut";
 import { isoDate } from "@/lib/week";
+import { chargerPosteQuart, etatQuart } from "@/lib/poste-quart";
 import {
   buildJourFlow,
   type BesoinPoste,
@@ -88,7 +89,7 @@ export async function chargerProjection(
     { data: quartsD },
     { data: jqD },
     ovD,
-    { data: pqOffD },
+    pq,
     { data: persD },
     contratD,
     matD,
@@ -102,7 +103,7 @@ export async function chargerProjection(
     fetchAll<{ jour: string; ligne_id: string; quart_code: string; ouverte: boolean }>(() =>
       supabase.from("ouverture_quart").select("jour, ligne_id, quart_code, ouverte").in("jour", horizonIsos).order("jour").order("ligne_id").order("quart_code").returns<{ jour: string; ligne_id: string; quart_code: string; ouverte: boolean }[]>()
     ),
-    supabase.from("poste_quart").select("poste_id, quart_code").eq("actif", false).returns<{ poste_id: string; quart_code: string }[]>(),
+    chargerPosteQuart(supabase),
     supabase.from("personne").select("id, equipe_id").returns<{ id: string; equipe_id: string | null }[]>(),
     fetchAll<{ personne_id: string; date_debut: string | null; date_fin: string | null }>(() =>
       supabase.from("contrat_periode").select("personne_id, date_debut, date_fin").order("id").returns<{ personne_id: string; date_debut: string | null; date_fin: string | null }[]>()
@@ -130,7 +131,6 @@ export async function chargerProjection(
         posteActif.add(p.id);
       }
   const quarts = (quartsD ?? []).map((q) => q.code);
-  const pqOff = new Set((pqOffD ?? []).map((r) => `${r.poste_id}:${r.quart_code}`));
 
   // Ordonnancement reel (quarts actifs / lignes ouvertes) + detection « jour ordonnance ».
   const actMap = new Map<string, boolean>();
@@ -154,9 +154,9 @@ export async function chargerProjection(
       for (const l of lignes) {
         if (!ligneOuverte(l.id, q)) continue;
         for (const p of l.poste ?? []) {
-          if (!p.actif || pqOff.has(`${p.id}:${q}`)) continue;
-          const eff = p.effectif_requis ?? 0;
-          if (eff > 0) besoins.push({ cle: `${p.id}:${q}`, posteId: p.id, quart: q, effectifRequis: eff, gabarit: !ordonnance });
+          if (!p.actif) continue;
+          const { tourne, effectif } = etatQuart(pq, p.id, q, p.effectif_requis ?? 0);
+          if (tourne && effectif > 0) besoins.push({ cle: `${p.id}:${q}`, posteId: p.id, quart: q, effectifRequis: effectif, gabarit: !ordonnance });
         }
       }
     }
