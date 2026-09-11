@@ -36,7 +36,7 @@ export type Personne = {
 
 export type Poste = {
   id: string;
-  atelier_id: string | null; // hérité de la ligne — sert à ventiler Besoin et Cible par service
+  atelier_id: string | null; // hérité de la ligne — sert à ventiler le Besoin par service
   actif: boolean;
   categorie: string; // manager | conducteur | operateur
   effectif_requis: number; // abaque (besoin) par poste et PAR QUART
@@ -45,7 +45,6 @@ export type Poste = {
   // besoin d'un poste = effectif_requis × nbQuartsPostes : 1 manager sur
   // matin + après-midi = besoin 2. Calculé au chargement (référentiel).
   nbQuartsPostes: number;
-  objectif_cible: number; // objectif « ≥ seuil » agrégé sur la Cible
 };
 
 export type MatCell = { personne_id: string; poste_id: string; niveau_actuel: number };
@@ -71,11 +70,6 @@ export type BlocCategorie = {
   // semaines : c'est un abaque de référentiel, pas une charge datée.
   besoin: number;
   niveaux: LigneNiveau[]; // 1..nbNiveaux
-  // Cible (agrégée) : somme des objectif_cible sur les postes actifs de la
-  // catégorie DANS L'ATELIER du service. Positionnée au seuil compétent —
-  // objectif_cible n'étant pas ventilé par niveau exact, l'afficher sur
-  // chaque niveau serait trompeur.
-  cible: { niveau: number; valeur: number } | null;
 };
 export type BlocService = {
   atelierId: string;
@@ -205,7 +199,6 @@ export type Params = {
   equipesFiltre?: string[] | null;
   semaines: Semaine[];
   nbNiveaux: number;
-  seuilCompetent: number;
   habilitationStricte: boolean;
 };
 
@@ -239,7 +232,7 @@ export function calculerGrille(p: Params): Grille {
   const {
     personnes, postes, matrice, contratsParPersonne, absencesParPersonne,
     posteCompRequise, competencesPersonne, ateliers,
-    ateliersFiltre, equipesFiltre, semaines, nbNiveaux, seuilCompetent,
+    ateliersFiltre, equipesFiltre, semaines, nbNiveaux,
     habilitationStricte,
   } = p;
 
@@ -271,12 +264,11 @@ export function calculerGrille(p: Params): Grille {
   const atelierNomById = new Map(ateliers.map((a) => [a.id, a.nom]));
   const atelierIdsRetenus = new Set(persRetenues.map((pe) => pe.atelier_id).filter((x): x is string => !!x));
 
-  // Besoin et Cible par (atelier, catégorie), agrégés sur les postes actifs
-  // de la catégorie rattachés à l'atelier via leur ligne (poste.atelier_id
-  // hérité au chargement). Un atelier sans poste d'une catégorie n'aura ni
-  // besoin ni cible pour cette catégorie — c'est le comportement voulu.
+  // Besoin par (atelier, catégorie), agrégé sur les postes actifs de la
+  // catégorie rattachés à l'atelier via leur ligne (poste.atelier_id hérité
+  // au chargement). Un atelier sans poste d'une catégorie n'aura pas de besoin
+  // pour cette catégorie — c'est le comportement voulu.
   const besoinParCle = new Map<string, number>(); // "atelierId|cat" → int
-  const cibleParCle = new Map<string, number>();
   for (const po of postes) {
     if (!po.actif) continue;
     if (!catValides.has(po.categorie)) continue;
@@ -285,7 +277,6 @@ export function calculerGrille(p: Params): Grille {
     // Besoin = effectif_requis × nombre de quarts postés (matin + après-midi
     // = 2, etc.). Un poste sans quart posté (nbQuartsPostes 0) ne contribue pas.
     besoinParCle.set(cle, (besoinParCle.get(cle) ?? 0) + (po.effectif_requis ?? 0) * (po.nbQuartsPostes ?? 0));
-    cibleParCle.set(cle, (cibleParCle.get(cle) ?? 0) + (po.objectif_cible ?? 0));
   }
 
   const services: BlocService[] = Array.from(atelierIdsRetenus)
@@ -320,10 +311,8 @@ export function calculerGrille(p: Params): Grille {
 
         const cle = `${id}|${c.key}`;
         const besoin = besoinParCle.get(cle) ?? 0;
-        const cibleVal = cibleParCle.get(cle) ?? 0;
-        const cible = cibleVal > 0 ? { niveau: seuilCompetent, valeur: cibleVal } : null;
 
-        return { cat: c.key as Categorie, catLabel: c.label, besoin, niveaux, cible };
+        return { cat: c.key as Categorie, catLabel: c.label, besoin, niveaux };
       });
 
       return { atelierId: id, atelierNom: nom, blocs };

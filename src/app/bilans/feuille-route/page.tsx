@@ -7,7 +7,7 @@ import ReportAtelierFilter from "@/app/bilans/ReportAtelierFilter";
 import ReportEquipeFilter from "@/app/bilans/ReportEquipeFilter";
 import { requireRapportBilan } from "@/lib/permissions";
 import { fetchAll } from "@/lib/fetch-all";
-import { getNbNiveauxC, getSeuilCompetentC, getCouleursNiveauxC } from "@/lib/refdata";
+import { getNbNiveauxC, getCouleursNiveauxC } from "@/lib/refdata";
 import { couleursNiveau } from "@/lib/couleurs-niveau";
 import HabilitationsToggle from "./HabilitationsToggle";
 import {
@@ -32,7 +32,7 @@ const CAT_COULEUR: Record<string, { fg: string; bg: string }> = {
 type LigneAtelier = {
   id: string;
   atelier_id: string | null;
-  poste: { id: string; actif: boolean; categorie: string | null; effectif_requis: number | null; objectif_cible: number | null }[];
+  poste: { id: string; actif: boolean; categorie: string | null; effectif_requis: number | null }[];
 };
 
 type PlRow = { personne_id: string; jour: string; motif_absence_id: string | null };
@@ -65,7 +65,6 @@ export default async function FeuilleRouteReport({
   })();
 
   const nbNiveaux = await getNbNiveauxC();
-  const seuilCompetent = await getSeuilCompetentC();
   const couleursCfg = await getCouleursNiveauxC();
   const couleurs = couleursNiveau(couleursCfg);
 
@@ -75,7 +74,7 @@ export default async function FeuilleRouteReport({
     supabase.from("personne").select("id, atelier_id, equipe_id").eq("statut", "ACTIF").returns<Personne[]>(),
     supabase
       .from("ligne")
-      .select("id, atelier_id, poste(id, actif, categorie, effectif_requis, objectif_cible)")
+      .select("id, atelier_id, poste(id, actif, categorie, effectif_requis)")
       .eq("actif", true)
       .returns<LigneAtelier[]>(),
     fetchAll<MatCell>(() =>
@@ -129,7 +128,6 @@ export default async function FeuilleRouteReport({
         categorie: p.categorie ?? "operateur",
         effectif_requis: p.effectif_requis ?? 0,
         nbQuartsPostes: nbQuartsDe(p.id),
-        objectif_cible: p.objectif_cible ?? 0,
       });
     }
   }
@@ -178,12 +176,19 @@ export default async function FeuilleRouteReport({
     equipesFiltre: equipe ? [equipe] : null,
     semaines,
     nbNiveaux,
-    seuilCompetent,
     habilitationStricte,
   });
 
   const semainesLabel = grille.semaines.map((s) => `S${String(s.num).padStart(2, "0")}`);
   const todayLundi = pivotLundi;
+  // Regroupement des semaines par année pour la rangée d'en-tête supérieure :
+  // les 24 semaines peuvent enjamber le 31 décembre (…S52 2026, S01 2027…).
+  const anneeSpans: { annee: number; span: number; firstIdx: number }[] = [];
+  grille.semaines.forEach((s, i) => {
+    const last = anneeSpans[anneeSpans.length - 1];
+    if (last && last.annee === s.annee) last.span++;
+    else anneeSpans.push({ annee: s.annee, span: 1, firstIdx: i });
+  });
 
   return (
     <>
@@ -197,7 +202,7 @@ export default async function FeuilleRouteReport({
             </div>
             <div className="sub" style={{ marginTop: 4 }}>
               <strong>Besoin</strong> = somme, sur les postes actifs de la catégorie <em>dans l&apos;atelier</em>, de <code>effectif_requis × nombre de quarts postés</code> (Référentiel) : 1 poste à 1 place tournant matin + après-midi compte 2. La journée pleine compte 1 (elle ne se cumule pas avec matin/après-midi).{" "}
-              <strong>Cible</strong> = somme <code>poste.objectif_cible</code> sur ces mêmes postes, positionnée au seuil compétent (niv.&nbsp;{seuilCompetent}) — c&apos;est l&apos;objectif « nombre de personnes ≥ seuil » saisi dans le bilan de la Matrice, agrégé par catégorie du service.
+              <strong>Total</strong> = nombre de personnes compétentes de la catégorie (niv.&nbsp;1 à&nbsp;{nbNiveaux}, chacune comptée une fois) ; <span style={{ color: "#15803d", fontWeight: 700 }}>vert</span> si ≥ besoin, <span style={{ color: "#b91c1c", fontWeight: 700 }}>rouge</span> si &lt; besoin.
             </div>
           </div>
         </div>
@@ -218,6 +223,27 @@ export default async function FeuilleRouteReport({
                   {grille.semaines.map((_, i) => <col key={i} />)}
                 </colgroup>
                 <thead>
+                  {/* Rangée années : une cellule fusionnée par année couverte. */}
+                  <tr>
+                    <th style={{ padding: "2px 8px", background: "#fff" }}>&nbsp;</th>
+                    {anneeSpans.map((a) => (
+                      <th
+                        key={a.annee}
+                        colSpan={a.span}
+                        style={{
+                          textAlign: "center",
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: "var(--muted)",
+                          padding: "2px 0",
+                          background: "#f1f5f9",
+                          borderLeft: "1px solid var(--border)",
+                        }}
+                      >
+                        {a.annee}
+                      </th>
+                    ))}
+                  </tr>
                   <tr>
                     <th style={{ textAlign: "left", padding: "4px 8px", fontSize: 12, color: "var(--muted)" }}>&nbsp;</th>
                     {grille.semaines.map((s, i) => (
@@ -334,30 +360,38 @@ export default async function FeuilleRouteReport({
                             </tr>
                           );
                         })}
-                        {bloc.cible && (
-                          <tr style={{ borderTop: "1px dashed #cbd5e1" }}>
-                            <td
-                              style={{ padding: "3px 8px", fontSize: 11, fontStyle: "italic", color: "var(--muted)", whiteSpace: "nowrap" }}
-                              title={`Somme des objectifs cible (poste.objectif_cible) sur les postes ${bloc.catLabel.toLowerCase()} actifs du site. Positionnée au seuil compétent (niv. ${seuilCompetent}) réglé dans /admin/competences.`}
-                            >
-                              Cible (≥ {seuilCompetent})
-                            </td>
-                            {grille.semaines.map((_, wi) => (
+                        {/* Ligne Total : somme des niveaux (personnes compétentes,
+                            comptées une fois). Vert si ≥ besoin, rouge si en-dessous. */}
+                        <tr style={{ borderTop: "2px solid #cbd5e1" }}>
+                          <td
+                            style={{ padding: "3px 8px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}
+                            title={`Nombre de personnes ${bloc.catLabel.toLowerCase()} compétentes (niv. 1 à ${nbNiveaux}), chacune comptée une fois. Vert si ≥ besoin (${bloc.besoin}), rouge sinon.`}
+                          >
+                            Total
+                          </td>
+                          {grille.semaines.map((s, wi) => {
+                            const total = bloc.niveaux.reduce((acc, niv) => acc + niv.parSemaine[wi], 0);
+                            const suffisant = total >= bloc.besoin;
+                            return (
                               <td
                                 key={wi}
                                 style={{
                                   textAlign: "center",
-                                  fontSize: 11,
-                                  fontStyle: "italic",
-                                  color: "var(--muted)",
-                                  borderLeft: "1px dashed #eef2f7",
+                                  fontSize: 12,
+                                  fontWeight: 700,
+                                  color: "#fff",
+                                  background: suffisant ? "#15803d" : "#b91c1c",
+                                  borderLeft: wi === 0 ? "1px solid var(--border)" : "1px solid rgba(255,255,255,0.35)",
+                                  outline: s.lundi === todayLundi ? "2px solid #1d4ed8" : undefined,
+                                  outlineOffset: -2,
                                 }}
+                                title={`${total} compétent(s) / besoin ${bloc.besoin}${suffisant ? "" : ` — manque ${bloc.besoin - total}`}`}
                               >
-                                {bloc.cible!.valeur}
+                                {total}
                               </td>
-                            ))}
-                          </tr>
-                        )}
+                            );
+                          })}
+                        </tr>
                       </Fragment>
                     );
                   })}
@@ -370,7 +404,7 @@ export default async function FeuilleRouteReport({
         <p className="muted" style={{ marginTop: 16, fontSize: 12 }}>
           <Link href="/matrice" className="navlink">Modifier la matrice</Link>{" "}
           &nbsp;·&nbsp;{" "}
-          <Link href="/admin/competences" className="navlink">Régler seuil et niveaux</Link>
+          <Link href="/admin/competences" className="navlink">Régler les niveaux</Link>
         </p>
       </div>
     </>

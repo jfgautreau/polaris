@@ -157,11 +157,11 @@ describe("calculerGrille — intégration", () => {
       //  - po-cond-1 : 2 × 2 quarts = 4
       //  - po-cond-2 : 2 × 1 quart  = 2  → total conducteurs Condi = 6
       //  - po-ope-1  : 5 × 1 quart  = 5
-      { id: "po-cond-1", atelier_id: "at-condi", actif: true, categorie: "conducteur", effectif_requis: 2, nbQuartsPostes: 2, objectif_cible: 4 },
-      { id: "po-cond-2", atelier_id: "at-condi", actif: true, categorie: "conducteur", effectif_requis: 2, nbQuartsPostes: 1, objectif_cible: 3 },
-      { id: "po-ope-1", atelier_id: "at-condi", actif: true, categorie: "operateur", effectif_requis: 5, nbQuartsPostes: 1, objectif_cible: 6 },
+      { id: "po-cond-1", atelier_id: "at-condi", actif: true, categorie: "conducteur", effectif_requis: 2, nbQuartsPostes: 2 },
+      { id: "po-cond-2", atelier_id: "at-condi", actif: true, categorie: "conducteur", effectif_requis: 2, nbQuartsPostes: 1 },
+      { id: "po-ope-1", atelier_id: "at-condi", actif: true, categorie: "operateur", effectif_requis: 5, nbQuartsPostes: 1 },
       // Poste Fab (conducteur) pour vérifier la ventilation par atelier : 3 × 1 = 3.
-      { id: "po-fab-cond", atelier_id: "at-fab", actif: true, categorie: "conducteur", effectif_requis: 3, nbQuartsPostes: 1, objectif_cible: 5 },
+      { id: "po-fab-cond", atelier_id: "at-fab", actif: true, categorie: "conducteur", effectif_requis: 3, nbQuartsPostes: 1 },
     ],
     matrice: [
       { personne_id: "p1", poste_id: "po-cond-1", niveau_actuel: 2 },
@@ -186,7 +186,6 @@ describe("calculerGrille — intégration", () => {
     ],
     semaines: construireSemaines("2026-09-07", 2),
     nbNiveaux: 4,
-    seuilCompetent: 2,
     habilitationStricte: false,
   };
 
@@ -215,17 +214,6 @@ describe("calculerGrille — intégration", () => {
     expect(ope.niveaux[0].parSemaine[0]).toBe(0);
   });
 
-  it("cible agrégée au seuil compétent, ventilée par atelier des postes", () => {
-    const g = calculerGrille(base);
-    const condi = g.services.find((s) => s.atelierId === "at-condi")!;
-    const cond = condi.blocs.find((b) => b.cat === "conducteur")!;
-    // Condi : 4 (po-cond-1) + 3 (po-cond-2) = 7 — Fab NON inclus.
-    expect(cond.cible).toEqual({ niveau: 2, valeur: 7 });
-    const fab = g.services.find((s) => s.atelierId === "at-fab")!;
-    const fabCond = fab.blocs.find((b) => b.cat === "conducteur")!;
-    // Fab : 5 (po-fab-cond) uniquement.
-    expect(fabCond.cible).toEqual({ niveau: 2, valeur: 5 });
-  });
 
   it("besoin = effectif_requis × nbQuartsPostes, ventilé par atelier des postes", () => {
     const g = calculerGrille(base);
