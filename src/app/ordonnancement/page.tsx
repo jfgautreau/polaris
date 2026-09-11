@@ -7,6 +7,7 @@ import { requireModule, canWrite } from "@/lib/permissions";
 import { parseMonday, weekDays, isoDate, mondayOf, addDays, isoWeekNumber, dowMon, type Jour } from "@/lib/week";
 import { getProfils } from "@/lib/semaine-type";
 import { chargerPosteQuart, tourneSurQuart } from "@/lib/poste-quart";
+import { chargerValidites, actifLe } from "@/lib/referentiel-validite";
 import OrdoGrid from "./OrdoGrid";
 import OrdoQuinzaineNav from "./OrdoQuinzaineNav";
 
@@ -56,7 +57,7 @@ export default async function OrdonnancementPage({
   }
 
   const supabase = await getServerClient();
-  const [{ data: quartsD }, { data: lignesD }, { data: jq }, ov, pq, profils] = await Promise.all([
+  const [{ data: quartsD }, { data: lignesD }, { data: jq }, ov, pq, profils, ligneVal, posteVal] = await Promise.all([
     supabase.from("quart").select("code, libelle, ordre, creneau").order("ordre").returns<Quart[]>(),
     supabase
       .from("ligne")
@@ -78,7 +79,11 @@ export default async function OrdonnancementPage({
     ),
     chargerPosteQuart(supabase),
     getProfils(supabase),
+    chargerValidites(supabase, "ligne"),
+    chargerValidites(supabase, "poste"),
   ]);
+  // Validité datée (0071) à AUJOURD'HUI : ligne / poste fermé (date atteinte) est masqué.
+  const todayIsoRef = isoDate(new Date());
 
   const quarts = quartsD ?? [];
   // Split : la « journée » (pleine journée, mise à part en bas) = le quart sans
@@ -104,11 +109,12 @@ export default async function OrdonnancementPage({
   // sur ce quart (effectif par quart, cf. src/lib/poste-quart.ts — « – » = ne tourne pas).
   const quartsDeLigne = (l: Ligne) =>
     quarts
-      .filter((q) => (l.poste ?? []).some((p) => p.actif && tourneSurQuart(pq, p.id, q.code)))
+      .filter((q) => (l.poste ?? []).some((p) => p.actif && actifLe(posteVal.get(p.id), todayIsoRef) && tourneSurQuart(pq, p.id, q.code)))
       .map((q) => q.code);
 
   const lignes = (lignesD ?? [])
     .slice()
+    .filter((l) => actifLe(ligneVal.get(l.id), todayIsoRef)) // fermeture datée atteinte -> ligne masquée
     .sort(ordreThenNom)
     .map((l) => ({
       id: l.id,

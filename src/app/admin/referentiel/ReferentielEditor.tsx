@@ -82,11 +82,35 @@ const REQ_TAG: React.CSSProperties = {
 };
 
 type Titulaire = { id: string; label: string };
+type Validite = { date_ouverture: string | null; date_fermeture: string | null };
+
+// « YYYY-MM-DD » -> « JJ/MM/AAAA » (badge de fermeture prévue).
+const fmtFr = (iso: string | null): string => (iso ? iso.split("-").reverse().join("/") : "");
+
+// Petit champ date compact pour ouverture / fermeture.
+const DATE_IN: React.CSSProperties = { width: 128, fontSize: 12 };
+
+// Badge « ⏳ Ferme le … » (ambre) affiché quand une fermeture est prévue.
+const PLAN_BADGE: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 5,
+  fontSize: 11,
+  fontWeight: 600,
+  color: "#b45309",
+  background: "#fef3c7",
+  border: "1px solid #f5d99a",
+  padding: "2px 8px",
+  borderRadius: 8,
+  whiteSpace: "nowrap",
+};
 
 export default function ReferentielEditor({
   initial,
   quarts = [],
   pq = {},
+  ligneVal = {},
+  posteVal = {},
   comps = [],
   pcr = [],
   persons = [],
@@ -97,6 +121,8 @@ export default function ReferentielEditor({
   initial: Atelier[];
   quarts?: Quart[];
   pq?: Record<string, { actif: boolean; effectif: number | null }>;
+  ligneVal?: Record<string, Validite>;
+  posteVal?: Record<string, Validite>;
   comps?: Comp[];
   pcr?: string[];
   persons?: Titulaire[];
@@ -117,6 +143,10 @@ export default function ReferentielEditor({
   // l'effectif par défaut du poste ; { actif:false } = « – » (ne tourne pas) ;
   // { actif:true, effectif } = tourne à N (0 ou N). Cf. src/lib/poste-quart.ts.
   const [pqState, setPqState] = useState<Record<string, { actif: boolean; effectif: number | null }>>(pq);
+  // Ouverture / fermeture datées (migration 0071), par ligne et par poste. Vide
+  // = pas de date. Repli sur `actif` quand les deux dates sont nulles.
+  const [ligneValSt, setLigneValSt] = useState<Record<string, Validite>>(ligneVal);
+  const [posteValSt, setPosteValSt] = useState<Record<string, Validite>>(posteVal);
   // Habilitations requises (cle `${poste}:${competence}`). Presente = exigee.
   const [req, setReq] = useState<Set<string>>(new Set(pcr));
   // Poste dont on edite les habilitations requises (modale).
@@ -220,6 +250,18 @@ export default function ReferentielEditor({
   function toggleLigne(aid: string, lid: string, actif: boolean) {
     setLigne(aid, lid, (l) => ({ ...l, actif }));
     post("toggle", { entity: "ligne", id: lid, actif });
+  }
+  // Ouverture / fermeture datées (0071). Vide = pas de date. Auto-enregistré.
+  const valDe = (rec: Record<string, Validite>, id: string): Validite => rec[id] ?? { date_ouverture: null, date_fermeture: null };
+  function setLigneDate(lid: string, champ: "date_ouverture" | "date_fermeture", val: string) {
+    const v = val || null;
+    setLigneValSt((s) => ({ ...s, [lid]: { ...valDe(s, lid), [champ]: v } }));
+    schedule(`l:${lid}:${champ}`, () => post("update-ligne", { id: lid, [champ]: v ?? "" }), 500);
+  }
+  function setPosteDate(pid: string, champ: "date_ouverture" | "date_fermeture", val: string) {
+    const v = val || null;
+    setPosteValSt((s) => ({ ...s, [pid]: { ...valDe(s, pid), [champ]: v } }));
+    schedule(`p:${pid}:${champ}`, () => post("update-poste", { id: pid, patch: { [champ]: v ?? "" } }), 500);
   }
   async function addLigne(aid: string, nom: string) {
     const j = await post("create-ligne", { atelier_id: aid, nom });
@@ -376,6 +418,17 @@ export default function ReferentielEditor({
                     style={{ width: 150 }}
                   />
                 </label>
+                <label style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--muted)" }} title="Date d'ouverture prévue de la ligne. Avant cette date, la ligne n'apparaît pas dans le planning. Vide = ouverte.">
+                  Ouvre le
+                  <input type="date" value={valDe(ligneValSt, l.id).date_ouverture ?? ""} onChange={(e) => setLigneDate(l.id, "date_ouverture", e.target.value)} style={DATE_IN} />
+                </label>
+                <label style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--muted)" }} title="Date de fermeture prévue de la ligne. À partir de cette date, la ligne disparaît du planning. Vide = pas de fermeture prévue.">
+                  Ferme le
+                  <input type="date" value={valDe(ligneValSt, l.id).date_fermeture ?? ""} onChange={(e) => setLigneDate(l.id, "date_fermeture", e.target.value)} style={DATE_IN} />
+                </label>
+                {valDe(ligneValSt, l.id).date_fermeture && (
+                  <span style={PLAN_BADGE} title="Cette ligne fermera à cette date (elle reste visible jusque-là).">⏳ Ferme le {fmtFr(valDe(ligneValSt, l.id).date_fermeture)}</span>
+                )}
                 <ToggleSwitch on={l.actif} onChange={(v) => toggleLigne(a.id, l.id, v)} title="Activer / désactiver la ligne" />
                 <button type="button" style={ADD_BTN} onClick={() => addPoste(a.id, l.id, "")} title="Ajouter un poste (à compléter ensuite)">
                   ＋ Ajouter un poste
@@ -401,6 +454,7 @@ export default function ReferentielEditor({
                   <col style={{ width: 86 }} />{/* N° Rot */}
                   <col style={{ width: 200 }} />{/* Habil. requises */}
                   <col style={{ width: 150 }} />{/* Titulaire */}
+                  <col style={{ width: 132 }} />{/* Ferme le */}
                   {quarts.map((q) => (
                     <col key={q.code} style={{ width: 58 }} />
                   ))}
@@ -418,6 +472,7 @@ export default function ReferentielEditor({
                     <th title="N° de rotation, libre. Un poste à plusieurs positions porte plusieurs numéros (ex. « 12, 13 »).">N° Rot</th>
                     <th title="Habilitations exigées pour tenir ce poste">Habil. requises</th>
                     <th title="Titulaire(s) du poste (poste fixe). Cocher une ou plusieurs personnes, comme les habilitations requises. Même donnée que le sélecteur « Poste fixe » de la fiche Personnel : chaque titulaire est pré-rempli sur ce poste dans le planning.">Titulaire</th>
+                    <th title="Date de fermeture prévue du poste. À partir de cette date, le poste disparaît du planning. Vide = pas de fermeture prévue.">Ferme le</th>
                     {quarts.map((q) => (
                       <th key={q.code} title={`Effectif requis en ${q.libelle} — « – » (vide) = ne tourne pas, 0 = tourne à 0, N = N personnes`} style={{ fontSize: 11 }}>
                         {q.libelle.slice(0, 4)}
@@ -534,6 +589,15 @@ export default function ReferentielEditor({
                           )}
                         </button>
                       </td>
+                      <td>
+                        <input
+                          type="date"
+                          value={valDe(posteValSt, p.id).date_fermeture ?? ""}
+                          onChange={(e) => setPosteDate(p.id, "date_fermeture", e.target.value)}
+                          style={{ width: "100%", minWidth: 0, fontSize: 12 }}
+                          title="Date de fermeture prévue du poste — à partir de cette date, il disparaît du planning. Vide = pas de fermeture."
+                        />
+                      </td>
                       {quarts.map((q) => (
                         <td key={q.code} style={{ textAlign: "center" }}>
                           <input
@@ -559,7 +623,7 @@ export default function ReferentielEditor({
                   ))}
                   {l.poste.length === 0 && (
                     <tr>
-                      <td colSpan={11 + quarts.length} className="muted">Aucun poste.</td>
+                      <td colSpan={12 + quarts.length} className="muted">Aucun poste.</td>
                     </tr>
                   )}
                 </tbody>

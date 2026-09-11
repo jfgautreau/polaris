@@ -6,6 +6,7 @@ import LectureSeule from "@/components/LectureSeule";
 import { fetchAll } from "@/lib/fetch-all";
 import { getNbNiveauxC } from "@/lib/refdata";
 import { chargerPosteQuart } from "@/lib/poste-quart";
+import { chargerValidites, type Validite } from "@/lib/referentiel-validite";
 import ReferentielEditor from "./ReferentielEditor";
 
 type Poste = {
@@ -30,7 +31,7 @@ export default async function ReferentielPage() {
   const { profile, perms } = await requireModule("referentiel", "read");
 
   const supabase = await getServerClient();
-  const [{ data }, { data: quartsD }, pqMap, { data: compsD }, pcrD, { data: persD }, nbNiveaux] = await Promise.all([
+  const [{ data }, { data: quartsD }, pqMap, { data: compsD }, pcrD, { data: persD }, nbNiveaux, ligneValMap, posteValMap] = await Promise.all([
     supabase
       .from("atelier")
       .select(
@@ -53,6 +54,8 @@ export default async function ReferentielPage() {
     // le poste fixe courant pour afficher le titulaire en face de chaque poste.
     supabase.from("personne").select("id, nom, prenom, poste_fixe_id, statut").neq("statut", "PARTI").order("nom").returns<{ id: string; nom: string; prenom: string; poste_fixe_id: string | null; statut: string }[]>(),
     getNbNiveauxC(),
+    chargerValidites(supabase, "ligne"),
+    chargerValidites(supabase, "poste"),
   ]);
 
   const ateliers = (data ?? []).map((a) => ({
@@ -67,6 +70,11 @@ export default async function ReferentielPage() {
   // Effectif par quart (trois états) transmis au client sous forme d'objet simple.
   const pq: Record<string, { actif: boolean; effectif: number | null }> = {};
   for (const [k, v] of pqMap) pq[k] = v;
+  // Dates d'ouverture/fermeture (migration 0071) par ligne et par poste.
+  const ligneVal: Record<string, Validite> = {};
+  for (const [k, v] of ligneValMap) ligneVal[k] = v;
+  const posteVal: Record<string, Validite> = {};
+  for (const [k, v] of posteValMap) posteVal[k] = v;
   const pcr = pcrD.map((r) => `${r.poste_id}:${r.competence_id}`);
   // Regroupements déjà saisis sur le site (0069) : alimentent l'autocomplétion
   // du champ « Regroupement » de chaque ligne (réutiliser une valeur = zéro
@@ -108,7 +116,7 @@ export default async function ReferentielPage() {
         </p>
 
         <LectureSeule actif={!canWrite(perms, "referentiel")}>
-          <ReferentielEditor initial={ateliers} quarts={quartsD ?? []} pq={pq} comps={compsD ?? []} pcr={pcr} persons={persons} titulaires={titulaires} nbNiveaux={nbNiveaux} regroupements={regroupements} />
+          <ReferentielEditor initial={ateliers} quarts={quartsD ?? []} pq={pq} ligneVal={ligneVal} posteVal={posteVal} comps={compsD ?? []} pcr={pcr} persons={persons} titulaires={titulaires} nbNiveaux={nbNiveaux} regroupements={regroupements} />
         </LectureSeule>
       </div>
     </>

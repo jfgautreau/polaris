@@ -26,6 +26,7 @@ import { rotationForWeek } from "@/lib/rotation";
 import { addMonthsIso } from "@/lib/habilitations";
 import { quartParDefaut, quartOuDefaut, memeQuart } from "@/lib/quarts";
 import { chargerPosteQuart, tourneSurQuart, effectifSurQuart } from "@/lib/poste-quart";
+import { chargerValidites, actifLe } from "@/lib/referentiel-validite";
 import { estAuTravailLe, deriverArriveeDepart } from "@/lib/personne-statut";
 
 type PosteRow = {
@@ -110,6 +111,8 @@ export default async function PlanningPage({
     { data: allActiveD },
     { data: chefData },
     pq,
+    ligneVal,
+    posteVal,
   ] = await Promise.all([
     supabase.from("equipe").select("id, nom, couleur, quart_fixe").eq("actif", true).order("nom").returns<Equipe[]>(),
     supabase
@@ -132,7 +135,14 @@ export default async function PlanningPage({
       ? Promise.resolve({ data: [] as { equipe_id: string }[] })
       : supabase.from("equipe_chef").select("equipe_id").eq("app_user_id", profile.authId).returns<{ equipe_id: string }[]>(),
     chargerPosteQuart(supabase),
+    chargerValidites(supabase, "ligne"),
+    chargerValidites(supabase, "poste"),
   ]);
+  // Validité datée (0071) évaluée à AUJOURD'HUI : une ligne / un poste dont la
+  // fermeture est atteinte (ou l'ouverture pas encore) disparaît des écrans.
+  const todayIsoRef = isoDate(new Date());
+  const ligneOuverteDate = (lid: string) => actifLe(ligneVal.get(lid), todayIsoRef);
+  const posteOuvertDate = (pid: string) => actifLe(posteVal.get(pid), todayIsoRef);
   const motifs = motifsD ?? [];
   // Repli si migration 0068 (colonne `couleur`) non appliquée : on relit sans.
   let quarts: Quart[] = quartsD ?? [];
@@ -174,13 +184,14 @@ export default async function PlanningPage({
   const ordreThenNom = <T extends { ordre_affichage?: number; nom: string }>(a: T, b: T) =>
     (a.ordre_affichage ?? 0) - (b.ordre_affichage ?? 0) || a.nom.localeCompare(b.nom);
   const groupsAll = (lignesD ?? [])
+    .filter((l) => ligneOuverteDate(l.id)) // fermeture datée atteinte -> ligne masquée
     .map((l) => ({
       ligneNom: l.nom,
       ligneId: l.id,
       ligneOrdre: l.ordre_affichage ?? 0,
       atelierId: l.atelier?.id ?? null,
       atelierNom: l.atelier?.nom ?? "",
-      postes: [...(l.poste ?? [])].filter((p) => p.actif).sort(ordreThenNom),
+      postes: [...(l.poste ?? [])].filter((p) => p.actif && posteOuvertDate(p.id)).sort(ordreThenNom),
     }))
     .filter((g) => g.postes.length > 0)
     .sort(

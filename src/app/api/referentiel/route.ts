@@ -42,9 +42,40 @@ function posteValue(key: string, value: unknown) {
       const v = s(value);
       return v === "" ? null : Math.max(1, Math.min(3, Number(v)));
     }
+    // Ouverture / fermeture datées (migration 0071). "" = pas de date (null).
+    case "date_ouverture":
+    case "date_fermeture":
+      return dateValue(value);
     default:
       return undefined;
   }
+}
+
+// Normalise une date d'ouverture/fermeture : "YYYY-MM-DD" ou null (vide/invalide).
+function dateValue(value: unknown): string | null {
+  const v = s(value);
+  return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+}
+
+// Update tolérant à l'absence des colonnes de dates (migration 0071 non passée) :
+// si l'update échoue faute de colonne, on retire les clés de date et on réessaie.
+async function updateTable(
+  supabase: ReturnType<typeof getAdminClient>,
+  table: "ligne" | "poste",
+  patch: Record<string, unknown>,
+  id: string,
+  site_id: string
+): Promise<{ error: { message: string } | null }> {
+  let { error } = await supabase.from(table).update(patch).eq("id", id).eq("site_id", site_id);
+  const dateKey = "date_ouverture" in patch || "date_fermeture" in patch;
+  if (error && (error.code === "42703" || error.code === "PGRST204") && dateKey) {
+    const p2 = { ...patch };
+    delete p2.date_ouverture;
+    delete p2.date_fermeture;
+    if (Object.keys(p2).length === 0) return { error: null };
+    ({ error } = await supabase.from(table).update(p2).eq("id", id).eq("site_id", site_id));
+  }
+  return { error };
 }
 
 // Unicité d'un « code » de nom sur le site (insensible à la casse), parmi les
@@ -159,6 +190,9 @@ export async function POST(req: NextRequest) {
         if (body.ordre_affichage !== undefined) patch.ordre_affichage = Math.max(0, Math.floor(Number(body.ordre_affichage) || 0));
         // Regroupement (0069) : étiquette de reporting, texte libre borné, vide = null.
         if (body.regroupement !== undefined) patch.regroupement = s(body.regroupement).slice(0, 60) || null;
+        // Ouverture / fermeture datées (migration 0071).
+        if (body.date_ouverture !== undefined) patch.date_ouverture = dateValue(body.date_ouverture);
+        if (body.date_fermeture !== undefined) patch.date_fermeture = dateValue(body.date_fermeture);
         if (Object.keys(patch).length === 0) return NextResponse.json({ error: "Rien à modifier" }, { status: 400 });
         // Unicité du nom : bloque un renommage qui produirait un doublon parmi
         // les autres lignes actives du site (l'id courant est exclu).
@@ -166,7 +200,7 @@ export async function POST(req: NextRequest) {
           const uErr = await verifierUniciteNom(supabase, "ligne", "nom", patch.nom as string, site_id, s(body.id));
           if (uErr) return NextResponse.json({ error: uErr }, { status: 409 });
         }
-        const { error } = await supabase.from("ligne").update(patch).eq("id", s(body.id)).eq("site_id", site_id);
+        const { error } = await updateTable(supabase, "ligne", patch, s(body.id), site_id);
         if (error) throw error;
         return NextResponse.json({ ok: true });
       }
@@ -187,7 +221,7 @@ export async function POST(req: NextRequest) {
           const uErr = await verifierUniciteNom(supabase, "poste", "nom_court", patch.nom_court as string, site_id, s(body.id));
           if (uErr) return NextResponse.json({ error: uErr }, { status: 409 });
         }
-        const { error } = await supabase.from("poste").update(patch).eq("id", s(body.id)).eq("site_id", site_id);
+        const { error } = await updateTable(supabase, "poste", patch, s(body.id), site_id);
         if (error) throw error;
         return NextResponse.json({ ok: true });
       }

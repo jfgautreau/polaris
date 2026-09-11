@@ -6,6 +6,7 @@ import { requireModule, canWritePlacementData } from "@/lib/permissions";
 import { fetchAll } from "@/lib/fetch-all";
 import { quartParDefaut, quartOuDefaut, memeQuart } from "@/lib/quarts";
 import { chargerPosteQuart, tourneSurQuart, effectifSurQuart } from "@/lib/poste-quart";
+import { chargerValidites, actifLe } from "@/lib/referentiel-validite";
 import { isoDate, mondayOf, addDays } from "@/lib/week";
 import { getRotationRefsC } from "@/lib/refdata";
 import { rotationForWeek, equipesParQuart } from "@/lib/rotation";
@@ -115,7 +116,7 @@ export default async function PlacementPage({
   const atelierId = ateliers.find((a) => a.id === sp.atelier)?.id ?? ateliers[0]?.id ?? "";
 
   // Postes de l'atelier + desactivations poste x quart + placements du jour + matrice.
-  const [{ data: lignesD }, pq, { data: plD }, mat] = await Promise.all([
+  const [{ data: lignesD }, pq, { data: plD }, mat, ligneVal, posteVal] = await Promise.all([
     atelierId
       ? supabase
           .from("ligne")
@@ -138,7 +139,12 @@ export default async function PlacementPage({
         supabase.from("matrice").select("personne_id, poste_id, niveau_actuel").in("poste_id", posteIds).order("id").returns<MatRow[]>()
       );
     })(),
+    chargerValidites(supabase, "ligne"),
+    chargerValidites(supabase, "poste"),
   ]);
+  // Validité datée (0071) à AUJOURD'HUI : ligne / poste dont la fermeture est
+  // atteinte (ou l'ouverture pas encore) est masqué.
+  const todayIsoRef = new Date().toISOString().slice(0, 10);
 
   // Ouverture des lignes decidee dans l'Ordonnancement, pour ce jour et ce quart.
   // Memes regles que le Planning (cf. src/app/planning/page.tsx) : un quart sans
@@ -175,13 +181,14 @@ export default async function PlacementPage({
   // Effectif par quart (trois états, cf. src/lib/poste-quart.ts) : un poste qui ne
   // tourne pas sur le quart (« – ») est masqué ; sinon son besoin = effectif du quart.
   const groups = (lignesD ?? [])
+    .filter((l) => actifLe(ligneVal.get(l.id), todayIsoRef)) // fermeture datée atteinte -> ligne masquée
     .map((l) => ({
       ligneId: l.id,
       ligneNom: l.nom,
       ligneOrdre: l.ordre_affichage ?? 0,
       fermee: !ligneOuverte(l.id), // ordonnancement : ligne fermée -> besoin 0
       postes: [...(l.poste ?? [])]
-        .filter((p) => p.actif && tourneSurQuart(pq, p.id, quart, p.effectif_requis))
+        .filter((p) => p.actif && actifLe(posteVal.get(p.id), todayIsoRef) && tourneSurQuart(pq, p.id, quart, p.effectif_requis))
         .sort(ordreThenNom)
         .map((p) => ({
           id: p.id,
