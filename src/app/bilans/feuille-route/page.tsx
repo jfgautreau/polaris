@@ -14,6 +14,7 @@ import {
   calculerGrille,
   construireSemaines,
   lundiIsoDe,
+  nbQuartsPostesDe,
   type Atelier,
   type Contrat,
   type MatCell,
@@ -68,7 +69,7 @@ export default async function FeuilleRouteReport({
   const couleursCfg = await getCouleursNiveauxC();
   const couleurs = couleursNiveau(couleursCfg);
 
-  const [{ data: atD }, { data: eqD }, { data: persD }, { data: lignesD }, matD, plD, cpD, pcD, { data: pcrD }] = await Promise.all([
+  const [{ data: atD }, { data: eqD }, { data: persD }, { data: lignesD }, matD, plD, cpD, pcD, { data: pcrD }, { data: quartsD }, { data: pqOffD }] = await Promise.all([
     supabase.from("atelier").select("id, nom").eq("actif", true).order("nom").returns<Atelier[]>(),
     supabase.from("equipe").select("id, nom, couleur").eq("actif", true).order("nom").returns<{ id: string; nom: string; couleur: string | null }[]>(),
     supabase.from("personne").select("id, atelier_id, equipe_id").eq("statut", "ACTIF").returns<Personne[]>(),
@@ -97,7 +98,22 @@ export default async function FeuilleRouteReport({
       supabase.from("personne_competence").select("personne_id, competence_id, date_expiration").order("id").returns<PcRow[]>(),
     ),
     supabase.from("poste_competence_requise").select("poste_id, competence_id").returns<PcReqRow[]>(),
+    // Quarts du site + désactivations poste×quart : servent à compter les
+    // quarts POSTÉS de chaque poste pour le besoin (matin + après-midi = 2).
+    supabase.from("quart").select("code, creneau, ordre").order("ordre").returns<{ code: string; creneau: string | null; ordre: number }[]>(),
+    supabase.from("poste_quart").select("poste_id, quart_code").eq("actif", false).returns<{ poste_id: string; quart_code: string }[]>(),
   ]);
+
+  // Quarts postés par poste (référentiel) : tous les quarts du site sauf ceux
+  // désactivés (`poste_quart`, défaut actif). `journeeCode` = quart pleine
+  // journée (sans créneau, plus petit ordre) — même détection que l'ordo.
+  const quartCodes = (quartsD ?? []).map((q) => q.code);
+  const journeeCode = [...(quartsD ?? [])].filter((q) => !q.creneau).sort((a, b) => a.ordre - b.ordre)[0]?.code ?? null;
+  const pqOff = new Set((pqOffD ?? []).map((r) => `${r.poste_id}:${r.quart_code}`));
+  const nbQuartsDe = (posteId: string): number => {
+    const actifs = quartCodes.filter((q) => !pqOff.has(`${posteId}:${q}`));
+    return nbQuartsPostesDe(actifs, journeeCode);
+  };
 
   // Postes actifs indexés + rattachement à leur atelier (via ligne). L'atelier_id
   // du POSTE est celui de sa ligne : il sert à ventiler le Besoin et la Cible par
@@ -112,6 +128,7 @@ export default async function FeuilleRouteReport({
         actif: true,
         categorie: p.categorie ?? "operateur",
         effectif_requis: p.effectif_requis ?? 0,
+        nbQuartsPostes: nbQuartsDe(p.id),
         objectif_cible: p.objectif_cible ?? 0,
       });
     }
@@ -179,7 +196,7 @@ export default async function FeuilleRouteReport({
               24 semaines glissantes · comptage <strong>exact</strong> (personne = son niveau MAX par catégorie) · service = <strong>atelier d&apos;affectation</strong> de la personne · variations : absences pleine semaine, expirations d&apos;habilitation, fins de contrat.
             </div>
             <div className="sub" style={{ marginTop: 4 }}>
-              <strong>Besoin</strong> = somme <code>poste.effectif_requis</code> sur les postes actifs de la catégorie <em>dans l&apos;atelier</em> (abaque du Référentiel).{" "}
+              <strong>Besoin</strong> = somme, sur les postes actifs de la catégorie <em>dans l&apos;atelier</em>, de <code>effectif_requis × nombre de quarts postés</code> (Référentiel) : 1 poste à 1 place tournant matin + après-midi compte 2. La journée pleine compte 1 (elle ne se cumule pas avec matin/après-midi).{" "}
               <strong>Cible</strong> = somme <code>poste.objectif_cible</code> sur ces mêmes postes, positionnée au seuil compétent (niv.&nbsp;{seuilCompetent}) — c&apos;est l&apos;objectif « nombre de personnes ≥ seuil » saisi dans le bilan de la Matrice, agrégé par catégorie du service.
             </div>
           </div>
@@ -249,7 +266,7 @@ export default async function FeuilleRouteReport({
                           <tr key={`${svc.atelierId}:${bloc.cat}:besoin`}>
                             <td
                               style={{ padding: "3px 8px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap", color: "#334155" }}
-                              title={`Somme des effectif_requis sur les postes ${bloc.catLabel.toLowerCase()} actifs de l'atelier (Référentiel). Constant sur les 24 semaines : c'est un abaque de référence, pas une charge datée.`}
+                              title={`Somme de (effectif_requis × nombre de quarts postés) sur les postes ${bloc.catLabel.toLowerCase()} actifs de l'atelier (Référentiel). 1 place tournant matin + après-midi = 2. Constant sur les 24 semaines : abaque de référence, pas une charge datée.`}
                             >
                               Besoin
                             </td>

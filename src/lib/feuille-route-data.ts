@@ -39,7 +39,12 @@ export type Poste = {
   atelier_id: string | null; // hérité de la ligne — sert à ventiler Besoin et Cible par service
   actif: boolean;
   categorie: string; // manager | conducteur | operateur
-  effectif_requis: number; // abaque (besoin) par poste
+  effectif_requis: number; // abaque (besoin) par poste et PAR QUART
+  // Nombre de quarts POSTÉS du poste (matin/après-midi/nuit… — la journée ne
+  // compte que si c'est le seul quart, cf. `quartsEffectifs` du loader). Le
+  // besoin d'un poste = effectif_requis × nbQuartsPostes : 1 manager sur
+  // matin + après-midi = besoin 2. Calculé au chargement (référentiel).
+  nbQuartsPostes: number;
   objectif_cible: number; // objectif « ≥ seuil » agrégé sur la Cible
 };
 
@@ -168,6 +173,19 @@ export function habilitationValideAu(exp: string | null | undefined, jour: strin
   return exp >= jour;
 }
 
+// Nombre de quarts POSTÉS d'un poste, pour le besoin. `quartsActifs` = les
+// quarts sur lesquels le poste tourne (référentiel : tous sauf désactivés).
+// `journeeCode` = quart « pleine journée » (sans créneau, plus petit ordre) —
+// détection identique à l'ordonnancement / assez-competences. La journée est
+// un AGRÉGAT : elle ne compte QUE si c'est le seul quart du poste (poste en
+// régulière), sinon elle doublonnerait matin + après-midi + nuit. Ainsi
+// « matin + après-midi » = 2, « journée seule » = 1, « matin + AM + nuit » = 3.
+export function nbQuartsPostesDe(quartsActifs: string[], journeeCode: string | null): number {
+  const postes = journeeCode ? quartsActifs.filter((c) => c !== journeeCode) : quartsActifs;
+  if (postes.length > 0) return postes.length;
+  return quartsActifs.length > 0 ? 1 : 0; // journée seule = régulière (1) ; aucun quart = 0
+}
+
 // --- Calcul principal -----------------------------------------------------
 
 export type Params = {
@@ -264,7 +282,9 @@ export function calculerGrille(p: Params): Grille {
     if (!catValides.has(po.categorie)) continue;
     if (!po.atelier_id) continue;
     const cle = `${po.atelier_id}|${po.categorie}`;
-    besoinParCle.set(cle, (besoinParCle.get(cle) ?? 0) + (po.effectif_requis ?? 0));
+    // Besoin = effectif_requis × nombre de quarts postés (matin + après-midi
+    // = 2, etc.). Un poste sans quart posté (nbQuartsPostes 0) ne contribue pas.
+    besoinParCle.set(cle, (besoinParCle.get(cle) ?? 0) + (po.effectif_requis ?? 0) * (po.nbQuartsPostes ?? 0));
     cibleParCle.set(cle, (cibleParCle.get(cle) ?? 0) + (po.objectif_cible ?? 0));
   }
 

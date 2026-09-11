@@ -7,10 +7,33 @@ import {
   personneEnEffectifLundi,
   semainePleineAbsence,
   habilitationValideAu,
+  nbQuartsPostesDe,
   maxParCategorieAuJour,
   calculerGrille,
   type Params,
 } from "./feuille-route-data";
+
+describe("nbQuartsPostesDe", () => {
+  const J = "journee";
+  it("matin + après-midi = 2", () => {
+    expect(nbQuartsPostesDe(["matin", "apres_midi"], J)).toBe(2);
+  });
+  it("matin + après-midi + nuit = 3", () => {
+    expect(nbQuartsPostesDe(["matin", "apres_midi", "nuit"], J)).toBe(3);
+  });
+  it("journée seule = 1 (régulière)", () => {
+    expect(nbQuartsPostesDe(["journee"], J)).toBe(1);
+  });
+  it("journée + matin + après-midi = 2 (la journée ne doublonne pas)", () => {
+    expect(nbQuartsPostesDe(["journee", "matin", "apres_midi"], J)).toBe(2);
+  });
+  it("aucun quart = 0", () => {
+    expect(nbQuartsPostesDe([], J)).toBe(0);
+  });
+  it("sans journeeCode défini : compte tous les quarts", () => {
+    expect(nbQuartsPostesDe(["matin", "apres_midi"], null)).toBe(2);
+  });
+});
 
 describe("dates", () => {
   it("lundiIsoDe : lundi 2026-09-07 est son propre lundi", () => {
@@ -130,12 +153,15 @@ describe("calculerGrille — intégration", () => {
       { id: "p3", atelier_id: "at-fab", equipe_id: "eq-a" },
     ],
     postes: [
-      // Postes Condi : 2 conducteurs (cible 4+3=7, besoin 2+2=4) + 1 opérateur.
-      { id: "po-cond-1", atelier_id: "at-condi", actif: true, categorie: "conducteur", effectif_requis: 2, objectif_cible: 4 },
-      { id: "po-cond-2", atelier_id: "at-condi", actif: true, categorie: "conducteur", effectif_requis: 2, objectif_cible: 3 },
-      { id: "po-ope-1", atelier_id: "at-condi", actif: true, categorie: "operateur", effectif_requis: 5, objectif_cible: 6 },
-      // Poste Fab (conducteur) pour vérifier la ventilation par atelier.
-      { id: "po-fab-cond", atelier_id: "at-fab", actif: true, categorie: "conducteur", effectif_requis: 3, objectif_cible: 5 },
+      // Postes Condi. Besoin = effectif_requis × nbQuartsPostes :
+      //  - po-cond-1 : 2 × 2 quarts = 4
+      //  - po-cond-2 : 2 × 1 quart  = 2  → total conducteurs Condi = 6
+      //  - po-ope-1  : 5 × 1 quart  = 5
+      { id: "po-cond-1", atelier_id: "at-condi", actif: true, categorie: "conducteur", effectif_requis: 2, nbQuartsPostes: 2, objectif_cible: 4 },
+      { id: "po-cond-2", atelier_id: "at-condi", actif: true, categorie: "conducteur", effectif_requis: 2, nbQuartsPostes: 1, objectif_cible: 3 },
+      { id: "po-ope-1", atelier_id: "at-condi", actif: true, categorie: "operateur", effectif_requis: 5, nbQuartsPostes: 1, objectif_cible: 6 },
+      // Poste Fab (conducteur) pour vérifier la ventilation par atelier : 3 × 1 = 3.
+      { id: "po-fab-cond", atelier_id: "at-fab", actif: true, categorie: "conducteur", effectif_requis: 3, nbQuartsPostes: 1, objectif_cible: 5 },
     ],
     matrice: [
       { personne_id: "p1", poste_id: "po-cond-1", niveau_actuel: 2 },
@@ -201,14 +227,14 @@ describe("calculerGrille — intégration", () => {
     expect(fabCond.cible).toEqual({ niveau: 2, valeur: 5 });
   });
 
-  it("besoin agrégé sur effectif_requis, ventilé par atelier des postes", () => {
+  it("besoin = effectif_requis × nbQuartsPostes, ventilé par atelier des postes", () => {
     const g = calculerGrille(base);
     const condi = g.services.find((s) => s.atelierId === "at-condi")!;
-    // Conducteurs Condi : 2 + 2 = 4, Opérateurs Condi : 5.
-    expect(condi.blocs.find((b) => b.cat === "conducteur")!.besoin).toBe(4);
+    // Conducteurs Condi : (2×2) + (2×1) = 6, Opérateurs Condi : 5×1 = 5.
+    expect(condi.blocs.find((b) => b.cat === "conducteur")!.besoin).toBe(6);
     expect(condi.blocs.find((b) => b.cat === "operateur")!.besoin).toBe(5);
     const fab = g.services.find((s) => s.atelierId === "at-fab")!;
-    // Conducteurs Fab : 3.
+    // Conducteurs Fab : 3×1 = 3.
     expect(fab.blocs.find((b) => b.cat === "conducteur")!.besoin).toBe(3);
   });
 
