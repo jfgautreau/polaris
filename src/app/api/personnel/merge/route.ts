@@ -39,7 +39,7 @@ async function mergeAll(sb: SupabaseClient, table: string, keep: string, dup: st
   return { moved: ids.length, dropped: 0 };
 }
 
-const IDENT = ["matricule", "numero_badge", "equipe_id", "atelier_id", "date_livret_accueil", "pointure", "commentaire", "sexe", "date_debut", "date_fin"];
+const IDENT = ["matricule", "numero_badge", "equipe_id", "atelier_id", "regroupement", "date_livret_accueil", "pointure", "commentaire", "sexe", "date_debut", "date_fin"];
 const empty = (v: unknown) => v === null || v === undefined || v === "";
 
 export async function POST(req: NextRequest) {
