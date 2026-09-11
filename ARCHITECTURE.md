@@ -31,17 +31,23 @@ placement journalier, habilitations, affichage couloir, bilans).
 ## Modèle de données (Supabase / PostgreSQL)
 - **Auth & droits** : `app_user` (compte + rôle), liée à `auth.users` (trigger
   `handle_new_user`) ; `role_permission` (surcharge de la matrice de droits par module).
-- **Référentiel** : `atelier` > `ligne` > `poste` (`effectif_requis` = abaque, `nom_court`,
+- **Référentiel** : `atelier` > `ligne` > `poste` (`effectif_requis` = abaque **déprécié**,
+  repli de l'effectif par quart depuis 0070 ; `nom_court`,
   `categorie` manager/conducteur/operateur, `niveau_min_requis`, `objectif_polyvalence`,
   `objectif_cible`, `ordre_affichage`), `equipe` (+ `quart_fixe`), `equipe_chef`.
+  `ligne` et `poste` portent aussi `date_ouverture`/`date_fermeture` (0071 :
+  ouverture/fermeture datée, helper `src/lib/referentiel-validite.ts`).
 - **Quarts** : `quart` (`journee`/`matin`/`apres_midi`/`nuit` + horaires),
   `rotation_reference` (**rotation par référence datée** : une semaine (lundi) × équipe →
   quart ; l'alternance des semaines suivantes est *calculée* par `src/lib/rotation.ts`,
   jamais stockée — pour une semaine cible, la référence active est la plus récente ≤ cette
   semaine, donc changer la rotation = ajouter une référence datée sans toucher le passé),
   `equipe_quart_semaine` (ancienne saisie semaine-par-semaine, **conservée mais plus
-  lue/écrite**), `poste_quart` (activation poste×quart, défaut actif : ne stocke que les
-  désactivations), `jour_quart`, `ouverture_quart`, `horaire_poste` (poste × quart × jour,
+  lue/écrite**), `poste_quart` (**effectif PAR quart** depuis 0070, colonne
+  `effectif_requis` : trois états lus par `src/lib/poste-quart.ts` — aucune ligne =
+  repli sur `poste.effectif_requis` ; `actif=false` = « – » ne tourne pas ;
+  `actif=true` = tourne à 0 ou N. L'ancien « ne stocke que les désactivations » n'est
+  plus vrai), `jour_quart`, `ouverture_quart`, `horaire_poste` (poste × quart × jour,
   = horaire *standard* affiché à la TV et proposé par défaut dans la pendule du planning).
 - **Personnel** : `personne` (équipe, atelier, type_contrat, sexe, `numero_badge`,
   `date_livret_accueil`, temps partiel `tp_config` jsonb ; champs RGPD
