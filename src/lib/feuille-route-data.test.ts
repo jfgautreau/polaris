@@ -130,14 +130,20 @@ describe("calculerGrille — intégration", () => {
       { id: "p3", atelier_id: "at-fab", equipe_id: "eq-a" },
     ],
     postes: [
-      { id: "po-cond-1", actif: true, categorie: "conducteur", objectif_cible: 4 },
-      { id: "po-cond-2", actif: true, categorie: "conducteur", objectif_cible: 3 },
-      { id: "po-ope-1", actif: true, categorie: "operateur", objectif_cible: 6 },
+      // Postes Condi : 2 conducteurs (cible 4+3=7, besoin 2+2=4) + 1 opérateur.
+      { id: "po-cond-1", atelier_id: "at-condi", actif: true, categorie: "conducteur", effectif_requis: 2, objectif_cible: 4 },
+      { id: "po-cond-2", atelier_id: "at-condi", actif: true, categorie: "conducteur", effectif_requis: 2, objectif_cible: 3 },
+      { id: "po-ope-1", atelier_id: "at-condi", actif: true, categorie: "operateur", effectif_requis: 5, objectif_cible: 6 },
+      // Poste Fab (conducteur) pour vérifier la ventilation par atelier.
+      { id: "po-fab-cond", atelier_id: "at-fab", actif: true, categorie: "conducteur", effectif_requis: 3, objectif_cible: 5 },
     ],
     matrice: [
       { personne_id: "p1", poste_id: "po-cond-1", niveau_actuel: 2 },
       { personne_id: "p1", poste_id: "po-cond-2", niveau_actuel: 3 },
       { personne_id: "p2", poste_id: "po-ope-1", niveau_actuel: 1 },
+      // p3 (affectation Fab) est niveau 4 sur un poste Condi : vérifie que le
+      // filtre « service = atelier d'affectation » place ce compte dans Fab
+      // même si le poste tenu est ailleurs.
       { personne_id: "p3", poste_id: "po-cond-1", niveau_actuel: 4 },
     ],
     contratsParPersonne: new Map([
@@ -183,12 +189,27 @@ describe("calculerGrille — intégration", () => {
     expect(ope.niveaux[0].parSemaine[0]).toBe(0);
   });
 
-  it("cible agrégée au seuil compétent", () => {
+  it("cible agrégée au seuil compétent, ventilée par atelier des postes", () => {
     const g = calculerGrille(base);
     const condi = g.services.find((s) => s.atelierId === "at-condi")!;
     const cond = condi.blocs.find((b) => b.cat === "conducteur")!;
-    // 4 (po-cond-1) + 3 (po-cond-2) = 7, positionné au niv.2 (seuil).
+    // Condi : 4 (po-cond-1) + 3 (po-cond-2) = 7 — Fab NON inclus.
     expect(cond.cible).toEqual({ niveau: 2, valeur: 7 });
+    const fab = g.services.find((s) => s.atelierId === "at-fab")!;
+    const fabCond = fab.blocs.find((b) => b.cat === "conducteur")!;
+    // Fab : 5 (po-fab-cond) uniquement.
+    expect(fabCond.cible).toEqual({ niveau: 2, valeur: 5 });
+  });
+
+  it("besoin agrégé sur effectif_requis, ventilé par atelier des postes", () => {
+    const g = calculerGrille(base);
+    const condi = g.services.find((s) => s.atelierId === "at-condi")!;
+    // Conducteurs Condi : 2 + 2 = 4, Opérateurs Condi : 5.
+    expect(condi.blocs.find((b) => b.cat === "conducteur")!.besoin).toBe(4);
+    expect(condi.blocs.find((b) => b.cat === "operateur")!.besoin).toBe(5);
+    const fab = g.services.find((s) => s.atelierId === "at-fab")!;
+    // Conducteurs Fab : 3.
+    expect(fab.blocs.find((b) => b.cat === "conducteur")!.besoin).toBe(3);
   });
 
   it("absence pleine semaine retire la personne du décompte", () => {

@@ -21,7 +21,7 @@ import {
   type Poste,
 } from "@/lib/feuille-route-data";
 
-const HORIZON = 12;
+const HORIZON = 24;
 const CAT_COULEUR: Record<string, { fg: string; bg: string }> = {
   manager: { fg: "#9333ea", bg: "#f3e8ff" },
   conducteur: { fg: "#4338ca", bg: "#eceafe" },
@@ -31,7 +31,7 @@ const CAT_COULEUR: Record<string, { fg: string; bg: string }> = {
 type LigneAtelier = {
   id: string;
   atelier_id: string | null;
-  poste: { id: string; actif: boolean; categorie: string | null; objectif_cible: number | null }[];
+  poste: { id: string; actif: boolean; categorie: string | null; effectif_requis: number | null; objectif_cible: number | null }[];
 };
 
 type PlRow = { personne_id: string; jour: string; motif_absence_id: string | null };
@@ -74,7 +74,7 @@ export default async function FeuilleRouteReport({
     supabase.from("personne").select("id, atelier_id, equipe_id").eq("statut", "ACTIF").returns<Personne[]>(),
     supabase
       .from("ligne")
-      .select("id, atelier_id, poste(id, actif, categorie, objectif_cible)")
+      .select("id, atelier_id, poste(id, actif, categorie, effectif_requis, objectif_cible)")
       .eq("actif", true)
       .returns<LigneAtelier[]>(),
     fetchAll<MatCell>(() =>
@@ -99,15 +99,19 @@ export default async function FeuilleRouteReport({
     supabase.from("poste_competence_requise").select("poste_id, competence_id").returns<PcReqRow[]>(),
   ]);
 
-  // Postes actifs indexés + rattachement à leur atelier (via ligne).
+  // Postes actifs indexés + rattachement à leur atelier (via ligne). L'atelier_id
+  // du POSTE est celui de sa ligne : il sert à ventiler le Besoin et la Cible par
+  // service (indépendamment de l'atelier d'affectation des personnes).
   const postes: Poste[] = [];
   for (const l of lignesD ?? []) {
     for (const p of l.poste ?? []) {
       if (!p.actif) continue;
       postes.push({
         id: p.id,
+        atelier_id: l.atelier_id,
         actif: true,
         categorie: p.categorie ?? "operateur",
+        effectif_requis: p.effectif_requis ?? 0,
         objectif_cible: p.objectif_cible ?? 0,
       });
     }
@@ -172,7 +176,11 @@ export default async function FeuilleRouteReport({
           <div>
             <PageTitle module="bilans">Projection de compétences — feuille de route</PageTitle>
             <div className="sub">
-              12 semaines glissantes · comptage <strong>exact</strong> (personne = son niveau MAX par catégorie) · service = <strong>atelier d&apos;affectation</strong> · variations : absences pleine semaine, expirations d&apos;habilitation, fins de contrat.
+              24 semaines glissantes · comptage <strong>exact</strong> (personne = son niveau MAX par catégorie) · service = <strong>atelier d&apos;affectation</strong> de la personne · variations : absences pleine semaine, expirations d&apos;habilitation, fins de contrat.
+            </div>
+            <div className="sub" style={{ marginTop: 4 }}>
+              <strong>Besoin</strong> = somme <code>poste.effectif_requis</code> sur les postes actifs de la catégorie <em>dans l&apos;atelier</em> (abaque du Référentiel).{" "}
+              <strong>Cible</strong> = somme <code>poste.objectif_cible</code> sur ces mêmes postes, positionnée au seuil compétent (niv.&nbsp;{seuilCompetent}) — c&apos;est l&apos;objectif « nombre de personnes ≥ seuil » saisi dans le bilan de la Matrice, agrégé par catégorie du service.
             </div>
           </div>
         </div>
@@ -235,6 +243,33 @@ export default async function FeuilleRouteReport({
                             </span>
                           </td>
                         </tr>
+                        {/* Ligne Besoin (abaque) : constante sur l'horizon, sert
+                            de référence pour lire les niveaux ci-dessous. */}
+                        {bloc.besoin > 0 && (
+                          <tr key={`${svc.atelierId}:${bloc.cat}:besoin`}>
+                            <td
+                              style={{ padding: "3px 8px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap", color: "#334155" }}
+                              title={`Somme des effectif_requis sur les postes ${bloc.catLabel.toLowerCase()} actifs de l'atelier (Référentiel). Constant sur les 24 semaines : c'est un abaque de référence, pas une charge datée.`}
+                            >
+                              Besoin
+                            </td>
+                            {grille.semaines.map((s, wi) => (
+                              <td
+                                key={wi}
+                                style={{
+                                  textAlign: "center",
+                                  fontSize: 12,
+                                  fontWeight: 700,
+                                  color: "#334155",
+                                  background: s.lundi === todayLundi ? "#eff6ff" : "#f8fafc",
+                                  borderLeft: wi === 0 ? "1px solid var(--border)" : "1px solid #eef2f7",
+                                }}
+                              >
+                                {bloc.besoin}
+                              </td>
+                            ))}
+                          </tr>
+                        )}
                         {bloc.niveaux.map((niv, ni) => {
                           const teinte = couleurs[niv.niveau] ?? "#94a3b8";
                           return (
