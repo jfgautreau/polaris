@@ -21,6 +21,7 @@ import { rotationForWeek, type RotationRef } from "@/lib/rotation";
 import { contratCouvreLe, type Periode } from "@/lib/personne-statut";
 import { isoDate } from "@/lib/week";
 import { chargerPosteQuart, etatQuart } from "@/lib/poste-quart";
+import { chargerValidites, actifLe } from "@/lib/referentiel-validite";
 import {
   buildJourFlow,
   type BesoinPoste,
@@ -90,6 +91,8 @@ export async function chargerProjection(
     { data: jqD },
     ovD,
     pq,
+    ligneVal,
+    posteVal,
     { data: persD },
     contratD,
     matD,
@@ -104,6 +107,8 @@ export async function chargerProjection(
       supabase.from("ouverture_quart").select("jour, ligne_id, quart_code, ouverte").in("jour", horizonIsos).order("jour").order("ligne_id").order("quart_code").returns<{ jour: string; ligne_id: string; quart_code: string; ouverte: boolean }[]>()
     ),
     chargerPosteQuart(supabase),
+    chargerValidites(supabase, "ligne"),
+    chargerValidites(supabase, "poste"),
     supabase.from("personne").select("id, equipe_id").returns<{ id: string; equipe_id: string | null }[]>(),
     fetchAll<{ personne_id: string; date_debut: string | null; date_fin: string | null }>(() =>
       supabase.from("contrat_periode").select("personne_id, date_debut, date_fin").order("id").returns<{ personne_id: string; date_debut: string | null; date_fin: string | null }[]>()
@@ -153,8 +158,9 @@ export async function chargerProjection(
       if (!quartActif(q)) continue;
       for (const l of lignes) {
         if (!ligneOuverte(l.id, q)) continue;
+        if (!actifLe(ligneVal.get(l.id), iso)) continue; // ligne fermée (date) ce jour
         for (const p of l.poste ?? []) {
-          if (!p.actif) continue;
+          if (!p.actif || !actifLe(posteVal.get(p.id), iso)) continue;
           const { tourne, effectif } = etatQuart(pq, p.id, q, p.effectif_requis ?? 0);
           if (tourne && effectif > 0) besoins.push({ cle: `${p.id}:${q}`, posteId: p.id, quart: q, effectifRequis: effectif, gabarit: !ordonnance });
         }

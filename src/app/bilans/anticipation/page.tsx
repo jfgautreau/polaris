@@ -8,6 +8,7 @@ import { requireRapportBilan } from "@/lib/permissions";
 import { fetchAll } from "@/lib/fetch-all";
 import { getSeuilCompetentC } from "@/lib/refdata";
 import { chargerPosteQuart, effectifSurQuart } from "@/lib/poste-quart";
+import { chargerValidites, actifLe } from "@/lib/referentiel-validite";
 import { isoDate, isoWeekNumber, parseMois, monthDays, monthLabel } from "@/lib/week";
 import { buildJourFlow, type BesoinPoste, type PersonneDispo } from "@/lib/projection-capacite";
 
@@ -39,7 +40,7 @@ export default async function AnticipationReport({ searchParams }: { searchParam
   const supabase = await getServerClient();
   // Seuil « compétent » paramétrable par site (0062, repli 2).
   const SEUIL = await getSeuilCompetentC();
-  const [{ data: lignesD }, { data: quartsD }, { data: jqD }, ovD, pq, { data: persD }, plD, matD, { data: atD }] =
+  const [{ data: lignesD }, { data: quartsD }, { data: jqD }, ovD, pq, ligneVal, posteVal, { data: persD }, plD, matD, { data: atD }] =
     await Promise.all([
       supabase.from("ligne").select("id, nom, atelier_id, poste(id, nom, actif, effectif_requis, categorie)").eq("actif", true).returns<LigneRow[]>(),
       supabase.from("quart").select("code").returns<{ code: string }[]>(),
@@ -48,6 +49,8 @@ export default async function AnticipationReport({ searchParams }: { searchParam
         supabase.from("ouverture_quart").select("jour, ligne_id, quart_code, ouverte").in("jour", horizonIsos).order("jour").order("ligne_id").order("quart_code").returns<{ jour: string; ligne_id: string; quart_code: string; ouverte: boolean }[]>()
       ),
       chargerPosteQuart(supabase),
+      chargerValidites(supabase, "ligne"),
+      chargerValidites(supabase, "poste"),
       supabase.from("personne").select("id, nom, prenom, type_contrat, date_fin").eq("statut", "ACTIF").returns<Personne[]>(),
       fetchAll<Placement>(() =>
         supabase.from("placement").select("personne_id, jour, motif_absence_id").in("jour", horizonIsos).order("id").returns<Placement[]>()
@@ -71,7 +74,8 @@ export default async function AnticipationReport({ searchParams }: { searchParam
       if (!quartActif(q, iso)) continue;
       for (const l of lignes) {
         if (!ligneOuverte(l.id, q, iso)) continue;
-        for (const p of l.poste ?? []) if (p.actif) b += effectifSurQuart(pq, p.id, q, p.effectif_requis);
+        if (!actifLe(ligneVal.get(l.id), iso)) continue; // ligne fermée (date) ce jour
+      for (const p of l.poste ?? []) if (p.actif && actifLe(posteVal.get(p.id), iso)) b += effectifSurQuart(pq, p.id, q, p.effectif_requis);
       }
     }
     return b;
@@ -117,7 +121,8 @@ export default async function AnticipationReport({ searchParams }: { searchParam
       if (!quartActif(q, iso)) continue;
       for (const l of lignes) {
         if (!ligneOuverte(l.id, q, iso)) continue;
-        for (const p of l.poste ?? []) if (p.actif && (p.categorie ?? "operateur") === cat) b += effectifSurQuart(pq, p.id, q, p.effectif_requis);
+        if (!actifLe(ligneVal.get(l.id), iso)) continue; // ligne fermée (date) ce jour
+        for (const p of l.poste ?? []) if (p.actif && actifLe(posteVal.get(p.id), iso) && (p.categorie ?? "operateur") === cat) b += effectifSurQuart(pq, p.id, q, p.effectif_requis);
       }
     }
     return b;

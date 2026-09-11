@@ -32,6 +32,7 @@ import { rotationForWeek, type RotationRef } from "@/lib/rotation";
 import { contratCouvreLe, type Periode } from "@/lib/personne-statut";
 import { isoDate, isoWeekNumber } from "@/lib/week";
 import { chargerPosteQuart, etatQuart } from "@/lib/poste-quart";
+import { chargerValidites, actifLe } from "@/lib/referentiel-validite";
 import { buildJourFlow, type BesoinPoste, type PersonneDispo } from "@/lib/projection-capacite";
 
 export type JourCol = {
@@ -146,6 +147,8 @@ export async function chargerCouvertureConges(
     { data: equipesD },
     { data: quartsD },
     pq,
+    ligneVal,
+    posteVal,
     { data: jqD },
     ovD,
     { data: rr },
@@ -165,6 +168,8 @@ export async function chargerCouvertureConges(
     supabase.from("equipe").select("id, quart_fixe").eq("actif", true).returns<{ id: string; quart_fixe: string | null }[]>(),
     supabase.from("quart").select("code, creneau, ordre").order("ordre").returns<{ code: string; creneau: string | null; ordre: number }[]>(),
     chargerPosteQuart(supabase),
+    chargerValidites(supabase, "ligne"),
+    chargerValidites(supabase, "poste"),
     supabase.from("jour_quart").select("jour, quart_code, actif").in("jour", horizonIsos).returns<{ jour: string; quart_code: string; actif: boolean }[]>(),
     fetchAll<{ jour: string; ligne_id: string; quart_code: string; ouverte: boolean }>(() =>
       supabase.from("ouverture_quart").select("jour, ligne_id, quart_code, ouverte").in("jour", horizonIsos).order("jour").order("ligne_id").order("quart_code").returns<{ jour: string; ligne_id: string; quart_code: string; ouverte: boolean }[]>()
@@ -225,6 +230,8 @@ export async function chargerCouvertureConges(
     const ordonnance = joursOrdonnances.has(iso);
     const out: BesoinPoste[] = [];
     for (const p of postesBesoin) {
+      // Fermeture datée (0071) : poste ou sa ligne fermé ce jour -> aucun besoin.
+      if (!actifLe(posteVal.get(p.id), iso) || !actifLe(ligneVal.get(p.ligneId), iso)) continue;
       const ouverts: string[] = [];
       for (const q of quarts) {
         const { tourne, effectif } = etatQuart(pq, p.id, q, p.posteEff);

@@ -8,6 +8,7 @@ import { getModulesMasquesC } from "@/lib/site-modules";
 import { getSeuilCompetentC } from "@/lib/refdata";
 import { RAPPORTS_BILAN } from "@/lib/bilans-rapports";
 import { fetchAll } from "@/lib/fetch-all";
+import { chargerValidites, actifLe } from "@/lib/referentiel-validite";
 import { isoDate, addDays, monthDays, monthLabel } from "@/lib/week";
 
 type Personne = {
@@ -37,13 +38,15 @@ export default async function CockpitPage() {
   const supabase = await getServerClient();
   // Seuil « compétent » paramétrable par site (0062, repli 2).
   const seuilCompetent = await getSeuilCompetentC();
-  const [{ data: persD }, { data: lignesD }, matD, plD, { data: eqD }] =
+  const [{ data: persD }, { data: lignesD }, ligneVal, posteVal, matD, plD, { data: eqD }] =
     await Promise.all([
       supabase
         .from("personne")
         .select("id, nom, prenom, statut, type_contrat, date_fin, equipe_id, sexe")
         .returns<Personne[]>(),
       supabase.from("ligne").select("id, nom, poste(id, nom, actif, remplacable)").eq("actif", true).returns<LigneRow[]>(),
+      chargerValidites(supabase, "ligne"),
+      chargerValidites(supabase, "poste"),
       fetchAll<Mat>(() => supabase.from("matrice").select("personne_id, poste_id").gte("niveau_actuel", seuilCompetent).order("id").returns<Mat[]>()),
       fetchAll<{ poste_id: string | null; motif_absence_id: string | null }>(() =>
         supabase
@@ -89,8 +92,8 @@ export default async function CockpitPage() {
   // Postes fragiles : nb de personnes actives competentes (niveau >= seuil) par poste
   // PTNR (non remplaçable) exclus des postes fragiles / sans relève : un seul
   // titulaire par conception n'est pas une fragilité (cf. Compétences critiques).
-  const postes = (lignesD ?? []).flatMap((l) =>
-    (l.poste ?? []).filter((p) => p.actif && p.remplacable !== false).map((p) => ({ id: p.id, nom: p.nom, ligne: l.nom }))
+  const postes = (lignesD ?? []).filter((l) => actifLe(ligneVal.get(l.id), todayIso)).flatMap((l) =>
+    (l.poste ?? []).filter((p) => p.actif && p.remplacable !== false && actifLe(posteVal.get(p.id), todayIso)).map((p) => ({ id: p.id, nom: p.nom, ligne: l.nom }))
   );
   const compByPoste = new Map<string, Set<string>>();
   for (const r of matD) {

@@ -10,6 +10,7 @@ import { fetchAll } from "@/lib/fetch-all";
 import { getNbNiveauxC, getCouleursNiveauxC } from "@/lib/refdata";
 import { couleursNiveau } from "@/lib/couleurs-niveau";
 import { chargerPosteQuart, etatQuart, tourneSurQuart } from "@/lib/poste-quart";
+import { chargerValidites, actifLe } from "@/lib/referentiel-validite";
 import HabilitationsToggle from "./HabilitationsToggle";
 import {
   calculerGrille,
@@ -70,7 +71,7 @@ export default async function FeuilleRouteReport({
   const couleursCfg = await getCouleursNiveauxC();
   const couleurs = couleursNiveau(couleursCfg);
 
-  const [{ data: atD }, { data: eqD }, { data: persD }, { data: lignesD }, matD, plD, cpD, pcD, { data: pcrD }, { data: quartsD }, pq] = await Promise.all([
+  const [{ data: atD }, { data: eqD }, { data: persD }, { data: lignesD }, matD, plD, cpD, pcD, { data: pcrD }, { data: quartsD }, pq, ligneVal, posteVal] = await Promise.all([
     supabase.from("atelier").select("id, nom").eq("actif", true).order("nom").returns<Atelier[]>(),
     supabase.from("equipe").select("id, nom, couleur").eq("actif", true).order("nom").returns<{ id: string; nom: string; couleur: string | null }[]>(),
     supabase.from("personne").select("id, atelier_id, equipe_id, regroupement").eq("statut", "ACTIF").returns<Personne[]>(),
@@ -103,6 +104,8 @@ export default async function FeuilleRouteReport({
     // quarts POSTÉS de chaque poste pour le besoin (matin + après-midi = 2).
     supabase.from("quart").select("code, creneau, ordre").order("ordre").returns<{ code: string; creneau: string | null; ordre: number }[]>(),
     chargerPosteQuart(supabase),
+    chargerValidites(supabase, "ligne"),
+    chargerValidites(supabase, "poste"),
   ]);
 
   // Quarts postés par poste (référentiel) : tous les quarts du site sauf ceux
@@ -128,8 +131,10 @@ export default async function FeuilleRouteReport({
   // service (indépendamment de l'atelier d'affectation des personnes).
   const postes: Poste[] = [];
   for (const l of lignesD ?? []) {
+    // Fermeture datée (0071) : ligne fermée dès le début du rapport -> exclue de l'abaque.
+    if (!actifLe(ligneVal.get(l.id), pivotLundi)) continue;
     for (const p of l.poste ?? []) {
-      if (!p.actif) continue;
+      if (!p.actif || !actifLe(posteVal.get(p.id), pivotLundi)) continue;
       postes.push({
         id: p.id,
         atelier_id: l.atelier_id,

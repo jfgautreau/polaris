@@ -22,6 +22,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchAll } from "@/lib/fetch-all";
+import { chargerValidites, actifLe } from "@/lib/referentiel-validite";
 import { isoDate, addDays } from "@/lib/week";
 import { addMonthsIso, habValable } from "@/lib/habilitations";
 import { deriverArriveeDepart, type Periode } from "@/lib/personne-statut";
@@ -100,7 +101,7 @@ export async function chargerPolyvalenceCompetences(
   const limHab = isoDate(addDays(new Date(), H_HAB));
   const in30 = isoDate(addDays(new Date(), 30));
 
-  const [{ data: persD }, { data: lignesD }, matD, { data: pcrD }, { data: compD }, { data: atD }, contratD] = await Promise.all([
+  const [{ data: persD }, { data: lignesD }, matD, { data: pcrD }, { data: compD }, { data: atD }, contratD, ligneVal, posteVal] = await Promise.all([
     supabase.from("personne").select("id, nom, prenom, type_contrat, atelier_id, equipe_id").eq("statut", "ACTIF").order("nom").returns<Named[]>(),
     supabase.from("ligne").select("id, nom, atelier_id, poste(id, nom, actif, categorie, remplacable, niveau_min_requis)").eq("actif", true).order("nom").returns<LigneRow[]>(),
     fetchAll<Mat>(() => supabase.from("matrice").select("personne_id, poste_id, niveau_actuel, niveau_cible").order("id").returns<Mat[]>()),
@@ -108,7 +109,12 @@ export async function chargerPolyvalenceCompetences(
     supabase.from("competence").select("id, nom, a_recycler, duree_validite_mois").eq("actif", true).returns<Comp[]>(),
     supabase.from("atelier").select("id, nom").eq("actif", true).order("nom").returns<{ id: string; nom: string }[]>(),
     fetchAll<Contrat>(() => supabase.from("contrat_periode").select("personne_id, date_debut, date_fin, motif_fin").order("id").returns<Contrat[]>()),
+    chargerValidites(supabase, "ligne"),
+    chargerValidites(supabase, "poste"),
   ]);
+  // Fermeture datée (0071) : analyse « aujourd'hui » -> on écarte les lignes /
+  // postes déjà fermés à ce jour.
+  const todayIsoRef = isoDate(new Date());
 
   const active = persD ?? [];
   const activeIds = new Set(active.map((p) => p.id));
@@ -152,8 +158,8 @@ export async function chargerPolyvalenceCompetences(
   for (const r of matD) matNiveau.set(`${r.personne_id}:${r.poste_id}`, r.niveau_actuel);
 
   // Postes du périmètre (filtre atelier via ligne.atelier_id).
-  const lignes = (lignesD ?? []).filter((l) => !atelier || l.atelier_id === atelier);
-  const postes = lignes.flatMap((l) => (l.poste ?? []).filter((p) => p.actif).map((p) => ({ id: p.id, nom: p.nom, ligne: l.nom, atelierId: l.atelier_id, atelierNom: l.atelier_id ? atelierNom.get(l.atelier_id) ?? "—" : "Sans service", categorie: p.categorie ?? "operateur", remplacable: p.remplacable !== false, min: p.niveau_min_requis ?? 0 })));
+  const lignes = (lignesD ?? []).filter((l) => (!atelier || l.atelier_id === atelier) && actifLe(ligneVal.get(l.id), todayIsoRef));
+  const postes = lignes.flatMap((l) => (l.poste ?? []).filter((p) => p.actif && actifLe(posteVal.get(p.id), todayIsoRef)).map((p) => ({ id: p.id, nom: p.nom, ligne: l.nom, atelierId: l.atelier_id, atelierNom: l.atelier_id ? atelierNom.get(l.atelier_id) ?? "—" : "Sans service", categorie: p.categorie ?? "operateur", remplacable: p.remplacable !== false, min: p.niveau_min_requis ?? 0 })));
 
   // Toutes les habilitations exigées détenues et valides aujourd'hui ?
   const habOkAujourdhui = (pid: string, cid: string) => {
