@@ -3,6 +3,7 @@ import { getServerClient, getAdminClient } from "@/lib/supabase-server";
 import { getCurrentProfile } from "@/lib/current-user";
 import { canWriteModule } from "@/lib/permissions";
 import { verifierIdSite } from "@/lib/verifier-site";
+import { messageRefusPerimetre } from "@/lib/erreurs";
 
 // POST /api/matrice/cell { personne_id, poste_id, niveau_actuel, niveau_cible }
 // Upsert d'une cellule de matrice. La RLS (can_edit_personne) autorise admin
@@ -60,8 +61,9 @@ export async function POST(req: NextRequest) {
   );
 
   if (error) {
-    // RLS / permission ou autre
-    return NextResponse.json({ error: error.message }, { status: 403 });
+    // RLS / permission ou autre : le refus le plus courant est le CHEF d'équipe
+    // hors de son périmètre (personne d'une autre équipe).
+    return NextResponse.json({ error: messageRefusPerimetre({ code: error.code, message: error.message, details: null }) }, { status: 403 });
   }
   return NextResponse.json({ ok: true });
 }

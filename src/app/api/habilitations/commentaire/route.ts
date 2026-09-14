@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getServerClient, getAdminClient } from "@/lib/supabase-server";
 import { getCurrentProfile } from "@/lib/current-user";
 import { canWriteModule } from "@/lib/permissions";
+import { messageRefusPerimetre } from "@/lib/erreurs";
 
 // POST /api/habilitations/commentaire { id, commentaire }
 // Edition inline du commentaire d'une habilitation depuis la vue liste. Meme
@@ -22,6 +23,6 @@ export async function POST(req: NextRequest) {
     .update({ commentaire })
     .eq("id", id)
     .eq("site_id", profile.siteId);
-  if (error) return NextResponse.json({ error: error.message }, { status: 403 });
+  if (error) return NextResponse.json({ error: messageRefusPerimetre({ code: error.code, message: error.message, details: null }) }, { status: 403 });
   return NextResponse.json({ ok: true });
 }

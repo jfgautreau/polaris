@@ -4,6 +4,7 @@ import { getServerClient, getAdminClient } from "@/lib/supabase-server";
 import { getCurrentProfile } from "@/lib/current-user";
 import { canWriteModule } from "@/lib/permissions";
 import { addMonthsIso } from "@/lib/habilitations";
+import { messageRefusPerimetre } from "@/lib/erreurs";
 
 // POST /api/habilitations { personne_id, competence_id, date_obtention, date_autorisation_conduite? }
 // Enregistre (ou recycle) une habilitation. Pendant longtemps c'etait une server
@@ -66,7 +67,7 @@ export async function POST(req: NextRequest) {
     },
     { onConflict: "personne_id,competence_id" }
   );
-  if (error) return NextResponse.json({ error: error.message }, { status: 403 });
+  if (error) return NextResponse.json({ error: messageRefusPerimetre({ code: error.code, message: error.message, details: null }) }, { status: 403 });
 
   revalidatePath("/habilitations");
   return NextResponse.json({ ok: true });
@@ -99,7 +100,7 @@ export async function DELETE(req: NextRequest) {
     .eq("personne_id", personne_id)
     .eq("competence_id", competence_id)
     .eq("site_id", profile.siteId);
-  if (error) return NextResponse.json({ error: error.message }, { status: 403 });
+  if (error) return NextResponse.json({ error: messageRefusPerimetre({ code: error.code, message: error.message, details: null }) }, { status: 403 });
 
   revalidatePath("/habilitations");
   return NextResponse.json({ ok: true });

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getServerClient, getAdminClient } from "@/lib/supabase-server";
 import { getCurrentProfile } from "@/lib/current-user";
 import { canWriteModule } from "@/lib/permissions";
+import { messageRefusPerimetre } from "@/lib/erreurs";
 
 // POST /api/habilitations/autorisation { id, remise: boolean }
 // Toggle « autorisation remise » sur un enregistrement personne_competence
@@ -33,7 +34,7 @@ export async function POST(req: NextRequest) {
     .eq("id", id)
     .eq("site_id", site_id)
     .single<{ date_obtention: string | null }>();
-  if (readErr) return NextResponse.json({ error: readErr.message }, { status: 403 });
+  if (readErr) return NextResponse.json({ error: messageRefusPerimetre({ code: readErr.code, message: readErr.message, details: null }) }, { status: 403 });
   if (remise && !rec?.date_obtention) {
     return NextResponse.json({ error: "Date d'obtention manquante." }, { status: 400 });
   }
@@ -43,6 +44,6 @@ export async function POST(req: NextRequest) {
     .update({ date_autorisation_conduite: remise ? rec!.date_obtention : null })
     .eq("id", id)
     .eq("site_id", site_id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 403 });
+  if (error) return NextResponse.json({ error: messageRefusPerimetre({ code: error.code, message: error.message, details: null }) }, { status: 403 });
   return NextResponse.json({ ok: true });
 }

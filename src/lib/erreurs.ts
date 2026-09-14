@@ -58,6 +58,19 @@ export function messageErreur(e: ErreurPg): string | null {
   }
 }
 
+// Message d'un refus d'écriture sur une table scopée PAR PERSONNE (RLS
+// `can_edit_personne` : matrice, personne_competence, absence, placement…). Le
+// refus le plus fréquent est le CHEF D'ÉQUIPE hors de son périmètre — il tient
+// le droit de module mais ne peut éditer que SON équipe. On le nomme au lieu de
+// renvoyer le brut PostgREST (« new row violates row-level security policy »),
+// et on retombe sur `messageErreur` pour tout autre code.
+export function messageRefusPerimetre(e: ErreurPg): string {
+  if (e && (e.code === "42501" || /row-level security/i.test(e.message ?? ""))) {
+    return "Modification refusée : cette personne n'est pas dans votre périmètre (vous ne pouvez éditer que votre équipe).";
+  }
+  return messageErreur(e) ?? "L'enregistrement a échoué.";
+}
+
 // Construit l'URL de retour d'une server action. Les actions se terminent par
 // un `redirect()` : c'est le seul canal dont elles disposent pour faire
 // remonter quelque chose a l'ecran.

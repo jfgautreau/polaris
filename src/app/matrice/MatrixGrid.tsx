@@ -63,6 +63,11 @@ export default function MatrixGrid({
     return o;
   });
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  // Message circonstancié du serveur sur refus (RLS / périmètre d'équipe). Sans
+  // lui, un refus affichait « Échec » sans dire pourquoi, et la cellule RESTAIT
+  // sur la valeur refusée (faux succès visuel). On l'affiche et on revient à la
+  // valeur d'avant.
+  const [saveMsg, setSaveMsg] = useState<string>("");
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const objTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -113,41 +118,66 @@ export default function MatrixGrid({
 
   const statOf = (poid: string): Stat => stats.get(poid) ?? EMPTY_STAT;
 
+  // Fin d'un échec d'écriture : message serveur affiché, revert appliqué par
+  // l'appelant, indicateur gardé plus longtemps (le message doit se lire).
+  async function echec(res: Response | null, revert: () => void) {
+    let msg = "Enregistrement impossible (réseau).";
+    if (res) {
+      const j = (await res.json().catch(() => ({}))) as { error?: string };
+      msg = typeof j.error === "string" && j.error ? j.error : "Modification refusée.";
+    }
+    revert();
+    setSaveState("error");
+    setSaveMsg(msg);
+    if (savedTimer.current) clearTimeout(savedTimer.current);
+    savedTimer.current = setTimeout(() => setSaveState("idle"), 4000);
+  }
+
   function saveObjectif(poid: string, champ: "actuel" | "cible", value: number) {
+    const prev = champ === "actuel" ? objActuel[poid] ?? 0 : objCible[poid] ?? 0;
     if (champ === "actuel") setObjActuel((o) => ({ ...o, [poid]: value }));
     else setObjCible((o) => ({ ...o, [poid]: value }));
     setSaveState("saving");
+    setSaveMsg("");
     const tk = `${poid}:${champ}`;
     if (objTimers.current[tk]) clearTimeout(objTimers.current[tk]);
     objTimers.current[tk] = setTimeout(async () => {
+      const revert = () =>
+        champ === "actuel"
+          ? setObjActuel((o) => ({ ...o, [poid]: prev }))
+          : setObjCible((o) => ({ ...o, [poid]: prev }));
       try {
         const res = await fetch("/api/poste/objectif", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ poste_id: poid, champ, objectif: value }),
         });
-        setSaveState(res.ok ? "saved" : "error");
+        if (!res.ok) return echec(res, revert);
+        setSaveState("saved");
       } catch {
-        setSaveState("error");
+        return echec(null, revert);
       }
       if (savedTimer.current) clearTimeout(savedTimer.current);
       savedTimer.current = setTimeout(() => setSaveState("idle"), 1500);
     }, 500);
   }
 
-  function save(k: string, cell: Cell, pid: string, poid: string) {
+  function save(k: string, cell: Cell, pid: string, poid: string, prev: Cell) {
     setSaveState("saving");
+    setSaveMsg("");
     if (timers.current[k]) clearTimeout(timers.current[k]);
     timers.current[k] = setTimeout(async () => {
+      const revert = () => setCells((c) => ({ ...c, [k]: prev }));
       try {
         const res = await fetch("/api/matrice/cell", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ personne_id: pid, poste_id: poid, niveau_actuel: cell.a, niveau_cible: cell.c }),
         });
-        setSaveState(res.ok ? "saved" : "error");
+        if (!res.ok) return echec(res, revert);
+        setSaveState("saved");
       } catch {
-        setSaveState("error");
+        return echec(null, revert);
       }
       if (savedTimer.current) clearTimeout(savedTimer.current);
       savedTimer.current = setTimeout(() => setSaveState("idle"), 1500);
@@ -188,13 +218,13 @@ export default function MatrixGrid({
         const nextC = cycle[(((idx < 0 ? 0 : idx) + delta) % cycle.length + cycle.length) % cycle.length];
         next = { a: cur.a, c: nextC };
       }
-      save(k, next, pid, poid);
+      save(k, next, pid, poid, cur);
       return { ...prev, [k]: next };
     });
   }
 
   const saveLabel =
-    saveState === "saving" ? "Enregistrement..." : saveState === "saved" ? "Enregistré" : saveState === "error" ? "Échec d'enregistrement" : "";
+    saveState === "saving" ? "Enregistrement..." : saveState === "saved" ? "Enregistré" : saveState === "error" ? (saveMsg || "Échec d'enregistrement") : "";
 
   // Colonne noms adaptative (px) partagee par les 2 tables -> colonnes alignees.
   const nameW = Math.min(320, Math.max(150, personnes.reduce((m, p) => Math.max(m, p.label.length), 0) * 7.2 + 30));

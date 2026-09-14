@@ -47,23 +47,37 @@ const effExp = (rec: Row, comp?: Comp) => rec.date_expiration ?? addMonthsIso(re
 function AutorisationCell({ id, initial }: { id: string; initial: boolean }) {
   const [val, setVal] = useState<boolean>(initial);
   const [state, setState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  // Message serveur en cas de refus (RLS / périmètre). Affiché en info-bulle du
+  // « ! » : sans lui, un chef d'équipe hors périmètre voyait la case revenir en
+  // arrière sans savoir pourquoi.
+  const [msg, setMsg] = useState<string>("");
 
   async function onChange(v: boolean) {
     setVal(v);
     setState("saving");
+    setMsg("");
     try {
       const res = await fetch("/api/habilitations/autorisation", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, remise: v }),
       });
-      setState(res.ok ? "saved" : "error");
-      if (!res.ok) setVal(!v); // rollback visuel
-    } catch {
+      if (res.ok) {
+        setState("saved");
+        setTimeout(() => setState("idle"), 1500);
+        return;
+      }
+      const j = (await res.json().catch(() => ({}))) as { error?: string };
+      setVal(!v); // rollback visuel
       setState("error");
+      setMsg(typeof j.error === "string" && j.error ? j.error : "Modification refusée.");
+      setTimeout(() => setState("idle"), 4000);
+    } catch {
       setVal(!v);
+      setState("error");
+      setMsg("Enregistrement impossible (réseau).");
+      setTimeout(() => setState("idle"), 4000);
     }
-    setTimeout(() => setState("idle"), 1500);
   }
 
   return (
@@ -74,7 +88,7 @@ function AutorisationCell({ id, initial }: { id: string; initial: boolean }) {
         onChange={(e) => onChange(e.target.checked)}
         style={{ width: "auto", margin: 0 }}
       />
-      <span style={{ fontSize: 12, width: 14, color: state === "error" ? "var(--danger)" : "var(--ok)" }}>
+      <span title={state === "error" ? msg : undefined} style={{ fontSize: 12, width: 14, color: state === "error" ? "var(--danger)" : "var(--ok)" }}>
         {state === "saving" ? "…" : state === "saved" ? "✓" : state === "error" ? "!" : ""}
       </span>
     </label>
@@ -85,11 +99,16 @@ function AutorisationCell({ id, initial }: { id: string; initial: boolean }) {
 function CommentaireCell({ id, initial }: { id: string; initial: string | null }) {
   const [val, setVal] = useState(initial ?? "");
   const [state, setState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [msg, setMsg] = useState<string>("");
+  // Dernière valeur ENREGISTRÉE : on y revient si le serveur refuse (sinon le
+  // champ garde un commentaire que la base n'a pas accepté — faux succès).
+  const saved = useRef(initial ?? "");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function onChange(v: string) {
     setVal(v);
     setState("saving");
+    setMsg("");
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(async () => {
       try {
@@ -98,11 +117,23 @@ function CommentaireCell({ id, initial }: { id: string; initial: string | null }
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id, commentaire: v }),
         });
-        setState(res.ok ? "saved" : "error");
-      } catch {
+        if (res.ok) {
+          saved.current = v;
+          setState("saved");
+          setTimeout(() => setState("idle"), 1500);
+          return;
+        }
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        setVal(saved.current); // rollback à la dernière valeur enregistrée
         setState("error");
+        setMsg(typeof j.error === "string" && j.error ? j.error : "Modification refusée.");
+        setTimeout(() => setState("idle"), 4000);
+      } catch {
+        setVal(saved.current);
+        setState("error");
+        setMsg("Enregistrement impossible (réseau).");
+        setTimeout(() => setState("idle"), 4000);
       }
-      setTimeout(() => setState("idle"), 1500);
     }, 500);
   }
 
@@ -115,7 +146,7 @@ function CommentaireCell({ id, initial }: { id: string; initial: string | null }
         placeholder="—"
         style={{ width: "100%", fontSize: 12, padding: "2px 4px" }}
       />
-      <span style={{ fontSize: 12, width: 14, color: state === "error" ? "var(--danger)" : "var(--ok)", flexShrink: 0 }}>
+      <span title={state === "error" ? msg : undefined} style={{ fontSize: 12, width: 14, color: state === "error" ? "var(--danger)" : "var(--ok)", flexShrink: 0 }}>
         {state === "saving" ? "…" : state === "saved" ? "✓" : state === "error" ? "!" : ""}
       </span>
     </span>
