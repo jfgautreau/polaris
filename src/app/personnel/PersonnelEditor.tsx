@@ -168,6 +168,7 @@ export default function PersonnelEditor({
   postes = [],
   canEdit,
   canRgpd,
+  canEditAbsence,
   quarts = [],
   rotationRefs = [],
   motifs = [],
@@ -186,6 +187,10 @@ export default function PersonnelEditor({
   // supprimer), indépendamment de canEdit. Une opération RGPD est bien plus
   // sensible qu'une simple édition de fiche — elle a son propre droit.
   canRgpd: boolean;
+  // Droit dédié « absences: write » : gouverne l'édition dans la modale Absences,
+  // distinct de `canEdit` (personnel). Le bouton reste visible en lecture pour
+  // consulter l'historique ; seule l'édition est masquée sans ce droit.
+  canEditAbsence: boolean;
   quarts?: { code: string; libelle: string; creneau?: string | null }[];
   rotationRefs?: { semaine: string; equipe_id: string; quart_code: string }[];
   motifs?: Motif[];
@@ -842,7 +847,7 @@ export default function PersonnelEditor({
         <AbsencesModal
           personne={{ id: absFor.id, label: `${absFor.nom} ${absFor.prenom}` }}
           motifs={motifs}
-          canEdit={canEdit}
+          canEdit={canEditAbsence}
           onClose={() => setAbsFor(null)}
         />
       )}

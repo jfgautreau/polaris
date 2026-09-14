@@ -13,6 +13,12 @@ export const MODULES: { key: string; label: string; href: string; admin: boolean
   { key: "matrice", label: "Matrice", href: "/matrice", admin: false },
   { key: "habilitations", label: "Habilitations", href: "/habilitations", admin: false },
   { key: "planning", label: "Planning", href: "/planning", admin: false },
+  // Absences : droit a part entiere (l'action « declarer une absence » etait
+  // auparavant empruntee au module `planning`, alors qu'elle est proposee depuis
+  // DEUX ecrans — Personnel et le bouton 🤒 du Planning). Ecran operationnel
+  // (admin: false), sa tuile apparait des la lecture ; l'ecran /absences-specifiques
+  // en est la page. L'ecriture reste soumise au perimetre RLS pour le chef d'equipe.
+  { key: "absences", label: "Absences", href: "/absences-specifiques", admin: false },
   { key: "placement", label: "Placement", href: "/placement", admin: false },
   { key: "ordonnancement", label: "Ordonnancement", href: "/ordonnancement", admin: false },
   { key: "bilans", label: "Bilans", href: "/bilans", admin: false },
@@ -44,19 +50,20 @@ export function defaultsFor(role: string): Perms {
   switch (role) {
     case "chef_equipe":
       // Placement suit Planning : c'est le meme travail par une autre saisie.
-      set({ personnel: "read", bilans: "read", matrice: "write", habilitations: "write", planning: "write", placement: "write" });
+      // Absences : ecriture, mais cantonnee a son equipe par la RLS (comme matrice/planning).
+      set({ personnel: "read", bilans: "read", matrice: "write", habilitations: "write", planning: "write", placement: "write", absences: "write" });
       break;
     case "ordo":
-      set({ personnel: "read", matrice: "read", habilitations: "read", planning: "read", bilans: "read", ordonnancement: "write" });
+      set({ personnel: "read", matrice: "read", habilitations: "read", planning: "read", bilans: "read", ordonnancement: "write", absences: "read" });
       break;
     case "rh":
-      set({ personnel: "read", matrice: "read", habilitations: "read", planning: "read", bilans: "read" });
+      set({ personnel: "read", matrice: "read", habilitations: "read", planning: "read", bilans: "read", absences: "read" });
       break;
     case "codir":
-      set({ personnel: "read", matrice: "read", habilitations: "read", planning: "read", ordonnancement: "read", bilans: "read", journal: "read" });
+      set({ personnel: "read", matrice: "read", habilitations: "read", planning: "read", ordonnancement: "read", bilans: "read", journal: "read", absences: "read" });
       break;
     case "planning":
-      set({ personnel: "read", matrice: "read", habilitations: "read", planning: "read", ordonnancement: "read", bilans: "read" });
+      set({ personnel: "read", matrice: "read", habilitations: "read", planning: "read", ordonnancement: "read", bilans: "read", absences: "read" });
       break;
   }
   return p;

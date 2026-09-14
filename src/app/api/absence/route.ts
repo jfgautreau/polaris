@@ -20,7 +20,9 @@ export async function POST(req: NextRequest) {
   const op = s(body?.op);
   if (!body || !op) return NextResponse.json({ error: "Requête invalide" }, { status: 400 });
 
-  const supabase = (await canWriteModule(profile.role, "planning")) ? getAdminClient() : await getServerClient();
+  // Droit dedie « absences » (hors chef) -> client admin (declare pour tout le
+  // monde). Sinon RLS : admin ou chef de l'equipe de la personne (perimetre).
+  const supabase = (await canWriteModule(profile.role, "absences")) ? getAdminClient() : await getServerClient();
 
   try {
     if (op === "save") {

@@ -58,6 +58,11 @@ export default async function PersonnelPage({
   // du personnel. Sans lui, la roue crantée n'apparaît pas — cf. les gardes des
   // trois actions (actions.ts, api/personnel/[id]/export).
   const canRgpd = canWrite(perms, "rgpd");
+  // Déclaration d'absence : droit dédié « absences » (migration UI 2026-09), pas
+  // `personnel`. Sans ça, le bouton d'absence de l'écran Personnel écrivait via
+  // /api/absence gardé par un AUTRE module — un titulaire Personnel sans le droit
+  // Absences obtenait « Échec » au save (couplage Personnel → Planning).
+  const canEditAbsence = canWrite(perms, "absences");
 
   const supabase = await getServerClient();
   // Tout en parallele (une seule vague). Les colonnes etendues (atelier_id, sexe,
@@ -181,6 +186,7 @@ export default async function PersonnelPage({
           postes={postesOpts}
           canEdit={canEdit}
           canRgpd={canRgpd}
+          canEditAbsence={canEditAbsence}
           erreur={sp.err}
           quarts={quartsData ?? []}
           rotationRefs={rotationRefs}

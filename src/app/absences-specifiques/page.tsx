@@ -1,6 +1,6 @@
 import { getServerClient } from "@/lib/supabase-server";
 import AppHeader from "@/components/AppHeader";
-import { requireModule } from "@/lib/permissions";
+import { requireModule, canWrite } from "@/lib/permissions";
 import { fetchAll } from "@/lib/fetch-all";
 import { grouperAbsences, type JourAbsence } from "@/lib/absences-periodes";
 import AbsencesEditor, { type PeriodeVue } from "./AbsencesEditor";
@@ -24,7 +24,8 @@ export default async function AbsencesSpecifiquesPage({
 }: {
   searchParams: Promise<{ atelier?: string; search?: string }>;
 }) {
-  const { profile } = await requireModule("planning", "read");
+  const { profile, perms } = await requireModule("absences", "read");
+  const canEdit = canWrite(perms, "absences");
   const sp = await searchParams;
   const atelierInit = sp.atelier ?? "";
   const searchInit = sp.search ?? "";
@@ -88,7 +89,7 @@ export default async function AbsencesSpecifiquesPage({
 
   return (
     <>
-      <AppHeader role={profile.role} active="/planning" />
+      <AppHeader role={profile.role} active="/absences-specifiques" />
       <div className="container" style={{ maxWidth: 1500 }}>
         <div className="toolbar" style={{ justifyContent: "space-between", alignItems: "center" }}>
           <h1 style={{ margin: 0 }}>Absences spécifiques</h1>
@@ -107,6 +108,7 @@ export default async function AbsencesSpecifiquesPage({
           initial={periodes}
           atelierInit={atelierInit}
           nomInit={searchInit}
+          canEdit={canEdit}
         />
       </div>
     </>

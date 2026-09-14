@@ -60,6 +60,7 @@ export default function AbsencesEditor({
   initial,
   atelierInit = "",
   nomInit = "",
+  canEdit,
 }: {
   personnes: Personne[];
   motifs: Motif[];
@@ -69,6 +70,11 @@ export default function AbsencesEditor({
   // (bouton « 🤒 »). Vides = aucun filtre — comportement historique.
   atelierInit?: string;
   nomInit?: string;
+  // Droit « absences: write » (calculé serveur). En lecture seule, on masque
+  // toute la saisie : « + Déclarer », crayon et corbeille. Sans ce garde, un
+  // titulaire de `absences: read` (ordo, rh, codir…) voyait les boutons et
+  // chaque enregistrement échouait en « Échec » (403 côté API).
+  canEdit: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -155,10 +161,12 @@ export default function AbsencesEditor({
   }, [ouvertPop]);
 
   function commencerNouveau() {
+    if (!canEdit) return;
     setErreur(null);
     setEdit({ mode: "new", personne_id: "", motif_absence_id: "", debut: "", fin: "", commentaire: "" });
   }
   function commencerEdition(p: PeriodeVue) {
+    if (!canEdit) return;
     setErreur(null);
     if (p.absence_id) {
       setEdit({ mode: "existing", absence_id: p.absence_id, personne_id: p.personne_id, motif_absence_id: p.motif_absence_id, debut: p.debut, fin: p.fin, commentaire: p.commentaire });
@@ -434,7 +442,7 @@ export default function AbsencesEditor({
         </div>
       )}
 
-      {!edit && (
+      {canEdit && !edit && (
         <div style={{ marginBottom: 8 }}>
           <button type="button" className="btn-sm" onClick={commencerNouveau} style={{ width: "auto" }}>
             + Déclarer une absence
@@ -472,8 +480,12 @@ export default function AbsencesEditor({
                     {a.commentaire || (a.declaree ? "—" : "")}
                   </td>
                   <td style={{ ...cellStyle, textAlign: "right", whiteSpace: "nowrap" }}>
-                    <button type="button" className="iconbtn edit" onClick={() => commencerEdition(a)} title={a.absence_id ? "Modifier" : "Modifier (re-déclare la période)"}><EditIcon /></button>
-                    <button type="button" className="iconbtn del" onClick={() => supprimer(a)} title="Supprimer"><TrashIcon /></button>
+                    {canEdit && (
+                      <>
+                        <button type="button" className="iconbtn edit" onClick={() => commencerEdition(a)} title={a.absence_id ? "Modifier" : "Modifier (re-déclare la période)"}><EditIcon /></button>
+                        <button type="button" className="iconbtn del" onClick={() => supprimer(a)} title="Supprimer"><TrashIcon /></button>
+                      </>
+                    )}
                   </td>
                 </tr>
               );

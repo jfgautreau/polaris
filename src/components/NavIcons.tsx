@@ -14,6 +14,7 @@ export const NAV_COLOR: Record<string, string> = {
   habilitations: "#ca8a04",
   ordonnancement: "#ea580c",
   planning: "#0d9488",
+  absences: "#db2777",
   placement: "#4f46e5",
   bilans: "#e11d48",
 };
@@ -121,6 +122,18 @@ export function NavIcon({ name, size = 14 }: { name: string; size?: number }): R
             <rect x="10" y="15.5" width="2.4" height="3.2" rx="0.5" />
             <rect x="15" y="15.5" width="2.4" height="3.2" rx="0.5" />
           </g>
+        </Svg>
+      );
+
+    // Absences : calendrier barré d'un × (langage visuel de AbsenceIcon)
+    case "absences":
+      return (
+        <Svg size={size}>
+          <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" fill="#fff" />
+          <path d="M3.5 7.5a2.5 2.5 0 0 1 2.5-2.5h12a2.5 2.5 0 0 1 2.5 2.5v1.8H3.5z" fill={DETAIL} />
+          <rect x="7" y="3" width="2.2" height="4" rx="1.1" fill="#fff" />
+          <rect x="14.8" y="3" width="2.2" height="4" rx="1.1" fill="#fff" />
+          <path d="M9 12.4l6 5.6M15 12.4l-6 5.6" stroke={DETAIL} strokeWidth="1.9" fill="none" strokeLinecap="round" />
         </Svg>
       );
 

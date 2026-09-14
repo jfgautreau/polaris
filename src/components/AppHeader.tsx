@@ -12,7 +12,7 @@ import UserMenu from "@/components/UserMenu";
 import Logo from "@/components/Logo";
 import { NavIcon, NAV_COLOR } from "@/components/NavIcons";
 
-const MAIN_ORDER = ["referentiel", "personnel", "matrice", "habilitations", "ordonnancement", "planning", "placement", "bilans"];
+const MAIN_ORDER = ["referentiel", "personnel", "matrice", "habilitations", "ordonnancement", "planning", "absences", "placement", "bilans"];
 
 // Palette des pastilles (icone blanche dessus) : source unique dans NavIcons.
 const NAV_TILE = NAV_COLOR;
