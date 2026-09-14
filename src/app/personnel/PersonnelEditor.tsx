@@ -226,6 +226,10 @@ export default function PersonnelEditor({
   // Filtre secondaire : ne montrer que les fiches a completer (champs manquants).
   // Utile pour une session de menage RH. Off par defaut.
   const [incompletFilter, setIncompletFilter] = useState(false);
+  // 2e ligne de filtres : Service (atelier) et Équipe. "" = tous. Filtres client
+  // (comme statut/contrat), combines en ET avec la recherche et les autres.
+  const [atelierFilter, setAtelierFilter] = useState("");
+  const [equipeFilter, setEquipeFilter] = useState("");
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const today = todayStr();
@@ -465,6 +469,8 @@ export default function PersonnelEditor({
     // toute divergence quand la bascule quotidienne n'a pas encore ete faite.
     if (statutFilter && statutALaDate(r, today) !== statutFilter) return false;
     if (contratFilter && r.type_contrat !== contratFilter) return false;
+    if (atelierFilter && r.atelier_id !== atelierFilter) return false;
+    if (equipeFilter && r.equipe_id !== equipeFilter) return false;
     if (incompletFilter && !ficheIncomplete(r)) return false;
     // Recherche globale : tous les mots doivent apparaitre dans une colonne cherchable.
     if (gTerms.length) {
@@ -473,6 +479,11 @@ export default function PersonnelEditor({
     }
     return true;
   });
+
+  // Services / équipes RÉELLEMENT présents dans l'effectif : on n'offre pas un
+  // filtre qui ne remonterait personne. (ateliers déjà bornés aux actifs côté page.)
+  const ateliersPresents = ateliers.filter((a) => rows.some((r) => r.atelier_id === a.id));
+  const equipesPresentes = equipes.filter((e) => rows.some((r) => r.equipe_id === e.id));
 
   const saveLabel =
     save === "saving" ? "Enregistrement…" : save === "saved" ? "Enregistré ✓" : save === "error" ? (saveMsg ?? "Échec d'enregistrement") : "";
@@ -668,6 +679,33 @@ export default function PersonnelEditor({
                 {types.map((c) => (
                   <button key={c.code} type="button" className={contratFilter === c.code ? "seg active" : "seg"} onClick={() => setContratFilter(c.code)}>
                     {c.libelle}
+                  </button>
+                ))}
+              </div>
+            </span>
+          </span>
+        </div>
+
+        {/* 2e ligne de filtres : Service (atelier) et Équipe. */}
+        <div className="hb-l2">
+          <span className="hb-fin">
+            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span className="muted" style={{ fontWeight: 600, fontSize: 13 }}>Service</span>
+              <div className="segments">
+                <button type="button" className={atelierFilter === "" ? "seg active" : "seg"} onClick={() => setAtelierFilter("")}>Tous</button>
+                {ateliersPresents.map((a) => (
+                  <button key={a.id} type="button" className={atelierFilter === a.id ? "seg active" : "seg"} onClick={() => setAtelierFilter(a.id)}>{a.nom}</button>
+                ))}
+              </div>
+            </span>
+            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span className="muted" style={{ fontWeight: 600, fontSize: 13 }}>Équipe</span>
+              <div className="segments">
+                <button type="button" className={equipeFilter === "" ? "seg active" : "seg"} onClick={() => setEquipeFilter("")}>Toutes</button>
+                {equipesPresentes.map((e) => (
+                  <button key={e.id} type="button" className={equipeFilter === e.id ? "seg active" : "seg"} onClick={() => setEquipeFilter(e.id)}>
+                    <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: e.couleur ?? "#cbd5e1", marginRight: 6, verticalAlign: "middle" }} />
+                    {e.nom}
                   </button>
                 ))}
               </div>
