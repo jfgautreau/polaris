@@ -48,6 +48,21 @@ type Body = Record<string, unknown>;
 const s = (v: unknown) => String(v ?? "").trim();
 const orNull = (v: string) => (v === "" ? null : v);
 
+// Normalise une date de contrat. Un <input type="date"> accepte des annees a
+// plus de 4 chiffres : une faute de frappe ("262026-08-30" pour 2026) etait
+// stockee telle quelle (Postgres l'accepte) puis faisait planter le rendu de
+// la modale Cycle de vie a toISOString(). On rejette ici tout ce qui n'est pas
+// une date AAAA-MM-JJ dans une plage plausible ; "" -> null.
+function dateContratOuNull(v: string): string | null {
+  if (v === "") return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+  if (!m) return null;
+  const an = Number(m[1]);
+  if (an < 1900 || an > 2200) return null;
+  const t = new Date(v + "T00:00").getTime();
+  return Number.isNaN(t) ? null : v;
+}
+
 type PeriodeRow = {
   type_contrat: string;
   agence_interim: string | null;
@@ -401,8 +416,8 @@ export async function POST(req: NextRequest) {
           personne_id,
           type_contrat,
           agence_interim: type_contrat === "INTERIM" ? orNull(s(body.agence_interim)) : null,
-          date_debut: orNull(s(body.date_debut)),
-          date_fin: orNull(s(body.date_fin)),
+          date_debut: dateContratOuNull(s(body.date_debut)),
+          date_fin: dateContratOuNull(s(body.date_fin)),
           commentaire: orNull(s(body.commentaire)),
           motif: orNull(s(body.motif)),
           motif_fin: orNull(s(body.motif_fin)),
@@ -438,7 +453,7 @@ export async function POST(req: NextRequest) {
             break;
           case "date_debut":
           case "date_fin":
-            patch[k] = orNull(s(v));
+            patch[k] = dateContratOuNull(s(v));
             break;
         }
       }

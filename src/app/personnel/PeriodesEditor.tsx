@@ -215,8 +215,8 @@ export default function PeriodesEditor({
                     </select>
                   )}
                 </td>
-                <td><input type="date" value={r.date_debut ?? ""} onChange={(e) => edit(r.id, "date_debut", e.target.value, true)} style={inp} /></td>
-                <td><input type="date" value={r.date_fin ?? ""} onChange={(e) => edit(r.id, "date_fin", e.target.value, true)} style={inp} /></td>
+                <td><input type="date" min="1900-01-01" max="2200-12-31" value={r.date_debut ?? ""} onChange={(e) => edit(r.id, "date_debut", e.target.value, true)} style={inp} /></td>
+                <td><input type="date" min="1900-01-01" max="2200-12-31" value={r.date_fin ?? ""} onChange={(e) => edit(r.id, "date_fin", e.target.value, true)} style={inp} /></td>
                 <td><input value={r.motif ?? ""} onChange={(e) => edit(r.id, "motif", e.target.value)} placeholder="ex. remplacement, surcroît…" style={inp} /></td>
                 <td><input value={r.motif_fin ?? ""} onChange={(e) => edit(r.id, "motif_fin", e.target.value)} placeholder="ex. retraite, démission, fin de mission" style={inp} title="Motif de fin de ce contrat. Le motif_fin du dernier contrat vaut motif de départ de la personne." /></td>
                 <td><input value={r.commentaire ?? ""} onChange={(e) => edit(r.id, "commentaire", e.target.value)} style={inp} /></td>

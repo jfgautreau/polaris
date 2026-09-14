@@ -235,12 +235,17 @@ function detecterTrous(
 
 function decale(iso: string, jours: number): string {
   const d = new Date(iso + "T00:00");
+  // Une date invalide (ex. faute de frappe sur l'annee : "262026-08-30")
+  // ferait lever RangeError a toISOString() et planterait tout le rendu de
+  // la modale. On la laisse telle quelle plutot que de faire tomber l'ecran.
+  if (Number.isNaN(d.getTime())) return iso;
   d.setDate(d.getDate() + jours);
   return d.toISOString().slice(0, 10);
 }
 
 function ecart(a: string, b: string): number {
   const ms = new Date(b + "T00:00").getTime() - new Date(a + "T00:00").getTime();
+  if (Number.isNaN(ms)) return 0;
   return Math.round(ms / 86_400_000);
 }
 
