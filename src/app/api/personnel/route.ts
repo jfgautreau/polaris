@@ -257,9 +257,14 @@ export async function POST(req: NextRequest) {
       for (const k of Object.keys(patchIn)) {
         const v = patchIn[k];
         switch (k) {
+          // Casse normalisee AUSSI a la modification inline (pas seulement a la
+          // creation) : NOM en capitales, Prenom capitalise. Sans ca, renommer
+          // une personne existante laissait passer « gautreau » / « JEAN ».
           case "nom":
+            patch.nom = normaliseNom(s(v));
+            break;
           case "prenom":
-            patch[k] = s(v);
+            patch.prenom = normalisePrenom(s(v));
             break;
           case "matricule":
           case "pointure":

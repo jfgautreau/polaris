@@ -34,6 +34,9 @@ export default function DroitsMatrix({
 }) {
   const [m, setM] = useState<Record<string, Record<string, Niveau>>>(initial);
   const [save, setSave] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  // Message circonstancié du serveur (anti-escalade, rôle protégé…) : sans lui,
+  // un refus s'affichait « Échec » sans dire POURQUOI le clic n'a rien changé.
+  const [saveMsg, setSaveMsg] = useState<string>("");
   const modifiables = new Set(rolesModifiables);
 
   // Le cycle ne propose jamais un niveau superieur a celui que l'on detient
@@ -52,20 +55,35 @@ export default function DroitsMatrix({
     if (next === cur) return;
     setM((prev) => ({ ...prev, [role]: { ...(prev[role] ?? {}), [mod]: next } }));
     setSave("saving");
+    setSaveMsg("");
     try {
       const res = await fetch("/api/droits", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ role, module: mod, niveau: next }),
       });
-      setSave(res.ok ? "saved" : "error");
-    } catch {
+      if (res.ok) {
+        setSave("saved");
+        setTimeout(() => setSave("idle"), 1500);
+        return;
+      }
+      // Refus serveur : on REVIENT à la valeur précédente (l'optimiste laissait
+      // la cellule sur un niveau que la base n'a pas accepté) et on affiche le
+      // message circonstancié plutôt qu'un « Échec » muet. Gardé plus longtemps.
+      const j = await res.json().catch(() => ({} as { error?: string }));
+      setM((prev) => ({ ...prev, [role]: { ...(prev[role] ?? {}), [mod]: cur } }));
       setSave("error");
+      setSaveMsg(typeof j.error === "string" ? j.error : "Modification refusée.");
+      setTimeout(() => setSave("idle"), 4000);
+    } catch {
+      setM((prev) => ({ ...prev, [role]: { ...(prev[role] ?? {}), [mod]: cur } }));
+      setSave("error");
+      setSaveMsg("Enregistrement impossible (réseau).");
+      setTimeout(() => setSave("idle"), 4000);
     }
-    setTimeout(() => setSave("idle"), 1500);
   }
 
-  const saveLabel = save === "saving" ? "Enregistrement…" : save === "saved" ? "Enregistré ✓" : save === "error" ? "Échec" : "";
+  const saveLabel = save === "saving" ? "Enregistrement…" : save === "saved" ? "Enregistré ✓" : save === "error" ? (saveMsg || "Échec") : "";
   const saveColor = save === "error" ? "var(--danger)" : save === "saved" ? "var(--ok)" : "var(--muted)";
 
   return (
@@ -124,6 +142,35 @@ export default function DroitsMatrix({
               }
               const niv = m[r.key]?.[mod.key] ?? "none";
               const st = STYLE[niv];
+              // Cellule INERTE : aucun autre niveau n'est atteignable (on ne peut
+              // pas accorder un droit qu'on n'a pas soi-même — anti-escalade). Au
+              // lieu d'un bouton qui « ne fait rien » au clic, on le désactive et
+              // on explique. Concerne un module où l'appelant a « Aucun ».
+              const inerte = suivant(niv, mod.key) === niv;
+              if (inerte) {
+                return (
+                  <td key={r.key} style={{ textAlign: "center", padding: 3 }}>
+                    <span
+                      title="Vous n'avez pas ce droit vous-même : vous ne pouvez pas l'accorder."
+                      style={{
+                        display: "inline-block",
+                        width: 78,
+                        padding: "5px 6px",
+                        background: st.bg,
+                        color: st.fg,
+                        border: st.border,
+                        borderRadius: 6,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        opacity: 0.45,
+                        cursor: "not-allowed",
+                      }}
+                    >
+                      {st.label}
+                    </span>
+                  </td>
+                );
+              }
               return (
                 <td key={r.key} style={{ textAlign: "center", padding: 3 }}>
                   <button

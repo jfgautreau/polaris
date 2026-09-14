@@ -707,9 +707,9 @@ export default function PersonnelEditor({
                       <td><input value={r.numero_badge ?? ""} onChange={(e) => field(r.id, "numero_badge", e.target.value)} style={{ ...inp, ...C("numero_badge") }} /></td>
                       <td style={{ position: "relative" }}>
                         {pastilleIncomplet(r)}
-                        <input value={r.nom} onChange={(e) => field(r.id, "nom", e.target.value)} style={{ ...inp, width: `calc(100% - ${ficheIncomplete(r) ? 22 : 0}px)` }} />
+                        <input value={r.nom} onChange={(e) => field(r.id, "nom", e.target.value)} onBlur={(e) => field(r.id, "nom", normaliseNom(e.target.value), true)} style={{ ...inp, width: `calc(100% - ${ficheIncomplete(r) ? 22 : 0}px)` }} />
                       </td>
-                      <td><input value={r.prenom} onChange={(e) => field(r.id, "prenom", e.target.value)} style={inp} /></td>
+                      <td><input value={r.prenom} onChange={(e) => field(r.id, "prenom", e.target.value)} onBlur={(e) => field(r.id, "prenom", normalisePrenom(e.target.value), true)} style={inp} /></td>
                       <td><select id={champId(r.id, "sexe")} value={r.sexe ?? ""} onChange={(e) => field(r.id, "sexe", e.target.value, true)} style={{ ...inp, ...C("sexe"), background: sexeBg(r.sexe), color: sexeFg(r.sexe), fontWeight: 600 }}><option value="">-</option><option value="H">H</option><option value="F">F</option></select></td>
                       <td><select id={champId(r.id, "equipe_id")} value={r.equipe_id ?? ""} onChange={(e) => field(r.id, "equipe_id", e.target.value, true)} style={{ ...inp, ...C("equipe"), ...eqStyle(r.equipe_id) }}><option value="">-</option>{equipes.map((x) => (<option key={x.id} value={x.id}>{x.nom}</option>))}</select></td>
                       <td><select id={champId(r.id, "atelier_id")} value={encSvc(r.atelier_id, r.regroupement)} onChange={(e) => setService(r.id, e.target.value)} style={{ ...inp, ...C("atelier") }} title={serviceLabel(r) || undefined}>

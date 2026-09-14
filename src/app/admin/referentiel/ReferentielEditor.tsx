@@ -155,6 +155,11 @@ export default function ReferentielEditor({
   // Message d'erreur circonstancié (409 unicité, 400, etc.) : affiché à côté de
   // l'indicateur global. Réinitialisé au succès suivant.
   const [saveMsg, setSaveMsg] = useState<string>("");
+  // Bannière d'erreur PERSISTANTE (ne s'efface qu'au prochain succès ou à la
+  // fermeture manuelle). L'indicateur global disparaissait en 4 s, en haut à
+  // droite, loin du champ édité → un nom en doublon était rejeté « en silence »
+  // (le nom réapparaissait à l'identique au rechargement, sans explication).
+  const [banniere, setBanniere] = useState<string | null>(null);
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -168,11 +173,14 @@ export default function ReferentielEditor({
       });
       const j = await res.json().catch(() => ({} as { error?: string; ok?: boolean; row?: unknown }));
       if (!res.ok) {
-        setSaveMsg(typeof j.error === "string" ? j.error : "Échec");
+        const msg = typeof j.error === "string" ? j.error : "Échec de l'enregistrement.";
+        setSaveMsg(msg);
+        setBanniere(msg);
         throw new Error();
       }
       setSave("saved");
       setSaveMsg("");
+      setBanniere(null);
       return j as { ok?: boolean; row?: unknown };
     } catch {
       setSave("error");
@@ -365,6 +373,36 @@ export default function ReferentielEditor({
       >
         {saveLabel}
       </div>
+
+      {banniere && (
+        <div
+          role="alert"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            margin: "0 0 12px",
+            padding: "10px 14px",
+            borderRadius: 8,
+            background: "#fef2f2",
+            color: "#991b1b",
+            border: "1px solid #fecaca",
+            fontSize: 13,
+            fontWeight: 600,
+          }}
+        >
+          <span aria-hidden="true">⚠</span>
+          <span style={{ flex: 1 }}>{banniere}</span>
+          <button
+            type="button"
+            onClick={() => setBanniere(null)}
+            title="Fermer"
+            style={{ background: "transparent", border: "none", color: "#991b1b", cursor: "pointer", width: "auto", margin: 0, padding: 0, fontSize: 16, lineHeight: 1 }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       <div style={{ display: "flex", marginBottom: 12 }}>
         <button type="button" style={ADD_BTN} onClick={() => addAtelier("")} title="Ajouter un service (à compléter ensuite)">
