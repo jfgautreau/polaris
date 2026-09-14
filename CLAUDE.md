@@ -126,6 +126,11 @@ données, RLS), `tasks/handoff.md` (détail écran par écran), `tasks/lessons.m
   L'interdire supposerait de n'ouvrir que les rôles strictement plus faibles que soi —
   or les rôles ne sont pas ordonnés entre eux, la matrice serait **entièrement grisée**
   pour tout autre qu'un admin (vérifié sur les données réelles).
+  ⚠️ **UX `DroitsMatrix`** (2026-09-11) : sur refus serveur, la cellule **revient à sa
+  valeur précédente** (l'optimiste laissait un niveau non enregistré = faux succès) et le
+  **message circonstancié** du serveur s'affiche au lieu d'un « Échec » muet. Une cellule
+  **inerte** — module où l'appelant a « Aucun », donc rien à accorder (anti-escalade) — est
+  rendue **désactivée avec info-bulle**, plus un bouton qui ne réagit pas au clic.
 - **`is_active` est vérifié par `getCurrentProfile()`** (pas seulement par la RLS) :
   un compte désactivé n'a plus de profil, donc plus de navigation.
 - ⚠️ **`app_user.site_id` absent = refus de session** (audit S6, 2026-09-10). Depuis
@@ -707,6 +712,10 @@ prochain gros chantier, pas une optimisation cosmétique.
   atelier** : sinon une personne toute blanche dans l'atelier affiché mais compétente
   ailleurs serait signalée à tort.
 - Personnel : `src/app/personnel/*` + `src/app/api/personnel/{route,merge/route,[id]/export/route,[id]/absences/route}.ts`.
+  ⚠️ **Casse des noms/prénoms normalisée AUSSI à la modif inline** (2026-09-11, pas seulement
+  à la création) : `normaliseNom` (NOM en capitales) / `normalisePrenom` (Prénom capitalisé)
+  de `src/lib/noms.ts`, appliqués côté serveur (op `update`) **et** à l'écran (`onBlur` des
+  champs Nom/Prénom de la grille). Renommer « gautreau » sur une ligne existante → « GAUTREAU ».
   Colonne **Absences** (calendrier barré) : historique regroupé en périodes, déclaration
   d'une absence. Le regroupement vit dans `src/lib/absences-periodes.ts` (testé) : il
   part des **jours** et non de la table `absence` — 401 des 421 jours sont saisis au
@@ -773,9 +782,11 @@ prochain gros chantier, pas une optimisation cosmétique.
   créées vides pour saisie inline restent supportées). `atelier.nom` **n'est pas**
   contraint (décision assumée : très peu d'ateliers, doublon improbable et sans
   risque de confusion). Le message serveur (« Ce nom court est déjà utilisé… ») est
-  relayé par le champ `error` du JSON et affiché par `ReferentielEditor` à côté de
-  l'indicateur d'enregistrement, gardé 4 s (contre 1,5 s en succès) pour laisser le
-  temps de lire.
+  relayé par le champ `error` du JSON. ⚠️ **Bannière d'erreur persistante** (2026-09-11) :
+  `ReferentielEditor` affiche le refus dans une **bannière rouge pleine largeur, fermable,
+  effacée seulement au prochain succès** — l'ancien indicateur discret (4 s, coin droit)
+  passait inaperçu et le nom en doublon « se corrigeait tout seul » au rechargement sans
+  explication.
 - Habilitations : `src/app/habilitations/{page,HabilitationsList,HabMark,HabLegendeModal,HabMajModal,AutorisationMark}.tsx`
   + `src/app/admin/habilitations-param/*` + `src/app/api/habilitations/route.ts`.
   Saisie **au clic sur une pastille** (modale pré-remplie) ; l'en-tête est rendu par
@@ -903,13 +914,23 @@ prochain gros chantier, pas une optimisation cosmétique.
   S, S+1…). Radio dans le formulaire, un seul jeu d'inputs affiché à la fois. La
   fenêtre calculée passe par `joursDeFenetre(fen, pivot)` — utilisé par
   `/affichage/atelier/[atelier]` et `/affichage/impression`.
-- Absences (écran Planning) : `src/app/absences-specifiques/{page,AbsencesEditor}.tsx`
+- Absences (module **`absences`**, écran `src/app/absences-specifiques/{page,AbsencesEditor}.tsx`)
   — reconstruit les périodes de TOUT l'effectif à partir des jours d'absence
   (`grouperAbsences`), pas de la seule table `absence` (401 jours sur 421 saisis au
   planning sans période déclarée). Même UX que la modale Personnel : édition inline
   (motif via palette, période au calendrier 2 mois, commentaire), crayon + corbeille,
   vérification de conflit avant écrasement. Popovers en `position: fixed` (piège
   `overflow: auto` de la carte modale, cf. patterns UI).
+  ⚠️ **Module `absences` DÉDIÉ** (2026-09-11) : « déclarer une absence » n'emprunte plus
+  le droit `planning`. Nouveau module opérationnel `absences` (tuile de nav propre, icône
+  calendrier barré `#db2777`, page `/absences-specifiques`, entrée dans `MAIN_ORDER` après
+  Planning). Défauts reproduisant l'existant : admin + chef d'équipe (périmètre RLS) en
+  écriture ; ordo/rh/codir/planning en lecture. `/api/absence` gardé par `absences` (même
+  mécanique `canWriteModule ? admin : RLS` → le chef garde son périmètre). L'éditeur reçoit
+  un **`canEdit`** (= `absences: write`) et masque « + Déclarer », crayon et corbeille en
+  lecture seule (avant : toujours éditable → saves en 403 muet). Écran Personnel : le bouton
+  d'absence suit **`canEditAbsence`** (= `absences: write`), distinct de l'édition de fiche
+  (`personnel`) ; le bouton reste visible en lecture pour consulter l'historique.
   ⚠️ **Filtres nom + atelier SYNCHRONISÉS À L'URL** (2026-09-09, `?search=` / `?atelier=`) :
   état local pour la réactivité de la frappe, `router.replace()` sans historique à chaque
   modif. Sans cette sync, un `router.refresh()` ultérieur (déclenché par une écriture)
@@ -988,12 +1009,22 @@ prochain gros chantier, pas une optimisation cosmétique.
   les codes Postgres ; les server actions repassent le message par l'URL
   (`urlAvecErreur` → `?err=`) et la page l'affiche via `<BandeauErreur>`. Un test
   (`ecritures-verifiees.test.ts`) échoue si une écriture n'est pas destructurée.
+  ⚠️ **Refus explicite + pas de faux succès** (P2, 2026-09-11) : les routes scopées PAR
+  PERSONNE (`/api/matrice/cell`, `/api/habilitations{,/autorisation,/commentaire}`)
+  renvoyaient un 403 brut et le client laissait la cellule sur la valeur refusée. Elles
+  passent désormais par **`messageRefusPerimetre()`** (`src/lib/erreurs.ts`) qui nomme le
+  cas le plus courant — **chef d'équipe hors de son périmètre** (RLS `can_edit_personne`,
+  code `42501`) — et retombe sur `messageErreur` pour les autres codes. Côté client
+  (`MatrixGrid`, `HabilitationsList`, `DroitsMatrix`) : sur refus on **revient à la valeur
+  enregistrée** et on **affiche le message** (indicateur ou info-bulle), jamais un « Échec »
+  muet. Le Référentiel (`ReferentielEditor`) a une **bannière d'erreur persistante et
+  fermable** pour les doublons de nom (409) — l'indicateur discret de 4 s était raté.
 - **Séquences « effacer puis réécrire » → fonction SQL.** `set_rotation_reference`,
   `creer_absence`, `maj_absence` (migration 0037, `SECURITY INVOKER` : le modèle
   d'autorisation est inchangé). En deux requêtes applicatives, un échec de la seconde
   perdait la donnée en silence — la rotation n'est pas reconstituable. Le même test
   interdit le retour au `delete` + `insert` applicatif sur ces tables.
-- Tests (Vitest, **268** au 2026-09-10) : règles pures + `permissions.test.ts`
+- Tests (Vitest, **313** au 2026-09-14) : règles pures + `permissions.test.ts`
   (droits par défaut, périmètre du chef d'équipe, anti-escalade), `roles.test.ts`
   (slugifyRole), `routes-gardees.test.ts` (inventaire : **toute route API porte
   une garde** — le proxy exclut `api/`, une route nouvelle serait publique — et
