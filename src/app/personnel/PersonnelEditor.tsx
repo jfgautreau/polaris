@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Fragment, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import PageTitle from "@/components/PageTitle";
 import ConfirmForm from "@/components/ConfirmForm";
 import ModaleDeplacable from "@/components/ModaleDeplacable";
@@ -199,6 +199,8 @@ export default function PersonnelEditor({
   erreur?: string;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [rows, setRows] = useState<Row[]>(initial);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [gq, setGq] = useState("");
@@ -226,10 +228,23 @@ export default function PersonnelEditor({
   // Filtre secondaire : ne montrer que les fiches a completer (champs manquants).
   // Utile pour une session de menage RH. Off par defaut.
   const [incompletFilter, setIncompletFilter] = useState(false);
-  // 2e ligne de filtres : Service (atelier) et Équipe. "" = tous. Filtres client
-  // (comme statut/contrat), combines en ET avec la recherche et les autres.
-  const [atelierFilter, setAtelierFilter] = useState("");
-  const [equipeFilter, setEquipeFilter] = useState("");
+  // 2e ligne de filtres : Service (atelier) et Équipe. "" = tous. Combines en ET
+  // avec la recherche et les autres filtres. ⚠️ PORTÉS PAR L'URL (?service= /
+  // ?equipe=) pour survivre à un rafraîchissement : état local pour la réactivité,
+  // `router.replace` (sans nouvelle entrée d'historique) à chaque changement. Le
+  // server component ne lit PAS ces params (il charge tout l'effectif, le filtrage
+  // est client) — donc un router.refresh() après écriture ne les réinitialise pas.
+  const [atelierFilter, setAtelierFilter] = useState(() => searchParams.get("service") ?? "");
+  const [equipeFilter, setEquipeFilter] = useState(() => searchParams.get("equipe") ?? "");
+  function syncUrl(service: string, equipe: string) {
+    const p = new URLSearchParams(searchParams.toString());
+    if (service) p.set("service", service); else p.delete("service");
+    if (equipe) p.set("equipe", equipe); else p.delete("equipe");
+    const qs = p.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }
+  const chooseAtelier = (v: string) => { setAtelierFilter(v); syncUrl(v, equipeFilter); };
+  const chooseEquipe = (v: string) => { setEquipeFilter(v); syncUrl(atelierFilter, v); };
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const today = todayStr();
@@ -692,18 +707,18 @@ export default function PersonnelEditor({
             <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span className="muted" style={{ fontWeight: 600, fontSize: 13 }}>Service</span>
               <div className="segments">
-                <button type="button" className={atelierFilter === "" ? "seg active" : "seg"} onClick={() => setAtelierFilter("")}>Tous</button>
+                <button type="button" className={atelierFilter === "" ? "seg active" : "seg"} onClick={() => chooseAtelier("")}>Tous</button>
                 {ateliersPresents.map((a) => (
-                  <button key={a.id} type="button" className={atelierFilter === a.id ? "seg active" : "seg"} onClick={() => setAtelierFilter(a.id)}>{a.nom}</button>
+                  <button key={a.id} type="button" className={atelierFilter === a.id ? "seg active" : "seg"} onClick={() => chooseAtelier(a.id)}>{a.nom}</button>
                 ))}
               </div>
             </span>
             <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span className="muted" style={{ fontWeight: 600, fontSize: 13 }}>Équipe</span>
               <div className="segments">
-                <button type="button" className={equipeFilter === "" ? "seg active" : "seg"} onClick={() => setEquipeFilter("")}>Toutes</button>
+                <button type="button" className={equipeFilter === "" ? "seg active" : "seg"} onClick={() => chooseEquipe("")}>Toutes</button>
                 {equipesPresentes.map((e) => (
-                  <button key={e.id} type="button" className={equipeFilter === e.id ? "seg active" : "seg"} onClick={() => setEquipeFilter(e.id)}>
+                  <button key={e.id} type="button" className={equipeFilter === e.id ? "seg active" : "seg"} onClick={() => chooseEquipe(e.id)}>
                     <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: e.couleur ?? "#cbd5e1", marginRight: 6, verticalAlign: "middle" }} />
                     {e.nom}
                   </button>
