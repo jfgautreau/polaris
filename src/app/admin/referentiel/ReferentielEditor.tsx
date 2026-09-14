@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ModaleDeplacable from "@/components/ModaleDeplacable";
 import ToggleSwitch from "@/components/ToggleSwitch";
 
@@ -162,6 +162,14 @@ export default function ReferentielEditor({
   const [banniere, setBanniere] = useState<string | null>(null);
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Toast d'erreur : auto-fermeture après 6 s (filet en plus du ✕ et de
+  // l'effacement au prochain succès). Le timer est relancé à chaque nouveau message.
+  useEffect(() => {
+    if (!banniere) return;
+    const t = setTimeout(() => setBanniere(null), 6000);
+    return () => clearTimeout(t);
+  }, [banniere]);
 
   async function post(op: string, payload: Record<string, unknown>) {
     setSave("saving");
@@ -374,19 +382,29 @@ export default function ReferentielEditor({
         {saveLabel}
       </div>
 
+      {/* Toast d'erreur FIXE bas-centre : toujours visible quel que soit le scroll
+          (la page Référentiel défile en entier, et l'ancienne bannière en haut
+          passait hors écran quand on éditait un poste en bas). */}
       {banniere && (
         <div
           role="alert"
+          className="ref-toast"
           style={{
+            position: "fixed",
+            left: "50%",
+            bottom: 16,
+            transform: "translateX(-50%)",
+            zIndex: 200,
             display: "flex",
             alignItems: "center",
             gap: 10,
-            margin: "0 0 12px",
-            padding: "10px 14px",
-            borderRadius: 8,
+            width: "min(560px, calc(100vw - 32px))",
+            padding: "11px 14px",
+            borderRadius: 10,
             background: "#fef2f2",
             color: "#991b1b",
             border: "1px solid #fecaca",
+            boxShadow: "0 8px 24px rgba(0,0,0,.18)",
             fontSize: 13,
             fontWeight: 600,
           }}
@@ -403,6 +421,11 @@ export default function ReferentielEditor({
           </button>
         </div>
       )}
+      <style>{`
+        @keyframes ref-toast-in { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
+        .ref-toast { animation: ref-toast-in .18s ease-out; }
+        @media (prefers-reduced-motion: reduce) { .ref-toast { animation: none; } }
+      `}</style>
 
       <div style={{ display: "flex", marginBottom: 12 }}>
         <button type="button" style={ADD_BTN} onClick={() => addAtelier("")} title="Ajouter un service (à compléter ensuite)">
