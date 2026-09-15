@@ -3,7 +3,7 @@ import AppHeader from "@/components/AppHeader";
 import PageTitle from "@/components/PageTitle";
 import ReportActions from "@/app/bilans/ReportActions";
 import { requireRapportBilan } from "@/lib/permissions";
-import { getQuartsC } from "@/lib/refdata";
+import { getQuartsC, getTypesAgenceC } from "@/lib/refdata";
 import { parseMonday, weekDays, isoWeekNumber, isoDate } from "@/lib/week";
 import { chargerAbsences4Semaines, chargerHorairesInterim, type Absences4 } from "@/lib/synthese-data";
 import { INTERIM_BG } from "@/lib/interim";
@@ -54,12 +54,16 @@ export default async function SynthesesPage({
     supabase.from("motif_absence").select("id, libelle").eq("actif", true).order("libelle").returns<{ id: string; libelle: string }[]>(),
   ]);
 
+  // Codes de contrat pilotés par agence (0072) : intérim + CDI intérimaire…
+  // Vue Absences = tout l'effectif SAUF ces codes ; vue Intérim = ces codes.
+  const agenceCodes = await getTypesAgenceC();
+
   let abs: Absences4 = { lignes: [], recap: [] };
   let groupes: Awaited<ReturnType<typeof chargerHorairesInterim>> = [];
   if (vue === "absences") {
-    abs = await chargerAbsences4Semaines(supabase, workdayIsos, atelier || undefined, motif || undefined);
+    abs = await chargerAbsences4Semaines(supabase, workdayIsos, atelier || undefined, motif || undefined, agenceCodes);
   } else {
-    groupes = await chargerHorairesInterim(supabase, weekIsos, quarts);
+    groupes = await chargerHorairesInterim(supabase, weekIsos, quarts, agenceCodes);
   }
 
   const nbPlaces = groupes.reduce((s, g) => s + g.lignes.length, 0);
@@ -210,7 +214,7 @@ export default async function SynthesesPage({
                 {groupes.map((g, gi) => {
                   const secId = `agence-${gi}`;
                   return (
-                    <section key={g.agence} id={secId} data-agence-section className="agence-print report-section">
+                    <section key={g.agence} id={secId} data-agence-section className="agence-print report-section print-flow">
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 8 }}>
                         <h2 style={{ margin: 0 }}>
                           {g.agence}{" "}

@@ -12,7 +12,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchAll } from "@/lib/fetch-all";
 import { horaireTxt, type MapsHoraire, type HM, type TpCfg } from "@/lib/horaires";
-import { estInterim } from "@/lib/interim";
+import { estAvecAgence } from "@/lib/interim";
 import type { QuartRef } from "@/lib/quarts";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -71,7 +71,10 @@ export async function chargerAbsences4Semaines(
   supabase: DB,
   workdayIsos: string[],
   filtreAtelier?: string,
-  filtreMotif?: string
+  filtreMotif?: string,
+  // Codes de contrat pilotés par agence (0072) : exclus de la vue Absences,
+  // comme l'était l'intérim. Repli (undefined) = le seul code INTERIM.
+  agenceCodes?: Iterable<string>,
 ): Promise<Absences4> {
   // 1) Jours d'absence tombant dans la fenetre. fetchAll : au-dela de 1000 lignes,
   //    PostgREST tronque en silence (cf. L8).
@@ -108,7 +111,7 @@ export async function chargerAbsences4Semaines(
   const cellsByPerson = new Map<string, Record<string, CelluleAbsence>>();
   for (const r of jours) {
     const p = persById.get(r.personne_id);
-    if (!p || estInterim(p.type_contrat)) continue;
+    if (!p || estAvecAgence(p.type_contrat, agenceCodes)) continue;
     if (filtreMotif && r.motif_absence_id !== filtreMotif) continue;
     const cells = cellsByPerson.get(r.personne_id) ?? cellsByPerson.set(r.personne_id, {}).get(r.personne_id)!;
     if (cells[r.jour]) continue; // un seul motif par case
@@ -176,13 +179,17 @@ export type GroupeAgence = { agence: string; lignes: LigneInterim[]; sansBesoin:
 export async function chargerHorairesInterim(
   supabase: DB,
   weekIsos: string[],
-  quarts: QuartRef[]
+  quarts: QuartRef[],
+  // Codes de contrat pilotés par agence (0072) : intérim + CDI intérimaire…
+  // Repli (undefined/vide) = le seul code INTERIM historique.
+  agenceCodes?: Iterable<string>,
 ): Promise<GroupeAgence[]> {
-  // 1) Les interimaires du site (non partis).
+  const codesAgence = [...new Set([...(agenceCodes ?? []), "INTERIM"])];
+  // 1) Les personnes pilotées par agence du site (non parties).
   const { data: persD } = await supabase
     .from("personne")
     .select("id, nom, prenom, agence_interim, atelier_id, statut")
-    .eq("type_contrat", "INTERIM")
+    .in("type_contrat", codesAgence)
     .neq("statut", "PARTI")
     .returns<{ id: string; nom: string; prenom: string; agence_interim: string | null; atelier_id: string | null; statut: string }[]>();
   const interims = persD ?? [];
