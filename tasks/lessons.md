@@ -647,3 +647,49 @@ bug de logique, alors que le coupable est **une seule cellule de donnée** hors 
 `toLocaleDateString`, etc.) doit être validée à l'écriture OU le point de sérialisation doit
 être gardé contre `Invalid Date`. Postgres `date` accepte des années jusqu'à 5874897 : ce
 n'est pas lui qui vous protégera.
+
+## L41 — Un loader `refdata` partagé qui oublie une colonne casse SILENCIEUSEMENT tous ses lecteurs
+
+**Symptôme (2026-09-15)** : sur l'affichage TV, l'éclatement Matin / Après-midi mettait
+**tout le monde au matin**. Aucune erreur, aucune exception.
+
+**Cause** : `getQuartsC()` (`src/lib/refdata.ts`) sélectionnait `code, libelle, ordre` —
+**sans `creneau`**. Les consommateurs qui typaient les quarts avec `creneau?: string | null`
+recevaient donc `creneau === undefined` partout. Le classeur matin/aprem de la TV (qui lit
+`quart.creneau`) ne matchait JAMAIS → chaque personne tombait sur le repli « matin ». Le
+calcul du TP (`creneauDe`, planning) était exposé au même trou. Le champ étant **optionnel**
+dans le type, TypeScript ne signalait rien : un `undefined` silencieux, pas une erreur.
+
+**Solution** : ajouter `creneau` au `select` du loader partagé. Un seul point de correction
+répare TOUS les lecteurs (TV, TP). La colonne existe depuis 0057 ; c'est le loader qui la
+laissait tomber.
+
+**Règle générale** : un loader `refdata` mutualisé est un contrat. Si un écran a besoin
+d'une colonne, elle doit être dans le `select` du loader — et le **type de retour ne doit
+pas la rendre optionnelle** si elle est toujours présente en base, sinon un oubli de `select`
+devient un `undefined` muet au lieu d'une erreur de compilation. Vérifier le `select` d'un
+loader partagé AVANT de soupçonner la logique métier d'un consommateur.
+
+## L42 — Mise à l'échelle « pour tenir sur une page » : viser une hauteur PLUS COURTE que la feuille
+
+**Symptôme (2026-09-15)** : les PDF du Placement (« PDF » et « PDF CE ») rognaient la
+**dernière ligne** des plans denses, malgré `ajusterFeuille()` qui met le contenu à l'échelle
+pour tenir dans la hauteur imprimable. Augmenter la marge de la feuille (680 → 650) n'a pas
+suffi.
+
+**Cause** : `ajusterFeuille()` mesure `scrollHeight` en **media screen**, puis calcule un
+`scale` garantissant `hauteur ≤ cible`. Mais le rendu **imprimé** est systématiquement un
+peu plus haut que la mesure écran (métriques de police, arrondis) : le contenu mis à l'échelle
+sur la hauteur EXACTE de la feuille (`.printSheet` en `overflow:hidden`) débordait donc de
+quelques pixels à l'impression → dernière ligne coupée. Tant que la cible d'échelle = la
+hauteur de la feuille, il n'y a **aucune marge** pour absorber cet écart.
+
+**Solution** : **découpler** la cible d'échelle de la hauteur de la feuille. La feuille reste
+à 650 px (zone de page), mais le contenu vise `PAGE_H = 600` → ~50 px de marge INTERNE. Le
+débordement d'impression tient dans cette marge, la feuille ne rogne plus.
+
+**Règle générale** : quand on met un contenu à l'échelle pour tenir sur une page avec un
+cadre en `overflow:hidden`, la cible de hauteur doit être **strictement plus petite** que le
+cadre. Ne jamais « aligner » les deux pour « remplir la page » : la mesure écran n'est pas la
+hauteur imprimée, et un cadre au ras coupera toujours quelque chose. (Un commentaire dans
+`PlacementBoard.tsx` et `placement.module.css` interdit désormais ce ré-alignement.)

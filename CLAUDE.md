@@ -466,6 +466,16 @@ hauteur de rangée constante : `.refpostes` sur la table des postes,
   reprend le même style en inline.
 - **Filtres** : `.filterrow` (label + segments), navigation en `useTransition`.
   Planning : ordre **Quart / Atelier / Équipe**.
+- ⚠️ **Report contextuel des filtres (2026-09-15, `src/components/MainNav.tsx`)** : le nom
+  recherché, l'**équipe** et le **service** VOYAGENT quand on bascule par le menu entre
+  **Planning ↔ Personnel ↔ Matrice ↔ Habilitations**. Contextuel, PAS collant : le filtre
+  ne suit que ce saut (le quart du Planning et le statut/fiche du Personnel ne voyagent
+  pas). Le param « service » change de nom selon l'écran : `service` côté Personnel,
+  `atelier` partout ailleurs (`serviceParam()` dans `MainNav`). Pour que le report
+  **atterrisse ET survive au rafraîchissement**, la recherche par nom est désormais
+  **portée par l'URL** (`?search=`) sur Personnel, Matrice et Habilitations (écriture
+  débouncée 500 ms), comme le Planning. `MainNav` (client, `usePathname`/`useSearchParams`)
+  est monté dans `AppHeader` sous un `<Suspense>` et rend la nav principale.
 - **Modales** : ⚠️ **TOUTE modale doit être déplaçable** via `<ModaleDeplacable>` —
   l'utilisateur a besoin de consulter le fond sans fermer la modale. Le contenu
   DOIT inclure un élément `.mdd-drag` (typiquement le bandeau titre) pour la
@@ -489,6 +499,12 @@ hauteur de rangée constante : `.refpostes` sur la table des postes,
 - **Intérim = jaune** (`INTERIM_BG` de `src/lib/interim.ts`) sur Planning, Placement,
   Matrice, Habilitations et TV. Le vert est réservé à « aujourd'hui » sur la TV — les
   deux se distinguent d'un coup d'œil. Un seul endroit pour changer la teinte.
+  ⚠️ **Depuis 0072, le jaune est piloté par `avec_agence`, pas par le code INTERIM en
+  dur** : chaque écran charge les codes via `getTypesAgenceC()` et appelle
+  `styleInterim(code, codes)` / `estAvecAgence(code, codes)` — un **CDI intérimaire** est
+  donc surligné comme un intérimaire. La TV (route publique) lit les codes directement
+  par site (pas de cookie). Sans liste passée, `styleInterim`/`estAvecAgence` retombent
+  sur le seul code INTERIM (compat).
 - **Choix d'une plage de dates** : `<DateRangePicker>` (deux mois côte à côte, sélection
   en deux clics, style Booking). La logique est dans `src/lib/calendrier.ts`, testée.
   Utilisé dans la modale Absences ; à reprendre partout où l'on demande *du…au*.
@@ -552,7 +568,8 @@ prochain gros chantier, pas une optimisation cosmétique.
     sur un poste un jour donné — priorité **exception ponctuelle > temps partiel >
     horaire standard** (la priorité porte sur la SOURCE, pas borne par borne). Partagé
     entre l'affichage TV et la synthèse intérim (`/bilans/syntheses`) pour ne pas diverger.
-- Nav : `src/components/{AppHeader,SettingsMenu,UserMenu,NavIcons}.tsx`.
+- Nav : `src/components/{AppHeader,MainNav,SettingsMenu,UserMenu,NavIcons}.tsx`.
+  `MainNav` = nav principale client (report contextuel des filtres, cf. patterns UI).
   Logo → `/` (page d'accueil : logo centré + titre « planning »).
   `UserMenu` porte aussi le lien vers le **guide utilisateur** (`public/guide.html`,
   document autonome ouvert dans un onglet, mais servi derrière l'authentification).
@@ -664,7 +681,12 @@ prochain gros chantier, pas une optimisation cosmétique.
   absences filtrées par l'atelier affiché) ; copie **écraser / compléter** ; bouton **PDF**
   (feuille A4 paysage : plan + colonne « **Absents / TP du jour** » — motifs d'absence **et**
   bloc **Temps partiel** ; TP du jour calculé serveur `tpIds`, mêmes règles que Planning/TV ;
-  mise à l'échelle mesurée).
+  mise à l'échelle mesurée). ⚠️ **PDF rogné en bas — headroom (2026-09-15)** : `ajusterFeuille()`
+  met le contenu à l'échelle sur une **cible plus courte (`PAGE_H=600`) que la hauteur de
+  `.printSheet` (650)** → ~50 px de marge INTERNE. Le rendu imprimé est toujours un peu plus
+  haut que la mesure faite en media screen ; sans cet écart, il débordait la feuille
+  (`overflow:hidden`) et coupait la dernière ligne des plans denses. **Ne PAS ré-aligner
+  `PAGE_H` sur la hauteur de la feuille** (piège vécu, deux fois).
   **Filtre « Conducteurs »** (checkbox à côté de « Masquer les placés », icône `OperateurIcon`) :
   ne montre que les personnes ayant AU MOINS UNE compétence (`niveau_actuel ≥ 1`) sur AU
   MOINS UN poste `categorie='conducteur'` actif — set `conducteurIds` calculé serveur
@@ -733,10 +755,20 @@ prochain gros chantier, pas une optimisation cosmétique.
   Intérim → CDD → CDI se fait en ajoutant un contrat. Motif de départ (retraite,
   démission…) = `contrat_periode.motif_fin` du dernier contrat.
   **Fiche incomplète** : pastille orange `!` devant le nom si la personne n'a
-  **aucun contrat** dans `contrat_periode`. Clic = ouvre la modale Cycle de vie.
-  Flag `hasContrat` calculé serveur (`page.tsx`) et propagé au client. Segment
+  **aucun contrat** dans `contrat_periode`, **OU** (0072) si son **contrat courant**
+  est piloté par agence (`avec_agence`) **sans agence renseignée** (`agenceManquante`,
+  dérivé serveur du reflet `personne.type_contrat`/`agence_interim`). Clic = ouvre la
+  modale Cycle de vie (tooltip circonstancié : « pas de contrat » vs « agence manquante »).
+  Flags `hasContrat` + `agenceManquante` calculés serveur (`page.tsx`). Segment
   de filtre « Fiche · Toutes / ⚠ Incomplètes » + badge d'alerte dans l'en-tête.
   Filtre Statut par défaut = **Actif** (avec segments « À venir / Actif / Parti »).
+  ⚠️ **Champ Agence à la création** (0072) : la modale « Nouvelle personne » affiche un
+  champ **Agence d'intérim** (datalist des agences de Param RH) **uniquement** pour un
+  contrat piloté par agence, écrit sur la 1re période. Idem dans le Cycle de vie
+  (`PeriodesEditor`) : le champ Agence est activé pour tout type `avec_agence`, plus le
+  seul code INTERIM. ⚠️ **Filtres portés par l'URL** (2026-09-15) : recherche (débouncée),
+  Statut et Fiche (en plus de Service/Équipe) → survivent au rafraîchissement ; report
+  contextuel vers Planning/Matrice/Habilitations via `MainNav`.
   **Colonne Commentaire** dans la grille (`personne.commentaire`) : éditée inline en
   écriture, tronquée + info-bulle en lecture. ⚠️ Largeurs des colonnes resserrées (sauf
   Nom/Prénom) pour la loger, plusieurs libellés d'en-tête raccourcis (`Matr.` non — libellé
@@ -807,6 +839,9 @@ prochain gros chantier, pas une optimisation cosmétique.
 - Bilans : `src/app/bilans/*` (Cockpit + 8 rapports détaillés, impression PDF via
   `@media print`). Liste des rapports centralisée dans `src/lib/bilans-rapports.ts`
   (partagée Cockpit ↔ `/platform` pour le masquage par site, cf. Plateforme).
+  ⚠️ **`ReportActions`** (barre d'actions commune aux rapports) porte, à côté de l'icône
+  imprimante, un bouton **« PDF »** explicite (2026-09-15) qui lance le même `window.print()`
+  — beaucoup d'utilisateurs ne reconnaissaient pas l'imprimante comme un export PDF.
   - **Synthèses hebdomadaires** (`/bilans/syntheses` + `SyntheseFilters`, `AgencePrintButton`,
     données dans `src/lib/synthese-data.ts`) : un écran, deux vues (bascule) sur un sélecteur
     de semaine. **Absences** = **mini-calendrier jour par jour sur 4 semaines glissantes**
@@ -826,7 +861,9 @@ prochain gros chantier, pas une optimisation cosmétique.
     (`.agence-print:not(.print-hidden) + …`), `position: sticky` **neutralisé** dans les
     tableaux imprimés, et la grille du calendrier porte `print-flow` pour se **scinder**
     naturellement entre pages (le `break-inside: avoid` global des `.card` sortait une 1re
-    page quasi vide sur un tableau plus haut qu'une page).
+    page quasi vide sur un tableau plus haut qu'une page). ⚠️ **2026-09-15** : les **sections
+    d'agence** (vue Intérim) portent AUSSI `print-flow` — sans lui, la 1re agence sortait
+    **2 pages blanches** (même piège, elles n'avaient que `agence-print report-section`).
   - **Polyvalence & compétences** (`/bilans/polyvalence`, `src/lib/polyvalence-competences-data.ts`) :
     **FUSION** (2026-09-08) des trois anciens rapports de compétences — Polyvalence,
     Plan de montée en compétence, Compétences critiques — en une lecture RH unique
@@ -890,13 +927,19 @@ prochain gros chantier, pas une optimisation cosmétique.
   où au moins une personne affichée est **placée** (`placementDays`) : ce second
   terme fait apparaître la feuille même quand l'atelier maison est fermé ce jour-là
   mais que des gens sont **prêtés** ailleurs.
-  ⚠️ **Éclatement Matin / Après-midi** (2026-09-09) : deux tableaux EMPILÉS, en-têtes
-  teal foncé (Matin) puis brun-rouge (Après-midi). Chaque personne est classée dans
-  UNE SEULE section, d'après (dans l'ordre) : (1) créneau du quart de son placement
-  **le plus fréquent** sur la fenêtre affichée (matin/aprem, `quart.creneau`) ; (2)
-  à défaut (nuit, journée, ou aucun placement matin/AM) créneau du quart de son
-  **équipe** cette semaine via rotation datée / quart fixe ; (3) matin par défaut.
-  Objectif : réduire la longueur de chaque section pour un écran de couloir.
+  ⚠️ **Éclatement Matin / Après-midi / Nuit** (2026-09-09, **Nuit ajoutée 2026-09-15**) :
+  tableaux EMPILÉS, en-têtes teal foncé (Matin), brun-rouge (Après-midi), indigo (Nuit).
+  La section **Nuit n'est rendue que si elle a des personnes**. Chaque personne est
+  classée dans UNE SEULE section via `sectionDuQuart` (sans code en dur) : `creneau`
+  matin/aprem = direct ; `creneau` null → **journée** (plus petit `ordre` parmi les
+  quarts sans créneau → **Matin**, présente le matin) OU **nuit** (les autres quarts
+  sans créneau). Ordre de décision : (1) section du placement **le plus fréquent** sur
+  la fenêtre ; (2) à défaut, section du quart de son **équipe** cette semaine (rotation
+  datée / quart fixe) ; (3) Matin par défaut. ⚠️ **Bug corrigé 2026-09-15** : `getQuartsC()`
+  ne sélectionnait pas `quart.creneau` → `creneau` toujours `undefined` → tout le monde
+  tombait sur le repli Matin (nuit mélangée au matin). `creneau` ajouté au loader partagé
+  (bénéficie aussi au calcul TP). Objectif : réduire la longueur de chaque section pour un
+  écran de couloir.
   ⚠️ **Fenêtre paramétrable en Param RH** : mode *relatif* (jours autour d'aujourd'hui,
   historique) ou *absolu* (N semaines calendaires à partir du lundi de la semaine
   courante — S, S+1…) — migration 0067, `getFenetreAffichage()` + `joursDeFenetre()`
@@ -959,8 +1002,15 @@ prochain gros chantier, pas une optimisation cosmétique.
   si le rapport est masqué). Réglage **indépendant** du masquage du menu Bilans.
   `setModuleMasque` accepte une clé de `MODULE_KEYS`, de `CLES_MASQUABLES_EXTRA`
   **ou** de `CLES_RAPPORTS_BILAN`.
-- Migrations : `supabase/migrations/0001..0071` (dernière appliquée : **0071** —
-  `ligne.date_ouverture`/`date_fermeture` + `poste.date_ouverture`/`date_fermeture`
+- Migrations : `supabase/migrations/0001..0072` (dernière appliquée : **0072** —
+  `type_contrat.avec_agence` (bool) : **drapeau « piloté par agence »** généralisant
+  l'intérim (intérim + CDI intérimaire…) : champ Agence à la création Personnel + Cycle
+  de vie, **surlignage jaune** (Planning/Matrice/Habilitations/Placement/TV), remontée
+  **Synthèses** (vue Intérim par agence ; exclu de la vue Absences). Coché dans Param RH →
+  Types de contrat. `getTypesAgenceC()` (tag `TYPES_AGENCE_TAG`) + `estAvecAgence()` /
+  `styleInterim(code, codes)` ; `estInterim()` reste le code INTERIM littéral (alerte 18
+  mois) ; repli tolérant sur INTERIM.
+  **`0071`** = `ligne.date_ouverture`/`date_fermeture` + `poste.date_ouverture`/`date_fermeture`
   (date nullable) : **ouverture/fermeture datée** du Référentiel. `actif` reste le
   coupe-circuit ; helper `src/lib/referentiel-validite.ts` (`actifLe`) évalué à
   aujourd'hui masque une ligne/poste dont la fermeture est atteinte, dans Planning /
