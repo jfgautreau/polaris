@@ -156,6 +156,10 @@ export default function PlacementBoard({
   const [over, setOver] = useState<string | null>(null); // cible de depot survolee
   // Demande de forcage en attente : habilitation manquante sur le poste vise.
   const [ask, setAsk] = useState<{ persId: string; posteId: string; manque: string[]; numero: string | null } | null>(null);
+  // Personne deja placee sur un poste d'un AUTRE quart ce jour-la (409 renvoye
+  // par /api/placement/cell). On propose de la retirer de l'autre quart puis de
+  // la placer ici, au lieu d'un echec muet (P1c).
+  const [askAutreQuart, setAskAutreQuart] = useState<{ persId: string; value: string; num: string | null; forcer: boolean } | null>(null);
 
   const printRef = useRef<HTMLDivElement>(null);
   // La feuille n'est montee QU'AU moment d'imprimer : la garder en permanence
@@ -264,7 +268,10 @@ export default function PlacementBoard({
     });
     if (!res.ok) {
       const j = await res.json().catch(() => ({}));
-      throw new Error(j.error ?? "Échec de l'enregistrement.");
+      const err = new Error(j.error ?? "Échec de l'enregistrement.") as Error & { autreQuart?: boolean };
+      // 409 sur /api/placement/cell = « déjà placée sur un autre quart ce jour-là ».
+      if (res.status === 409) err.autreQuart = true;
+      throw err;
     }
   }
 
@@ -323,6 +330,13 @@ export default function PlacementBoard({
         else delete c[persId];
         return c;
       });
+      // Déjà placée sur un autre quart : au lieu d'un échec muet, on propose de la
+      // retirer de l'autre quart puis de la poser ici (P1c).
+      if ((e as { autreQuart?: boolean }).autreQuart) {
+        setSaving("idle");
+        setAskAutreQuart({ persId, value, num, forcer });
+        return;
+      }
       setSaving("error");
       setMsg(e instanceof Error ? e.message : "Échec.");
       setTimeout(() => {
@@ -330,6 +344,26 @@ export default function PlacementBoard({
         setMsg(null);
       }, 3500);
     }
+  }
+
+  // Confirmation « retirer de l'autre quart » : on libère d'abord l'autre quart,
+  // puis on repasse par le chemin normal (assign re-vérifie l'habilitation et
+  // gère l'optimiste / le rollback). La cible étant libérée côté serveur, le 409
+  // ne se reproduit pas.
+  async function confirmerAutreQuart() {
+    const a = askAutreQuart;
+    if (!a) return;
+    setAskAutreQuart(null);
+    try {
+      await post(a.persId, ""); // retire l'affectation de l'autre quart
+    } catch (e) {
+      setSaving("error");
+      setMsg(e instanceof Error ? e.message : "Échec.");
+      setTimeout(() => { setSaving("idle"); setMsg(null); }, 3500);
+      return;
+    }
+    setAutreQuart((aq) => { const n2 = { ...aq }; delete n2[a.persId]; return n2; });
+    await assign(a.persId, a.value, a.forcer, a.num);
   }
 
   // Copier les affectations poste d'un jour vers un autre (meme quart). La destination
@@ -1259,6 +1293,31 @@ export default function PlacementBoard({
                 }}
               >
                 Oui, je force
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {askAutreQuart && (
+        <div className={s.overlay} onClick={() => setAskAutreQuart(null)}>
+          <div className="card" onClick={(e) => e.stopPropagation()} style={{ margin: 0, width: "100%", maxWidth: 460 }}>
+            <h2 style={{ margin: "0 0 8px", fontSize: 18, color: "#b45309" }}>Déjà placé sur un autre quart</h2>
+            <p style={{ margin: "0 0 14px", fontSize: 14 }}>
+              <strong>{(() => { const p = persById.get(askAutreQuart.persId); return p ? `${p.nom} ${p.prenom}` : ""; })()}</strong>{" "}
+              est déjà placé(e) sur un poste d&apos;un autre quart ce jour-là. Voulez-vous le/la retirer
+              de l&apos;autre quart et le/la placer sur <strong>{posteNom.get(askAutreQuart.value) ?? "ce poste"}</strong> ?
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button type="button" className={s.cancelSel} style={{ padding: "7px 16px", fontSize: 13 }} onClick={() => setAskAutreQuart(null)}>
+                Annuler
+              </button>
+              <button
+                type="button"
+                style={{ width: "auto", margin: 0, padding: "7px 16px", fontSize: 13, fontWeight: 700, background: "#b45309", border: "1px solid #b45309", borderRadius: 8, cursor: "pointer" }}
+                onClick={confirmerAutreQuart}
+              >
+                Placer quand même (retirer de l&apos;autre quart)
               </button>
             </div>
           </div>
