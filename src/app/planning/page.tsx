@@ -21,7 +21,7 @@ import ConducteurToggle from "./ConducteurToggle";
 import { TvIcon } from "@/components/icons";
 import QuartBandeau from "./QuartBandeau";
 import PlanningGrid from "./PlanningGrid";
-import { getRotationRefsC } from "@/lib/refdata";
+import { getRotationRefsC, getTypesAgenceC } from "@/lib/refdata";
 import { rotationForWeek } from "@/lib/rotation";
 import { addMonthsIso } from "@/lib/habilitations";
 import { quartParDefaut, quartOuDefaut, memeQuart } from "@/lib/quarts";
@@ -647,11 +647,14 @@ export default async function PlanningPage({
   // pour ne rendre que le sous-ensemble filtre par defaut). La recherche par nom,
   // cote client, filtre alors dans l'effectif complet et retrouve quelqu'un meme
   // hors atelier/equipe courants.
+  // Contrats pilotés par agence (drapeau avec_agence, 0072) : surlignés en jaune
+  // comme l'intérim (intérim + CDI intérimaire…).
+  const agenceCodesSet = new Set(await getTypesAgenceC());
   const gridPersonnes = allActive.map((p) => ({
     id: p.id,
     label: `${p.nom} ${p.prenom}`,
     equipe_id: p.equipe_id,
-    interim: p.type_contrat === "INTERIM",
+    interim: agenceCodesSet.has(p.type_contrat),
     color: p.equipe_id ? equipeColor[p.equipe_id] : undefined,
     editable: canEditPlanningFull || (p.equipe_id != null && chefEquipes.has(p.equipe_id)),
   }));

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { isoDate, addDays } from "@/lib/week";
 import { habValable, habManqueTxt } from "@/lib/habilitations";
 import { parseNumeros } from "@/lib/numeros-rotation";
-import { styleInterim, estInterim } from "@/lib/interim";
+import { styleInterim, estAvecAgence } from "@/lib/interim";
 import SlideSwitch from "@/components/SlideSwitch";
 import { PrintIcon, OperateurIcon } from "@/components/icons";
 import JourNav from "./JourNav";
@@ -65,6 +65,7 @@ export default function PlacementBoard({
   winStart,
   winEnd,
   conducteurIds = [],
+  agenceCodes = ["INTERIM"],
   quartBandeau,
 }: {
   title?: ReactNode;
@@ -99,6 +100,9 @@ export default function PlacementBoard({
   // « Conducteurs » du filtre : quand elle est active, on ne montre que ces
   // personnes. La recherche par nom passe outre, comme pour équipe/atelier.
   conducteurIds?: string[];
+  // Codes de contrat pilotés par agence (drapeau avec_agence, 0072) : surlignés
+  // en jaune (intérim + CDI intérimaire…).
+  agenceCodes?: string[];
   // Bandeau plein-largeur de rappel du QUART en cours d'édition (même composant
   // que le Planning, cf. src/app/planning/QuartBandeau.tsx) : couleur = quart.couleur
   // (migration 0068). Rendu pré-calculé côté serveur et passé en prop, comme le
@@ -128,6 +132,7 @@ export default function PlacementBoard({
   // les autres filtres ; la recherche par nom la court-circuite.
   const [onlyCond, setOnlyCond] = useState(false);
   const condSet = useMemo(() => new Set(conducteurIds), [conducteurIds]);
+  const agenceSet = useMemo(() => new Set(agenceCodes), [agenceCodes]);
   // Filtre visuel : quand une personne est active (glissee/selectionnee),
   // n'afficher que les postes ou elle est competente (niveau >= min, hors
   // restriction). On garde toujours visibles les postes deja occupes pour
@@ -234,7 +239,7 @@ export default function PlacementBoard({
         title={raisons.length ? `${p.nom} ${p.prenom}\n⚠ ${raisons.join("\n⚠ ")}` : `${p.nom} ${p.prenom}`}
       >
         <span className={s.dot} style={{ background: p.couleur ?? "#e5e7eb" }} />
-        <span style={{ ...styleInterim(p.type_contrat), padding: estInterim(p.type_contrat) ? "0 3px" : 0 }}>{label(p)}</span>
+        <span style={{ ...styleInterim(p.type_contrat, agenceSet), padding: estAvecAgence(p.type_contrat, agenceSet) ? "0 3px" : 0 }}>{label(p)}</span>
       </span>
     );
   };
@@ -780,7 +785,7 @@ export default function PlacementBoard({
                         title={`${p.nom} ${p.prenom}`}
                       >
                         <span className={s.dot} style={{ background: p.couleur ?? "#e5e7eb" }} />
-                        <span className={s.absNom} style={{ ...styleInterim(p.type_contrat), padding: estInterim(p.type_contrat) ? "0 4px" : 0 }}>{p.nom} {p.prenom}</span>
+                        <span className={s.absNom} style={{ ...styleInterim(p.type_contrat, agenceSet), padding: estAvecAgence(p.type_contrat, agenceSet) ? "0 4px" : 0 }}>{p.nom} {p.prenom}</span>
                       </div>
                     ))}
                   </div>
@@ -979,7 +984,7 @@ export default function PlacementBoard({
                   <span
                     className={s.nm}
                     title={`${p.nom} ${p.prenom}`}
-                    style={{ ...styleInterim(p.type_contrat), padding: estInterim(p.type_contrat) ? "0 4px" : 0 }}
+                    style={{ ...styleInterim(p.type_contrat, agenceSet), padding: estAvecAgence(p.type_contrat, agenceSet) ? "0 4px" : 0 }}
                   >
                     {p.nom} {p.prenom}
                   </span>

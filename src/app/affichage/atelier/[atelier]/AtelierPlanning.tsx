@@ -117,6 +117,18 @@ export default async function AtelierPlanning({
   const displayById = new Map<string, Personne>();
   for (const p of rosterD ?? []) displayById.set(p.id, { nom: p.nom, prenom: p.prenom, type_contrat: p.type_contrat });
 
+  // Codes de contrat pilotés par agence (drapeau avec_agence, 0072) : surlignés en
+  // jaune (intérim + CDI intérimaire…). Route publique → on ne passe pas par
+  // getTypesAgenceC (cookie) mais par une requête bornée au site. Repli sur le
+  // seul code INTERIM si la colonne n'existe pas encore.
+  const { data: typesAg } = await admin
+    .from("type_contrat")
+    .select("code, avec_agence")
+    .eq("site_id", site.id)
+    .returns<{ code: string; avec_agence: boolean }[]>();
+  const agenceSet = new Set<string>(["INTERIM"]);
+  for (const t of typesAg ?? []) if (t.avec_agence) agenceSet.add(t.code);
+
   const horMap = new Map<string, { debut: string | null; fin: string | null }>(); // `${poste}:${quart}:${dow}`
   const excMap = new Map<string, { debut: string | null; fin: string | null; motif: string | null }>(); // `${personne}:${iso}` (horaire specifique + commentaire)
   type TpHM = Record<string, { debut: string; fin: string }>;
@@ -568,7 +580,7 @@ export default async function AtelierPlanning({
                 </thead>
                 <tbody>
                   {liste.map((p) => {
-                    const interim = p.type_contrat === "INTERIM";
+                    const interim = agenceSet.has(p.type_contrat);
                     return (
                       <tr key={p.id}>
                         <td style={{ border: cellBorder, padding: "5px 10px", fontWeight: 600, whiteSpace: "nowrap" }}>

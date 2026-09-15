@@ -8,7 +8,7 @@ import { quartParDefaut, quartOuDefaut, memeQuart } from "@/lib/quarts";
 import { chargerPosteQuart, tourneSurQuart, effectifSurQuart } from "@/lib/poste-quart";
 import { chargerValidites, actifLe } from "@/lib/referentiel-validite";
 import { isoDate, mondayOf, addDays } from "@/lib/week";
-import { getRotationRefsC } from "@/lib/refdata";
+import { getRotationRefsC, getTypesAgenceC } from "@/lib/refdata";
 import { rotationForWeek, equipesParQuart } from "@/lib/rotation";
 import { addMonthsIso } from "@/lib/habilitations";
 import { estAuTravailLe, deriverArriveeDepart } from "@/lib/personne-statut";
@@ -394,6 +394,7 @@ export default async function PlacementPage({
         winStart={winStart}
         winEnd={winEnd}
         conducteurIds={conducteurIds}
+        agenceCodes={await getTypesAgenceC()}
         quartBandeau={<QuartBandeau quart={quart} quarts={quarts} />}
       />
     </div>

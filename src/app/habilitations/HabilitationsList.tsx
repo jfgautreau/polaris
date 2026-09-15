@@ -199,6 +199,7 @@ export default function HabilitationsList({
   equipes = [],
   atelier = "",
   equipe = "",
+  agenceCodes = ["INTERIM"],
   lienParam = false,
 }: {
   rows: Row[];
@@ -213,8 +214,12 @@ export default function HabilitationsList({
   equipes?: { id: string; label: string }[];
   atelier?: string;
   equipe?: string;
+  // Codes de contrat pilotés par agence (drapeau avec_agence, 0072) : surlignés
+  // en jaune (intérim + CDI intérimaire…).
+  agenceCodes?: string[];
   lienParam?: boolean; // droit de lecture sur « Param. Habilitation »
 }) {
+  const agenceSet = useMemo(() => new Set(agenceCodes), [agenceCodes]);
   const [search, setSearch] = useState("");
   const [view, setView] = useState<"grille" | "liste">("grille"); // grille par défaut
   // Saisie ouverte au clic sur une pastille, pre-remplie avec cette case.
@@ -544,7 +549,7 @@ export default function HabilitationsList({
                   {rowsShownPersonnes.map((p) => (
                     <tr key={p.id}>
                       <td className={g.nameCell}>
-                        <span style={p.type_contrat === "INTERIM" ? { background: INTERIM_BG, borderRadius: 3, padding: "0 4px" } : undefined}>{p.nom} {p.prenom}</span>
+                        <span style={p.type_contrat && agenceSet.has(p.type_contrat) ? { background: INTERIM_BG, borderRadius: 3, padding: "0 4px" } : undefined}>{p.nom} {p.prenom}</span>
                       </td>
                       {shownOrdered.map((c) => {
                         const { statut, title } = cellOf(p.id, c);

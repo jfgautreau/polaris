@@ -1,7 +1,7 @@
 import { getServerClient } from "@/lib/supabase-server";
 import AppHeader from "@/components/AppHeader";
 import { requireModule, canWrite } from "@/lib/permissions";
-import { getAteliersC, getEquipesC, getNiveauxC, getNbNiveauxC, getSeuilCompetentC, getCouleursNiveauxC } from "@/lib/refdata";
+import { getAteliersC, getEquipesC, getNiveauxC, getNbNiveauxC, getSeuilCompetentC, getCouleursNiveauxC, getTypesAgenceC } from "@/lib/refdata";
 import { couleursNiveau } from "@/lib/couleurs-niveau";
 import { fetchAll } from "@/lib/fetch-all";
 import MatricePanel from "./MatricePanel";
@@ -158,11 +158,15 @@ export default async function MatricePage({
     .filter((p) => (!sp.equipe || p.equipe_id === sp.equipe) && (!sp.atelier || p.atelier_id === sp.atelier))
     .map((p) => p.id);
 
+  // Contrats pilotés par agence (drapeau avec_agence, 0072) : surlignés en jaune
+  // comme l'intérim (intérim + CDI intérimaire…).
+  const agenceCodesSet = new Set(await getTypesAgenceC());
+
   // Perimetre d'edition (chefEquipes recupere en vague 1)
   const gridPersonnes = personnes.map((p) => ({
     id: p.id,
     label: `${p.nom} ${p.prenom}`,
-    interim: p.type_contrat === "INTERIM",
+    interim: agenceCodesSet.has(p.type_contrat),
     avenir: p.statut === "A_VENIR",
     editable: canEditMatrice || (p.equipe_id != null && chefEquipes.has(p.equipe_id)),
     // Alerte réservée aux ACTIFS : une personne « À venir » sans compétence est normale.

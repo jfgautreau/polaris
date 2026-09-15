@@ -2,7 +2,7 @@ import { getServerClient } from "@/lib/supabase-server";
 import AppHeader from "@/components/AppHeader";
 import { fetchAll } from "@/lib/fetch-all";
 import { requireModule, canWrite, canRead } from "@/lib/permissions";
-import { getAteliersC, getEquipesC } from "@/lib/refdata";
+import { getAteliersC, getEquipesC, getTypesAgenceC } from "@/lib/refdata";
 import HabilitationsList from "./HabilitationsList";
 
 type Comp = { id: string; nom: string; duree_validite_mois: number | null; categorie: string | null; groupe: string | null; ordre: number; a_autorisation_conduite: boolean };
@@ -36,7 +36,7 @@ export default async function HabilitationsPage({
   // Matrice de polyvalence, cf. src/app/matrice/page.tsx.
   const persQ = supabase.from("personne").select("id, nom, prenom, type_contrat, equipe_id, atelier_id").eq("statut", "ACTIF").order("nom");
 
-  const [{ data: compsD }, { data: persD }, pcD, ateliers, equipes] = await Promise.all([
+  const [{ data: compsD }, { data: persD }, pcD, ateliers, equipes, agenceCodes] = await Promise.all([
     supabase
       .from("competence")
       .select("id, nom, duree_validite_mois, categorie, groupe, ordre, a_autorisation_conduite")
@@ -55,6 +55,7 @@ export default async function HabilitationsPage({
     ),
     getAteliersC(),
     getEquipesC(),
+    getTypesAgenceC(),
   ]);
 
   const comps = compsD ?? [];
@@ -90,6 +91,7 @@ export default async function HabilitationsPage({
           equipes={equipes.map((e) => ({ id: e.id, label: e.nom }))}
           atelier={sp.atelier ?? ""}
           equipe={sp.equipe ?? ""}
+          agenceCodes={agenceCodes}
           lienParam={canRead(perms, "habilitations_param")}
         />
       </div>
