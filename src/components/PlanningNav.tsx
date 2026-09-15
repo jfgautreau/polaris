@@ -6,7 +6,8 @@ import { parseMonday, isoDate, addDays, mondayOf, isoWeekNumber } from "@/lib/we
 const MOIS = ["Janv", "Févr", "Mars", "Avr", "Mai", "Juin", "Juil", "Août", "Sept", "Oct", "Nov", "Déc"];
 
 // Navigation planning : Annee / Mois (segments) + pastilles des semaines du mois.
-// Cliquer une semaine ouvre la vue 3 semaines (S-1 / S / S+1) centree dessus.
+// Cliquer une semaine l'ouvre EN PREMIERE (a gauche) de la vue 3 semaines
+// (S / S+1 / S+2) : on regarde ce qui vient.
 export default function PlanningNav({
   base,
   semaine,

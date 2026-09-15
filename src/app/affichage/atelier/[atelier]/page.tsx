@@ -1,6 +1,6 @@
 import { getCurrentSite } from "@/lib/current-site";
 import { getQuartsC } from "@/lib/refdata";
-import { parseJour } from "@/lib/week";
+import { parseJour, isoDate, mondayOf } from "@/lib/week";
 import { getFenetreAffichage, joursDeFenetre } from "@/lib/parametres";
 import AutoRefresh from "@/components/AutoRefresh";
 import AffichageBarre from "./AffichageBarre";
@@ -22,7 +22,14 @@ export default async function AffichageAtelier({
   // qui vient, pas a relire le lundi passe.
   // `?date` deplace le pivot (sans recalage sur le lundi).
   const fen = await getFenetreAffichage();
-  const days = joursDeFenetre(fen, parseJour(sp.date));
+  const pivot = parseJour(sp.date);
+  const days = joursDeFenetre(fen, pivot);
+  // Bornes affichées + comparaison au lundi de la semaine courante : servent au
+  // sélecteur de semaine de la barre (choix de la semaine à afficher / imprimer).
+  const pivotIso = isoDate(pivot);
+  const debutIso = days[0]?.iso ?? pivotIso;
+  const finIso = days[days.length - 1]?.iso ?? pivotIso;
+  const estCourant = isoDate(mondayOf(pivot)) === isoDate(mondayOf());
 
   // Multi-tenant : nom d'usine affiche en haut a droite pour qu'un ecran
   // couloir d'un site ne puisse pas etre confondu avec celui d'un autre.
@@ -44,7 +51,16 @@ export default async function AffichageAtelier({
           quarts={quarts}
           days={days}
           refreshNote
-          actions={<AffichageBarre cadreId="affichage-feuille" contenuId="affichage-contenu" />}
+          actions={
+            <AffichageBarre
+              cadreId="affichage-feuille"
+              contenuId="affichage-contenu"
+              pivotIso={pivotIso}
+              debutIso={debutIso}
+              finIso={finIso}
+              estCourant={estCourant}
+            />
+          }
         />
       </div>
     </div>

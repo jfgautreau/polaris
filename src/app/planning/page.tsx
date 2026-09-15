@@ -92,7 +92,10 @@ export default async function PlanningPage({
   // pour atelier/équipe).
   const filtreConducteurs = sp.cond === "1";
 
-  const weekMondays = [addDays(center, -7), center, addDays(center, 7)];
+  // La semaine choisie (par défaut la semaine EN COURS) est affichée À GAUCHE,
+  // suivie des deux semaines à venir (S, S+1, S+2) : on regarde ce qui vient,
+  // pas la semaine passée. Naviguer (WeekNav / PlanningNav) déplace ce trio.
+  const weekMondays = [center, addDays(center, 7), addDays(center, 14)];
   const todayMondayIso = isoDate(mondayOf());
   const rawDays = weekMondays.flatMap((wm, wi) =>
     weekDays(wm).map((d, di) => ({ ...d, firstOfWeek: di === 0, wi }))

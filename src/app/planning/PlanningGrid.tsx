@@ -207,6 +207,34 @@ export default function PlanningGrid({
     return () => el.removeEventListener("scroll", handler);
   }, []);
 
+  // Croix de navigation (surlignage ligne + colonne au survol), comme la Matrice
+  // et l'Ordonnancement. La LIGNE est peinte en CSS (.planning-cross tr:hover) ;
+  // la COLONNE l'est ici en écrivant directement le fond du <col> partagé par les
+  // DEUX tables (en-têtes + corps), sans re-render React — gratuit sur des
+  // milliers de cellules.
+  const headTableRef = useRef<HTMLTableElement>(null);
+  const bodyTableRef = useRef<HTMLTableElement>(null);
+  const hoverCol = useRef(-1);
+  const paintCol = useCallback((index: number, on: boolean) => {
+    for (const t of [headTableRef.current, bodyTableRef.current]) {
+      const col = t?.querySelector("colgroup")?.children[index] as HTMLElement | undefined;
+      if (col) col.style.background = on ? "rgba(37,99,235,0.07)" : "";
+    }
+  }, []);
+  const onCellOver = useCallback((e: React.MouseEvent) => {
+    const td = (e.target as HTMLElement).closest("td");
+    if (!td) return;
+    const idx = td.cellIndex; // 0 = colonne des noms, puis une colonne par jour
+    if (idx === hoverCol.current) return;
+    if (hoverCol.current > 0) paintCol(hoverCol.current, false);
+    hoverCol.current = idx;
+    if (idx > 0) paintCol(idx, true);
+  }, [paintCol]);
+  const onCellLeave = useCallback(() => {
+    if (hoverCol.current > 0) paintCol(hoverCol.current, false);
+    hoverCol.current = -1;
+  }, [paintCol]);
+
   const displayedSet = useMemo(
     () => (displayedIds ? new Set(displayedIds) : null),
     [displayedIds],
@@ -663,7 +691,7 @@ export default function PlanningGrid({
           {saving === "saving" ? "Enregistrement..." : saving === "saved" ? "Enregistré" : saving === "error" ? "Échec" : ""}
         </div>
 
-      <table className="matrix" style={tStyle}>
+      <table ref={headTableRef} className="matrix" style={tStyle} onMouseOver={onCellOver} onMouseLeave={onCellLeave}>
         <Cols />
         <thead>
           <tr>
@@ -816,7 +844,7 @@ export default function PlanningGrid({
 
       {/* Tableau 2 : noms (defile, remplit le reste de la fenetre) */}
       <div ref={gridScrollRef} className="card" style={{ marginTop: 8, overflowX: "hidden", overflowY: "auto", scrollbarGutter: "stable", flex: 1, minHeight: 0, padding: "0 12px" }}>
-      <table className="matrix" style={tStyle}>
+      <table ref={bodyTableRef} className="matrix planning-cross" style={tStyle} onMouseOver={onCellOver} onMouseLeave={onCellLeave}>
         <Cols />
         <tbody>
           {shown.map((pers, rowIndex) => (
@@ -1027,7 +1055,17 @@ export default function PlanningGrid({
                           )}
                           {excAt === ek && (
                             <div className="exc-pop" onClick={(ev) => ev.stopPropagation()}>
-                              <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 4 }}>Horaire spécifique</div>
+                              {/* Croix de fermeture en haut à droite de la fenêtre. */}
+                              <button
+                                type="button"
+                                onClick={() => setExcAt(null)}
+                                title="Fermer"
+                                aria-label="Fermer"
+                                style={{ position: "absolute", top: 4, right: 4, width: 18, height: 18, margin: 0, padding: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", lineHeight: 1, fontSize: 13, border: "none", background: "transparent", color: "var(--muted)", cursor: "pointer" }}
+                              >
+                                ✕
+                              </button>
+                              <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 4, paddingRight: 16 }}>Horaire spécifique</div>
                               {stdTxt && (
                                 <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>Par défaut : {stdTxt}</div>
                               )}
@@ -1056,7 +1094,6 @@ export default function PlanningGrid({
                                 {e && (
                                   <button type="button" className="btn-sm btn-ghost" style={{ padding: "2px 8px" }} onClick={() => clearExc(pers.id, d.iso)}>Effacer</button>
                                 )}
-                                <button type="button" className="btn-sm btn-ghost" style={{ padding: "2px 8px" }} onClick={() => setExcAt(null)}>×</button>
                               </div>
                             </div>
                           )}

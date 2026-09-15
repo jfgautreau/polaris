@@ -338,6 +338,16 @@ table {
   box-shadow: inset 0 0 0 999px rgba(15, 23, 42, 0.06);
 }
 
+/* Planning — croix de navigation (ligne + colonne) au survol, comme la Matrice
+   et l'Ordonnancement. La colonne est peinte via le <col> partagé (JS dans
+   PlanningGrid) ; la ligne l'est ici. `box-shadow` inset plutôt qu'un fond : les
+   cases du Planning portent déjà leur propre couleur d'état (violet TP, rouge
+   hors-compétence, jaune sureffectif, bleu « aujourd'hui »…) — l'inset se
+   superpose sans effacer l'information. */
+.planning-cross tbody tr:hover td {
+  box-shadow: inset 0 0 0 999px rgba(37, 99, 235, 0.06);
+}
+
 /* Référentiel — table des postes : le contenu des cellules (inputs, selects et
    le bouton « Habil. requises ») doit avoir LA MÊME hauteur, sinon la ligne
    paraît bancale même à hauteur de rangée constante. On aligne tout à 28 px. */

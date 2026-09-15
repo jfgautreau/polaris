@@ -1,74 +1,114 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import Logo from "@/components/Logo";
+import { addDays, isoDate } from "@/lib/week";
 
-// Barre d'actions de l'ecran TV : impression PDF et retour a l'application.
-// Masquee a l'impression (`noprint`).
+// Barre d'actions de l'ecran TV : choix de la semaine affichee, impression PDF
+// et retour a l'application. Masquee a l'impression (`noprint`).
 //
-// Impression : UNE page A3 verticale. Comme au Placement, aucune regle CSS ne
-// sait « faire rentrer » un contenu — on mesure, puis on met a l'echelle.
-// A3 portrait a 96 dpi : 297 x 420 mm, moins les marges de 8 mm du @page,
-// soit 281 x 404 mm = 1062 x 1527 px utiles.
-const PAGE_L = 1060;
-const PAGE_H = 1525;
-// Plusieurs largeurs d'essai : une feuille plus etroite que la page autorise un
-// AGRANDISSEMENT (le tableau d'une semaine est bien plus large que haut, il se
-// tasserait en haut d'une A3 verticale) ; une plus large permet de reduire.
-const LARGEURS_ESSAI = [700, 820, 940, 1060, 1300, 1600, 1900];
-const ECHELLE_MAX = 1.6;
+// Impression (2026-09-15, refonte) : on n'ecrase plus tout le planning sur UNE
+// page A3 (rognait la derniere ligne des services denses). On imprime en A3
+// PAYSAGE, les colonnes ajustees a la LARGEUR de la feuille (`table width:100%`),
+// et le contenu COULE sur plusieurs pages : chaque rangee reste entiere
+// (`break-inside: avoid` sur les `tr`) et l'en-tete des jours se repete en haut
+// de chaque page (`thead { display: table-header-group }`). Plus de mise a
+// l'echelle mesuree — le navigateur pagine tout seul.
 
-// Gabarit commun aux deux commandes : le bouton porte une bordure, le logo n'en
-// a pas — sans taille imposee, ils ne tombaient pas d'aplomb.
+// Gabarit commun aux commandes : le bouton porte une bordure, le logo n'en a pas.
 const TAILLE = 42;
 
-export default function AffichageBarre({ cadreId, contenuId }: { cadreId: string; contenuId: string }) {
-  function imprimer() {
-    const el = document.getElementById(contenuId);
-    if (!el) {
-      window.print();
-      return;
-    }
-    const largeur0 = el.style.width;
-    const transform0 = el.style.transform;
+function jjmm(iso: string) {
+  const [, m, d] = iso.split("-");
+  return `${d}/${m}`;
+}
 
-    el.style.transformOrigin = "top left";
-    el.style.transform = "none";
-    let meilleur = { f: 0, w: PAGE_L };
-    for (const w of LARGEURS_ESSAI) {
-      el.style.width = `${w}px`;
-      const f = Math.min(ECHELLE_MAX, PAGE_L / w, PAGE_H / el.scrollHeight);
-      if (f > meilleur.f) meilleur = { f, w };
-    }
-    el.style.width = `${meilleur.w}px`;
-    el.style.transform = `scale(${meilleur.f})`;
+export default function AffichageBarre({
+  cadreId,
+  contenuId,
+  pivotIso,
+  debutIso,
+  finIso,
+  estCourant,
+}: {
+  cadreId: string;
+  contenuId: string;
+  pivotIso: string;
+  debutIso: string;
+  finIso: string;
+  estCourant: boolean;
+}) {
+  const router = useRouter();
+  const pathname = usePathname();
 
-    window.print();
-
-    // window.print() bloque jusqu'a la fermeture de la boite : on peut rendre
-    // l'ecran a son etat normal juste apres (c'est un ecran TV, il reste affiche).
-    el.style.width = largeur0;
-    el.style.transform = transform0;
-  }
+  // Navigation de semaine : `?date` deplace le pivot de la fenetre d'affichage
+  // (cf. joursDeFenetre). ± 7 jours = semaine precedente / suivante ; « cette
+  // semaine » retire le parametre (retour au pivot = aujourd'hui).
+  const pivot = new Date(pivotIso + "T00:00");
+  const allerA = (iso: string | null) =>
+    router.push(iso ? `${pathname}?date=${iso}` : pathname);
 
   return (
     <>
       {/* Regles d'impression propres a cet ecran. Le @page global est en A4
-          paysage ; declare ici APRES, celui-ci l'emporte pour cette page. Le
-          cadre est borne a une page exactement, sinon la feuille elargie avant
-          reduction sortirait de la zone imprimable. */}
+          paysage ; declare ici APRES, celui-ci l'emporte. Le cadre ne borne plus
+          la hauteur a une page : le contenu coule sur plusieurs feuilles. */}
       <style>{`
         @media print {
-          @page { size: A3 portrait; margin: 8mm; }
-          #${cadreId} { width: ${PAGE_L}px; height: ${PAGE_H}px; overflow: hidden; padding: 0 !important; }
+          @page { size: A3 landscape; margin: 10mm; }
+          #${cadreId} { width: auto !important; height: auto !important; overflow: visible !important; padding: 0 !important; }
+          #${contenuId} { transform: none !important; width: auto !important; }
+          #${cadreId} table { page-break-inside: auto; }
+          #${cadreId} thead { display: table-header-group; }
+          #${cadreId} tr { break-inside: avoid; page-break-inside: avoid; }
+          #${cadreId} section { break-inside: auto; }
         }
       `}</style>
 
       <div className="noprint" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        {/* Selecteur de semaine : precedente / periode affichee / suivante. */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <button
+            type="button"
+            onClick={() => allerA(isoDate(addDays(pivot, -7)))}
+            title="Semaine précédente"
+            aria-label="Semaine précédente"
+            style={btnFleche}
+          >
+            &lsaquo;
+          </button>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", lineHeight: 1.2, minWidth: 120 }}>
+            <span style={{ fontSize: 15, fontWeight: 700, whiteSpace: "nowrap" }}>
+              {jjmm(debutIso)} → {jjmm(finIso)}
+            </span>
+            {estCourant ? (
+              <span style={{ fontSize: 11, color: "#16a34a", fontWeight: 600 }}>Semaine en cours</span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => allerA(null)}
+                style={{ width: "auto", margin: 0, padding: 0, border: "none", background: "transparent", color: "#1d4ed8", fontSize: 11, fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}
+              >
+                Revenir à cette semaine
+              </button>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => allerA(isoDate(addDays(pivot, 7)))}
+            title="Semaine suivante"
+            aria-label="Semaine suivante"
+            style={btnFleche}
+          >
+            &rsaquo;
+          </button>
+        </div>
+
         <button
           type="button"
-          onClick={imprimer}
-          title="Imprimer / enregistrer en PDF (A3 vertical, une page)"
+          onClick={() => window.print()}
+          title="Imprimer / enregistrer en PDF (A3 paysage, plusieurs pages si besoin)"
           aria-label="Imprimer"
           style={{
             display: "inline-flex",
@@ -108,3 +148,21 @@ export default function AffichageBarre({ cadreId, contenuId }: { cadreId: string
     </>
   );
 }
+
+const btnFleche: React.CSSProperties = {
+  width: 34,
+  height: 34,
+  padding: 0,
+  margin: 0,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: 22,
+  fontWeight: 800,
+  lineHeight: 1,
+  background: "#fff",
+  color: "#1d4ed8",
+  border: "1px solid var(--border)",
+  borderRadius: 9,
+  cursor: "pointer",
+};

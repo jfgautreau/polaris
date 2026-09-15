@@ -415,7 +415,7 @@ export default async function AtelierPlanning({
               (Service {atelierNomById.get(info!.atelierId) ?? "?"})
             </div>
           )}
-          {h && <div style={{ color: "#1d4ed8", fontSize: 13 }}>{h}</div>}
+          {h && <div style={{ color: "#1d4ed8", fontSize: 14 }}>{h}</div>}
           {cmt && <div style={{ color: "#6b7280", fontStyle: "italic", fontSize: 12 }}>{cmt}</div>}
         </div>
       );
