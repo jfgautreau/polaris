@@ -594,7 +594,8 @@
         <li><a href="#tv">12. Affichage TV</a></li>
         <li><a href="#journal">13. Journal</a></li>
         <li><a href="#reglages">14. Réglages</a></li>
-        <li><a href="#depannage">15. Dépannage</a></li>
+        <li><a href="#cas-usage">15. Cas d'usage pas-à-pas</a></li>
+        <li><a href="#depannage">16. Dépannage</a></li>
       </ol>
     </nav>
 
@@ -619,6 +620,7 @@
                 <b class="cal">2</b>
                 <span class="m-link"><span class="m-tile" style="background:#16a34a"></span>Référentiel</span>
                 <span class="m-link"><span class="m-tile" style="background:#2563eb"></span>Personnel</span>
+                <span class="m-link"><span class="m-tile" style="background:#db2777"></span>Absences</span>
                 <span class="m-link"><span class="m-tile" style="background:#7c3aed"></span>Matrice</span>
                 <span class="m-link"><span class="m-tile" style="background:#ca8a04"></span>Habilitations</span>
                 <span class="m-link"><span class="m-tile" style="background:#ea580c"></span>Ordonnancement</span>
@@ -747,7 +749,7 @@
           <li><strong>Copier une journée précédente</strong> pour ne pas repartir de zéro.</li>
           <li><strong>Compléter et ajuster</strong> en glissant les noms sur les postes ; le compteur en haut à droite indique ce qu'il reste à couvrir.</li>
           <li><strong>Vérifier qu'il n'y a plus de rouge</strong> : ni poste incomplet, ni placement forcé.</li>
-          <li>Les <a href="#tv">écrans TV</a> de l'service se mettent à jour tout seuls.</li>
+          <li>Les <a href="#tv">écrans TV</a> du service se mettent à jour tout seuls.</li>
         </ol>
 
         <div class="note tip">
@@ -1690,8 +1692,86 @@
       </section>
 
       <!-- ================= 15. DEPANNAGE ================= -->
+      <!-- ================= 15. CAS D'USAGE ================= -->
+      <section id="cas-usage">
+        <h2>15. Cas d'usage pas-à-pas</h2>
+
+        <p class="lede">
+          Les gestes les plus courants, du début à la fin. Chaque recette renvoie
+          à la section détaillée si vous voulez aller plus loin.
+        </p>
+
+        <h3>Créer une fiche personnel</h3>
+        <ol>
+          <li>Ouvrez <a href="#personnel">Personnel</a> et cliquez sur <strong>＋ Ajouter</strong>.</li>
+          <li>Renseignez le <strong>nom</strong> et le <strong>prénom</strong> (la casse est corrigée toute seule : « GAUTREAU Jean »).</li>
+          <li>Choisissez le <strong>contrat</strong>, le <strong>service</strong> et l'<strong>équipe</strong>. Pour un contrat piloté par une agence (intérim, CDI intérimaire), un champ <strong>Agence d'intérim</strong> apparaît : renseignez-le.</li>
+          <li>Indiquez la <strong>date d'arrivée</strong> (elle peut être dans le futur : la personne reste « À venir » jusqu'au jour J).</li>
+          <li>Validez avec <strong>Créer</strong>. Si un homonyme existe, Polaris propose plutôt de réactiver l'ancien profil.</li>
+        </ol>
+        <div class="note">
+          <span class="label">Fiche incomplète&nbsp;?</span>
+          <p>
+            Une pastille orange devant le nom signale une fiche à compléter&nbsp;: aucun contrat
+            dans le Cycle de vie, ou un contrat d'agence sans agence renseignée. Le segment
+            <strong>Fiche · Incomplètes</strong> les regroupe pour une session de mise à jour.
+          </p>
+        </div>
+
+        <h3>Alimenter la matrice de polyvalence</h3>
+        <ol>
+          <li>Ouvrez la <a href="#matrice">Matrice</a>. Les lignes sont les personnes, les colonnes les postes du service.</li>
+          <li>Restez sur la vue <strong>Actuel</strong> (le niveau réel d'aujourd'hui).</li>
+          <li>Cliquez sur la pastille à l'intersection <em>personne × poste</em> et choisissez le niveau atteint. La cible suit automatiquement si elle était calée sur l'actuel.</li>
+          <li>Passez sur <strong>Cible</strong> pour fixer un objectif plus haut que l'actuel là où vous voulez faire monter quelqu'un.</li>
+          <li>Une pastille orange <strong>!</strong> devant un nom signale une personne active sans aucune compétence&nbsp;: une piste de formation.</li>
+        </ol>
+
+        <h3>Renseigner une habilitation</h3>
+        <ol>
+          <li>Ouvrez <a href="#habilitations">Habilitations</a> et cliquez sur la pastille <em>personne × habilitation</em>.</li>
+          <li>Saisissez la <strong>date d'obtention</strong>. L'échéance est calculée (rouge &lt; 30&nbsp;j, orange 30–90&nbsp;j, vert au-delà) ; la cloche en haut compte celles qui arrivent à échéance.</li>
+        </ol>
+
+        <h3>Placer une personne sur le planning</h3>
+        <ol>
+          <li>Commencez toujours par les <strong>absences</strong> du jour (voir la recette suivante).</li>
+          <li>Ouvrez le <a href="#placement">Placement</a> sur le bon <strong>service</strong>, le bon <strong>jour</strong> et le bon <strong>quart</strong>.</li>
+          <li>Au besoin, <strong>copiez une journée</strong> précédente pour ne pas repartir de zéro.</li>
+          <li><strong>Glissez un nom</strong> de la colonne de gauche sur une case de poste. Le compteur en haut de chaque poste indique ce qu'il reste à couvrir.</li>
+          <li>Si la personne n'a pas l'habilitation exigée, Polaris demande confirmation&nbsp;: le placement forcé reste en rouge jusqu'à régularisation.</li>
+          <li>Vérifiez qu'il ne reste plus de rouge, puis exportez si besoin en <strong>PDF</strong> (plan seul) ou <strong>PDF CE</strong> (avec la colonne des absents).</li>
+        </ol>
+        <div class="note tip">
+          <span class="label">Astuce</span>
+          <p>
+            Le bouton <strong>⛁ TP + pré-affectation</strong> (en tête de semaine du
+            <a href="#planning">Planning</a>) pose d'un coup les temps partiels et les personnes à
+            poste fixe, sans jamais écraser une case déjà remplie.
+          </p>
+        </div>
+
+        <h3>Déclarer une absence</h3>
+        <ol>
+          <li>Depuis <a href="#personnel">Personnel</a> (icône calendrier de la ligne) ou depuis <a href="#absences">Absences</a>, cliquez sur <strong>＋ Déclarer</strong>.</li>
+          <li>Choisissez le <strong>motif</strong>, puis la <strong>période</strong> au calendrier (deux clics : début, fin).</li>
+          <li>Enregistrez. Les jours concernés sont bloqués dans le Planning et le Placement&nbsp;: la personne ne peut plus y être placée par erreur.</li>
+        </ol>
+
+        <div class="note tip">
+          <span class="label">Les filtres vous suivent</span>
+          <p>
+            Un nom cherché, une équipe ou un service filtré vous accompagnent quand vous
+            basculez entre <a href="#planning">Planning</a>, <a href="#personnel">Personnel</a>,
+            <a href="#matrice">Matrice</a> et <a href="#habilitations">Habilitations</a> — et sont
+            conservés si vous rafraîchissez la page.
+          </p>
+        </div>
+      </section>
+
+      <!-- ================= 16. DEPANNAGE ================= -->
       <section id="depannage">
-        <h2>15. Dépannage</h2>
+        <h2>16. Dépannage</h2>
 
         <dl class="faq">
           <dt>Je ne vois pas le même menu qu'un collègue.</dt>
