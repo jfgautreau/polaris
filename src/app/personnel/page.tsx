@@ -2,7 +2,7 @@ import { getServerClient } from "@/lib/supabase-server";
 import AppHeader from "@/components/AppHeader";
 import { requireModule, canWrite } from "@/lib/permissions";
 import PersonnelEditor from "./PersonnelEditor";
-import { getRotationRefsC } from "@/lib/refdata";
+import { getRotationRefsC, getTypesAgenceC } from "@/lib/refdata";
 
 type Equipe = { id: string; nom: string; couleur: string | null; quart_fixe: string | null };
 type Quart = { code: string; libelle: string; creneau: string | null };
@@ -20,6 +20,8 @@ type Row = {
   numero_badge: string | null;
   date_livret_accueil: string | null;
   type_contrat: string;
+  // Reflet dénormalisé du contrat courant (maintenu par syncPersonneFromPeriodes).
+  agence_interim: string | null;
   date_debut: string | null;
   date_fin: string | null;
   // Dates DERIVEES des contrats (migration 0050) : plus stockees sur personne.
@@ -31,6 +33,9 @@ type Row = {
   motif_depart: string | null;
   contrat_debut: string | null; // idem date_arrivee, garde pour compat
   hasContrat: boolean; // true si au moins un contrat_periode existe
+  // Contrat courant piloté par agence mais sans agence renseignée (fiche
+  // incomplète) — dérivé serveur du drapeau avec_agence (0072).
+  agenceManquante: boolean;
   pointure: string | null;
   commentaire: string | null;
   statut: string;
@@ -44,7 +49,7 @@ type TpConfig = { demi?: { mode: string; source: string; matin?: HMap; aprem?: H
 
 const COLS_PERSONNE =
   "id, matricule, nom, prenom, equipe_id, atelier_id, regroupement, sexe, numero_badge, date_livret_accueil, " +
-  "type_contrat, date_debut, date_fin, pointure, commentaire, statut, temps_partiel, tp_type, tp_config, poste_fixe_id";
+  "type_contrat, agence_interim, date_debut, date_fin, pointure, commentaire, statut, temps_partiel, tp_type, tp_config, poste_fixe_id";
 
 export default async function PersonnelPage({
   searchParams,
@@ -70,7 +75,7 @@ export default async function PersonnelPage({
   // `quart_fixe` + rotation + quarts : servent l'apercu de quinzaine de la modale
   // temps partiel (l'alternance « une semaine sur deux » vient de la rotation de
   // l'equipe, pas du temps partiel lui-meme).
-  type BaseRow = Omit<Row, "contrat_debut" | "date_arrivee" | "date_depart_prevu" | "motif_depart">;
+  type BaseRow = Omit<Row, "contrat_debut" | "date_arrivee" | "date_depart_prevu" | "motif_depart" | "agenceManquante">;
   type CpRow = { personne_id: string; date_debut: string | null; date_fin: string | null; motif_fin: string | null; created_at: string };
   const [
     { data: equipesData },
@@ -82,6 +87,8 @@ export default async function PersonnelPage({
     rotationRefs,
     { data: motifsData },
     typesR,
+    { data: agencesData },
+    agenceCodesArr,
   ] = await Promise.all([
     supabase.from("equipe").select("id, nom, couleur, quart_fixe").order("nom").returns<Equipe[]>(),
     supabase.from("atelier").select("id, nom").eq("actif", true).order("nom").returns<Atelier[]>(),
@@ -102,7 +109,14 @@ export default async function PersonnelPage({
     // Types de contrat parametrables (migration 0040). Best-effort : si la
     // table n'existe pas encore, on retombe sur les 3 codes historiques.
     supabase.from("type_contrat").select("code, libelle").eq("actif", true).order("ordre").returns<{ code: string; libelle: string }[]>(),
+    // Agences d'intérim actives (0034) : menu du champ Agence de la création.
+    supabase.from("agence_interim").select("nom").eq("actif", true).order("nom").returns<{ nom: string }[]>(),
+    // Codes de contrat pilotés par agence (0072) : conditionnent le champ Agence
+    // (création) et le surlignage jaune ; source de la fiche « Incomplète » agence.
+    getTypesAgenceC(),
   ]);
+  const agenceCodesSet = new Set(agenceCodesArr);
+  const agences = (agencesData ?? []).map((a) => a.nom);
   const types = typesR.data && typesR.data.length > 0
     ? typesR.data
     : [{ code: "CDI", libelle: "CDI" }, { code: "CDD", libelle: "CDD" }, { code: "INTERIM", libelle: "Intérim" }];
@@ -171,6 +185,11 @@ export default async function PersonnelPage({
       date_depart_prevu: d.depart,
       motif_depart: d.motifDepart,
       hasContrat: periodesParPersonne.has(r.id),
+      // Fiche incomplète (agence) : le contrat COURANT est piloté par agence
+      // (drapeau avec_agence, 0072) mais aucune agence n'est renseignée. On se
+      // base sur le reflet dénormalisé (personne.type_contrat + agence_interim),
+      // qui suit le contrat le plus récent (syncPersonneFromPeriodes).
+      agenceManquante: agenceCodesSet.has(r.type_contrat) && !(r.agence_interim ?? "").trim(),
     };
   });
 
@@ -192,6 +211,8 @@ export default async function PersonnelPage({
           rotationRefs={rotationRefs}
           motifs={motifsData ?? []}
           types={types}
+          agences={agences}
+          agenceCodes={agenceCodesArr}
         />
       </div>
     </>

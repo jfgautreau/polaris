@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import PageTitle from "@/components/PageTitle";
 import ConfirmForm from "@/components/ConfirmForm";
@@ -30,11 +30,13 @@ type Row = {
   numero_badge: string | null;
   date_livret_accueil: string | null;
   type_contrat: string;
+  agence_interim: string | null;
   date_arrivee: string | null;
   date_debut: string | null;
   date_fin: string | null;
   contrat_debut: string | null;
   hasContrat: boolean;
+  agenceManquante: boolean;
   pointure: string | null;
   commentaire: string | null;
   statut: string;
@@ -173,6 +175,8 @@ export default function PersonnelEditor({
   rotationRefs = [],
   motifs = [],
   types = CONTRATS_FALLBACK,
+  agences = [],
+  agenceCodes = ["INTERIM"],
   erreur,
 }: {
   initial: Row[];
@@ -195,6 +199,11 @@ export default function PersonnelEditor({
   rotationRefs?: { semaine: string; equipe_id: string; quart_code: string }[];
   motifs?: Motif[];
   types?: TypeContrat[];
+  // Agences d'intérim actives (menu du champ Agence de la création).
+  agences?: string[];
+  // Codes de contrat pilotés par agence (drapeau avec_agence, 0072) : activent
+  // le champ Agence à la création et le surlignage jaune.
+  agenceCodes?: string[];
   // Message des server actions RGPD, repasse par l URL (cf. BandeauErreur).
   erreur?: string;
 }) {
@@ -268,6 +277,10 @@ export default function PersonnelEditor({
   const normCode = (c: string) => c.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase();
   const codeDefautContrat = types.find((t) => normCode(t.code) === "INTERIM")?.code ?? types[0]?.code ?? "";
   const [contrat, setContrat] = useState(codeDefautContrat);
+  // Agence d'intérim saisie à la création, visible seulement pour un contrat
+  // piloté par agence (drapeau avec_agence, 0072).
+  const [agence, setAgence] = useState("");
+  const agenceSet = useMemo(() => new Set(agenceCodes), [agenceCodes]);
   const [livret, setLivret] = useState("");
   const [pointure, setPointure] = useState("");
   // Date d'arrivee saisie a la creation. Defaut = aujourd'hui, editable pour
@@ -419,9 +432,11 @@ export default function PersonnelEditor({
     // La 1re periode de contrat prend la date d'arrivee comme date_debut, pour
     // que l'historique de contrats et la vraie date d'entree partent du meme point.
     const dateDebutContrat = dateArrivee || today;
+    const agenceSaisie = agenceSet.has(contrat) ? agence.trim() : "";
     const j = await post("create", {
       nom: nom.trim(), prenom: prenom.trim(), sexe, matricule, numero_badge: badge,
       equipe_id: eq, atelier_id: at, type_contrat: contrat,
+      agence_interim: agenceSaisie,
       date_arrivee: dateArrivee || today,
       date_debut: dateDebutContrat,
       date_livret_accueil: livret, pointure,
@@ -429,13 +444,16 @@ export default function PersonnelEditor({
     if (j?.row) {
       const created: Row = {
         ...(j.row as Row), atelier_id: at || null, regroupement: null, sexe: sexe || null, numero_badge: badge || null,
+        agence_interim: agenceSaisie || null,
         date_livret_accueil: livret || null,
         date_arrivee: dateArrivee || today,
         date_debut: dateDebutContrat, contrat_debut: dateDebutContrat,
+        hasContrat: true,
+        agenceManquante: agenceSet.has(contrat) && !agenceSaisie,
       };
       setRows((rs) => [...rs, created].sort(sortRows));
       setNom(""); setPrenom(""); setSexe(""); setMatricule(""); setBadge("");
-      setEq(""); setAt(""); setContrat(codeDefautContrat); setLivret(""); setPointure(""); setDateArrivee(todayStr());
+      setEq(""); setAt(""); setContrat(codeDefautContrat); setAgence(""); setLivret(""); setPointure(""); setDateArrivee(todayStr());
       setShowCreate(false);
       // Purge du cache RSC : sans ca, une navigation puis un retour sur
       // /personnel repartait des donnees serveur mises en cache et le nouveau
@@ -454,7 +472,7 @@ export default function PersonnelEditor({
 
   const cellText = (r: Row, key: ColKey): string => {
     switch (key) {
-      case "type_contrat": return (r.type_contrat === "INTERIM" ? "intérim interim" : r.type_contrat).toLowerCase();
+      case "type_contrat": return (agenceSet.has(r.type_contrat) ? `${r.type_contrat} intérim interim` : r.type_contrat).toLowerCase();
       case "matricule": return (r.matricule ?? "").toLowerCase();
       case "numero_badge": return (r.numero_badge ?? "").toLowerCase();
       case "nom": return r.nom.toLowerCase();
@@ -478,7 +496,9 @@ export default function PersonnelEditor({
   // l'appelle (branche `incompletFilter`). Une fonction flechee `const` n'est pas
   // hoistee — la definir plus bas jetait un ReferenceError (TDZ) des qu'on activait
   // le filtre « Incompletes », plantant tout l'ecran.
-  const ficheIncomplete = (r: Row): boolean => !r.hasContrat;
+  // Incomplète = aucune période de contrat OU contrat courant piloté par agence
+  // sans agence renseignée (agenceManquante, dérivé serveur — 0072).
+  const ficheIncomplete = (r: Row): boolean => !r.hasContrat || r.agenceManquante;
   const filtered = rows.filter((r) => {
     // On compare au statut CALCULE (source de verite), pas au cache : evite
     // toute divergence quand la bascule quotidienne n'a pas encore ete faite.
@@ -505,7 +525,7 @@ export default function PersonnelEditor({
   const saveColor = save === "error" ? "var(--danger)" : save === "saved" ? "var(--ok)" : "var(--muted)";
   const inp: React.CSSProperties = { width: "100%", fontSize: 13, padding: "3px 4px" };
   const C = (k: ColKey): React.CSSProperties => (CENTER.has(k) ? { textAlign: "center", textAlignLast: "center" } : {});
-  const interimStyle = (t: string) => (t === "INTERIM" ? { background: "#fde68a", color: "#92400e", fontWeight: 600 } : {});
+  const interimStyle = (t: string) => (agenceSet.has(t) ? { background: "#fde68a", color: "#92400e", fontWeight: 600 } : {});
 
   const Cols = () => (
     <colgroup>
@@ -536,8 +556,8 @@ export default function PersonnelEditor({
     whiteSpace: "nowrap",
   };
   const contratChip = (r: Row) => {
-    const bg = r.type_contrat === "INTERIM" ? "#fde68a" : "#e0e7ff";
-    const fg = r.type_contrat === "INTERIM" ? "#92400e" : "#3730a3";
+    const bg = agenceSet.has(r.type_contrat) ? "#fde68a" : "#e0e7ff";
+    const fg = agenceSet.has(r.type_contrat) ? "#92400e" : "#3730a3";
     return (
       <button
         type="button"
@@ -567,12 +587,15 @@ export default function PersonnelEditor({
   // aucun contrat n'existe. Clic ouvre la modale Cycle de vie pour en saisir un.
   const pastilleIncomplet = (r: Row) => {
     if (!ficheIncomplete(r)) return null;
+    const motif = !r.hasContrat
+      ? "Pas de contrat dans Cycle de vie"
+      : "Contrat intérim sans agence renseignée";
     return (
       <button
         type="button"
         onClick={canEdit ? () => setCycleFor(r) : undefined}
-        title={`Pas de contrat dans Cycle de vie${canEdit ? " — cliquer pour en ajouter un" : ""}`}
-        aria-label="Pas de contrat"
+        title={`${motif}${canEdit ? " — cliquer pour compléter" : ""}`}
+        aria-label={motif}
         style={{
           width: 16,
           height: 16,
@@ -1053,6 +1076,22 @@ export default function PersonnelEditor({
                   {types.map((c) => (<option key={c.code} value={c.code}>{c.libelle}</option>))}
                 </select>
               </div>
+              {/* Agence : uniquement pour un contrat piloté par agence (0072).
+                  Saisie libre + suggestions des agences paramétrées (Param RH). */}
+              {agenceSet.has(contrat) && (
+                <div className="field">
+                  <span>Agence d&apos;intérim</span>
+                  <input
+                    value={agence}
+                    onChange={(e) => setAgence(e.target.value)}
+                    list="agences-create"
+                    placeholder="Agence"
+                  />
+                  <datalist id="agences-create">
+                    {agences.map((a) => (<option key={a} value={a} />))}
+                  </datalist>
+                </div>
+              )}
               <div className="field">
                 <span>Matricule</span>
                 <input value={matricule} onChange={(e) => setMatricule(e.target.value)} placeholder="auto (intérim)" />

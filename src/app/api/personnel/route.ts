@@ -44,6 +44,27 @@ async function codesContratAutorises(supabase: SupabaseClient, siteId: string): 
   }
 }
 
+// Codes de contrat PILOTÉS PAR AGENCE (drapeau type_contrat.avec_agence, 0072) :
+// pour ces codes on conserve/écrit l'agence, pour les autres on la met à null.
+// Généralise le test `type_contrat === "INTERIM"` codé en dur. Repli tant que la
+// colonne n'existe pas : le seul code INTERIM.
+async function codesAgenceAutorises(supabase: SupabaseClient, siteId: string): Promise<Set<string>> {
+  try {
+    const { data, error } = await supabase
+      .from("type_contrat")
+      .select("code, avec_agence")
+      .eq("site_id", siteId)
+      .returns<{ code: string; avec_agence: boolean }[]>();
+    if (error) return new Set(["INTERIM"]);
+    const set = new Set<string>();
+    for (const r of data ?? []) if (r.avec_agence) set.add(r.code);
+    set.add("INTERIM"); // défensif : l'intérim reste toujours piloté par agence
+    return set;
+  } catch {
+    return new Set(["INTERIM"]);
+  }
+}
+
 type Body = Record<string, unknown>;
 const s = (v: unknown) => String(v ?? "").trim();
 const orNull = (v: string) => (v === "" ? null : v);
@@ -189,6 +210,7 @@ export async function POST(req: NextRequest) {
   // MULTI-SITE : site_id explicite pour le cas admin client (service_role).
   const site_id = profile.siteId;
   const CONTRATS = await codesContratAutorises(supabase, site_id);
+  const AGENCE_CODES = await codesAgenceAutorises(supabase, site_id);
 
   try {
     if (op === "create") {
@@ -234,7 +256,7 @@ export async function POST(req: NextRequest) {
           atelier_id,
           type_contrat,
           matricule,
-          agence_interim: type_contrat === "INTERIM" ? orNull(s(body.agence_interim)) : null,
+          agence_interim: AGENCE_CODES.has(type_contrat) ? orNull(s(body.agence_interim)) : null,
           date_debut: dateDebutContrat,
           date_fin: orNull(s(body.date_fin)),
           pointure: orNull(s(body.pointure)),
@@ -255,7 +277,7 @@ export async function POST(req: NextRequest) {
       const { error: periodeErr } = await supabase.from("contrat_periode").insert({
         personne_id: created.id,
         type_contrat,
-        agence_interim: type_contrat === "INTERIM" ? orNull(s(body.agence_interim)) : null,
+        agence_interim: AGENCE_CODES.has(type_contrat) ? orNull(s(body.agence_interim)) : null,
         date_debut: dateDebutContrat,
         date_fin: orNull(s(body.date_fin)),
         site_id,
@@ -312,7 +334,7 @@ export async function POST(req: NextRequest) {
           case "type_contrat":
             if (CONTRATS.includes(s(v))) {
               patch.type_contrat = s(v);
-              if (s(v) !== "INTERIM") patch.agence_interim = null;
+              if (!AGENCE_CODES.has(s(v))) patch.agence_interim = null;
             }
             break;
         }
@@ -355,6 +377,19 @@ export async function POST(req: NextRequest) {
     if (op === "types-contrat") {
       try {
         // MULTI-SITE (0053) : borne par site_id (service_role bypass RLS).
+        // avec_agence (0072) : indique les types pilotés par agence (champ Agence
+        // activé dans le Cycle de vie). Repli si la colonne n'existe pas encore.
+        const { data, error } = await supabase
+          .from("type_contrat")
+          .select("code, libelle, avec_agence")
+          .eq("actif", true)
+          .eq("site_id", site_id)
+          .order("ordre")
+          .returns<{ code: string; libelle: string; avec_agence: boolean }[]>();
+        if (error) throw error;
+        return NextResponse.json({ ok: true, types: data ?? [] });
+      } catch {
+        // Colonne avec_agence absente : retente sans elle avant le repli en dur.
         const { data, error } = await supabase
           .from("type_contrat")
           .select("code, libelle")
@@ -362,15 +397,18 @@ export async function POST(req: NextRequest) {
           .eq("site_id", site_id)
           .order("ordre")
           .returns<{ code: string; libelle: string }[]>();
-        if (error) throw error;
-        return NextResponse.json({ ok: true, types: data ?? [] });
-      } catch {
+        if (!error && data) {
+          return NextResponse.json({
+            ok: true,
+            types: data.map((t) => ({ ...t, avec_agence: t.code.toUpperCase() === "INTERIM" })),
+          });
+        }
         return NextResponse.json({
           ok: true,
           types: [
-            { code: "CDI", libelle: "CDI" },
-            { code: "CDD", libelle: "CDD" },
-            { code: "INTERIM", libelle: "Intérim" },
+            { code: "CDI", libelle: "CDI", avec_agence: false },
+            { code: "CDD", libelle: "CDD", avec_agence: false },
+            { code: "INTERIM", libelle: "Intérim", avec_agence: true },
           ],
         });
       }
@@ -415,7 +453,7 @@ export async function POST(req: NextRequest) {
         .insert({
           personne_id,
           type_contrat,
-          agence_interim: type_contrat === "INTERIM" ? orNull(s(body.agence_interim)) : null,
+          agence_interim: AGENCE_CODES.has(type_contrat) ? orNull(s(body.agence_interim)) : null,
           date_debut: dateContratOuNull(s(body.date_debut)),
           date_fin: dateContratOuNull(s(body.date_fin)),
           commentaire: orNull(s(body.commentaire)),
@@ -442,7 +480,7 @@ export async function POST(req: NextRequest) {
           case "type_contrat":
             if (CONTRATS.includes(s(v))) {
               patch.type_contrat = s(v);
-              if (s(v) !== "INTERIM") patch.agence_interim = null;
+              if (!AGENCE_CODES.has(s(v))) patch.agence_interim = null;
             }
             break;
           case "agence_interim":

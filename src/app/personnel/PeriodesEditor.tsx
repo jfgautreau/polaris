@@ -14,11 +14,11 @@ type Periode = {
   commentaire: string | null;
 };
 
-type TypeContrat = { code: string; libelle: string };
+type TypeContrat = { code: string; libelle: string; avec_agence?: boolean };
 const CONTRATS_FALLBACK: TypeContrat[] = [
   { code: "CDI", libelle: "CDI" },
   { code: "CDD", libelle: "CDD" },
-  { code: "INTERIM", libelle: "Intérim" },
+  { code: "INTERIM", libelle: "Intérim", avec_agence: true },
 ];
 
 // Reflet recalcule par l'API sur `personne` apres chaque changement de periode.
@@ -106,6 +106,11 @@ export default function PeriodesEditor({
     };
   }, [personneId]);
 
+  // Codes de contrat pilotés par agence (drapeau avec_agence, 0072) : le champ
+  // Agence n'est activé que pour eux. Généralise l'ancien test « === INTERIM ».
+  // INTERIM reste toujours inclus (défensif).
+  const agenceSet = new Set<string>(types.filter((t) => t.avec_agence).map((t) => t.code).concat("INTERIM"));
+
   function patchLocal(id: string, p: Partial<Periode>) {
     setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...p } : r)));
   }
@@ -192,16 +197,16 @@ export default function PeriodesEditor({
                     // saisie libre, comme avant, plutot qu'un menu vide inutilisable.
                     <input
                       value={r.agence_interim ?? ""}
-                      disabled={r.type_contrat !== "INTERIM"}
+                      disabled={!agenceSet.has(r.type_contrat)}
                       onChange={(e) => edit(r.id, "agence_interim", e.target.value)}
-                      style={{ ...inp, opacity: r.type_contrat !== "INTERIM" ? 0.5 : 1 }}
+                      style={{ ...inp, opacity: agenceSet.has(r.type_contrat) ? 1 : 0.5 }}
                     />
                   ) : (
                     <select
                       value={r.agence_interim ?? ""}
-                      disabled={r.type_contrat !== "INTERIM"}
+                      disabled={!agenceSet.has(r.type_contrat)}
                       onChange={(e) => edit(r.id, "agence_interim", e.target.value, true)}
-                      style={{ ...inp, opacity: r.type_contrat !== "INTERIM" ? 0.5 : 1 }}
+                      style={{ ...inp, opacity: agenceSet.has(r.type_contrat) ? 1 : 0.5 }}
                     >
                       <option value="">—</option>
                       {agences.map((a) => (
