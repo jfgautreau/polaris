@@ -618,3 +618,32 @@ n° de semaine.
 `.map((d) => ({ ...d, firstOfWeek: dowMon(d.iso) === 0 }))`. Les blocs se redécoupent en
 [7, 7, 1] et chaque semaine reçoit son numéro. Leçon générale : **ne pas présumer qu'un helper
 partagé remplit un champ optionnel** (`firstOfWeek?`) — le vérifier dans sa source.
+## L40 — Une date JS invalide (année hors plage) plante tout le rendu client à `toISOString()`
+
+Incident 2026-09-15. La modale Cycle de vie du Personnel plantait à l'ouverture pour une
+personne (BICHARA) — écran « This page couldn't load ». Cause : son unique contrat intérim
+portait `date_fin = "262026-08-30"`, une faute de frappe sur l'année (262026 au lieu de
+2026, un « 26 » en trop).
+
+**Chaîne du bug** : `<input type="date">` accepte des années à plus de 4 chiffres (la spec
+HTML va jusqu'à l'an 275760) ; le `onChange` enregistrait immédiatement ; ni le client ni
+l'API ne validaient la plage ; le type `date` de Postgres accepte l'année aberrante → la
+valeur était stockée telle quelle. Elle n'explosait qu'au rendu : `new Date("262026-08-30")`
+→ `Invalid Date`, puis `decale()`/`fmtLendemain()` appelaient `.toISOString()` →
+**`RangeError: Invalid time value`** levé PENDANT le rendu du composant client → tout
+l'écran tombe. Symptôme trompeur : « ça plante juste pour cette personne » pointe vers un
+bug de logique, alors que le coupable est **une seule cellule de donnée** hors plage.
+
+**Solution (défense en profondeur)** :
+1. **Rendu** : `decale()`/`ecart()` (CycleDeVieModal) testent `Number.isNaN(d.getTime())` et
+   renvoient l'entrée telle quelle plutôt que de faire tomber l'écran. Une seule ligne de
+   donnée pourrie ne doit JAMAIS crasher tout le composant.
+2. **API** : `dateContratOuNull()` (`/api/personnel`, ops periode-create/update) rejette
+   toute date hors `AAAA-MM-JJ` ou hors plage 1900-2200 → null. La mine ne peut plus être
+   écrite.
+3. **Saisie** : `min="1900-01-01" max="2200-12-31"` sur les champs date de PeriodesEditor.
+
+**Règle générale** : toute valeur qui finira dans `new Date(...).toISOString()` (ou
+`toLocaleDateString`, etc.) doit être validée à l'écriture OU le point de sérialisation doit
+être gardé contre `Invalid Date`. Postgres `date` accepte des années jusqu'à 5874897 : ce
+n'est pas lui qui vous protégera.
