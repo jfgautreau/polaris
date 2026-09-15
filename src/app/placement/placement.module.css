@@ -500,10 +500,11 @@
   position: fixed;
   left: -20000px;
   top: 0;
-  /* A4 paysage @ 96dpi avec marges 8mm = ~1061 × 733 px. On garde ~11 % de marge
-     de sécurité (1020 × 650) : à 7 % (680) l'aperçu rognait encore le bas des
-     plans denses (hauteur mesurée en media screen < rendu imprimé). Doit rester
-     ALIGNÉ sur PAGE_L / PAGE_H de `ajusterFeuille()` dans PlacementBoard.tsx. */
+  /* A4 paysage @ 96dpi avec marges 8mm = ~1061 × 733 px. La feuille fait 1020 × 650
+     (marge vs la zone imprimable). Le CONTENU, lui, est mis à l'échelle sur une
+     cible plus courte (PAGE_H = 600 dans `ajusterFeuille()`), ce qui laisse ~50 px
+     de marge interne : le rendu imprimé (plus haut que la mesure media screen) ne
+     déborde plus cette feuille (overflow:hidden) sur les plans denses. */
   width: 1020px;
   height: 650px;
   overflow: hidden;

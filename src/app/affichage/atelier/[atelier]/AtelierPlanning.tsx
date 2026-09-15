@@ -461,11 +461,22 @@ export default async function AtelierPlanning({
   //     via la rotation datée, sinon quart fixe ;
   //  3) en dernier recours : matin par défaut.
   // Un quart sans créneau (journée, nuit) ne compte pas pour le split.
-  const quartCreneau = new Map<string, "matin" | "aprem" | null>();
-  for (const q of quarts) {
-    const c = q.creneau === "matin" ? "matin" : q.creneau === "aprem" ? "aprem" : null;
-    quartCreneau.set(q.code, c);
-  }
+  // Classe un quart en Matin / Après-midi / Nuit (sans code en dur) : créneau
+  // matin/aprem = direct ; créneau null = soit la JOURNÉE (plein temps, plus petit
+  // ordre parmi les quarts sans créneau → rangée en Matin car présente le matin),
+  // soit la NUIT (les autres quarts sans créneau). Sans ce 3e cas, la nuit tombait
+  // sur le repli « matin » et se mélangeait au matin.
+  const ordreJournee = Math.min(
+    ...quarts.filter((q) => !q.creneau).map((q) => q.ordre ?? 0),
+    Number.POSITIVE_INFINITY,
+  );
+  const sectionDuQuart = (code: string | null | undefined): "matin" | "aprem" | "nuit" => {
+    const q = quarts.find((x) => x.code === code);
+    if (!q) return "matin";
+    if (q.creneau === "matin") return "matin";
+    if (q.creneau === "aprem") return "aprem";
+    return (q.ordre ?? 0) === ordreJournee ? "matin" : "nuit";
+  };
   // Lecture d'équipe pour repli. Une seule requête (postée par personne concernée).
   const persEquipe = new Map<string, string | null>();
   if (personList.length) {
@@ -491,35 +502,40 @@ export default async function AtelierPlanning({
     .returns<{ id: string; quart_fixe: string | null }[]>();
   const quartFixeAll = new Map((equipesAll ?? []).map((e) => [e.id, e.quart_fixe]));
 
-  const creneauEquipe = (persId: string): "matin" | "aprem" | null => {
+  type Section = "matin" | "aprem" | "nuit";
+  // Section dominante d'un compteur ; égalité tranchée matin > aprem > nuit.
+  const dominante = (c: { matin: number; aprem: number; nuit: number }): Section | null => {
+    const max = Math.max(c.matin, c.aprem, c.nuit);
+    if (max === 0) return null;
+    if (c.matin === max) return "matin";
+    if (c.aprem === max) return "aprem";
+    return "nuit";
+  };
+
+  const creneauEquipe = (persId: string): Section | null => {
     const eq = persEquipe.get(persId);
     if (!eq) return null;
     const qf = quartFixeAll.get(eq);
-    if (qf) return quartCreneau.get(qf) ?? null;
-    // Créneau majoritaire sur la fenêtre (peut varier d'une semaine à l'autre).
-    const compte = { matin: 0, aprem: 0 };
+    if (qf) return sectionDuQuart(qf);
+    // Section majoritaire sur la fenêtre (peut varier d'une semaine à l'autre).
+    const compte = { matin: 0, aprem: 0, nuit: 0 };
     for (const m of mondaySetAll) {
       const rot = rotByMondayAll.get(m) ?? {};
       const q = rot[eq];
-      const c = q ? quartCreneau.get(q) ?? null : null;
-      if (c) compte[c] += 1;
+      if (q) compte[sectionDuQuart(q)] += 1;
     }
-    return compte.matin >= compte.aprem ? (compte.matin > 0 ? "matin" : null) : "aprem";
+    return dominante(compte);
   };
 
-  const sectionDe = (persId: string): "matin" | "aprem" => {
-    // 1) Placement le plus fréquent avec un créneau exploitable.
-    const compte = { matin: 0, aprem: 0 };
+  const sectionDe = (persId: string): Section => {
+    // 1) Placement le plus fréquent (matin / aprem / nuit).
+    const compte = { matin: 0, aprem: 0, nuit: 0 };
     for (const iso of isos) {
       const rows = byPerson.get(`${persId}:${iso}`) ?? [];
-      for (const r of rows) {
-        const qc = quartOuDefaut(r.quart_code, quarts);
-        const c = quartCreneau.get(qc);
-        if (c === "matin") compte.matin += 1;
-        else if (c === "aprem") compte.aprem += 1;
-      }
+      for (const r of rows) compte[sectionDuQuart(quartOuDefaut(r.quart_code, quarts))] += 1;
     }
-    if (compte.matin || compte.aprem) return compte.aprem > compte.matin ? "aprem" : "matin";
+    const dom = dominante(compte);
+    if (dom) return dom;
     // 2) Repli équipe (rotation datée / quart fixe).
     const c = creneauEquipe(persId);
     if (c) return c;
@@ -527,8 +543,10 @@ export default async function AtelierPlanning({
     return "matin";
   };
 
-  const matinList = personList.filter((p) => sectionDe(p.id) === "matin");
-  const apremList = personList.filter((p) => sectionDe(p.id) === "aprem");
+  const sectionParPers = new Map(personList.map((p) => [p.id, sectionDe(p.id)] as const));
+  const matinList = personList.filter((p) => sectionParPers.get(p.id) === "matin");
+  const apremList = personList.filter((p) => sectionParPers.get(p.id) === "aprem");
+  const nuitList = personList.filter((p) => sectionParPers.get(p.id) === "nuit");
 
   return (
     <>
@@ -547,13 +565,14 @@ export default async function AtelierPlanning({
         </p>
       ) : (
         <>
-          {/* Deux tableaux empilés : Matin, puis Après-midi. Chaque personne
-              apparaît dans une seule section — cf. `sectionDe()`. Un tableau
-              vide affiche un simple message discret. */}
+          {/* Tableaux empilés : Matin, Après-midi, puis Nuit (seulement si des
+              personnes y travaillent). Chaque personne apparaît dans une seule
+              section — cf. `sectionDe()`. Un tableau vide affiche un message discret. */}
           {([
             { titre: "Matin", liste: matinList, teinte: "#1e3a8a" },
             { titre: "Après-midi", liste: apremList, teinte: "#7c2d12" },
-          ] as const).map(({ titre, liste, teinte }) => (
+            ...(nuitList.length ? [{ titre: "Nuit", liste: nuitList, teinte: "#312e81" }] : []),
+          ] as { titre: string; liste: typeof matinList; teinte: string }[]).map(({ titre, liste, teinte }) => (
             <section key={titre} style={{ marginBottom: 18 }}>
               <h2 style={{ fontSize: 20, margin: "6px 0 8px", color: teinte }}>{titre}</h2>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 16, tableLayout: "fixed" }}>

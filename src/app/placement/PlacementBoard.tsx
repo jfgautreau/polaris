@@ -357,11 +357,12 @@ export default function PlacementBoard({
   // version CE au ras des 700 px — on aligne les deux modes sur 680 pour ne pas
   // avoir à distinguer par mode. `.printSheet` recadre en conséquence.
   const PAGE_L = 1020;
-  // Marge de sécurité portée à ~11 % (733 → 650) : à 7 % (680) l'aperçu rognait
-  // encore le bas des plans denses (la hauteur mesurée en media screen sous-estime
-  // le rendu imprimé, et `.printSheet` recadre en overflow:hidden). Doit rester
-  // ALIGNÉ sur la hauteur de `.printSheet` dans placement.module.css.
-  const PAGE_H = 650;
+  // Cible de HAUTEUR pour la mise à l'échelle. ⚠️ VOLONTAIREMENT plus courte que
+  // la hauteur de `.printSheet` (650) : le contenu mis à l'échelle (≤ 600) laisse
+  // ~50 px de marge INTERNE dans la feuille. Sans cet écart, le rendu imprimé —
+  // toujours un peu plus haut que la mesure faite en media screen — débordait la
+  // feuille (overflow:hidden) et rognait la dernière ligne des plans denses.
+  const PAGE_H = 600;
   // Borne haute de l'agrandissement : au-dela, un plan de deux lignes donne des
   // pavés demesurés pour rien.
   const ECHELLE_MAX = 1.6;
