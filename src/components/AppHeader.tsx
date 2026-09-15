@@ -12,7 +12,7 @@ import MainNav from "@/components/MainNav";
 import SettingsMenu from "@/components/SettingsMenu";
 import UserMenu from "@/components/UserMenu";
 import Logo from "@/components/Logo";
-const MAIN_ORDER = ["referentiel", "personnel", "matrice", "habilitations", "ordonnancement", "planning", "absences", "placement", "bilans"];
+const MAIN_ORDER = ["referentiel", "personnel", "absences", "matrice", "habilitations", "ordonnancement", "planning", "placement", "bilans"];
 
 // En-tete commun : navigation pilotee par la matrice des droits, cloche
 // d'alerte habilitations, deconnexion.

@@ -95,13 +95,15 @@ export default function SyntheseFilters({
 
       {vue === "absences" && (
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginLeft: "auto" }}>
-          <select value={atelier} onChange={(e) => go({ atelier: e.target.value })} style={{ height: 32 }}>
+          {/* padding vertical retiré : le style global select (padding 9px 11px)
+              + height:32 (border-box) rognait le bas du texte. */}
+          <select value={atelier} onChange={(e) => go({ atelier: e.target.value })} style={{ height: 32, padding: "0 10px" }}>
             <option value="">Tous les services</option>
             {ateliers.map((a) => (
               <option key={a.id} value={a.id}>{a.nom}</option>
             ))}
           </select>
-          <select value={motif} onChange={(e) => go({ motif: e.target.value })} style={{ height: 32 }}>
+          <select value={motif} onChange={(e) => go({ motif: e.target.value })} style={{ height: 32, padding: "0 10px" }}>
             <option value="">Tous les motifs</option>
             {motifs.map((m) => (
               <option key={m.id} value={m.id}>{m.nom}</option>

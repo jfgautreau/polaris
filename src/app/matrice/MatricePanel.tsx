@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import AtelierEquipeFiltres from "@/components/AtelierEquipeFiltres";
 import SlideSwitch from "@/components/SlideSwitch";
 import PageTitle from "@/components/PageTitle";
@@ -45,8 +46,25 @@ export default function MatricePanel({
 }) {
   const [mode, setMode] = useState<"actuel" | "cible">("actuel");
   const [showLegende, setShowLegende] = useState(false);
-  // La recherche vit dans l'en-tete (ligne 1) et pilote la grille.
-  const [search, setSearch] = useState("");
+  // La recherche vit dans l'en-tete (ligne 1) et pilote la grille. ⚠️ PORTÉE PAR
+  // L'URL (?search=) : survit au rafraîchissement et VOYAGE entre Planning /
+  // Personnel / Matrice / Habilitations (cf. MainNav). État local pour la
+  // réactivité, écriture débouncée.
+  const router = useRouter();
+  const pathname = usePathname();
+  const sp = useSearchParams();
+  const [search, setSearch] = useState(() => sp.get("search") ?? "");
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const chooseSearch = (v: string) => {
+    setSearch(v);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => {
+      const p = new URLSearchParams(sp.toString());
+      if (v.trim()) p.set("search", v.trim()); else p.delete("search");
+      const qs = p.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    }, 500);
+  };
 
   return (
     <>
@@ -57,9 +75,9 @@ export default function MatricePanel({
         <div className="hb-l1">
           <PageTitle module="matrice">Matrice de polyvalence</PageTitle>
           <span className="hb-search">
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="🔍 Rechercher un nom…" />
+            <input value={search} onChange={(e) => chooseSearch(e.target.value)} placeholder="🔍 Rechercher un nom…" />
             {search && (
-              <button type="button" className="clear" onClick={() => setSearch("")} title="Effacer la recherche">✕</button>
+              <button type="button" className="clear" onClick={() => chooseSearch("")} title="Effacer la recherche">✕</button>
             )}
           </span>
           <span className="hb-fin">

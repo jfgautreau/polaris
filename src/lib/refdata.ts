@@ -82,12 +82,15 @@ export async function getEquipesC() {
 
 const getQuartsBySite = unstable_cache(
   async (site: string) => {
+    // `creneau` (matin/aprem/null, 0057) : pilote la demi-journée du TP ET
+    // l'éclatement Matin/Après-midi de l'affichage TV. Sans lui, la TV classait
+    // tout le monde le matin (créneau toujours null → repli par défaut).
     const { data } = await getAdminClient()
       .from("quart")
-      .select("code, libelle, ordre")
+      .select("code, libelle, ordre, creneau")
       .eq("site_id", site)
       .order("ordre");
-    return (data ?? []) as { code: string; libelle: string; ordre: number }[];
+    return (data ?? []) as { code: string; libelle: string; ordre: number; creneau: string | null }[];
   },
   ["refdata-quarts"],
   { ...OPTS, tags: [QUARTS_TAG] }

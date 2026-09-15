@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { joursRestants, habStatut, addMonthsIso, fmtDateFr, HAB_COLOR, type HabStatut } from "@/lib/habilitations";
 import { usePersonGrid } from "@/components/usePersonGrid";
 import { INTERIM_BG } from "@/lib/interim";
@@ -220,7 +221,23 @@ export default function HabilitationsList({
   lienParam?: boolean; // droit de lecture sur « Param. Habilitation »
 }) {
   const agenceSet = useMemo(() => new Set(agenceCodes), [agenceCodes]);
-  const [search, setSearch] = useState("");
+  // Recherche ⚠️ PORTÉE PAR L'URL (?search=) : survit au rafraîchissement et
+  // VOYAGE entre Planning / Personnel / Matrice / Habilitations (cf. MainNav).
+  const router = useRouter();
+  const pathname = usePathname();
+  const sp = useSearchParams();
+  const [search, setSearch] = useState(() => sp.get("search") ?? "");
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const chooseSearch = (v: string) => {
+    setSearch(v);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => {
+      const p = new URLSearchParams(sp.toString());
+      if (v.trim()) p.set("search", v.trim()); else p.delete("search");
+      const qs = p.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    }, 500);
+  };
   const [view, setView] = useState<"grille" | "liste">("grille"); // grille par défaut
   // Saisie ouverte au clic sur une pastille, pre-remplie avec cette case.
   const [maj, setMaj] = useState<{ personneId: string; competenceId: string; dateObtention: string | null; autorisationRemise: boolean; commentaire: string | null } | null>(null);
@@ -391,11 +408,11 @@ export default function HabilitationsList({
           <span className="hb-search">
             <input
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => chooseSearch(e.target.value)}
               placeholder="🔍 Rechercher (nom, formation, groupe…)"
             />
             {search && (
-              <button type="button" className="clear" onClick={() => setSearch("")} title="Effacer la recherche">
+              <button type="button" className="clear" onClick={() => chooseSearch("")} title="Effacer la recherche">
                 ✕
               </button>
             )}
