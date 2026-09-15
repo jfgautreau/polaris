@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { requireModuleWrite } from "@/lib/permissions";
 import { getCurrentSite } from "@/lib/current-site";
 import { messageErreur, urlAvecErreur, type ErreurPg } from "@/lib/erreurs";
-import { MOTIFS_TAG } from "@/lib/refdata";
+import { MOTIFS_TAG, TYPES_AGENCE_TAG } from "@/lib/refdata";
 
 const PATH = "/admin/motifs";
 const s = (fd: FormData, k: string) => String(fd.get(k) ?? "").trim();
@@ -22,6 +22,9 @@ function done(err: ErreurPg = null): never {
   const msg = messageErreur(err);
   revalidatePath(PATH);
   updateTag(MOTIFS_TAG);
+  // Le drapeau avec_agence (0072) vit sur type_contrat : on invalide aussi son
+  // cache sur toute action de la page, coût nul, cohérence immédiate.
+  updateTag(TYPES_AGENCE_TAG);
   redirect(urlAvecErreur(PATH, msg));
 }
 
@@ -149,6 +152,21 @@ export async function toggleTypeContrat(fd: FormData) {
   const { error } = await supabase
     .from("type_contrat")
     .update({ actif: fd.get("actif") === "true" })
+    .eq("code", s(fd, "code"))
+    .eq("site_id", site.id);
+  done(error);
+}
+
+// Drapeau « piloté par agence » (0072) : coché = ce type active le champ Agence
+// (Personnel / Cycle de vie), est surligné en jaune et remonte dans les
+// Synthèses hebdomadaires. Le champ posté par ActifCheckbox s'appelle `actif`
+// mais porte ici le nouvel état de avec_agence.
+export async function toggleTypeContratAgence(fd: FormData) {
+  const supabase = await requireModuleWrite("motifs");
+  const site = await getCurrentSite();
+  const { error } = await supabase
+    .from("type_contrat")
+    .update({ avec_agence: fd.get("actif") === "true" })
     .eq("code", s(fd, "code"))
     .eq("site_id", site.id);
   done(error);

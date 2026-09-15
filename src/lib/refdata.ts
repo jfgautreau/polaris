@@ -263,3 +263,32 @@ const getRotationRefsBySite = unstable_cache(
 export async function getRotationRefsC() {
   return getRotationRefsBySite(await siteId());
 }
+
+// -------- Types de contrat pilotés par agence (0072) ---------------
+// Codes type_contrat dont le drapeau `avec_agence` est coché (intérim classique,
+// CDI intérimaire…). Généralise le test `type_contrat = 'INTERIM'` codé en dur :
+// ces codes activent le champ Agence, sont surlignés en jaune et remontent dans
+// les Synthèses. Le code INTERIM historique est toujours inclus (défensif : il
+// reste piloté par agence même si le drapeau n'a pas été coché). Repli tant que
+// la colonne n'existe pas (0072 non jouée) : le seul code INTERIM.
+export const TYPES_AGENCE_TAG = "refdata-types-agence";
+
+const getTypesAgenceBySite = unstable_cache(
+  async (site: string): Promise<string[]> => {
+    const { data, error } = await getAdminClient()
+      .from("type_contrat")
+      .select("code, avec_agence")
+      .eq("site_id", site);
+    if (error) return ["INTERIM"]; // colonne absente (0072 non appliquée)
+    const codes = (data ?? [])
+      .filter((t) => (t as { avec_agence?: boolean }).avec_agence)
+      .map((t) => (t as { code: string }).code);
+    if (!codes.some((c) => c.toUpperCase() === "INTERIM")) codes.push("INTERIM");
+    return codes;
+  },
+  ["refdata-types-agence"],
+  { ...OPTS, tags: [TYPES_AGENCE_TAG] }
+);
+export async function getTypesAgenceC(): Promise<string[]> {
+  return getTypesAgenceBySite(await siteId());
+}

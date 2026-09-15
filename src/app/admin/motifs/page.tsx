@@ -7,7 +7,7 @@ import ActifCheckbox from "@/components/ActifCheckbox";
 import {
   createMotif, updateMotif, toggleMotif, toggleNonPlanifie,
   createAgence, updateAgence, toggleAgence,
-  createTypeContrat, updateTypeContrat, toggleTypeContrat,
+  createTypeContrat, updateTypeContrat, toggleTypeContrat, toggleTypeContratAgence,
 } from "./actions";
 import AjoutModal from "./AjoutModal";
 import BandeauErreur from "@/components/BandeauErreur";
@@ -17,7 +17,7 @@ import { CheckIcon, EditIcon } from "@/components/icons";
 
 type Motif = { id: string; libelle: string; code_court: string; couleur: string; actif: boolean; non_planifie: boolean; code_gt: string | null };
 type Agence = { id: string; nom: string; actif: boolean };
-type TypeContrat = { code: string; libelle: string; actif: boolean; ordre: number };
+type TypeContrat = { code: string; libelle: string; actif: boolean; ordre: number; avec_agence: boolean };
 type FenetreAffichage = { mode?: "relatif" | "absolu"; jours_avant: number; jours_apres: number; nb_semaines?: number };
 
 // Règles d'écran de paramétrage (cf. CLAUDE.md — « Ossature des écrans de paramétrage »)
@@ -41,7 +41,7 @@ export default async function MotifsPage({
   const [motifsR, agencesR, typesR, fenR] = await Promise.all([
     supabase.from("motif_absence").select("id, libelle, code_court, couleur, actif, non_planifie, code_gt").order("libelle").returns<Motif[]>(),
     supabase.from("agence_interim").select("id, nom, actif").order("nom").returns<Agence[]>(),
-    supabase.from("type_contrat").select("code, libelle, actif, ordre").order("ordre").returns<TypeContrat[]>(),
+    supabase.from("type_contrat").select("code, libelle, actif, ordre, avec_agence").order("ordre").returns<TypeContrat[]>(),
     supabase.from("parametre_affichage").select("mode, jours_avant, jours_apres, nb_semaines").maybeSingle<FenetreAffichage>(),
   ]);
   // Replis en cascade : code_gt (0066) puis non_planifie (0060) peuvent manquer
@@ -61,8 +61,19 @@ export default async function MotifsPage({
   }
   const agences = agencesR.data ?? [];
   const agencesIndispo = !!agencesR.error;
-  const types = typesR.data ?? [];
-  const typesIndispo = !!typesR.error;
+  // Repli tolérant : la colonne avec_agence (0072) peut ne pas être encore
+  // appliquée. En cas d'erreur, on retente sans elle (avec_agence = false) pour
+  // ne pas faire croire que toute la table manque.
+  let types = typesR.data ?? [];
+  let typesIndispo = !!typesR.error;
+  let agenceFlagDispo = !typesR.error;
+  if (typesR.error) {
+    const r2 = await supabase.from("type_contrat").select("code, libelle, actif, ordre").order("ordre").returns<Omit<TypeContrat, "avec_agence">[]>();
+    if (!r2.error) {
+      typesIndispo = false;
+      types = (r2.data ?? []).map((t) => ({ ...t, avec_agence: false }));
+    }
+  }
   // Repli tolérant : la migration 0067 (colonnes mode/nb_semaines) peut ne pas
   // être encore appliquée. En cas d'erreur, on retente avec les seules colonnes
   // historiques pour ne pas bloquer l'écran.
@@ -263,6 +274,12 @@ export default async function MotifsPage({
           Alimente le menu déroulant <strong>Contrat</strong> dans Personnel et dans les périodes
           de contrat. Le <strong>code</strong> est ce qui est stocké sur chaque personne
           (« CDI », « CDD », « INTERIM »…). Retirer un type n&apos;efface pas l&apos;historique.
+          {" "}Cochez <strong>Agence</strong> pour un contrat piloté par une agence d&apos;intérim
+          (intérim, CDI intérimaire…) : le champ Agence s&apos;active dans la fiche, le contrat
+          est surligné en jaune et remonte dans les Synthèses hebdomadaires.
+          {!agenceFlagDispo && !typesIndispo && (
+            <> <strong style={{ color: "var(--danger)" }}>Exécutez la migration 0072</strong> dans le SQL Editor pour activer la colonne Agence.</>
+          )}
         </p>
 
         {typesIndispo ? (
@@ -300,6 +317,7 @@ export default async function MotifsPage({
                     <th>Libellé</th>
                     <th>Ordre</th>
                     <th style={{ width: 90 }}></th>
+                    <th style={{ width: 90, textAlign: "center" }} title="Contrat piloté par une agence d'intérim (intérim, CDI intérimaire…) : active le champ Agence, surligne en jaune et remonte dans les Synthèses hebdomadaires.">Agence</th>
                     <th style={{ width: 60, textAlign: "center" }}>Actif</th>
                   </tr>
                 </thead>
@@ -318,6 +336,9 @@ export default async function MotifsPage({
                           <button form={`ed-type-${t.code}`} type="submit" title="Valider" className="iconbtn ok"><CheckIcon /></button>
                           <Link href="/admin/motifs" className="iconbtn ghost" scroll={false} title="Annuler">✕</Link>
                         </td>
+                        <td style={{ textAlign: "center" }}>
+                          {agenceFlagDispo ? <ActifCheckbox id={t.code} actif={t.avec_agence} action={toggleTypeContratAgence} keyName="code" /> : <span className="muted">–</span>}
+                        </td>
                         <td style={{ textAlign: "center" }}><ActifCheckbox id={t.code} actif={t.actif} action={toggleTypeContrat} keyName="code" /></td>
                       </tr>
                     ) : (
@@ -329,6 +350,9 @@ export default async function MotifsPage({
                           <Link href={`/admin/motifs?edit=type:${t.code}`} className="iconbtn edit" scroll={false} prefetch={false} title="Modifier"><EditIcon /></Link>
                         </td>
                         <td style={{ textAlign: "center" }}>
+                          {agenceFlagDispo ? <ActifCheckbox id={t.code} actif={t.avec_agence} action={toggleTypeContratAgence} keyName="code" /> : <span className="muted">–</span>}
+                        </td>
+                        <td style={{ textAlign: "center" }}>
                           {/* PK texte `code` (pas un uuid) : on passe keyName="code" à ActifCheckbox
                               pour que le champ du formulaire porte le bon nom. */}
                           <ActifCheckbox id={t.code} actif={t.actif} action={toggleTypeContrat} keyName="code" />
@@ -336,7 +360,7 @@ export default async function MotifsPage({
                       </tr>
                     )
                   )}
-                  {types.length === 0 && (<tr><td colSpan={5} className="muted">Aucun type.</td></tr>)}
+                  {types.length === 0 && (<tr><td colSpan={6} className="muted">Aucun type.</td></tr>)}
                 </tbody>
               </table>
             </div>
