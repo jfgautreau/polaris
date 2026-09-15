@@ -10,7 +10,7 @@ import { addDays, isoDate } from "@/lib/week";
 //
 // Impression (2026-09-15, refonte) : on n'ecrase plus tout le planning sur UNE
 // page A3 (rognait la derniere ligne des services denses). On imprime en A3
-// PAYSAGE, les colonnes ajustees a la LARGEUR de la feuille (`table width:100%`),
+// PORTRAIT, les colonnes ajustees a la LARGEUR de la feuille (`table width:100%`),
 // et le contenu COULE sur plusieurs pages : chaque rangee reste entiere
 // (`break-inside: avoid` sur les `tr`) et l'en-tete des jours se repete en haut
 // de chaque page (`thead { display: table-header-group }`). Plus de mise a
@@ -56,7 +56,7 @@ export default function AffichageBarre({
           la hauteur a une page : le contenu coule sur plusieurs feuilles. */}
       <style>{`
         @media print {
-          @page { size: A3 landscape; margin: 10mm; }
+          @page { size: A3 portrait; margin: 10mm; }
           #${cadreId} { width: auto !important; height: auto !important; overflow: visible !important; padding: 0 !important; }
           #${contenuId} { transform: none !important; width: auto !important; }
           #${cadreId} table { page-break-inside: auto; }
@@ -108,7 +108,7 @@ export default function AffichageBarre({
         <button
           type="button"
           onClick={() => window.print()}
-          title="Imprimer / enregistrer en PDF (A3 paysage, plusieurs pages si besoin)"
+          title="Imprimer / enregistrer en PDF (A3 portrait, plusieurs pages si besoin)"
           aria-label="Imprimer"
           style={{
             display: "inline-flex",
