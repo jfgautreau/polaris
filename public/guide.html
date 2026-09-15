@@ -552,6 +552,10 @@
     <symbol id="lvl2" viewBox="0 0 28 28"><use href="#mk-base"/><path d="M14,14 L14,3 A11,11 0 0 1 14,25 Z" fill="#f59e0b"/></symbol>
     <symbol id="lvl3" viewBox="0 0 28 28"><use href="#mk-base"/><path d="M14,14 L14,3 A11,11 0 1 1 3,14 Z" fill="#84cc16"/></symbol>
     <symbol id="lvl4" viewBox="0 0 28 28"><use href="#mk-base"/><circle cx="14" cy="14" r="11" fill="#16a34a"/></symbol>
+    <!-- Échelle à 3 niveaux : le camembert se remplit par tiers (1/3, 2/3, plein). -->
+    <symbol id="n3-1" viewBox="0 0 28 28"><use href="#mk-base"/><path d="M14,14 L14,3 A11,11 0 0 1 23.526,19.5 Z" fill="#dc2626"/></symbol>
+    <symbol id="n3-2" viewBox="0 0 28 28"><use href="#mk-base"/><path d="M14,14 L14,3 A11,11 0 1 1 4.474,19.5 Z" fill="#f59e0b"/></symbol>
+    <symbol id="n3-3" viewBox="0 0 28 28"><use href="#mk-base"/><circle cx="14" cy="14" r="11" fill="#16a34a"/></symbol>
     <symbol id="lvlrx" viewBox="0 0 28 28">
       <circle cx="14" cy="14" r="11" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
       <path d="M9,9 L19,19 M19,9 L9,19" stroke="#dc2626" stroke-width="2.4" stroke-linecap="round"/>
@@ -721,7 +725,7 @@
         <h3>Compétence et habilitation</h3>
         <p>
           Une <strong>compétence</strong> dit à quel point une personne maîtrise un poste, sur une échelle
-          de 0 à 4. Elle se gère dans la <a href="#matrice">Matrice</a> et ne périme pas.
+          de 0 à 3. Elle se gère dans la <a href="#matrice">Matrice</a> et ne périme pas.
         </p>
         <p>
           Une <strong>habilitation</strong> est une formation réglementaire ou interne, avec une
@@ -1065,7 +1069,7 @@
 
         <p>
           La matrice croise <strong>les personnes et les postes</strong> : pour chaque case, le niveau de
-          maîtrise, de 0 à 4. C'est la source de l'aide à la compétence du Placement et de plusieurs bilans.
+          maîtrise, de 0 à 3. C'est la source de l'aide à la compétence du Placement et de plusieurs bilans.
         </p>
 
         <figure>
@@ -1075,9 +1079,9 @@
                 <tr><th style="background:var(--paper-2);color:var(--ink-3)">Personne</th><th>Conducteur</th><th>Rangement</th><th>Thermo 3</th><th>Palettiseur</th></tr>
               </thead>
               <tbody>
-                <tr><td class="nm">DUBOIS Anna</td><td><svg class="mark" width="26" height="26"><use href="#lvl4"/></svg></td><td><svg class="mark" width="26" height="26"><use href="#lvl3"/></svg></td><td><svg class="mark" width="26" height="26"><use href="#lvl2"/></svg></td><td><svg class="mark" width="26" height="26"><use href="#lvl0"/></svg></td></tr>
-                <tr><td class="nm">MARTIN Luc</td><td><svg class="mark" width="26" height="26"><use href="#lvl3"/></svg></td><td><svg class="mark" width="26" height="26"><use href="#lvl2"/></svg></td><td><svg class="mark" width="26" height="26"><use href="#lvl1"/></svg></td><td><svg class="mark" width="26" height="26"><use href="#lvl2"/></svg></td></tr>
-                <tr><td class="nm">PETIT Karim</td><td><svg class="mark" width="26" height="26"><use href="#lvl1"/></svg></td><td><svg class="mark" width="26" height="26"><use href="#lvl2"/></svg></td><td><svg class="mark" width="26" height="26"><use href="#lvlrx"/></svg></td><td><svg class="mark" width="26" height="26"><use href="#lvl3"/></svg></td></tr>
+                <tr><td class="nm">DUBOIS Anna</td><td><svg class="mark" width="26" height="26"><use href="#n3-3"/></svg></td><td><svg class="mark" width="26" height="26"><use href="#n3-2"/></svg></td><td><svg class="mark" width="26" height="26"><use href="#n3-1"/></svg></td><td><svg class="mark" width="26" height="26"><use href="#lvl0"/></svg></td></tr>
+                <tr><td class="nm">MARTIN Luc</td><td><svg class="mark" width="26" height="26"><use href="#n3-2"/></svg></td><td><svg class="mark" width="26" height="26"><use href="#n3-1"/></svg></td><td><svg class="mark" width="26" height="26"><use href="#n3-1"/></svg></td><td><svg class="mark" width="26" height="26"><use href="#n3-2"/></svg></td></tr>
+                <tr><td class="nm">PETIT Karim</td><td><svg class="mark" width="26" height="26"><use href="#n3-1"/></svg></td><td><svg class="mark" width="26" height="26"><use href="#n3-2"/></svg></td><td><svg class="mark" width="26" height="26"><use href="#lvlrx"/></svg></td><td><svg class="mark" width="26" height="26"><use href="#n3-3"/></svg></td></tr>
               </tbody>
             </table>
           </div>
@@ -1087,19 +1091,30 @@
           </figcaption>
         </figure>
 
-        <h3>Les cinq niveaux</h3>
+        <h3>Les niveaux</h3>
+        <p>
+          L'échelle compte <strong>trois niveaux de maîtrise</strong> (plus le 0 et la restriction).
+          Le camembert se remplit par tiers&nbsp;: plus il est plein et vert, plus la maîtrise est complète.
+        </p>
         <div class="table-scroll">
           <table class="data">
-            <thead><tr><th style="width:56px">Pastille</th><th style="width:60px">Niveau</th><th>Signification</th></tr></thead>
+            <thead><tr><th style="width:56px">Pastille</th><th style="width:96px">Niveau</th><th>Signification</th></tr></thead>
             <tbody>
-              <tr><td class="c"><svg class="mark" width="28" height="28"><use href="#lvl0"/></svg></td><td class="c">0</td><td>Non formé</td></tr>
-              <tr><td class="c"><svg class="mark" width="28" height="28"><use href="#lvl1"/></svg></td><td class="c">1</td><td>Connaît les instructions et les règles de sécurité du poste</td></tr>
-              <tr><td class="c"><svg class="mark" width="28" height="28"><use href="#lvl2"/></svg></td><td class="c">2</td><td>Garantit le niveau de qualité standard</td></tr>
-              <tr><td class="c"><svg class="mark" width="28" height="28"><use href="#lvl3"/></svg></td><td class="c">3</td><td>Garantit les temps standards ; peut expliquer et guider</td></tr>
-              <tr><td class="c"><svg class="mark" width="28" height="28"><use href="#lvl4"/></svg></td><td class="c">4</td><td>A formé un opérateur jusqu'au niveau 3 — maîtrise complète</td></tr>
+              <tr><td class="c"><svg class="mark" width="28" height="28"><use href="#lvl0"/></svg></td><td class="c">0</td><td>Non formé / non compétent</td></tr>
+              <tr><td class="c"><svg class="mark" width="28" height="28"><use href="#n3-1"/></svg></td><td class="c">1 · Junior</td><td>Réalise les opérations courantes sur ligne avec accompagnement.</td></tr>
+              <tr><td class="c"><svg class="mark" width="28" height="28"><use href="#n3-2"/></svg></td><td class="c">2 · Confirmé</td><td>Maîtrise la conduite de ligne en autonomie et gère les aléas courants.</td></tr>
+              <tr><td class="c"><svg class="mark" width="28" height="28"><use href="#n3-3"/></svg></td><td class="c">3 · Expert</td><td>Référence technique, optimise les performances et accompagne la montée en compétences des équipes.</td></tr>
               <tr><td class="c"><svg class="mark" width="28" height="28"><use href="#lvlrx"/></svg></td><td class="c">—</td><td><strong>Restriction</strong> : la personne ne doit pas tenir ce poste (raison médicale par exemple)</td></tr>
             </tbody>
           </table>
+        </div>
+        <div class="note">
+          <span class="label">Selon le site</span>
+          <p>
+            Le nombre de niveaux, leurs libellés et leurs couleurs sont <strong>paramétrables</strong>
+            (écran Compétences). Les libellés ci-dessus sont ceux en vigueur ; un autre site peut afficher
+            une échelle légèrement différente.
+          </p>
         </div>
 
         <h3>Actuel et Cible</h3>
