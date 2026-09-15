@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { getServerClient } from "@/lib/supabase-server";
 import { getCurrentProfile } from "@/lib/current-user";
 import { getCurrentSite } from "@/lib/current-site";
@@ -7,15 +8,11 @@ import { sortirDuMode } from "@/app/platform/actions";
 import { isoDate, addDays } from "@/lib/week";
 import { MODULES, getPermissions, canRead, canWrite } from "@/lib/permissions";
 import { getModulesMasquesC } from "@/lib/site-modules";
+import MainNav from "@/components/MainNav";
 import SettingsMenu from "@/components/SettingsMenu";
 import UserMenu from "@/components/UserMenu";
 import Logo from "@/components/Logo";
-import { NavIcon, NAV_COLOR } from "@/components/NavIcons";
-
 const MAIN_ORDER = ["referentiel", "personnel", "matrice", "habilitations", "ordonnancement", "planning", "absences", "placement", "bilans"];
-
-// Palette des pastilles (icone blanche dessus) : source unique dans NavIcons.
-const NAV_TILE = NAV_COLOR;
 
 // En-tete commun : navigation pilotee par la matrice des droits, cloche
 // d'alerte habilitations, deconnexion.
@@ -159,37 +156,16 @@ export default async function AppHeader({
             </span>
           )}
         </Link>
-        {mainLinks.map((l) => {
-          const tile = NAV_TILE[l.key];
-          return (
-            <Link
-              key={l.href}
-              href={l.href}
-              className={active === l.href ? "navlink active" : "navlink"}
-              style={{ display: "inline-flex", alignItems: "center", gap: 7 }}
-            >
-              {tile && (
-                <span
-                  aria-hidden="true"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    width: 22,
-                    height: 22,
-                    borderRadius: 7,
-                    background: tile,
-                    flexShrink: 0,
-                    boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.22)",
-                  }}
-                >
-                  <NavIcon name={l.key} />
-                </span>
-              )}
-              {l.label}
-            </Link>
-          );
-        })}
+        {/* Rendu côté client (usePathname/useSearchParams) pour reporter les
+            filtres partagés entre Planning et Personnel. Suspense car
+            useSearchParams l'exige ; sur ces pages dynamiques (cookies) le
+            fallback ne s'affiche jamais en pratique. */}
+        <Suspense fallback={null}>
+          <MainNav
+            links={mainLinks.map((l) => ({ key: l.key, href: l.href, label: l.label }))}
+            active={active}
+          />
+        </Suspense>
       </nav>
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
         <SettingsMenu links={configLinks} active={active} />

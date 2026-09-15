@@ -212,7 +212,11 @@ export default function PersonnelEditor({
   const searchParams = useSearchParams();
   const [rows, setRows] = useState<Row[]>(initial);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
-  const [gq, setGq] = useState("");
+  // Recherche par nom : ⚠️ PORTÉE PAR L'URL (?search=) pour survivre à un
+  // rafraîchissement, comme le Planning. État local pour la réactivité de la
+  // frappe, écriture débouncée dans l'URL (searchTimer).
+  const [gq, setGq] = useState(() => searchParams.get("search") ?? "");
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [dup, setDup] = useState<Row[] | null>(null);
   const [contratFilter, setContratFilter] = useState("");
   const [tpFor, setTpFor] = useState<Row | null>(null);
@@ -233,10 +237,16 @@ export default function PersonnelEditor({
   // Defaut ACTIF a l'ouverture : la liste montre l'effectif au travail au lieu
   // de tout melanger. Un clic sur « Tous », « A venir » ou « Parti » reste
   // possible, sans persister d'une visite a l'autre.
-  const [statutFilter, setStatutFilter] = useState<"" | "A_VENIR" | "ACTIF" | "PARTI">("");
+  // ⚠️ PORTÉ PAR L'URL (?statut=) pour survivre à un rafraîchissement.
+  const statutInit = (() => {
+    const v = searchParams.get("statut");
+    return v === "A_VENIR" || v === "ACTIF" || v === "PARTI" ? v : "";
+  })();
+  const [statutFilter, setStatutFilter] = useState<"" | "A_VENIR" | "ACTIF" | "PARTI">(statutInit);
   // Filtre secondaire : ne montrer que les fiches a completer (champs manquants).
-  // Utile pour une session de menage RH. Off par defaut.
-  const [incompletFilter, setIncompletFilter] = useState(false);
+  // Utile pour une session de menage RH. Off par defaut. ⚠️ PORTÉ PAR L'URL
+  // (?fiche=incompletes).
+  const [incompletFilter, setIncompletFilter] = useState(() => searchParams.get("fiche") === "incompletes");
   // 2e ligne de filtres : Service (atelier) et Équipe. "" = tous. Combines en ET
   // avec la recherche et les autres filtres. ⚠️ PORTÉS PAR L'URL (?service= /
   // ?equipe=) pour survivre à un rafraîchissement : état local pour la réactivité,
@@ -245,15 +255,36 @@ export default function PersonnelEditor({
   // est client) — donc un router.refresh() après écriture ne les réinitialise pas.
   const [atelierFilter, setAtelierFilter] = useState(() => searchParams.get("service") ?? "");
   const [equipeFilter, setEquipeFilter] = useState(() => searchParams.get("equipe") ?? "");
-  function syncUrl(service: string, equipe: string) {
-    const p = new URLSearchParams(searchParams.toString());
-    if (service) p.set("service", service); else p.delete("service");
-    if (equipe) p.set("equipe", equipe); else p.delete("equipe");
+  // Écrit TOUS les filtres portés par l'URL. Les valeurs par défaut (état courant)
+  // sont surchargées par `next`. Sans nouvelle entrée d'historique. Le nom des
+  // params (`service`, `equipe`, `search`) est partagé avec le Planning pour le
+  // report contextuel (cf. MainNav) — `atelier` (Planning) ↔ `service` (Personnel).
+  function pushUrl(next: { service?: string; equipe?: string; search?: string; statut?: string; fiche?: boolean }) {
+    const service = next.service ?? atelierFilter;
+    const equipe = next.equipe ?? equipeFilter;
+    const search = (next.search ?? gq).trim();
+    const statut = next.statut ?? statutFilter;
+    const fiche = next.fiche ?? incompletFilter;
+    const p = new URLSearchParams();
+    if (service) p.set("service", service);
+    if (equipe) p.set("equipe", equipe);
+    if (search) p.set("search", search);
+    if (statut) p.set("statut", statut);
+    if (fiche) p.set("fiche", "incompletes");
     const qs = p.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }
-  const chooseAtelier = (v: string) => { setAtelierFilter(v); syncUrl(v, equipeFilter); };
-  const chooseEquipe = (v: string) => { setEquipeFilter(v); syncUrl(atelierFilter, v); };
+  const chooseAtelier = (v: string) => { setAtelierFilter(v); pushUrl({ service: v }); };
+  const chooseEquipe = (v: string) => { setEquipeFilter(v); pushUrl({ equipe: v }); };
+  const chooseStatut = (v: "" | "A_VENIR" | "ACTIF" | "PARTI") => { setStatutFilter(v); pushUrl({ statut: v }); };
+  const chooseFiche = (v: boolean) => { setIncompletFilter(v); pushUrl({ fiche: v }); };
+  // Recherche : état instantané pour le filtrage client, écriture débouncée dans
+  // l'URL (500 ms) pour ne pas spammer router.replace à chaque touche.
+  const chooseSearch = (v: string) => {
+    setGq(v);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => pushUrl({ search: v }), 500);
+  };
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const today = todayStr();
@@ -638,18 +669,18 @@ export default function PersonnelEditor({
           <span className="hb-search">
             <input
               value={gq}
-              onChange={(e) => setGq(e.target.value)}
+              onChange={(e) => chooseSearch(e.target.value)}
               placeholder="🔍 Rechercher : nom, matricule, badge, équipe…"
             />
             {gq !== "" && (
-              <button type="button" className="clear" onClick={() => setGq("")} title="Effacer la recherche">✕</button>
+              <button type="button" className="clear" onClick={() => chooseSearch("")} title="Effacer la recherche">✕</button>
             )}
           </span>
           <span className="hb-fin">
             {nbIncompletActifs > 0 && !incompletFilter && (
               <button
                 type="button"
-                onClick={() => setIncompletFilter(true)}
+                onClick={() => chooseFiche(true)}
                 title="Voir les fiches actives à compléter"
                 style={{
                   width: "auto",
@@ -690,20 +721,20 @@ export default function PersonnelEditor({
             <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span className="muted" style={{ fontWeight: 600, fontSize: 13 }}>Statut</span>
               <div className="segments">
-                <button type="button" className={statutFilter === "" ? "seg active" : "seg"} onClick={() => setStatutFilter("")}>Tous</button>
-                <button type="button" className={statutFilter === "A_VENIR" ? "seg active" : "seg"} onClick={() => setStatutFilter("A_VENIR")}>À venir</button>
-                <button type="button" className={statutFilter === "ACTIF" ? "seg active" : "seg"} onClick={() => setStatutFilter("ACTIF")}>Actif</button>
-                <button type="button" className={statutFilter === "PARTI" ? "seg active" : "seg"} onClick={() => setStatutFilter("PARTI")}>Parti</button>
+                <button type="button" className={statutFilter === "" ? "seg active" : "seg"} onClick={() => chooseStatut("")}>Tous</button>
+                <button type="button" className={statutFilter === "A_VENIR" ? "seg active" : "seg"} onClick={() => chooseStatut("A_VENIR")}>À venir</button>
+                <button type="button" className={statutFilter === "ACTIF" ? "seg active" : "seg"} onClick={() => chooseStatut("ACTIF")}>Actif</button>
+                <button type="button" className={statutFilter === "PARTI" ? "seg active" : "seg"} onClick={() => chooseStatut("PARTI")}>Parti</button>
               </div>
             </span>
             <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span className="muted" style={{ fontWeight: 600, fontSize: 13 }}>Fiche</span>
               <div className="segments">
-                <button type="button" className={!incompletFilter ? "seg active" : "seg"} onClick={() => setIncompletFilter(false)}>Toutes</button>
+                <button type="button" className={!incompletFilter ? "seg active" : "seg"} onClick={() => chooseFiche(false)}>Toutes</button>
                 <button
                   type="button"
                   className={incompletFilter ? "seg active" : "seg"}
-                  onClick={() => setIncompletFilter(true)}
+                  onClick={() => chooseFiche(true)}
                   title="Fiches sans contrat dans Cycle de vie"
                 >
                   ⚠ Incomplètes
