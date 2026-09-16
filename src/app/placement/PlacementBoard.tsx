@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { isoDate, addDays } from "@/lib/week";
 import { habValable, habManqueTxt } from "@/lib/habilitations";
@@ -14,7 +14,7 @@ import s from "./placement.module.css";
 type Atelier = { id: string; nom: string };
 type Equipe = { id: string; nom: string; couleur: string | null };
 type Quart = { code: string; libelle: string };
-type Poste = { id: string; nom: string; nomCourt: string | null; effectifRequis: number; niveauMin: number; numeroRotation: string | null };
+type Poste = { id: string; nom: string; nomCourt: string | null; effectifRequis: number; niveauMin: number; numeroRotation: string | null; imprimable: boolean };
 // `fermee` = ligne fermée dans Ordonnancement (`ouverture_quart.ouverte = false`).
 // Depuis 2026-09-09, la ligne reste affichée et plaçable, mais son BESOIN vaut 0 :
 // le compteur des tuiles devient « X/0 » et la couverture globale n'en tient plus
@@ -694,6 +694,14 @@ export default function PlacementBoard({
       : groups;
   const filtreVide = active && hideIncomp && groups.length > 0 && groupsAffiches.length === 0;
 
+  // Feuille imprimée : on ne garde que les postes marqués « imprimables » au
+  // Référentiel (les postes de construction du planning en sont exclus), et on
+  // retire les lignes qui n'ont plus aucun poste imprimable. L'écran, lui, montre
+  // TOUS les postes (`groups`) — ce filtre ne concerne que le PDF / PDF CE.
+  const groupsImpr = groups
+    .map((g) => ({ ...g, postes: g.postes.filter((po) => po.imprimable) }))
+    .filter((g) => g.postes.length > 0);
+
   return (
     <div className={s.board}>
       {/* Filtres */}
@@ -910,10 +918,15 @@ export default function PlacementBoard({
                     const surEffectif = occ.length > effReq;
                     const cs = active ? compState(active, po) : null;
                     const isOver = over === `po:${po.id}`;
+                    // Nombre de colonnes de rangs : 10 rangs max par colonne, plafonné
+                    // à 3. Rang = une case numéro + éventuelle case « sans numéro ».
+                    const nbRangs = numerosDe(po).length + (placesSansNum(po) > 0 || occupantsSansNum(po.id).length > 0 ? 1 : 0);
+                    const nCols = Math.min(3, Math.max(1, Math.ceil(nbRangs / 10)));
                     return (
                       <div
                         key={po.id}
                         className={`${s.poste} ${surEffectif ? s.surEffectif : ""} ${cs ? s[cs] : ""} ${isOver ? s.over : ""}`}
+                        style={{ ["--cols" as string]: nCols } as CSSProperties}
                         {...overProps(`po:${po.id}`, po.id)}
                         onClick={() => clickTarget(po.id)}
                         title={active ? `${cs === "ok" ? "Compétent" : cs === "restrict" ? "Restriction !" : "Compétence insuffisante"} · niv. ${niveau(active, po.id)} / min ${po.niveauMin}` : po.nom}
@@ -1123,7 +1136,7 @@ export default function PlacementBoard({
 
         <div className={s.printBody}>
           <div className={s.printPlan}>
-            {groups.map((g) => (
+            {groupsImpr.map((g) => (
               <div key={g.ligneId} className={s.printLigne}>
                 <div className={s.printLigneNom}>{g.ligneNom}</div>
                 <div className={s.printPostes}>
@@ -1187,7 +1200,7 @@ export default function PlacementBoard({
                 </div>
               </div>
             ))}
-            {groups.length === 0 && <p className={s.printVide}>Aucune ligne ouverte ce jour-là sur ce quart.</p>}
+            {groupsImpr.length === 0 && <p className={s.printVide}>Aucun poste imprimable ce jour-là sur ce quart.</p>}
           </div>
 
           {prepImpression === "ce" && (

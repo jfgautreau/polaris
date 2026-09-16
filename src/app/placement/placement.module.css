@@ -81,9 +81,13 @@
   gap: 10px;
 }
 
-/* Carte poste = zone de depot */
+/* Carte poste = zone de depot.
+   Largeur pilotee par --cols (nombre de colonnes de rangs, calcule en JS selon
+   « 10 rangs max par colonne ») : 1 colonne = 190px (comportement historique),
+   +184px (174 de contenu + 10 de gouttiere) par colonne supplementaire. */
 .poste {
-  width: 190px;
+  --cols: 1;
+  width: calc(var(--cols) * 174px + (var(--cols) - 1) * 10px + 16px);
   min-height: 64px;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -117,21 +121,26 @@
   font-style: italic;
 }
 
-/* --- Cases d'un poste : une par numero de rotation, puis les places sans numero --- */
+/* --- Cases d'un poste : une par numero de rotation, puis les places sans numero ---
+   Rangs disposes en colonnes (multi-colonnes CSS) : au-dela de 10 rangs, ils
+   se repartissent sur 2 puis 3 colonnes (var --cols posee sur .poste par le JS),
+   pour eviter des tuiles interminables. Une case n'est jamais coupee entre deux
+   colonnes (break-inside: avoid). */
 .slots {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
+  columns: var(--cols, 1);
+  column-gap: 10px;
 }
 .slot {
   display: flex;
   align-items: center;
   gap: 5px;
   min-height: 24px;
+  margin-bottom: 3px;
   padding: 2px 3px;
   border: 1px dashed #e2e8f0;
   border-radius: 6px;
   cursor: pointer;
+  break-inside: avoid;
 }
 .slot:hover {
   border-color: #94a3b8;

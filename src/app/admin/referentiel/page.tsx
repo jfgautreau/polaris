@@ -20,6 +20,7 @@ type Poste = {
   ordre_affichage: number;
   numero_rotation: string | null;
   remplacable: boolean;
+  imprimable: boolean;
   actif: boolean;
 };
 type Ligne = { id: string; nom: string; actif: boolean; ordre_affichage: number; regroupement: string | null; poste: Poste[] };
@@ -31,14 +32,20 @@ export default async function ReferentielPage() {
   const { profile, perms } = await requireModule("referentiel", "read");
 
   const supabase = await getServerClient();
+  // Lecture tolérante à l'absence de `poste.imprimable` (migration 0073 non encore
+  // passée) : sélectionner une colonne absente ferait échouer TOUTE la requête
+  // imbriquée (L19) et viderait l'écran. On réessaie sans la colonne, défaut true.
+  const posteEmbed = (extra: string) =>
+    `id, nom, actif, ligne(id, nom, actif, ordre_affichage, regroupement, poste(id, nom, nom_court, categorie, effectif_requis, difficulte_formation, niveau_min_requis, ordre_affichage, numero_rotation, remplacable${extra}, actif))`;
+  const lireAteliers = async () => {
+    const avec = await supabase.from("atelier").select(posteEmbed(", imprimable")).order("nom").returns<Atelier[]>();
+    if (avec.error && (avec.error.code === "42703" || avec.error.code === "PGRST204")) {
+      return supabase.from("atelier").select(posteEmbed("")).order("nom").returns<Atelier[]>();
+    }
+    return avec;
+  };
   const [{ data }, { data: quartsD }, pqMap, { data: compsD }, pcrD, { data: persD }, nbNiveaux, ligneValMap, posteValMap] = await Promise.all([
-    supabase
-      .from("atelier")
-      .select(
-        "id, nom, actif, ligne(id, nom, actif, ordre_affichage, regroupement, poste(id, nom, nom_court, categorie, effectif_requis, difficulte_formation, niveau_min_requis, ordre_affichage, numero_rotation, remplacable, actif))"
-      )
-      .order("nom")
-      .returns<Atelier[]>(),
+    lireAteliers(),
     supabase.from("quart").select("code, libelle").order("ordre").returns<Quart[]>(),
     chargerPosteQuart(supabase),
     supabase.from("competence").select("id, nom, a_recycler").eq("actif", true).order("nom").returns<Comp[]>(),
@@ -64,7 +71,10 @@ export default async function ReferentielPage() {
       .sort((x, y) => (x.ordre_affichage ?? 0) - (y.ordre_affichage ?? 0) || x.nom.localeCompare(y.nom))
       .map((l) => ({
         ...l,
-        poste: [...(l.poste ?? [])].sort((x, y) => (x.ordre_affichage ?? 0) - (y.ordre_affichage ?? 0) || x.nom.localeCompare(y.nom)),
+        poste: [...(l.poste ?? [])]
+          // Défaut si la migration 0073 n'est pas encore passée (colonne absente).
+          .map((p) => ({ ...p, imprimable: p.imprimable ?? true }))
+          .sort((x, y) => (x.ordre_affichage ?? 0) - (y.ordre_affichage ?? 0) || x.nom.localeCompare(y.nom)),
       })),
   }));
   // Effectif par quart (trois états) transmis au client sous forme d'objet simple.

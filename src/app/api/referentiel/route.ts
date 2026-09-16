@@ -9,6 +9,9 @@ import { ATELIERS_TAG } from "@/lib/refdata";
 // Saisie inline du referentiel (ateliers / lignes / postes). Ecriture admin (RLS).
 // Ops : create-atelier | create-ligne | create-poste | update-atelier |
 //       update-ligne | update-poste | toggle.
+// ⚠️ Pas d'`imprimable` ici : POSTE_COLS sert au `.select()` de create-poste. Tant
+// que la migration 0073 n'est pas passée, sélectionner une colonne absente ferait
+// échouer TOUTE la requête (L19). Le client applique le défaut `imprimable = true`.
 const POSTE_COLS =
   "id, nom, nom_court, categorie, effectif_requis, difficulte_formation, niveau_min_requis, ordre_affichage, numero_rotation, remplacable, actif";
 const CATEGORIES = ["manager", "conducteur", "operateur"];
@@ -37,6 +40,9 @@ function posteValue(key: string, value: unknown) {
       return s(value).slice(0, 20) || null;
     // PTR (remplacable=true) / PTNR (false). Accepte booleen ou "true"/"false".
     case "remplacable":
+      return value === true || value === "true";
+    // Imprimable sur les feuilles de placement (migration 0073). Accepte booleen ou "true"/"false".
+    case "imprimable":
       return value === true || value === "true";
     case "difficulte_formation": {
       const v = s(value);
@@ -67,11 +73,13 @@ async function updateTable(
   site_id: string
 ): Promise<{ error: { message: string } | null }> {
   let { error } = await supabase.from(table).update(patch).eq("id", id).eq("site_id", site_id);
-  const dateKey = "date_ouverture" in patch || "date_fermeture" in patch;
-  if (error && (error.code === "42703" || error.code === "PGRST204") && dateKey) {
+  // Repli si une colonne récente n'est pas encore en base : dates (0071) ou
+  // `imprimable` (0073). On retire la ou les clés fautives et on réessaie.
+  const OPTIONNELLES = ["date_ouverture", "date_fermeture", "imprimable"] as const;
+  const aOptionnelle = OPTIONNELLES.some((k) => k in patch);
+  if (error && (error.code === "42703" || error.code === "PGRST204") && aOptionnelle) {
     const p2 = { ...patch };
-    delete p2.date_ouverture;
-    delete p2.date_fermeture;
+    for (const k of OPTIONNELLES) delete p2[k];
     if (Object.keys(p2).length === 0) return { error: null };
     ({ error } = await supabase.from(table).update(p2).eq("id", id).eq("site_id", site_id));
   }

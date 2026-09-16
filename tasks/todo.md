@@ -3,6 +3,24 @@
 > État au 2026-08-26. Migrations appliquées jusqu'à **0060**. **252** tests Vitest.
 > Historique détaillé : `git log`.
 
+## Revue — Poste imprimable + colonnes de noms Placement (2026-09-16)
+- [ ] **⚠ Migration `0073_poste_imprimable.sql` à exécuter** dans le SQL Editor Supabase
+      (`alter table poste add column imprimable boolean not null default true`). Le code
+      tolère son absence (repli sur `imprimable = true`, lectures Référentiel/Placement et
+      `update-poste` résilients aux codes 42703/PGRST204).
+- [x] **Référentiel — colonne « Impr. »** (Oui/Non) par poste : choisit s'il figure sur les
+      **feuilles de placement imprimées** (PDF / PDF CE). « Non » masque à l'impression les
+      postes qui ne servent qu'à **construire le planning** ; ils restent utilisables à
+      l'écran. Whitelist `posteValue` + `updateTable` (repli colonne absente).
+- [x] **Placement PDF/PDF CE** : le plan imprimé (`groupsImpr`) exclut les postes non
+      imprimables et les lignes qui n'ont plus aucun poste imprimable. L'écran montre tous
+      les postes.
+- [x] **Placement écran — noms sur 2/3 colonnes** : les rangs d'un poste (numéros de rotation
+      + case sans numéro) se répartissent en colonnes de **10 rangs max** (plafond 3 colonnes),
+      via multi-colonnes CSS pilotées par `--cols` (calc largeur de tuile). Évite les tuiles
+      interminables sur les postes à nombreux numéros.
+- [x] `tsc`, `npm run build`, `npm test` (313) OK.
+
 ## Revue — PDF Placement & tooltip Planning (2026-09-16)
 - [x] **PDF & PDF CE Placement** : les **numéros de rotation** figurent maintenant sur
       chaque poste numéroté, même vide (ligne « n° · libre ») — avant, un numéro sans

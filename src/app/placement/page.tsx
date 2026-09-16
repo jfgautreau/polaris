@@ -19,7 +19,7 @@ type Atelier = { id: string; nom: string };
 type Equipe = { id: string; nom: string; couleur: string | null; quart_fixe?: string | null };
 type Quart = { code: string; libelle: string; ordre: number; creneau: string | null; couleur?: string | null };
 type Personne = { id: string; nom: string; prenom: string; equipe_id: string | null; atelier_id: string | null; type_contrat: string };
-type PosteRow = { id: string; nom: string; nom_court: string | null; actif: boolean; effectif_requis: number; niveau_min_requis: number; ordre_affichage: number; numero_rotation: string | null };
+type PosteRow = { id: string; nom: string; nom_court: string | null; actif: boolean; effectif_requis: number; niveau_min_requis: number; ordre_affichage: number; numero_rotation: string | null; imprimable?: boolean };
 type LigneRow = { id: string; nom: string; ordre_affichage: number; atelier_id: string; poste: PosteRow[] };
 type Placement = { personne_id: string; poste_id: string | null; motif_absence_id: string | null; non_travaille: boolean; quart_code: string | null; numero_rotation: string | null };
 type MatRow = { personne_id: string; poste_id: string; niveau_actuel: number };
@@ -118,13 +118,18 @@ export default async function PlacementPage({
   // Postes de l'atelier + desactivations poste x quart + placements du jour + matrice.
   const [{ data: lignesD }, pq, { data: plD }, mat, ligneVal, posteVal] = await Promise.all([
     atelierId
-      ? supabase
-          .from("ligne")
-          .select("id, nom, ordre_affichage, atelier_id, poste(id, nom, nom_court, actif, effectif_requis, niveau_min_requis, ordre_affichage, numero_rotation)")
-          .eq("atelier_id", atelierId)
-          .eq("actif", true)
-          .order("nom")
-          .returns<LigneRow[]>()
+      ? (async () => {
+          // Lecture tolérante à l'absence de `poste.imprimable` (migration 0073 non
+          // passée) : une colonne absente ferait échouer TOUTE la requête imbriquée
+          // (L19) et viderait le plan. Repli sans la colonne, défaut true.
+          const embed = (extra: string) =>
+            `id, nom, ordre_affichage, atelier_id, poste(id, nom, nom_court, actif, effectif_requis, niveau_min_requis, ordre_affichage, numero_rotation${extra})`;
+          const q = (extra: string) =>
+            supabase.from("ligne").select(embed(extra)).eq("atelier_id", atelierId).eq("actif", true).order("nom").returns<LigneRow[]>();
+          const avec = await q(", imprimable");
+          if (avec.error && (avec.error.code === "42703" || avec.error.code === "PGRST204")) return q("");
+          return avec;
+        })()
       : Promise.resolve({ data: [] as LigneRow[] }),
     chargerPosteQuart(supabase),
     supabase.from("placement").select("personne_id, poste_id, motif_absence_id, non_travaille, quart_code, numero_rotation").eq("jour", jour).returns<Placement[]>(),
@@ -197,6 +202,8 @@ export default async function PlacementPage({
           effectifRequis: effectifSurQuart(pq, p.id, quart, p.effectif_requis),
           niveauMin: p.niveau_min_requis,
           numeroRotation: p.numero_rotation,
+          // Défaut true si la migration 0073 (colonne imprimable) n'est pas passée.
+          imprimable: p.imprimable ?? true,
         })),
     }))
     .filter((g) => g.postes.length > 0)
