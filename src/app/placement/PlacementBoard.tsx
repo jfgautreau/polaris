@@ -918,9 +918,18 @@ export default function PlacementBoard({
                     const surEffectif = occ.length > effReq;
                     const cs = active ? compState(active, po) : null;
                     const isOver = over === `po:${po.id}`;
-                    // Nombre de colonnes de rangs : 10 rangs max par colonne, plafonné
-                    // à 3. Rang = une case numéro + éventuelle case « sans numéro ».
-                    const nbRangs = numerosDe(po).length + (placesSansNum(po) > 0 || occupantsSansNum(po.id).length > 0 ? 1 : 0);
+                    const nums = numerosDe(po);
+                    const sansNum = occupantsSansNum(po.id);
+                    // Rangée de dépôt : visible s'il reste des places sans numéro NON
+                    // encore occupées (placesSansNum compte les places hors numéro, pas
+                    // les libres — on retranche les occupants), ou si un poste non
+                    // numéroté est totalement vide (pour garder une cible de dépôt).
+                    const dropRow = placesSansNum(po) - sansNum.length > 0 || (nums.length === 0 && sansNum.length === 0);
+                    // Colonnes de rangs : chaque numéro ET chaque occupant sans numéro
+                    // compte pour UNE ligne (« les noms »), plafonné à 10 lignes par
+                    // colonne et 3 colonnes. C'est ce qui répartit un poste chargé sur
+                    // 2-3 colonnes plutôt qu'une longue liste verticale.
+                    const nbRangs = nums.length + sansNum.length + (dropRow ? 1 : 0);
                     const nCols = Math.min(3, Math.max(1, Math.ceil(nbRangs / 10)));
                     return (
                       <div
@@ -944,7 +953,7 @@ export default function PlacementBoard({
                         {/* Une case par numero de rotation, puis les places restantes
                             de l'effectif, puis le surnombre eventuel. */}
                         <div className={s.slots}>
-                          {numerosDe(po).map((n) => (
+                          {nums.map((n) => (
                             <div
                               key={n}
                               className={`${s.slot} ${over === `po:${po.id}#${n}` ? s.over : ""}`}
@@ -959,20 +968,31 @@ export default function PlacementBoard({
                               </span>
                             </div>
                           ))}
-                          {/* Places sans numero : le reste de l'effectif, ou tout le poste
-                              s'il n'est pas numerote. */}
-                          {(placesSansNum(po) > 0 || occupantsSansNum(po.id).length > 0) && (
+                          {/* Sans numéro : UNE rangée par occupant (chaque nom = une
+                              ligne, d'où la répartition en colonnes de 10), puis, tant
+                              qu'il reste de la place — ou si le poste non numéroté est
+                              vide —, une rangée de dépôt. */}
+                          {sansNum.map((p) => (
+                            <div
+                              key={p.id}
+                              className={`${s.slot} ${s.slotLibre} ${over === `po:${po.id}` ? s.over : ""}`}
+                              {...overProps(`po:${po.id}`, po.id, null)}
+                              onClick={(e) => { e.stopPropagation(); clickTarget(po.id, null); }}
+                              title={nums.length ? `${po.nom} — sans numéro` : po.nom}
+                            >
+                              {nums.length > 0 && <span className={s.slotNum} style={{ opacity: 0.5 }}>—</span>}
+                              <span className={s.slotBody}>{chip(p, po)}</span>
+                            </div>
+                          ))}
+                          {dropRow && (
                             <div
                               className={`${s.slot} ${s.slotLibre} ${over === `po:${po.id}` ? s.over : ""}`}
                               {...overProps(`po:${po.id}`, po.id, null)}
                               onClick={(e) => { e.stopPropagation(); clickTarget(po.id, null); }}
-                              title={numerosDe(po).length ? `${po.nom} — sans numéro` : po.nom}
+                              title={nums.length ? `${po.nom} — sans numéro` : po.nom}
                             >
-                              {numerosDe(po).length > 0 && <span className={s.slotNum} style={{ opacity: 0.5 }}>—</span>}
-                              <span className={s.slotBody}>
-                                {occupantsSansNum(po.id).map((p) => chip(p, po))}
-                                {occupantsSansNum(po.id).length === 0 && <span className={s.emptyHint}>déposer ici</span>}
-                              </span>
+                              {nums.length > 0 && <span className={s.slotNum} style={{ opacity: 0.5 }}>—</span>}
+                              <span className={s.slotBody}><span className={s.emptyHint}>{nums.length ? "sans n°" : "déposer ici"}</span></span>
                             </div>
                           )}
                         </div>
