@@ -1009,10 +1009,7 @@ export default function PlanningGrid({
                         setDragKey(kCell);
                       } : undefined}
                       onDragEnd={() => { setDragKey(null); setOverKey(null); }}
-                      title={[
-                        dragSource ? "Glisser pour déplacer · cliquer pour réaffecter · Suppr pour effacer" : "Cliquer pour affecter · Suppr pour effacer",
-                        ...excInfo,
-                      ].join(" · ")}
+                      title={excInfo.length ? excInfo.join(" · ") : undefined}
                       onClick={(e) => {
                         const k = key(pers.id, d.iso);
                         setSelected(k);
