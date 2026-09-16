@@ -814,11 +814,15 @@ prochain gros chantier, pas une optimisation cosmétique.
   créées vides pour saisie inline restent supportées). `atelier.nom` **n'est pas**
   contraint (décision assumée : très peu d'ateliers, doublon improbable et sans
   risque de confusion). Le message serveur (« Ce nom court est déjà utilisé… ») est
-  relayé par le champ `error` du JSON. ⚠️ **Bannière d'erreur persistante** (2026-09-11) :
-  `ReferentielEditor` affiche le refus dans une **bannière rouge pleine largeur, fermable,
-  effacée seulement au prochain succès** — l'ancien indicateur discret (4 s, coin droit)
-  passait inaperçu et le nom en doublon « se corrigeait tout seul » au rechargement sans
-  explication.
+  relayé par le champ `error` du JSON. ⚠️ **Toast d'erreur fixe bas-centre** (2026-09-11,
+  repositionné 2026-09-16) : `ReferentielEditor` affiche le refus dans un **toast rouge
+  `position: fixed` ancré en bas-centre** (`z-index` au-dessus de l'en-tête sticky) —
+  **toujours visible quel que soit le scroll**. La page Référentiel défile en entier :
+  l'ancienne bannière en flux normal restait tout en haut et passait **hors écran** quand
+  on éditait un poste en bas d'un long référentiel. Fermeture par ✕, **auto-fermeture après
+  6 s** (timer relancé à chaque message), effacée au prochain succès ; slide-in respectant
+  `prefers-reduced-motion`. (Avant : indicateur discret 4 s coin droit, puis bannière en
+  haut — le nom en doublon « se corrigeait tout seul » au rechargement sans explication.)
 - Habilitations : `src/app/habilitations/{page,HabilitationsList,HabMark,HabLegendeModal,HabMajModal,AutorisationMark}.tsx`
   + `src/app/admin/habilitations-param/*` + `src/app/api/habilitations/route.ts`.
   Saisie **au clic sur une pastille** (modale pré-remplie) ; l'en-tête est rendu par
@@ -1067,8 +1071,9 @@ prochain gros chantier, pas une optimisation cosmétique.
   code `42501`) — et retombe sur `messageErreur` pour les autres codes. Côté client
   (`MatrixGrid`, `HabilitationsList`, `DroitsMatrix`) : sur refus on **revient à la valeur
   enregistrée** et on **affiche le message** (indicateur ou info-bulle), jamais un « Échec »
-  muet. Le Référentiel (`ReferentielEditor`) a une **bannière d'erreur persistante et
-  fermable** pour les doublons de nom (409) — l'indicateur discret de 4 s était raté.
+  muet. Le Référentiel (`ReferentielEditor`) affiche les doublons de nom (409) dans un
+  **toast fixe bas-centre** (fermable, auto-fermeture 6 s) — toujours visible même en bas
+  d'un long référentiel ; l'indicateur discret de 4 s, puis la bannière en haut, étaient ratés.
 - **Séquences « effacer puis réécrire » → fonction SQL.** `set_rotation_reference`,
   `creer_absence`, `maj_absence` (migration 0037, `SECURITY INVOKER` : le modèle
   d'autorisation est inchangé). En deux requêtes applicatives, un échec de la seconde
