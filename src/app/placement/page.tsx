@@ -254,6 +254,21 @@ export default async function PlacementPage({
     } else if (r.poste_id) autreQuart[r.personne_id] = quartOuDefaut(r.quart_code, quarts);
   }
 
+  // Commentaires du jour (horaire_exception.motif, saisis au Planning via la
+  // petite pendule) : affichés à côté du nom dans les PDF du Placement. Bornés
+  // à UN jour → petite lecture, pas de fetchAll ; la table est site-scopée (RLS
+  // via getServerClient).
+  const { data: hexD } = await supabase
+    .from("horaire_exception")
+    .select("personne_id, motif")
+    .eq("jour", jour)
+    .returns<{ personne_id: string; motif: string | null }[]>();
+  const commentaires: Record<string, string> = {};
+  for (const r of hexD ?? []) {
+    const m = (r.motif ?? "").trim();
+    if (m) commentaires[r.personne_id] = m;
+  }
+
   // Niveau de competence par (personne, poste) pour l'aide au placement.
   const matrice: Record<string, number> = {};
   for (const r of mat) matrice[`${r.personne_id}:${r.poste_id}`] = r.niveau_actuel;
@@ -369,6 +384,7 @@ export default async function PlacementPage({
         key={`${atelierId}|${jour}|${quart}`}
         vueAbsences={vueAbsences}
         numeroInit={numeroInit}
+        commentaires={commentaires}
         title={<PageTitle module="placement" style={{ fontSize: 20 }}>Placement</PageTitle>}
         jour={jour}
         quart={quart}

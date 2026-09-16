@@ -3,6 +3,22 @@
 > État au 2026-08-26. Migrations appliquées jusqu'à **0060**. **252** tests Vitest.
 > Historique détaillé : `git log`.
 
+## Revue — PDF Placement & tooltip Planning (2026-09-16)
+- [x] **PDF & PDF CE Placement** : les **numéros de rotation** figurent maintenant sur
+      chaque poste numéroté, même vide (ligne « n° · libre ») — avant, un numéro sans
+      personne était invisible (cf. `PlacementBoard.tsx`, section feuille imprimable).
+- [x] **PDF & PDF CE Placement** : les **commentaires du jour** (`horaire_exception.motif`,
+      saisis via la pendule du Planning) s'affichent en italique à côté du nom. Chargés
+      dans `placement/page.tsx` (lecture bornée à 1 jour, site-scopée), passés en prop
+      `commentaires`.
+- [x] **PDF Placement en A3 paysage** (bouton « PDF » seulement ; le « PDF CE » reste A4) :
+      page nommée `plcA3` (globals.css) activée via `body.print-a3` le temps du print ;
+      feuille et cible d'échelle redimensionnées (`PAGE_*_A3`, `LARGEURS_ESSAI_A3`,
+      `.printSheet[data-mode="simple"]`). Respecte L42 (cible < feuille).
+- [x] **Planning** : horaire spécifique + commentaire affichés au survol de **toute la
+      case** (title de la cellule et du bouton), plus seulement de la pendule 🕐.
+- [x] `tsc`, `npm run build`, `npm test` (313) OK.
+
 ## Sécurité / multi-site
 - [x] Isolation multi-tenant : `site_id` + RLS sur toutes les tables métier (0043–0054).
 - [x] Bornage explicite `site_id` de **toutes** les lectures/écritures via `getAdminClient()`,

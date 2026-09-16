@@ -915,6 +915,16 @@ export default function PlanningGrid({
                 const dragSource = pers.editable && (isPoste(v) || v === "X" || vTP);
                 const dropTarget = pers.editable && v === "" && !hors && !(tpb && !tpAbsence) && !other;
                 const isOver = overKey === kCell && dropTarget;
+                // Horaire spécifique + commentaire du jour (saisis via la pendule) :
+                // remontés dans le title de TOUTE la case — pas seulement de la
+                // pendule — pour qu'ils s'affichent au survol de la cellule entière.
+                const exCell = exc[excKey(pers.id, d.iso)];
+                const excInfo = exCell
+                  ? [
+                      exCell.debut || exCell.fin ? `Horaire : ${excLabel(exCell)}` : "",
+                      exCell.motif ? `Commentaire : ${exCell.motif}` : "",
+                    ].filter(Boolean)
+                  : [];
                 // Surlignage : cette case correspond-elle au type d'anomalie selectionne ce jour-la ?
                 const hiActive = highlight?.iso === d.iso;
                 const matchHi = !!hiActive && ((highlight!.type === "hc" && alert) || (highlight!.type === "over" && over));
@@ -955,6 +965,7 @@ export default function PlanningGrid({
                       restricted ? "⛔ Restriction médicale/physique sur ce poste" : alert ? "Hors compétence" : "",
                       manque.length ? `⚠ Placement forcé — habilitation manquante : ${manque.join(", ")}` : "",
                       over ? `Sur-effectif (${perDay[i].counts[v]}/${effectif[v] ?? 0})` : "",
+                      ...excInfo,
                     ].filter(Boolean).join(" · ") || undefined}
                     onDragOver={dropTarget ? (e) => { e.preventDefault(); if (overKey !== kCell) setOverKey(kCell); } : undefined}
                     onDragLeave={dropTarget ? () => setOverKey((o) => (o === kCell ? null : o)) : undefined}
@@ -998,7 +1009,10 @@ export default function PlanningGrid({
                         setDragKey(kCell);
                       } : undefined}
                       onDragEnd={() => { setDragKey(null); setOverKey(null); }}
-                      title={dragSource ? "Glisser pour déplacer · cliquer pour réaffecter · Suppr pour effacer" : "Cliquer pour affecter · Suppr pour effacer"}
+                      title={[
+                        dragSource ? "Glisser pour déplacer · cliquer pour réaffecter · Suppr pour effacer" : "Cliquer pour affecter · Suppr pour effacer",
+                        ...excInfo,
+                      ].join(" · ")}
                       onClick={(e) => {
                         const k = key(pers.id, d.iso);
                         setSelected(k);

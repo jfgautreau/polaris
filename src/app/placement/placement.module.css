@@ -512,6 +512,16 @@
   color: #000;
   background: #fff;
 }
+/* Bouton « PDF » (plan seul) : sortie A3 paysage. La feuille reprend les
+   proportions A3 (zone imprimable ~1527 × 1062 px @ 96dpi, marge de sécurité
+   → 1480 × 980) ; `ajusterFeuille(true)` met le contenu à l'échelle sur une
+   cible plus courte (PAGE_H_A3 = 920). La page nommée `plcA3` (globals.css,
+   activée via `body.print-a3`) porte le format papier réel. Le « PDF CE »
+   (data-mode="ce") garde l'A4 par défaut ci-dessus. */
+.printSheet[data-mode="simple"] {
+  width: 1480px;
+  height: 980px;
+}
 .printInner {
   width: 1020px;
   transform-origin: top left;
@@ -600,6 +610,11 @@
   text-align: center;
 }
 .printVide { color: #94a3b8; }
+/* Commentaire du jour (horaire_exception.motif) accolé au nom sur la feuille. */
+.printComment {
+  color: #475569;
+  font-style: italic;
+}
 
 .printAbs {
   flex: 0 0 168px;

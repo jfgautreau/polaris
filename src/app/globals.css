@@ -1172,6 +1172,23 @@ select.flat {
     size: A4 landscape;
     margin: 8mm;
   }
+  /* Placement, bouton « PDF » (plan seul) : sortie A3 paysage pour laisser
+     respirer les plans denses. Activé en posant `print-a3` sur <body> juste
+     avant window.print() (cf. PlacementBoard). Le « PDF CE » reste en A4. */
+  @page plcA3 {
+    size: A3 landscape;
+    margin: 8mm;
+  }
+  body.print-a3 {
+    page: plcA3;
+  }
+  /* Ceinture + bretelles : on assigne aussi la page nommée à la feuille elle-même
+     (le sélecteur d'attribut n'est pas renommé par le scoping CSS Module), pour que
+     l'A3 s'applique même si Chrome ne propage pas `page` depuis <body>. Même page
+     nommée que <body> → aucun saut de page parasite entre les deux. */
+  body.print-a3 [data-mode="simple"] {
+    page: plcA3;
+  }
   html,
   body {
     background: #fff !important;

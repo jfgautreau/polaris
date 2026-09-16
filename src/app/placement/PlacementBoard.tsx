@@ -58,6 +58,7 @@ export default function PlacementBoard({
   habPers = {},
   vueAbsences = false,
   numeroInit = {},
+  commentaires = {},
   quartOuvert = true,
   siteNom = "",
   tpIds = [],
@@ -89,6 +90,9 @@ export default function PlacementBoard({
   habPers?: Record<string, string>; // `${personne}:${habilitation}` -> echeance ("" = sans echeance)
   vueAbsences?: boolean; // pseudo-atelier « Absences » : photo transverse, pas de plan
   numeroInit?: Record<string, string>; // personne -> numero de rotation occupe
+  // Commentaire du jour par personne (horaire_exception.motif) : affiché à côté
+  // du nom dans les deux PDF (« PDF » et « PDF CE »).
+  commentaires?: Record<string, string>;
   quartOuvert?: boolean; // le quart est-il ouvert ce jour-la (Ordonnancement) ?
   siteNom?: string; // multi-tenant : nom d'usine dans le pied de page du PDF
   tpIds?: string[]; // personnes en temps partiel (indisponibles) ce jour-la
@@ -383,6 +387,10 @@ export default function PlacementBoard({
   // etroite qu'une page permet a l'inverse d'AGRANDIR un petit plan pour qu'il
   // remplisse la feuille au lieu de se tasser dans le coin superieur gauche.
   const LARGEURS_ESSAI = [700, 820, 940, 1060, 1300, 1600, 1900, 2200];
+  // Largeurs d'essai pour la sortie A3 (bouton « PDF », mode "simple") : une feuille
+  // A3 paysage est bien plus large qu'une A4, on autorise donc des rangées plus
+  // larges pour éviter de tasser un plan dense dans le coin supérieur gauche.
+  const LARGEURS_ESSAI_A3 = [1000, 1200, 1480, 1800, 2200, 2600, 3000];
   // A4 paysage avec marges 8mm (cf. @page globals.css) = ~1061 × 733 px @ 96dpi.
   // On garde ~7 % de marge de sécurité (1020 × 680) : l'aperçu Chrome/Edge rogne
   // dès que le rendu déborde d'un pixel, et un `scale()` calé au ras du max fait
@@ -391,6 +399,12 @@ export default function PlacementBoard({
   // version CE au ras des 700 px — on aligne les deux modes sur 680 pour ne pas
   // avoir à distinguer par mode. `.printSheet` recadre en conséquence.
   const PAGE_L = 1020;
+  // A3 paysage @ 96dpi avec marges 8mm = ~1527 × 1062 px. Même logique de marge de
+  // sécurité que l'A4 : feuille 1480 × 980 (cf. `.printSheet[data-mode="simple"]`),
+  // contenu mis à l'échelle sur une cible plus courte (920) → ~60 px de marge
+  // interne (cf. L42, ne PAS aligner la cible sur la hauteur de feuille).
+  const PAGE_L_A3 = 1480;
+  const PAGE_H_A3 = 920;
   // Cible de HAUTEUR pour la mise à l'échelle. ⚠️ VOLONTAIREMENT plus courte que
   // la hauteur de `.printSheet` (650) : le contenu mis à l'échelle (≤ 600) laisse
   // ~50 px de marge INTERNE dans la feuille. Sans cet écart, le rendu imprimé —
@@ -401,14 +415,17 @@ export default function PlacementBoard({
   // pavés demesurés pour rien.
   const ECHELLE_MAX = 1.6;
 
-  function ajusterFeuille() {
+  function ajusterFeuille(a3: boolean) {
     const el = printRef.current;
     if (!el) return;
     el.style.transform = "none";
-    let meilleur = { f: 0, w: PAGE_L };
-    for (const w of LARGEURS_ESSAI) {
+    const pageL = a3 ? PAGE_L_A3 : PAGE_L;
+    const pageH = a3 ? PAGE_H_A3 : PAGE_H;
+    const largeurs = a3 ? LARGEURS_ESSAI_A3 : LARGEURS_ESSAI;
+    let meilleur = { f: 0, w: pageL };
+    for (const w of largeurs) {
       el.style.width = `${w}px`;
-      const f = Math.min(ECHELLE_MAX, PAGE_L / w, PAGE_H / el.scrollHeight);
+      const f = Math.min(ECHELLE_MAX, pageL / w, pageH / el.scrollHeight);
       if (f > meilleur.f) meilleur = { f, w };
     }
     el.style.width = `${meilleur.w}px`;
@@ -416,10 +433,16 @@ export default function PlacementBoard({
   }
 
   // La feuille doit etre montee (donc mesurable) avant d'ouvrir la boite d'impression.
+  // Le bouton « PDF » (mode "simple") imprime en A3 : on pose `print-a3` sur <body>
+  // (bascule la page nommée `plcA3` de globals.css) le temps de l'impression, puis
+  // on retire la classe. Le « PDF CE » (mode "ce") reste en A4.
   useEffect(() => {
     if (!prepImpression) return;
-    ajusterFeuille();
+    const a3 = prepImpression === "simple";
+    if (a3) document.body.classList.add("print-a3");
+    ajusterFeuille(a3);
     window.print();
+    if (a3) document.body.classList.remove("print-a3");
     setPrepImpression(false);
   });
 
@@ -1110,6 +1133,19 @@ export default function PlacementBoard({
                     const effReq = g.fermee ? 0 : po.effectifRequis;
                     const sur = occ.length > effReq;
                     const trou = occ.length < effReq;
+                    const nums = numerosDe(po);
+                    // Ligne d'un occupant imprimé : badge (n° de rotation) + NOM P. +
+                    // éventuel commentaire du jour (horaire_exception.motif).
+                    const ligneOcc = (p: Personne, badge: ReactNode) => {
+                      const alerte = habManque(p.id, po.id).length > 0 || compState(p.id, po) !== "ok";
+                      return (
+                        <div key={p.id} className={`${s.printNom} ${alerte ? s.printAlerte : ""}`}>
+                          {badge}
+                          {p.nom} {p.prenom.charAt(0).toUpperCase()}.
+                          {commentaires[p.id] && <span className={s.printComment}> — {commentaires[p.id]}</span>}
+                        </div>
+                      );
+                    };
                     return (
                       <div key={po.id} className={`${s.printPoste} ${sur ? s.printSur : ""}`}>
                         <div className={s.printPosteHead}>
@@ -1118,19 +1154,32 @@ export default function PlacementBoard({
                             {occ.length}/{effReq}
                           </span>
                         </div>
-                        {occ.length === 0 ? (
-                          <div className={s.printVide}>—</div>
+                        {nums.length === 0 ? (
+                          // Poste sans numéro de rotation : liste des occupants (ou —).
+                          occ.length === 0 ? (
+                            <div className={s.printVide}>—</div>
+                          ) : (
+                            occ.map((p) => ligneOcc(p, numero[p.id] ? <span className={s.printNum}>{numero[p.id]}</span> : null))
+                          )
                         ) : (
-                          occ.map((p) => {
-                            const mq = habManque(p.id, po.id);
-                            const cs = compState(p.id, po);
-                            return (
-                              <div key={p.id} className={`${s.printNom} ${mq.length || cs !== "ok" ? s.printAlerte : ""}`}>
-                                {numero[p.id] && <span className={s.printNum}>{numero[p.id]}</span>}
-                                {p.nom} {p.prenom.charAt(0).toUpperCase()}.
-                              </div>
-                            );
-                          })
+                          // Poste numéroté : UNE ligne par numéro, même vide (« libre »),
+                          // pour que le n° de rotation figure toujours sur la feuille.
+                          <>
+                            {nums.map((n) => {
+                              const gens = occupantsNum(po.id, n);
+                              const badge = <span className={s.printNum}>{n}</span>;
+                              return gens.length === 0 ? (
+                                <div key={n} className={s.printNom}>
+                                  {badge}
+                                  <span className={s.printVide}>libre</span>
+                                </div>
+                              ) : (
+                                gens.map((p) => ligneOcc(p, badge))
+                              );
+                            })}
+                            {/* Occupants sans numéro (surnombre non numéroté). */}
+                            {occupantsSansNum(po.id).map((p) => ligneOcc(p, null))}
+                          </>
                         )}
                       </div>
                     );
