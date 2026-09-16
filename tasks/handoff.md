@@ -22,8 +22,12 @@ menu suit l'écriture, pas la lecture.
   en deux modes — `ecraser` (défaut) ou `completer` (ne touche à aucune personne déjà
   saisie ce jour-là). Mode appliqué côté serveur.
 - ⚠️ `placement` est unique par **(personne, jour)** : `/api/placement/cell` renvoie
-  **409** si on pose la personne sur un autre quart le même jour ; le board la libère
-  d'abord (delete puis upsert).
+  **409** si on pose la personne sur un autre quart le même jour. Si l'état client
+  connaît l'autre affectation (`autreQuart`), le board la libère d'avance (delete puis
+  upsert). Sinon (état périmé après copie / navigation), le 409 remonte tagué
+  (`autreQuart`) et le board ouvre la modale **« Placer quand même (retirer de l'autre
+  quart) »** (`askAutreQuart` → `confirmerAutreQuart`) au lieu d'un échec muet — P1c,
+  2026-09-15, cf. CLAUDE.md § Placement.
 - Board **keyé** sur `atelier|jour|quart` : il remonte à chaque changement de filtre,
   réinitialisant l'état local depuis les props serveur (cf. `lessons.md` L26).
 - **Lignes fermées** : le plan applique `jour_quart` / `ouverture_quart` comme le

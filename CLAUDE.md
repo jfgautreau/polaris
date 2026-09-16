@@ -608,6 +608,23 @@ prochain gros chantier, pas une optimisation cosmétique.
   « Tous quarts affichés »** (bug vécu : managers affectaient au mauvais quart). Le
   bandeau est **passé en prop `quartBandeau`** à `<PlanningGrid>` — la grille ne lit
   pas `quart.couleur` elle-même.
+  ⚠️ **Vue par défaut = semaine choisie À GAUCHE puis 2 à venir** (S / S+1 / S+2,
+  2026-09-15) — fini le centrage historique S-1 / S / S+1 : `weekMondays = [center,
+  +7, +14]` dans `page.tsx` (on regarde ce qui vient). `WeekNav` / `PlanningNav`
+  déplacent ce trio ; la fenêtre reste de 3 semaines (fetchAll toujours requis).
+  ⚠️ **Croix de navigation (surlignage ligne + colonne au survol)** (2026-09-15) comme
+  Matrice / Ordonnancement : la COLONNE est peinte via le fond du `<col>` **partagé
+  par les deux tables** (`paintCol` sur `onMouseOver`, écriture DOM directe, aucun
+  re-render) ; la LIGNE en CSS `.planning-cross tbody tr:hover td { box-shadow: inset }`
+  (l'inset se superpose sans effacer les couleurs d'état). ⚠️ Effet cosmétique assumé :
+  l'ombre de ligne écrase les barres-indicateurs par cellule (ex. `.pcell.hc.over`,
+  barre jaune sureffectif) tant que la ligne est survolée. La croix n'affecte NI le
+  clic NI le popover horaire (l'inset et le fond du `<col>` se peignent SOUS les enfants
+  positionnés et n'interceptent aucun événement — vérifié).
+  ⚠️ **Fenêtre horaire+commentaire (popover `.exc-pop`)** : croix de fermeture **✕ en
+  HAUT À DROITE** (bouton `position: absolute` dans le popover, 2026-09-15) ; l'ancien
+  `×` de la rangée du bas a été retiré (redondant). Le 🕐 n'apparaît que sur une case
+  **placée** (`isPoste || isFormation || exception`).
   ⚠️ **Les 4 boutons du bandeau (TV, 🕐, 🤒, Conducteurs) sont RENDUS EN HORIZONTAL**
   (2026-09-10) à droite de la barre de recherche, dans `PlanningGrid` (prop `actions`).
   L'ancienne colonne à droite du `.headband` (une `.filterrow` par bouton) est
@@ -698,6 +715,14 @@ prochain gros chantier, pas une optimisation cosmétique.
   volet Absences (couleur `#7c3aed`, **non-droppable** : le TP est calculé auto). Un TP
   DÉJÀ placé reste visible pour permettre le retrait (`rank=2`). Même règle que la
   feuille imprimée (`absPrint`), cohérence garantie.
+  ⚠️ **« Déjà placé sur un autre quart » — plus d'échec muet** (2026-09-15, P1c) : quand
+  `/api/placement/cell` renvoie **409** (personne déjà sur un poste d'un AUTRE quart ce
+  jour-là) et que l'état client l'ignorait (périmé après copie / navigation), `post()`
+  tague l'erreur (`autreQuart`) au lieu du rollback silencieux. `assign` ouvre alors la
+  modale `askAutreQuart` **« Placer quand même (retirer de l'autre quart) »** :
+  `confirmerAutreQuart` fait `post("")` (libère l'autre quart) puis **repasse par
+  `assign`** (re-vérif habilitation + optimiste). Le 409 ne se reproduit pas, la cible
+  étant libérée côté serveur.
   **Navigation par jour** = `JourNav` (remplace `<input type="date">`) : pastille date
   puis calendrier déroulant qui **grise** les jours sans ligne ouverte ; **la date
   d'aujourd'hui** apparaît en **surbrillance** (contour teal) dans le calendrier même
@@ -949,6 +974,21 @@ prochain gros chantier, pas une optimisation cosmétique.
   courante — S, S+1…) — migration 0067, `getFenetreAffichage()` + `joursDeFenetre()`
   dans `src/lib/parametres.ts`. La page passe TOUJOURS par `joursDeFenetre(fen, pivot)`
   — plus d'appel direct à `joursAutour()`.
+  ⚠️ **Sélecteur de semaine dans la barre** (`AffichageBarre`, 2026-09-15) : `‹ période
+  affichée › + « Revenir à cette semaine »` pilote **l'affichage ET le PDF** via `?date`
+  (déplace le pivot de ±7 j ; « cette semaine » retire le paramètre). La page passe
+  `pivotIso` / `debutIso` / `finIso` / `estCourant` à la barre (client `useRouter` +
+  `usePathname`). Horaires (bleu) affichés à **14 px** (agrandis d'un point).
+  ⚠️ **Impression PDF — A3 PORTRAIT MULTI-PAGES** (2026-09-15, refonte) : on n'écrase
+  plus tout le planning sur UNE page mise à l'échelle (rognait la dernière ligne des
+  services denses). CSS d'impression injecté par `AffichageBarre` : `@page A3 portrait`,
+  cadre `width/height:auto; overflow:visible`, contenu `transform:none; width:auto` →
+  **colonnes ajustées à la largeur** (`table width:100%`) et **contenu qui coule sur
+  plusieurs feuilles** — chaque rangée reste entière (`tr { break-inside: avoid }`) et
+  l'en-tête des jours se répète (`thead { display: table-header-group }`). Plus de
+  mesure/`scale()` ici. ⚠️ L'impression « tous les plannings » (`/affichage/impression`,
+  `ImpressionAuto`) garde, elle, l'ancien modèle **une page A3 par service** (mise à
+  l'échelle mesurée) — non touchée.
 - Param. RH (clé de droit toujours `motifs`, route toujours `/admin/motifs`) :
   `src/app/admin/motifs/{page,actions,FenetreAffichageInline}.tsx(ts)`. L'écran regroupe
   désormais **quatre sections** : Motifs d'absence, Agences d'intérim (menu Agence de

@@ -693,3 +693,23 @@ cadre en `overflow:hidden`, la cible de hauteur doit être **strictement plus pe
 cadre. Ne jamais « aligner » les deux pour « remplir la page » : la mesure écran n'est pas la
 hauteur imprimée, et un cadre au ras coupera toujours quelque chose. (Un commentaire dans
 `PlacementBoard.tsx` et `placement.module.css` interdit désormais ce ré-alignement.)
+
+## L43 — Contenu qui peut dépasser une page : FLUX multi-pages plutôt que mise à l'échelle
+
+**Contexte (2026-09-15)** : le PDF de l'affichage TV (`AffichageBarre`) écrasait tout le
+planning d'un service sur **une** page A3 mise à l'échelle (`transform: scale()` mesuré) ;
+sur les services denses ou une fenêtre de plusieurs semaines, la police devenait minuscule et
+la dernière ligne se coupait quand même.
+
+**Solution** : dès que le contenu **peut légitimement occuper plusieurs feuilles**, ne pas
+le mettre à l'échelle — le laisser **couler**. Cadre en `width/height:auto; overflow:visible`,
+contenu `transform:none; width:auto`, tableau `width:100%` (les **colonnes s'ajustent à la
+largeur** de la feuille), puis pagination naturelle : `tr { break-inside: avoid }` (aucune
+rangée coupée), `thead { display: table-header-group }` (en-tête répété en haut de chaque
+page), `section { break-inside: auto }` (une section peut se scinder).
+
+**Quand choisir quoi** :
+- **L42 (scale-to-fit)** quand le rendu DOIT tenir sur **une seule** page (ex. feuille de
+  Placement A4, une page A3 par service dans `/affichage/impression`).
+- **L43 (flux multi-pages)** quand plusieurs pages sont acceptables et qu'on veut garder une
+  **police lisible** + des rangées entières (ex. PDF de l'écran TV `AffichageBarre`).
