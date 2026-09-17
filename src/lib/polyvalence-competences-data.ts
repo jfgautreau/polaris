@@ -26,12 +26,13 @@ import { chargerValidites, actifLe } from "@/lib/referentiel-validite";
 import { isoDate, addDays } from "@/lib/week";
 import { addMonthsIso, habValable } from "@/lib/habilitations";
 import { deriverArriveeDepart, type Periode } from "@/lib/personne-statut";
+import { getNbNiveauxC } from "@/lib/refdata";
 
 export const H_DEPART = 180; // jours : horizon de vigilance sur les départs
 export const H_HAB = 90; // jours : horizon de vigilance sur les habilitations
 
 type Named = { id: string; nom: string; prenom: string; type_contrat: string; atelier_id: string | null; equipe_id: string | null };
-type LigneRow = { id: string; nom: string; atelier_id: string | null; poste: { id: string; nom: string; actif: boolean; categorie: string | null; remplacable: boolean; niveau_min_requis: number }[] };
+type LigneRow = { id: string; nom: string; atelier_id: string | null; poste: { id: string; nom: string; actif: boolean; categorie: string | null; remplacable: boolean; niveau_min_requis: number; objectif_polyvalence: number; objectif_cible: number }[] };
 type Mat = { personne_id: string; poste_id: string; niveau_actuel: number; niveau_cible: number };
 type Pcr = { poste_id: string; competence_id: string; competence: { nom: string; duree_validite_mois: number | null } | null };
 type Pc = { personne_id: string; competence_id: string; date_obtention: string | null; date_expiration: string | null };
@@ -50,9 +51,15 @@ export type PosteAnalyse = {
   categorie: string;
   remplacable: boolean;
   releve: Membre[];
-  sure: number; // relève sans risque imminent
+  sure: number; // personnes qui tiennent le poste sans risque imminent
   cible: number; // nb de personnes dont l'objectif est de tenir ce poste
   verdict: Verdict;
+  // Répartition des niveaux ACTUELS des personnes actives sur ce poste, indexée
+  // par niveau (niveaux[1] = nb au niveau 1, …). niveaux[0] non utilisé.
+  niveaux: number[];
+  besoinActuel: number; // objectif_polyvalence du poste (matrice) : nb visé aujourd'hui
+  besoinCible: number; // objectif_cible du poste (matrice) : nb visé à terme
+  raison: string; // pourquoi le poste est critique/fragile (texte prêt à afficher)
 };
 
 export type PolyService = { atelierId: string; nom: string; moyenne: number; nbPersonnes: number };
@@ -85,6 +92,7 @@ export type PolyvalenceCompetencesResult = {
   ecartTotal: number; // couples personne×poste avec niveau < cible
   nbClesPartantes: number;
   nbEcheancesCritiques: number;
+  nbNiveaux: number; // niveaux positifs activés pour le site (pour l'affichage Niv 1..N)
 };
 
 const estRetraite = (m: string | null) => !!m && /retrait/i.test(m);
@@ -101,9 +109,9 @@ export async function chargerPolyvalenceCompetences(
   const limHab = isoDate(addDays(new Date(), H_HAB));
   const in30 = isoDate(addDays(new Date(), 30));
 
-  const [{ data: persD }, { data: lignesD }, matD, { data: pcrD }, { data: compD }, { data: atD }, contratD, ligneVal, posteVal] = await Promise.all([
+  const [{ data: persD }, { data: lignesD }, matD, { data: pcrD }, { data: compD }, { data: atD }, contratD, ligneVal, posteVal, nbNiveaux] = await Promise.all([
     supabase.from("personne").select("id, nom, prenom, type_contrat, atelier_id, equipe_id").eq("statut", "ACTIF").order("nom").returns<Named[]>(),
-    supabase.from("ligne").select("id, nom, atelier_id, poste(id, nom, actif, categorie, remplacable, niveau_min_requis)").eq("actif", true).order("nom").returns<LigneRow[]>(),
+    supabase.from("ligne").select("id, nom, atelier_id, poste(id, nom, actif, categorie, remplacable, niveau_min_requis, objectif_polyvalence, objectif_cible)").eq("actif", true).order("nom").returns<LigneRow[]>(),
     fetchAll<Mat>(() => supabase.from("matrice").select("personne_id, poste_id, niveau_actuel, niveau_cible").order("id").returns<Mat[]>()),
     supabase.from("poste_competence_requise").select("poste_id, competence_id, competence:competence_id(nom, duree_validite_mois)").returns<Pcr[]>(),
     supabase.from("competence").select("id, nom, a_recycler, duree_validite_mois").eq("actif", true).returns<Comp[]>(),
@@ -111,6 +119,7 @@ export async function chargerPolyvalenceCompetences(
     fetchAll<Contrat>(() => supabase.from("contrat_periode").select("personne_id, date_debut, date_fin, motif_fin").order("id").returns<Contrat[]>()),
     chargerValidites(supabase, "ligne"),
     chargerValidites(supabase, "poste"),
+    getNbNiveauxC(),
   ]);
   // Fermeture datée (0071) : analyse « aujourd'hui » -> on écarte les lignes /
   // postes déjà fermés à ce jour.
@@ -159,7 +168,17 @@ export async function chargerPolyvalenceCompetences(
 
   // Postes du périmètre (filtre atelier via ligne.atelier_id).
   const lignes = (lignesD ?? []).filter((l) => (!atelier || l.atelier_id === atelier) && actifLe(ligneVal.get(l.id), todayIsoRef));
-  const postes = lignes.flatMap((l) => (l.poste ?? []).filter((p) => p.actif && actifLe(posteVal.get(p.id), todayIsoRef)).map((p) => ({ id: p.id, nom: p.nom, ligne: l.nom, atelierId: l.atelier_id, atelierNom: l.atelier_id ? atelierNom.get(l.atelier_id) ?? "—" : "Sans service", categorie: p.categorie ?? "operateur", remplacable: p.remplacable !== false, min: p.niveau_min_requis ?? 0 })));
+  const postes = lignes.flatMap((l) => (l.poste ?? []).filter((p) => p.actif && actifLe(posteVal.get(p.id), todayIsoRef)).map((p) => ({ id: p.id, nom: p.nom, ligne: l.nom, atelierId: l.atelier_id, atelierNom: l.atelier_id ? atelierNom.get(l.atelier_id) ?? "—" : "Sans service", categorie: p.categorie ?? "operateur", remplacable: p.remplacable !== false, min: p.niveau_min_requis ?? 0, besoinActuel: p.objectif_polyvalence ?? 0, besoinCible: p.objectif_cible ?? 0 })));
+
+  // Répartition des niveaux ACTUELS des personnes actives, par poste (niv 1..N).
+  const niveauxParPoste = new Map<string, number[]>();
+  for (const r of matD) {
+    if (!activeIds.has(r.personne_id)) continue;
+    if (r.niveau_actuel < 1 || r.niveau_actuel > nbNiveaux) continue;
+    let arr = niveauxParPoste.get(r.poste_id);
+    if (!arr) { arr = Array(nbNiveaux + 1).fill(0); niveauxParPoste.set(r.poste_id, arr); }
+    arr[r.niveau_actuel]++;
+  }
 
   // Toutes les habilitations exigées détenues et valides aujourd'hui ?
   const habOkAujourdhui = (pid: string, cid: string) => {
@@ -198,7 +217,21 @@ export async function chargerPolyvalenceCompetences(
     const sure = releve.filter((m) => !m.risque).length;
     const verdict: Verdict = releve.length === 0 || sure === 0 ? "critique" : sure === 1 ? "fragile" : "ok";
     const cible = matD.filter((r) => r.poste_id === p.id && activeIds.has(r.personne_id) && r.niveau_cible >= p.min).length;
-    return { id: p.id, nom: p.nom, ligne: p.ligne, atelierId: p.atelierId, atelierNom: p.atelierNom, categorie: p.categorie, remplacable: p.remplacable, releve, sure, cible, verdict };
+    const niveaux = niveauxParPoste.get(p.id) ?? Array(nbNiveaux + 1).fill(0);
+    // Pourquoi le poste est critique/fragile — phrase prête à afficher.
+    const aRisque = releve.filter((m) => m.risque);
+    const listeRisque = aRisque.map((m) => `${m.nom} (${m.risque})`).join(", ");
+    let raison = "";
+    if (releve.length === 0) {
+      raison = `Personne n'atteint le niveau requis (≥ ${p.min || 1}) avec les habilitations à jour aujourd'hui.`;
+    } else if (sure === 0) {
+      raison = `Les seules personnes capables de tenir le poste sont toutes à risque : ${listeRisque}.`;
+    } else if (sure === 1) {
+      const fiable = releve.find((m) => !m.risque);
+      raison = `Une seule personne fiable pour tenir le poste (${fiable?.nom ?? "?"})`;
+      raison += aRisque.length ? ` ; les autres sont à risque : ${listeRisque}.` : ", aucune autre en soutien.";
+    }
+    return { id: p.id, nom: p.nom, ligne: p.ligne, atelierId: p.atelierId, atelierNom: p.atelierNom, categorie: p.categorie, remplacable: p.remplacable, releve, sure, cible, verdict, niveaux, besoinActuel: p.besoinActuel, besoinCible: p.besoinCible, raison };
   });
   const verdictDe = new Map(analyse.map((a) => [a.id, a.verdict]));
 
@@ -322,5 +355,6 @@ export async function chargerPolyvalenceCompetences(
     ecartTotal,
     nbClesPartantes: clesARisque.length,
     nbEcheancesCritiques,
+    nbNiveaux,
   };
 }

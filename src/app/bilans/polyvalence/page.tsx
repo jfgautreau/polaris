@@ -76,10 +76,10 @@ export default async function PolyvalenceReport({ searchParams }: { searchParams
 
         <div className="kpi-grid">
           <div className="kpi accent"><div className="v">{fmtMoy(r.polyvalenceMoyenne)}</div><div className="l">Polyvalence moyenne</div><div className="s">postes tenus / personne</div></div>
-          <div className={`kpi ${r.nbSansReleveSure > 0 ? "danger" : "ok"}`}><div className="v">{r.nbSansReleveSure}</div><div className="l">Postes sans relève sûre</div><div className="s">0 relève fiable à {H_DEPART} j</div></div>
-          <div className={`kpi ${r.nbFragiles > 0 ? "warn" : "ok"}`}><div className="v">{r.nbFragiles}</div><div className="l">Postes fragiles</div><div className="s">1 seule relève sûre</div></div>
+          <div className={`kpi ${r.nbSansReleveSure > 0 ? "danger" : "ok"}`}><div className="v">{r.nbSansReleveSure}</div><div className="l">Postes sans personne fiable</div><div className="s">0 personne fiable à {H_DEPART} j</div></div>
+          <div className={`kpi ${r.nbFragiles > 0 ? "warn" : "ok"}`}><div className="v">{r.nbFragiles}</div><div className="l">Postes fragiles</div><div className="s">1 seule personne fiable</div></div>
           <div className={`kpi ${r.ecartTotal > 0 ? "warn" : "ok"}`}><div className="v">{r.ecartTotal}</div><div className="l">Écart à combler</div><div className="s">formations vers la cible</div></div>
-          <div className={`kpi ${r.nbClesPartantes > 0 ? "danger" : "ok"}`}><div className="v">{r.nbClesPartantes}</div><div className="l">Personnes clés partantes</div><div className="s">seule relève d&apos;un poste</div></div>
+          <div className={`kpi ${r.nbClesPartantes > 0 ? "danger" : "ok"}`}><div className="v">{r.nbClesPartantes}</div><div className="l">Personnes clés partantes</div><div className="s">seule à tenir un poste</div></div>
           <div className={`kpi ${r.nbEcheancesCritiques > 0 ? "danger" : r.echeances.length > 0 ? "warn" : "ok"}`}><div className="v">{r.echeances.length}</div><div className="l">Habilitations à échéance</div><div className="s">{r.nbEcheancesCritiques} critique(s) · ≤ {H_HAB} j</div></div>
         </div>
 
@@ -121,25 +121,37 @@ export default async function PolyvalenceReport({ searchParams }: { searchParams
           <h2>2 · Postes — couverture &amp; fragilité</h2>
           <div className="card" style={{ overflowX: "auto" }}>
             {r.postesCritiquesFragiles.length === 0 ? (
-              <p className="muted">Aucun poste critique ou fragile : chaque poste remplaçable a au moins 2 relèves sûres.</p>
+              <p className="muted">Aucun poste critique ou fragile : chaque poste remplaçable a au moins 2 personnes fiables pour le tenir.</p>
             ) : (
               <table>
-                <thead><tr><th>Poste</th><th>Service</th><th>Cat.</th><th style={{ textAlign: "center" }}>Relève sûre</th><th style={{ textAlign: "center" }}>Cible</th><th>Relève (risque signalé)</th><th style={{ textAlign: "right" }}>Verdict</th></tr></thead>
+                <thead>
+                  <tr>
+                    <th>Poste</th>
+                    <th>Service</th>
+                    <th>Cat.</th>
+                    {Array.from({ length: r.nbNiveaux }, (_, i) => i + 1).map((n) => (
+                      <th key={n} style={{ textAlign: "center" }}>Niv {n}</th>
+                    ))}
+                    <th style={{ textAlign: "center" }}>Besoin actuel</th>
+                    <th style={{ textAlign: "center" }}>Besoin cible</th>
+                    <th style={{ textAlign: "center" }}>Personnes fiables</th>
+                    <th>Pourquoi&nbsp;?</th>
+                    <th style={{ textAlign: "right" }}>Verdict</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {r.postesCritiquesFragiles.map((a) => (
                     <tr key={a.id}>
                       <td><strong>{a.nom}</strong><br /><span className="muted" style={{ fontSize: 11 }}>{a.ligne}</span></td>
                       <td className="muted">{a.atelierNom}</td>
                       <td>{catBadge(a.categorie)}</td>
+                      {Array.from({ length: r.nbNiveaux }, (_, i) => i + 1).map((n) => (
+                        <td key={n} style={{ textAlign: "center", color: (a.niveaux[n] ?? 0) === 0 ? "var(--muted)" : undefined }}>{a.niveaux[n] ?? 0}</td>
+                      ))}
+                      <td style={{ textAlign: "center" }} className="muted">{a.besoinActuel}</td>
+                      <td style={{ textAlign: "center" }} className="muted">{a.besoinCible}</td>
                       <td style={{ textAlign: "center", fontWeight: 700, color: a.sure === 0 ? "var(--danger)" : a.sure === 1 ? "#9a3412" : "var(--ok)" }}>{a.sure}</td>
-                      <td style={{ textAlign: "center" }} className="muted">{a.cible}</td>
-                      <td>
-                        {a.releve.length === 0 ? <span className="rbadge danger">aucune relève</span> : a.releve.map((m) => (
-                          <span key={m.id} style={{ marginRight: 8, whiteSpace: "nowrap" }}>
-                            {m.nom}{m.risque ? <span className="rbadge warn" style={{ marginLeft: 4 }}>{m.risque}</span> : null}
-                          </span>
-                        ))}
-                      </td>
+                      <td style={{ fontSize: 12, minWidth: 260 }}>{a.raison}</td>
                       <td style={{ textAlign: "right" }}>{verdictBadge(a.verdict)}</td>
                     </tr>
                   ))}
@@ -147,10 +159,11 @@ export default async function PolyvalenceReport({ searchParams }: { searchParams
               </table>
             )}
             <p className="muted" style={{ marginTop: 8, fontSize: 12 }}>
-              <strong>Relève</strong> = personnes actives au niveau min. requis <strong>et</strong> habilitées aujourd&apos;hui.
-              {" "}<strong>Relève sûre</strong> = sans risque imminent (départ ≤ {H_DEPART} j, retraite, ou habilitation exigée expirant ≤ {H_HAB} j).
-              {" "}<strong>Critique</strong> = 0 relève sûre (poste que vous allez perdre) · <strong>fragile</strong> = une seule.
-              {r.nbTenus > 0 && <> {" "}· {r.nbTenus} poste{r.nbTenus > 1 ? "s" : ""} tenu{r.nbTenus > 1 ? "s" : ""} (≥ 2 relèves sûres) non listé{r.nbTenus > 1 ? "s" : ""}.</>}
+              <strong>Niv 1…{r.nbNiveaux}</strong> = nombre de personnes formées à ce niveau sur le poste (niveau actuel).
+              {" "}<strong>Besoin actuel / cible</strong> = nombre de personnes visé, renseigné dans la matrice de polyvalence.
+              {" "}<strong>Personnes fiables</strong> = personnes qui savent tenir le poste aujourd&apos;hui (niveau requis atteint <strong>et</strong> habilitées) <strong>et</strong> sans risque imminent (départ ≤ {H_DEPART} j, retraite, ou habilitation exigée expirant ≤ {H_HAB} j).
+              {" "}<strong>Critique</strong> = 0 personne fiable (poste que vous allez perdre) · <strong>fragile</strong> = une seule.
+              {r.nbTenus > 0 && <> {" "}· {r.nbTenus} poste{r.nbTenus > 1 ? "s" : ""} tenu{r.nbTenus > 1 ? "s" : ""} (≥ 2 personnes fiables) non listé{r.nbTenus > 1 ? "s" : ""}.</>}
             </p>
           </div>
 
@@ -192,10 +205,10 @@ export default async function PolyvalenceReport({ searchParams }: { searchParams
             <div className="card">
               <h2 style={{ marginTop: 0, fontSize: 15 }}>Personnes clés sur le départ</h2>
               {r.clesARisque.length === 0 ? (
-                <p className="muted">Aucune personne « seule relève d&apos;un poste » ne quitte l&apos;effectif dans les {H_DEPART} jours.</p>
+                <p className="muted">Aucune personne « seule à pouvoir tenir un poste » ne quitte l&apos;effectif dans les {H_DEPART} jours.</p>
               ) : (
                 <table>
-                  <thead><tr><th>Personne</th><th>Départ</th><th>Seule relève de</th></tr></thead>
+                  <thead><tr><th>Personne</th><th>Départ</th><th>Seule à tenir</th></tr></thead>
                   <tbody>
                     {r.clesARisque.map((c) => (
                       <tr key={c.id}>
@@ -242,7 +255,7 @@ export default async function PolyvalenceReport({ searchParams }: { searchParams
               <p className="muted">Aucun écart individuel : tout le monde est au niveau cible.</p>
             ) : r.formations.length === 0 ? (
               <p style={{ margin: 0 }}>
-                {r.ecartTotal} formation(s) vers la cible, toutes sur des postes déjà tenus (≥ 2 relèves).{" "}
+                {r.ecartTotal} formation(s) vers la cible, toutes sur des postes déjà tenus (≥ 2 personnes fiables).{" "}
                 <Link href="/matrice" className="navlink">Détail dans la matrice &rarr;</Link>
               </p>
             ) : (
