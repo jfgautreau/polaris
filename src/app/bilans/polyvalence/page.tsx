@@ -135,7 +135,7 @@ export default async function PolyvalenceReport({ searchParams }: { searchParams
                     ))}
                     <th style={{ textAlign: "center" }}>Besoin actuel</th>
                     <th style={{ textAlign: "center" }}>Besoin cible</th>
-                    <th style={{ textAlign: "center" }}>Personnes fiables</th>
+                    <th style={{ textAlign: "center" }}>Nb compétence</th>
                     <th>Pourquoi&nbsp;?</th>
                     <th style={{ textAlign: "right" }}>Verdict</th>
                   </tr>
@@ -164,7 +164,7 @@ export default async function PolyvalenceReport({ searchParams }: { searchParams
               <strong>Niveau min</strong> = niveau exigé par le poste (référentiel).
               {" "}<strong>Niv 1…{r.nbNiveaux}</strong> = nombre de personnes formées à ce niveau sur le poste (niveau actuel).
               {" "}<strong>Besoin actuel / cible</strong> = nombre de personnes visé, renseigné dans la matrice de polyvalence.
-              {" "}<strong>Personnes fiables</strong> = personnes qui savent tenir le poste aujourd&apos;hui (niveau requis atteint <strong>et</strong> habilitées) <strong>et</strong> sans risque imminent (départ ≤ {H_DEPART} j, retraite, ou habilitation exigée expirant ≤ {H_HAB} j).
+              {" "}<strong>Nb compétence</strong> = nombre de personnes qui savent tenir le poste aujourd&apos;hui (niveau requis atteint <strong>et</strong> habilitées) <strong>et</strong> sans risque imminent (départ ≤ {H_DEPART} j, retraite, ou habilitation exigée expirant ≤ {H_HAB} j).
               {" "}<strong>Critique</strong> = 0 personne fiable (poste que vous allez perdre) · <strong>fragile</strong> = une seule.
               {r.nbTenus > 0 && <> {" "}· {r.nbTenus} poste{r.nbTenus > 1 ? "s" : ""} tenu{r.nbTenus > 1 ? "s" : ""} (≥ 2 personnes fiables) non listé{r.nbTenus > 1 ? "s" : ""}.</>}
             </p>
