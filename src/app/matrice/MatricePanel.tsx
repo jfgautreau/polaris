@@ -9,7 +9,7 @@ import Link from "next/link";
 import MatrixGrid from "./MatrixGrid";
 import LegendeModal from "./LegendeModal";
 
-type Poste = { id: string; nom: string; objectifActuel?: number; objectifCible?: number };
+type Poste = { id: string; nom: string; objectifActuel?: number; objectifCible?: number; niveauMin?: number };
 type Group = { ligneId: string; ligneNom: string; postes: Poste[] };
 type Personne = { id: string; label: string; editable: boolean; interim?: boolean; avenir?: boolean; sansCompetence?: boolean };
 type Cell = { a: number; c: number };

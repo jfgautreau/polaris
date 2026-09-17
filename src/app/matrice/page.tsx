@@ -13,6 +13,7 @@ type PosteRow = {
   objectif_polyvalence: number;
   objectif_cible: number;
   ordre_affichage: number;
+  niveau_min_requis: number;
 };
 type LigneRow = { id: string; nom: string; atelier_id: string; ordre_affichage: number; poste: PosteRow[] };
 type Atelier = { id: string; nom: string };
@@ -43,7 +44,7 @@ export default async function MatricePage({
   // Lignes (+ postes) eventuellement filtrees par atelier
   let ligneQ = supabase
     .from("ligne")
-    .select("id, nom, atelier_id, ordre_affichage, poste(id, nom, actif, objectif_polyvalence, objectif_cible, ordre_affichage)")
+    .select("id, nom, atelier_id, ordre_affichage, poste(id, nom, actif, objectif_polyvalence, objectif_cible, ordre_affichage, niveau_min_requis)")
     .eq("actif", true)
     .order("nom");
   if (sp.atelier) ligneQ = ligneQ.eq("atelier_id", sp.atelier);
@@ -108,6 +109,7 @@ export default async function MatricePage({
           nom: p.nom,
           objectifActuel: p.objectif_polyvalence ?? 0,
           objectifCible: p.objectif_cible ?? 0,
+          niveauMin: p.niveau_min_requis ?? 0,
         })),
     }))
     .filter((g) => g.postes.length > 0)

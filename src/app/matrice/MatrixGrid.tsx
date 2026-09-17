@@ -13,7 +13,7 @@ const buildCycle = (nb: number) => [...Array.from({ length: nb + 1 }, (_, i) => 
 const lvlTxt = (n: number) => (n === RESTRICT ? "Restriction ❌" : String(n));
 const norm = (s2: string) => s2.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
-type Poste = { id: string; nom: string; objectifActuel?: number; objectifCible?: number };
+type Poste = { id: string; nom: string; objectifActuel?: number; objectifCible?: number; niveauMin?: number };
 type Group = { ligneId: string; ligneNom: string; postes: Poste[] };
 type Personne = { id: string; label: string; editable: boolean; interim?: boolean; avenir?: boolean; sansCompetence?: boolean };
 type Cell = { a: number; c: number };
@@ -103,6 +103,17 @@ export default function MatrixGrid({
 
   // Une seule passe personnes x postes alimente les 9 lignes du bilan, au lieu
   // d'un balayage complet par ligne et par colonne.
+  // Seuil « compétent » PAR POSTE : le niveau attendu du poste au référentiel
+  // (`poste.niveau_min_requis`), avec repli sur le seuil global du site quand le
+  // poste n'a pas de niveau requis défini (0). Les lignes « Compétences » du
+  // bilan comptent donc, colonne par colonne, les personnes atteignant le niveau
+  // exigé par CE poste (au lieu d'un seuil unique ≥2).
+  const seuilDe = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const p of allPostes) m.set(p.id, p.niveauMin && p.niveauMin > 0 ? p.niveauMin : seuilCompetent);
+    return m;
+  }, [allPostes, seuilCompetent]);
+
   const stats = useMemo(() => {
     const m = new Map<string, Stat>();
     for (const p of allPostes) m.set(p.id, emptyStat(nbNiveaux));
@@ -110,18 +121,19 @@ export default function MatrixGrid({
     for (const pe of bilanPersonnes) {
       for (const p of allPostes) {
         const st = m.get(p.id)!;
+        const seuil = seuilDe.get(p.id) ?? seuilCompetent;
         const cell = cells[key(pe.id, p.id)];
         const a = cell?.a ?? 0;
         const c = cell?.c ?? 0;
         const affiche = useActuel ? a : c;
         if (affiche === RESTRICT) st.restrict++;
         else if (affiche >= 0 && affiche <= nbNiveaux) st.lvl[affiche]++;
-        if (a >= seuilCompetent) st.geA++;
-        if (c >= seuilCompetent) st.geC++;
+        if (a >= seuil) st.geA++;
+        if (c >= seuil) st.geC++;
       }
     }
     return m;
-  }, [allPostes, bilanPersonnes, cells, mode, nbNiveaux, seuilCompetent]);
+  }, [allPostes, bilanPersonnes, cells, mode, nbNiveaux, seuilCompetent, seuilDe]);
 
   const statOf = (poid: string): Stat => stats.get(poid) ?? EMPTY_STAT;
 
@@ -381,17 +393,18 @@ export default function MatrixGrid({
                       })}
                     </tr>
                     <tr className={s.rowCouverture}>
-                      <td className={s.bilanLabel}>Compétences {champ} (≥{seuilCompetent})</td>
+                      <td className={s.bilanLabel} title="Personnes atteignant le niveau requis de chaque poste (référentiel), avec repli sur le seuil du site si le poste n'a pas de niveau requis">Compétences {champ} (niv. requis)</td>
                       {allPostes.map((po) => {
                         const c = statOf(po.id)[field];
                         const obj = objMap[po.id] ?? 0;
+                        const seuil = seuilDe.get(po.id) ?? seuilCompetent;
                         const manque = c < obj; // sous l'objectif -> rouge sur fond rouge
                         return (
                           <td
                             key={po.id}
                             className={s.bilanTd}
                             data-manque={manque ? "1" : "0"}
-                            title={`${c} / objectif ${obj}${manque ? ` — manque ${obj - c}` : ""}`}
+                            title={`Niveau requis ≥ ${seuil} — ${c} personne(s) / objectif ${obj}${manque ? ` — manque ${obj - c}` : ""}`}
                           >
                             {c}
                           </td>
