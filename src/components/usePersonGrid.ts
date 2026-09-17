@@ -43,6 +43,8 @@ export function usePersonGrid(colHoverClass: string, colHeadRow: number, virt?: 
   const rowsTableRef = useRef<HTMLTableElement>(null);
   const rowsCardRef = useRef<HTMLDivElement>(null);
   const hoverCol = useRef(-1);
+  // Frame programmee pour un recompute differé (voir scheduleRecompute).
+  const rafId = useRef<number | null>(null);
 
   const rowCount = virt?.rowCount ?? 0;
   const rowH = virt?.rowHeight ?? 32;
@@ -73,6 +75,25 @@ export function usePersonGrid(colHoverClass: string, colHeadRow: number, virt?: 
     setRange((prev) => (prev.start === start && prev.end === end ? prev : { start, end }));
   }, [virt, rowH, overscan, rowCount]);
 
+  // ⚠️ Recompute TOUJOURS différé au prochain frame, au plus une fois (rAF
+  // débounce). Indispensable : le scroll et le ResizeObserver peuvent former une
+  // boucle de rétroaction — recompute → setRange → re-rendu → la hauteur réelle
+  // d'une ligne (32,8 px) diffère du `rowH` supposé (32), donc `scrollHeight`
+  // change → quand on est défilé tout en bas le navigateur re-CLAMPE `scrollTop`
+  // → événement `scroll` → recompute… En synchrone, React voyait des dizaines de
+  // setState imbriqués et jetait l'erreur #185 « Maximum update depth exceeded »,
+  // ce qui TUAIT l'onglet (« This page couldn't load ») au redimensionnement,
+  // bilan ouvert et grille défilée en bas (vécu sur la Matrice, 2026-09-17). Le
+  // rAF sépare chaque passe dans son propre tick : plus de cascade synchrone,
+  // donc plus de #185 ; la garde `prev===end` fait converger le reste.
+  const scheduleRecompute = useCallback(() => {
+    if (rafId.current != null) return;
+    rafId.current = requestAnimationFrame(() => {
+      rafId.current = null;
+      recompute();
+    });
+  }, [recompute]);
+
   // Mesure au montage puis a chaque changement de rowCount (filtre de recherche).
   useLayoutEffect(() => {
     recompute();
@@ -82,10 +103,16 @@ export function usePersonGrid(colHoverClass: string, colHeadRow: number, virt?: 
   useEffect(() => {
     const el = rowsCardRef.current;
     if (!el || !virt) return;
-    const ro = new ResizeObserver(() => recompute());
+    const ro = new ResizeObserver(() => scheduleRecompute());
     ro.observe(el);
-    return () => ro.disconnect();
-  }, [recompute, virt]);
+    return () => {
+      ro.disconnect();
+      if (rafId.current != null) {
+        cancelAnimationFrame(rafId.current);
+        rafId.current = null;
+      }
+    };
+  }, [scheduleRecompute, virt]);
 
   function paintCol(index: number, on: boolean) {
     for (const t of [headTableRef.current, rowsTableRef.current]) {
@@ -108,7 +135,9 @@ export function usePersonGrid(colHoverClass: string, colHeadRow: number, virt?: 
   function syncScroll(e: React.UIEvent<HTMLDivElement>) {
     const head = headCardRef.current;
     if (head) head.scrollLeft = e.currentTarget.scrollLeft;
-    if (virt) recompute();
+    // rAF débounce (cf. scheduleRecompute) : un re-render peut re-clamper
+    // scrollTop et ré-émettre `scroll` ; en synchrone c'était la boucle #185.
+    if (virt) scheduleRecompute();
   }
 
   // A etaler sur le conteneur scrollable de la liste.
