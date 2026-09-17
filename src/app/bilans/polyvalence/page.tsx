@@ -129,6 +129,7 @@ export default async function PolyvalenceReport({ searchParams }: { searchParams
                     <th>Poste</th>
                     <th>Service</th>
                     <th>Cat.</th>
+                    <th style={{ textAlign: "center" }}>Niveau min</th>
                     {Array.from({ length: r.nbNiveaux }, (_, i) => i + 1).map((n) => (
                       <th key={n} style={{ textAlign: "center" }}>Niv {n}</th>
                     ))}
@@ -145,6 +146,7 @@ export default async function PolyvalenceReport({ searchParams }: { searchParams
                       <td><strong>{a.nom}</strong><br /><span className="muted" style={{ fontSize: 11 }}>{a.ligne}</span></td>
                       <td className="muted">{a.atelierNom}</td>
                       <td>{catBadge(a.categorie)}</td>
+                      <td style={{ textAlign: "center", fontWeight: 600 }}>{a.min}</td>
                       {Array.from({ length: r.nbNiveaux }, (_, i) => i + 1).map((n) => (
                         <td key={n} style={{ textAlign: "center", color: (a.niveaux[n] ?? 0) === 0 ? "var(--muted)" : undefined }}>{a.niveaux[n] ?? 0}</td>
                       ))}
@@ -159,7 +161,8 @@ export default async function PolyvalenceReport({ searchParams }: { searchParams
               </table>
             )}
             <p className="muted" style={{ marginTop: 8, fontSize: 12 }}>
-              <strong>Niv 1…{r.nbNiveaux}</strong> = nombre de personnes formées à ce niveau sur le poste (niveau actuel).
+              <strong>Niveau min</strong> = niveau exigé par le poste (référentiel).
+              {" "}<strong>Niv 1…{r.nbNiveaux}</strong> = nombre de personnes formées à ce niveau sur le poste (niveau actuel).
               {" "}<strong>Besoin actuel / cible</strong> = nombre de personnes visé, renseigné dans la matrice de polyvalence.
               {" "}<strong>Personnes fiables</strong> = personnes qui savent tenir le poste aujourd&apos;hui (niveau requis atteint <strong>et</strong> habilitées) <strong>et</strong> sans risque imminent (départ ≤ {H_DEPART} j, retraite, ou habilitation exigée expirant ≤ {H_HAB} j).
               {" "}<strong>Critique</strong> = 0 personne fiable (poste que vous allez perdre) · <strong>fragile</strong> = une seule.

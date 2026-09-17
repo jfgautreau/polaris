@@ -50,6 +50,7 @@ export type PosteAnalyse = {
   atelierNom: string;
   categorie: string;
   remplacable: boolean;
+  min: number; // niveau minimum requis du poste (référentiel, poste.niveau_min_requis)
   releve: Membre[];
   sure: number; // personnes qui tiennent le poste sans risque imminent
   cible: number; // nb de personnes dont l'objectif est de tenir ce poste
@@ -231,7 +232,7 @@ export async function chargerPolyvalenceCompetences(
       raison = `Une seule personne fiable pour tenir le poste (${fiable?.nom ?? "?"})`;
       raison += aRisque.length ? ` ; les autres sont à risque : ${listeRisque}.` : ", aucune autre en soutien.";
     }
-    return { id: p.id, nom: p.nom, ligne: p.ligne, atelierId: p.atelierId, atelierNom: p.atelierNom, categorie: p.categorie, remplacable: p.remplacable, releve, sure, cible, verdict, niveaux, besoinActuel: p.besoinActuel, besoinCible: p.besoinCible, raison };
+    return { id: p.id, nom: p.nom, ligne: p.ligne, atelierId: p.atelierId, atelierNom: p.atelierNom, categorie: p.categorie, remplacable: p.remplacable, min: p.min, releve, sure, cible, verdict, niveaux, besoinActuel: p.besoinActuel, besoinCible: p.besoinCible, raison };
   });
   const verdictDe = new Map(analyse.map((a) => [a.id, a.verdict]));
 
