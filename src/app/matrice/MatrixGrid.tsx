@@ -52,6 +52,13 @@ export default function MatrixGrid({
   const niveaux = useMemo(() => Array.from({ length: nbNiveaux }, (_, i) => i + 1), [nbNiveaux]);
   const [cells, setCells] = useState<Record<string, Cell>>(initial);
   const [showBilan, setShowBilan] = useState(false);
+  // Cellule d'objectif en cours d'edition (`${champ}:${posteId}`). Un seul
+  // `<input>` est monte a la fois : sinon le bilan pose un champ de saisie natif
+  // par poste, et le repeint de toute cette rangee (en-tete jamais virtualise)
+  // sature le moteur de rendu de l'onglet au redimensionnement (crash « This
+  // page couldn't load », vecu sur un service a nombreux postes). Ailleurs, un
+  // simple nombre cliquable — leger a peindre.
+  const [editObj, setEditObj] = useState<string | null>(null);
   const [objActuel, setObjActuel] = useState<Record<string, number>>(() => {
     const o: Record<string, number> = {};
     for (const gr of groups) for (const p of gr.postes) o[p.id] = p.objectifActuel ?? 0;
@@ -330,28 +337,48 @@ export default function MatrixGrid({
                   <Fragment key={champ}>
                     <tr className={`${s.rowObjectif} ${cls}`}>
                       <td className={s.bilanLabel}>Objectif {champ}</td>
-                      {allPostes.map((po) => (
-                        <td key={po.id} className={s.bilanTd}>
-                          {canEditObjectif ? (
-                            <input
-                              type="number"
-                              min={0}
-                              value={objMap[po.id] ?? 0}
-                              onChange={(e) => saveObjectif(po.id, champ, Math.max(0, Number(e.target.value) || 0))}
-                              // La case contient toujours un nombre (0 par defaut) : au clic,
-                              // on le selectionne pour que la frappe le REMPLACE. Sinon le
-                              // curseur se pose a cote et l'on saisit « 03 » au lieu de « 3 ».
-                              onFocus={(e) => e.currentTarget.select()}
-                              // `onFocus` ne suffit pas : un clic dans un champ deja actif
-                              // ne refocalise pas, et un clic pose un curseur apres le focus.
-                              onClick={(e) => e.currentTarget.select()}
-                              className={s.objInput}
-                            />
-                          ) : (
-                            objMap[po.id] ?? 0
-                          )}
-                        </td>
-                      ))}
+                      {allPostes.map((po) => {
+                        const val = objMap[po.id] ?? 0;
+                        const cellKey = `${champ}:${po.id}`;
+                        // Champ de saisie monte UNIQUEMENT sur la cellule editee.
+                        if (canEditObjectif && editObj === cellKey) {
+                          return (
+                            <td key={po.id} className={s.bilanTd}>
+                              <input
+                                type="number"
+                                min={0}
+                                value={val}
+                                autoFocus
+                                onChange={(e) => saveObjectif(po.id, champ, Math.max(0, Number(e.target.value) || 0))}
+                                // La case contient toujours un nombre (0 par defaut) : au focus,
+                                // on le selectionne pour que la frappe le REMPLACE.
+                                onFocus={(e) => e.currentTarget.select()}
+                                onBlur={() => setEditObj(null)}
+                                className={s.objInput}
+                              />
+                            </td>
+                          );
+                        }
+                        return (
+                          <td key={po.id} className={s.bilanTd}>
+                            {canEditObjectif ? (
+                              // Vue legere : au clic/focus, la cellule passe en edition.
+                              <span
+                                tabIndex={0}
+                                role="button"
+                                className={s.objView}
+                                title="Cliquer pour modifier l'objectif"
+                                onClick={() => setEditObj(cellKey)}
+                                onFocus={() => setEditObj(cellKey)}
+                              >
+                                {val}
+                              </span>
+                            ) : (
+                              val
+                            )}
+                          </td>
+                        );
+                      })}
                     </tr>
                     <tr className={s.rowCouverture}>
                       <td className={s.bilanLabel}>Compétences {champ} (≥{seuilCompetent})</td>

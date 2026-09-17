@@ -102,6 +102,22 @@
   text-align: center;
   padding: 2px;
 }
+/* Vue legere de l'objectif (hors edition) : aucun controle de formulaire natif,
+   simple nombre cliquable. Retire des centaines d'`<input>` de l'en-tete du
+   bilan, dont le repeint saturait le moteur de rendu au redimensionnement. */
+.objView {
+  display: inline-block;
+  min-width: 30px;
+  padding: 2px;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.objView:hover,
+.objView:focus {
+  outline: none;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px var(--border);
+}
 
 .rowCouverture {
   background: #f8fafc;
