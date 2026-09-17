@@ -47,12 +47,18 @@ menu suit l'écriture, pas la lecture.
   **[-90 ; +150] jours** autour du jour affiché, bornée **quart + atelier** (mêmes règles
   que `ligneOuverte` : `jour_quart.actif` + `ouverture_quart`, défaut ouvert), à laquelle
   la navigation du calendrier est bornée.
-- **Bouton PDF** : A4 paysage, mise à l'échelle **mesurée** (cf. `lessons.md` L16). La
-  colonne de droite « **Absents / TP du jour** » liste les motifs d'absence **et** un bloc
-  « **Temps partiel** » (personnes indisponibles ce jour au sens TP, non déjà placées ni
-  absentes). Le TP du jour est calculé **serveur** (`page.tsx`, `tpIds`) avec les **mêmes
-  règles que le Planning / la TV** (journée off, ou équipe sur le créneau non travaillé via
-  la rotation datée + `quart.creneau`).
+- **Deux boutons PDF**, mise à l'échelle **mesurée** (cf. `lessons.md` L16, L42) :
+  - **PDF CE** (`mode="ce"`, **A4 paysage**) = plan + colonne de droite « **Absents / TP du
+    jour** » (motifs d'absence **et** bloc « **Temps partiel** » — personnes indisponibles ce
+    jour au sens TP, non déjà placées ni absentes ; TP calculé **serveur** `page.tsx`/`tpIds`,
+    mêmes règles que Planning / TV).
+  - **PDF** (`mode="simple"`, **A3 paysage**, plan seul) — A3 via `print-a3` posé sur `<body>`
+    (page nommée `plcA3`, globals.css).
+  - Sur les deux : **numéros de rotation imprimés même vides** (« n° · libre ») et
+    **commentaire du jour** (`horaire_exception.motif`) à côté du nom. Le plan imprimé exclut
+    les postes `imprimable = false` (`groupsImpr`).
+- **Écran** : les rangs d'un poste (numéros + occupants) se répartissent en **2-3 colonnes**
+  (10 lignes max par colonne, variable CSS `--cols`) — chaque occupant est une rangée.
 
 ## Temps partiel (`personne.tp_config`, jsonb, options cumulables)
 Modale `TempsPartielModal`, API `/api/personnel` op `tp`. Périodes datées dans

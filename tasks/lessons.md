@@ -713,3 +713,26 @@ page), `section { break-inside: auto }` (une section peut se scinder).
   Placement A4, une page A3 par service dans `/affichage/impression`).
 - **L43 (flux multi-pages)** quand plusieurs pages sont acceptables et qu'on veut garder une
   **police lisible** + des rangées entières (ex. PDF de l'écran TV `AffichageBarre`).
+
+## L44 — Une fonctionnalité « invisible » : compter la mauvaise unité
+
+**Symptôme (2026-09-16)** : demande « afficher les noms sur 2-3 colonnes, 10 lignes max par
+poste » au Placement. Première version livrée, `npm run build`/tests OK, déployée — et
+l'utilisateur : « je ne vois pas l'affichage avec 10 lignes max ». Aucune erreur, aucun crash.
+
+**Racine** : le nombre de colonnes se calculait sur `numerosDe(po).length` (les **numéros de
+rotation**), pas sur les **occupants**. Or beaucoup de postes ont peu/pas de numéros : leurs
+personnes s'affichaient en pastilles qui s'enroulent dans **une seule case**, jamais comptées
+comme « lignes ». Le seuil (>10) n'était donc jamais franchi → toujours une colonne. Le
+libellé « les **noms** » désignait pourtant les occupants, pas les numéros.
+
+**Fix** : chaque occupant (même sans numéro) devient une **rangée** à part entière, et le
+nombre de colonnes dérive du **total des rangées** (numéros + occupants), 10 max par colonne
+(plafond 3). `nCols = min(3, ceil(nbRangs / 10))`, posé en `--cols` sur `.poste` ; CSS
+`columns: var(--cols)`.
+
+**Règle** : quand une mise en page « par lignes » ne se déclenche pas, vérifier que le
+**compteur qui pilote le seuil compte bien l'unité visible par l'utilisateur** (ici : les
+noms), pas une unité voisine (les numéros de rotation). Un build vert ne prouve pas que la
+condition d'affichage se déclenche jamais — se méfier des features dont le déclencheur est un
+seuil : les tester sur une donnée qui **dépasse** le seuil, pas seulement à la compilation.

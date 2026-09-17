@@ -4,10 +4,9 @@
 > Historique détaillé : `git log`.
 
 ## Revue — Poste imprimable + colonnes de noms Placement (2026-09-16)
-- [ ] **⚠ Migration `0073_poste_imprimable.sql` à exécuter** dans le SQL Editor Supabase
-      (`alter table poste add column imprimable boolean not null default true`). Le code
-      tolère son absence (repli sur `imprimable = true`, lectures Référentiel/Placement et
-      `update-poste` résilients aux codes 42703/PGRST204).
+- [x] **Migration `0073_poste_imprimable.sql` appliquée** (2026-09-17) dans le SQL Editor
+      Supabase (`poste.imprimable boolean not null default true`). Le code reste tolérant à
+      son absence (repli `imprimable = true`, codes 42703/PGRST204) pour les autres sites.
 - [x] **Référentiel — colonne « Impr. »** (Oui/Non) par poste : choisit s'il figure sur les
       **feuilles de placement imprimées** (PDF / PDF CE). « Non » masque à l'impression les
       postes qui ne servent qu'à **construire le planning** ; ils restent utilisables à
