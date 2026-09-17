@@ -53,6 +53,15 @@ export function usePersonGrid(colHoverClass: string, colHeadRow: number, virt?: 
   // (le flash « lignes qui se chargent »), le surcout de ~16 lignes restant
   // negligeable face aux milliers de la grille complete.
   const overscan = virt?.overscan ?? 16;
+  // ⚠️ Drapeau PRIMITIF « virtualisation active ». L'appelant passe `virt` en
+  // OBJET LITTÉRAL recréé à chaque rendu (`{ rowCount: shown.length }`) : le
+  // mettre dans les deps de `recompute` recréait `recompute` À CHAQUE rendu,
+  // donc le `useLayoutEffect` ci-dessous s'exécutait à chaque rendu et rappelait
+  // `recompute()` EN SYNCHRONE. Couplé à l'oscillation du clamp de scrollTop
+  // (hauteur de ligne réelle 32,8 ≠ rowH 32), cela enchaînait des setState
+  // imbriqués → React #185 « Maximum update depth exceeded » → onglet tué. On ne
+  // dépend donc que de valeurs PRIMITIVES (enabled/rowH/overscan/rowCount).
+  const enabled = virt != null;
 
   // Fenetre visible [start, end[. Etat initial deterministe (identique serveur
   // et client -> pas de desynchro d'hydratation) : les INITIAL_ROWS premieres.
@@ -64,7 +73,7 @@ export function usePersonGrid(colHoverClass: string, colHeadRow: number, virt?: 
   // Recalcule la fenetre depuis la position et la hauteur du conteneur defilant.
   const recompute = useCallback(() => {
     const el = rowsCardRef.current;
-    if (!el || !virt) return;
+    if (!el || !enabled) return;
     const viewH = el.clientHeight || 1;
     const visible = Math.ceil(viewH / rowH);
     let start = Math.floor(el.scrollTop / rowH) - overscan;
@@ -73,7 +82,7 @@ export function usePersonGrid(colHoverClass: string, colHeadRow: number, virt?: 
     start = Math.max(0, Math.min(start, Math.max(0, rowCount - visible)));
     const end = Math.min(rowCount, start + visible + overscan * 2);
     setRange((prev) => (prev.start === start && prev.end === end ? prev : { start, end }));
-  }, [virt, rowH, overscan, rowCount]);
+  }, [enabled, rowH, overscan, rowCount]);
 
   // ⚠️ Recompute TOUJOURS différé au prochain frame, au plus une fois (rAF
   // débounce). Indispensable : le scroll et le ResizeObserver peuvent former une
@@ -102,7 +111,7 @@ export function usePersonGrid(colHoverClass: string, colHeadRow: number, virt?: 
   // Reagit au redimensionnement de la fenetre / du conteneur.
   useEffect(() => {
     const el = rowsCardRef.current;
-    if (!el || !virt) return;
+    if (!el || !enabled) return;
     const ro = new ResizeObserver(() => scheduleRecompute());
     ro.observe(el);
     return () => {
@@ -112,7 +121,7 @@ export function usePersonGrid(colHoverClass: string, colHeadRow: number, virt?: 
         rafId.current = null;
       }
     };
-  }, [scheduleRecompute, virt]);
+  }, [scheduleRecompute, enabled]);
 
   function paintCol(index: number, on: boolean) {
     for (const t of [headTableRef.current, rowsTableRef.current]) {
@@ -137,7 +146,7 @@ export function usePersonGrid(colHoverClass: string, colHeadRow: number, virt?: 
     if (head) head.scrollLeft = e.currentTarget.scrollLeft;
     // rAF débounce (cf. scheduleRecompute) : un re-render peut re-clamper
     // scrollTop et ré-émettre `scroll` ; en synchrone c'était la boucle #185.
-    if (virt) scheduleRecompute();
+    if (enabled) scheduleRecompute();
   }
 
   // A etaler sur le conteneur scrollable de la liste.
