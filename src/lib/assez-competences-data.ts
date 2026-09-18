@@ -4,7 +4,7 @@
 // de personnes présentes et compétentes pour tenir les postes requis ? Une
 // personne polyvalente ne tient qu'UN poste à la fois — jamais comptée deux fois.
 //
-// FRÈRE de la Projection de capacité (`projection-capacite-data.ts`). Le cœur de
+// Le cœur de
 // calcul est partagé : `buildJourFlow` (affectation optimale par flot maximum, une
 // personne = une place), et l'affectation est GLOBALE au site chaque jour (un seul
 // graphe pour tous les services + tous les créneaux). Le filtre de service ne fait
