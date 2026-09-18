@@ -170,13 +170,13 @@ export default async function PolyvalenceReport({ searchParams }: { searchParams
             </p>
           </div>
 
-          {r.ptnr.length > 0 && (
+          {r.ptnr.filter((a) => a.vacant || a.aRisque).length > 0 && (
             <div className="card" style={{ overflowX: "auto", marginTop: 14 }}>
               <h2 style={{ marginTop: 0, fontSize: 15 }}>Postes à titulaire unique (PTNR) <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>· un seul titulaire par conception</span></h2>
               <table>
                 <thead><tr><th>Poste</th><th>Service</th><th>Titulaire(s)</th><th style={{ textAlign: "right" }}>État</th></tr></thead>
                 <tbody>
-                  {r.ptnr.map((a) => (
+                  {r.ptnr.filter((a) => a.vacant || a.aRisque).map((a) => (
                     <tr key={a.id}>
                       <td><strong>{a.nom}</strong><br /><span className="muted" style={{ fontSize: 11 }}>{a.ligne}</span></td>
                       <td className="muted">{a.atelierNom}</td>
