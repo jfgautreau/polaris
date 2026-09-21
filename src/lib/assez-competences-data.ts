@@ -14,11 +14,12 @@
 //   • Par défaut (semaine non initialisée), source RÉFÉRENTIEL : chaque quart POSTÉ
 //     où le poste est ACTIVÉ (`poste_quart`, défaut actif) compte pour son
 //     `effectif_requis`. Un poste matin ET après-midi pèse donc 3 + 3 = 6.
-//   • ⚠️ « Journée » (régulière) ≠ matin + après-midi. C'est l'AGRÉGAT pleine-journée
-//     (activation = OU des quarts tournants), jamais un créneau qui s'ajoute. Un poste
-//     en matin/après-midi ne compte donc PAS la journée, même si la case reste cochée
-//     au référentiel. La journée n'est comptée que pour un poste en régulière (journée
-//     comme seul quart). Cf. `quartsEffectifs`.
+//   • ⚠️ « Journée » (pleine journée) = un quart POSTÉ comme un autre, ADDITIF : si un
+//     poste porte un effectif en journée ET en matin/après-midi, ce sont des PERSONNES
+//     DISTINCTES (ex. chef d'équipe : 3 matin + 3 après-midi + 1 journée = besoin 7),
+//     donc on les SOMME (décision 2026-09-21, cohérente avec la feuille de route). Un
+//     poste n'a un besoin de journée QUE si `poste_quart` l'active sur ce quart ;
+//     l'ancienne règle « journée = agrégat » l'excluait et SOUS-comptait le besoin réel.
 //   • Quand l'ORDONNANCEMENT a initialisé le jour, on prend ses données (plus fines :
 //     quarts réellement actifs `jour_quart` et lignes ouvertes `ouverture_quart`).
 //   • PTNR (`remplacable = false`) exclus, comme au Cockpit et à Polyvalence.
@@ -183,17 +184,12 @@ export async function chargerCouvertureConges(
   const quarts = (quartsD ?? []).map((q) => q.code); // triés par ordre
   const labelDe = new Map((quartsD ?? []).map((q) => [q.code, labelQuart(q.code, q.creneau)]));
 
-  // « Journée » (pleine journée / régulière) = quart sans créneau au plus petit
-  // ordre — MÊME détection que l'ordonnancement (reset-week). C'est l'AGRÉGAT de
-  // la journée (activation = OU des quarts tournants), pas un créneau qui s'ajoute
-  // à matin/après-midi. Règle de besoin : on compte les quarts POSTÉS du poste ;
-  // la journée ne compte QUE si c'est le seul quart du poste (poste en régulière),
-  // sinon elle doublonnerait matin + après-midi + nuit.
-  const journeeCode = [...(quartsD ?? [])].filter((q) => !q.creneau).sort((a, b) => a.ordre - b.ordre)[0]?.code ?? null;
-  const quartsEffectifs = (ouverts: string[]): string[] => {
-    const postes = journeeCode ? ouverts.filter((c) => c !== journeeCode) : ouverts;
-    return postes.length > 0 ? postes : ouverts; // journée seule = régulière
-  };
+  // Besoin ADDITIF (décision 2026-09-21) : chaque quart posté sur lequel le poste
+  // tourne (`poste_quart`, cf. etatQuart) compte pour son effectif, journée COMPRISE.
+  // Un effectif en journée + en matin/après-midi = des personnes distinctes (cf.
+  // en-tête). L'ancienne règle excluait la journée (agrégat) et sous-comptait le
+  // besoin. Le gate `poste_quart` par quart empêche tout besoin de journée fantôme
+  // sur un poste posté (journée y est « – ») : rien n'est doublonné.
 
   // Postes du besoin : actifs, remplaçables (PTNR exclus), et qui tournent avec un
   // effectif > 0 sur AU MOINS UN quart (effectif par quart, cf. src/lib/poste-quart.ts).
@@ -241,7 +237,7 @@ export async function chargerCouvertureConges(
           : true; // référentiel : chaque quart posté du poste compte
         if (ouvert) ouverts.push(q);
       }
-      for (const q of quartsEffectifs(ouverts)) out.push({ cle: `${p.id}:${q}`, posteId: p.id, quart: q, effectifRequis: etatQuart(pq, p.id, q, p.posteEff).effectif });
+      for (const q of ouverts) out.push({ cle: `${p.id}:${q}`, posteId: p.id, quart: q, effectifRequis: etatQuart(pq, p.id, q, p.posteEff).effectif });
     }
     return out;
   };
@@ -401,7 +397,7 @@ export async function chargerCouvertureConges(
 
   // Résumé de besoin (référentiel) par poste, pour la colonne « Besoin ».
   const resumeDe = (p: PosteBesoin): { label: string; besoin: number }[] =>
-    quartsEffectifs(quarts.filter((q) => { const e = etatQuart(pq, p.id, q, p.posteEff); return e.tourne && e.effectif > 0; }))
+    quarts.filter((q) => { const e = etatQuart(pq, p.id, q, p.posteEff); return e.tourne && e.effectif > 0; })
       .map((q) => ({ label: labelDe.get(q) ?? q, besoin: etatQuart(pq, p.id, q, p.posteEff).effectif }));
 
   const services: ServiceCouverture[] = servicesIds

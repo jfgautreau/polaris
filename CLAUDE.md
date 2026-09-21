@@ -956,11 +956,15 @@ prochain gros chantier, pas une optimisation cosmétique.
     optimale globale** chaque jour (`buildJourFlow`, une personne = une place, jamais
     comptée deux fois — moteur partagé avec la Projection). **Besoin par (poste × quart
     posté)** : source **référentiel** (`poste_quart`, défaut actif) par défaut, données
-    **ordonnancement** quand le jour est initialisé (`jour_quart`/`ouverture_quart`). ⚠️ La
-    **« journée »** (régulière) = agrégat pleine-journée (quart sans créneau au plus petit
-    ordre, comme reset-week) : **jamais ajoutée** à matin/après-midi ; comptée seulement si
-    c'est le **seul** quart du poste (`quartsEffectifs`). PTNR exclus. Présence = hors congé,
-    hors TP indisponible (rotation datée), dans l'effectif (contrats).
+    **ordonnancement** quand le jour est initialisé (`jour_quart`/`ouverture_quart`). ⚠️ Besoin
+    **ADDITIF** (2026-09-21, aligné sur la feuille de route) : chaque quart posté où le poste
+    tourne compte pour son effectif, **journée COMPRISE**. Un effectif en journée + en
+    matin/après-midi = des **personnes distinctes** (ex. chef d'équipe : 3 matin + 3 après-midi
+    + 1 journée = besoin **7**), donc on les **somme**. Le gate `poste_quart` par quart empêche
+    tout besoin de journée fantôme sur un poste posté (journée y est « – »). L'ancienne règle
+    « journée = agrégat jamais ajoutée » (`quartsEffectifs`, supprimée) sous-comptait le besoin.
+    PTNR exclus. Présence = hors congé, hors TP indisponible (rotation datée), dans l'effectif
+    (contrats).
   - ⚠️ **PTR/PTNR dans les rapports** (`poste.remplacable`, migration 0059) : « nettoyer +
     isoler ». Cockpit, **Polyvalence & compétences** et **Assez de compétences ?**
     **excluent** les PTNR des « postes fragiles / sans relève / écart-cible / besoin »
