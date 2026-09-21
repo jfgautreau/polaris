@@ -31,7 +31,6 @@ export type Semaine = { lundi: string; num: number; annee: number };
 export type Personne = {
   id: string;
   atelier_id: string | null;
-  equipe_id: string | null;
   // Affectation à un regroupement de lignes (migration 0069). Optionnel :
   // absent = comportement d'avant (aucun sous-total). Sert à ventiler
   // l'effectif du service par regroupement, sans double compte.
@@ -219,7 +218,6 @@ export type Params = {
   competencesPersonne: Map<string, Map<string, string | null>>;
   ateliers: Atelier[];
   ateliersFiltre?: string[] | null;
-  equipesFiltre?: string[] | null;
   semaines: Semaine[];
   nbNiveaux: number;
   habilitationStricte: boolean;
@@ -255,13 +253,12 @@ export function calculerGrille(p: Params): Grille {
   const {
     personnes, postes, matrice, contratsParPersonne, absencesParPersonne,
     posteCompRequise, competencesPersonne, ateliers,
-    ateliersFiltre, equipesFiltre, semaines, nbNiveaux,
+    ateliersFiltre, semaines, nbNiveaux,
     habilitationStricte,
   } = p;
 
   const posteById = new Map(postes.map((po) => [po.id, po]));
   const ateliersRetenus = ateliersFiltre && ateliersFiltre.length > 0 ? new Set(ateliersFiltre) : null;
-  const equipesRetenues = equipesFiltre && equipesFiltre.length > 0 ? new Set(equipesFiltre) : null;
 
   // Index matrice → parPersonne : [(posteId, niveau, cat)] pour les niveaux
   // positifs sur postes actifs de catégorie reconnue.
@@ -277,10 +274,9 @@ export function calculerGrille(p: Params): Grille {
     arr.push({ posteId: m.poste_id, niveau: m.niveau_actuel, cat: po.categorie });
   }
 
-  // Personnes retenues par filtre atelier d'affectation + équipe.
+  // Personnes retenues par filtre atelier d'affectation.
   const persRetenues = personnes.filter((pe) => {
     if (ateliersRetenus && !ateliersRetenus.has(pe.atelier_id ?? "")) return false;
-    if (equipesRetenues && !equipesRetenues.has(pe.equipe_id ?? "")) return false;
     return true;
   });
 

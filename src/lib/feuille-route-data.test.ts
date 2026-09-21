@@ -148,9 +148,9 @@ describe("maxParCategorieAuJour", () => {
 describe("calculerGrille — intégration", () => {
   const base: Params = {
     personnes: [
-      { id: "p1", atelier_id: "at-condi", equipe_id: "eq-a" },
-      { id: "p2", atelier_id: "at-condi", equipe_id: "eq-b" },
-      { id: "p3", atelier_id: "at-fab", equipe_id: "eq-a" },
+      { id: "p1", atelier_id: "at-condi" },
+      { id: "p2", atelier_id: "at-condi" },
+      { id: "p3", atelier_id: "at-fab" },
     ],
     postes: [
       // Postes Condi. Besoin = effectif_requis × nbQuartsPostes :
@@ -206,15 +206,6 @@ describe("calculerGrille — intégration", () => {
     expect(cond.niveaux[3].parSemaine[0]).toBe(1); // niv.4
   });
 
-  it("filtre équipe restreint la population", () => {
-    const g = calculerGrille({ ...base, equipesFiltre: ["eq-a"] });
-    const condi = g.services.find((s) => s.atelierId === "at-condi")!;
-    const ope = condi.blocs.find((b) => b.cat === "operateur")!;
-    // p2 est en eq-b → filtrée, donc opérateur niv.1 = 0
-    expect(ope.niveaux[0].parSemaine[0]).toBe(0);
-  });
-
-
   it("besoin = effectif_requis × nbQuartsPostes, ventilé par atelier des postes", () => {
     const g = calculerGrille(base);
     const condi = g.services.find((s) => s.atelierId === "at-condi")!;
@@ -264,9 +255,9 @@ describe("calculerGrille — intégration", () => {
 describe("calculerGrille — sous-totaux par regroupement (0069)", () => {
   const base: Params = {
     personnes: [
-      { id: "p1", atelier_id: "at-condi", equipe_id: "eq-a", regroupement: "Façonnage" },
-      { id: "p2", atelier_id: "at-condi", equipe_id: "eq-a", regroupement: "Cuisson" },
-      { id: "p3", atelier_id: "at-condi", equipe_id: "eq-a", regroupement: null }, // sans regroupement
+      { id: "p1", atelier_id: "at-condi", regroupement: "Façonnage" },
+      { id: "p2", atelier_id: "at-condi", regroupement: "Cuisson" },
+      { id: "p3", atelier_id: "at-condi", regroupement: null }, // sans regroupement
     ],
     postes: [
       // Deux lignes taguées + une non taguée, toutes conducteur.
@@ -320,7 +311,7 @@ describe("calculerGrille — sous-totaux par regroupement (0069)", () => {
   it("regroupement porté par une personne mais aucune ligne : bucket besoin 0 présent", () => {
     const perso = [
       ...base.personnes.slice(0, 2),
-      { id: "p3", atelier_id: "at-condi", equipe_id: "eq-a", regroupement: "Emballage" },
+      { id: "p3", atelier_id: "at-condi", regroupement: "Emballage" },
     ];
     const g = calculerGrille({ ...base, personnes: perso });
     const cond = g.services[0].blocs.find((b) => b.cat === "conducteur")!;

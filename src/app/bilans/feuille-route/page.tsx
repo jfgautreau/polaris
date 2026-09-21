@@ -4,7 +4,7 @@ import { getServerClient } from "@/lib/supabase-server";
 import AppHeader from "@/components/AppHeader";
 import PageTitle from "@/components/PageTitle";
 import ReportAtelierFilter from "@/app/bilans/ReportAtelierFilter";
-import ReportEquipeFilter from "@/app/bilans/ReportEquipeFilter";
+import ReportQuartFilter from "@/app/bilans/ReportQuartFilter";
 import { requireRapportBilan } from "@/lib/permissions";
 import { fetchAll } from "@/lib/fetch-all";
 import { getNbNiveauxC, getCouleursNiveauxC } from "@/lib/refdata";
@@ -46,12 +46,13 @@ type PcReqRow = { poste_id: string; competence_id: string };
 export default async function FeuilleRouteReport({
   searchParams,
 }: {
-  searchParams: Promise<{ atelier?: string; equipe?: string; hab?: string }>;
+  searchParams: Promise<{ atelier?: string; quart?: string; hab?: string }>;
 }) {
   const { profile } = await requireRapportBilan("feuille-route");
   const sp = await searchParams;
   const atelier = sp.atelier ?? "";
-  const equipe = sp.equipe ?? "";
+  // Quart choisi : "" = Tous (besoin = somme des quarts, comportement historique).
+  const quartSel = sp.quart ?? "";
   // Bascule habilitations : `hab=off` = mode « ignorées » ; par défaut strict.
   const habilitationStricte = sp.hab !== "off";
 
@@ -71,10 +72,9 @@ export default async function FeuilleRouteReport({
   const couleursCfg = await getCouleursNiveauxC();
   const couleurs = couleursNiveau(couleursCfg);
 
-  const [{ data: atD }, { data: eqD }, { data: persD }, { data: lignesD }, matD, plD, cpD, pcD, { data: pcrD }, { data: quartsD }, pq, ligneVal, posteVal] = await Promise.all([
+  const [{ data: atD }, { data: persD }, { data: lignesD }, matD, plD, cpD, pcD, { data: pcrD }, { data: quartsD }, pq, ligneVal, posteVal] = await Promise.all([
     supabase.from("atelier").select("id, nom").eq("actif", true).order("nom").returns<Atelier[]>(),
-    supabase.from("equipe").select("id, nom, couleur").eq("actif", true).order("nom").returns<{ id: string; nom: string; couleur: string | null }[]>(),
-    supabase.from("personne").select("id, atelier_id, equipe_id, regroupement").eq("statut", "ACTIF").returns<Personne[]>(),
+    supabase.from("personne").select("id, atelier_id, regroupement").eq("statut", "ACTIF").returns<Personne[]>(),
     supabase
       .from("ligne")
       .select("id, atelier_id, regroupement, poste(id, actif, categorie, effectif_requis)")
@@ -102,7 +102,7 @@ export default async function FeuilleRouteReport({
     supabase.from("poste_competence_requise").select("poste_id, competence_id").returns<PcReqRow[]>(),
     // Quarts du site + désactivations poste×quart : servent à compter les
     // quarts POSTÉS de chaque poste pour le besoin (matin + après-midi = 2).
-    supabase.from("quart").select("code, creneau, ordre").order("ordre").returns<{ code: string; creneau: string | null; ordre: number }[]>(),
+    supabase.from("quart").select("code, libelle, creneau, ordre").order("ordre").returns<{ code: string; libelle: string; creneau: string | null; ordre: number }[]>(),
     chargerPosteQuart(supabase),
     chargerValidites(supabase, "ligne"),
     chargerValidites(supabase, "poste"),
@@ -112,15 +112,23 @@ export default async function FeuilleRouteReport({
   // désactivés (`poste_quart`, défaut actif). `journeeCode` = quart pleine
   // journée (sans créneau, plus petit ordre) — même détection que l'ordo.
   const quartCodes = (quartsD ?? []).map((q) => q.code);
+  const quartLabel = (quartsD ?? []).find((q) => q.code === quartSel)?.libelle ?? quartSel;
   const journeeCode = [...(quartsD ?? [])].filter((q) => !q.creneau).sort((a, b) => a.ordre - b.ordre)[0]?.code ?? null;
   const nbQuartsDe = (posteId: string): number => {
     const actifs = quartCodes.filter((q) => tourneSurQuart(pq, posteId, q));
     return nbQuartsPostesDe(actifs, journeeCode);
   };
-  // Besoin d'un poste = SOMME des effectifs par quart posté (matin 2 + après-midi 1
-  // = 3), avec la même règle « journée » que nbQuartsPostesDe (la journée pleine ne
-  // se cumule pas avec matin/après-midi). Remplace l'ancien effectif × nb quarts.
+  // Besoin d'un poste. Quart choisi (`quartSel`) : besoin = effectif de CE quart
+  // seul (0 si le poste n'y tourne pas) — une équipe ne couvre qu'un quart à la
+  // fois, on compare donc au besoin d'un quart. « Tous » (quartSel = "") : SOMME
+  // des effectifs par quart posté (matin 2 + après-midi 1 = 3), avec la même
+  // règle « journée » que nbQuartsPostesDe (la journée pleine ne se cumule pas
+  // avec matin/après-midi).
   const besoinPosteDe = (posteId: string, posteEff: number): number => {
+    if (quartSel) {
+      const e = etatQuart(pq, posteId, quartSel, posteEff);
+      return e.tourne ? e.effectif : 0;
+    }
     const running = quartCodes.filter((q) => { const e = etatQuart(pq, posteId, q, posteEff); return e.tourne && e.effectif > 0; });
     const effectifs = journeeCode && running.some((q) => q !== journeeCode) ? running.filter((q) => q !== journeeCode) : running;
     return effectifs.reduce((s, q) => s + etatQuart(pq, posteId, q, posteEff).effectif, 0);
@@ -189,7 +197,6 @@ export default async function FeuilleRouteReport({
     competencesPersonne,
     ateliers: atD ?? [],
     ateliersFiltre: atelier ? [atelier] : null,
-    equipesFiltre: equipe ? [equipe] : null,
     semaines,
     nbNiveaux,
     habilitationStricte,
@@ -217,14 +224,22 @@ export default async function FeuilleRouteReport({
               24 semaines glissantes · comptage <strong>exact</strong> (personne = son niveau MAX par catégorie) · service = <strong>atelier d&apos;affectation</strong> de la personne · variations : absences pleine semaine, expirations d&apos;habilitation, fins de contrat.
             </div>
             <div className="sub" style={{ marginTop: 4 }}>
-              <strong>Besoin</strong> = somme, sur les postes actifs de la catégorie <em>dans l&apos;atelier</em>, de <code>effectif_requis × nombre de quarts postés</code> (Référentiel) : 1 poste à 1 place tournant matin + après-midi compte 2. La journée pleine compte 1 (elle ne se cumule pas avec matin/après-midi).{" "}
+              {quartSel ? (
+                <>
+                  <strong>Besoin</strong> = somme, sur les postes actifs de la catégorie <em>dans l&apos;atelier</em>, de l&apos;effectif requis <strong>sur le quart {quartLabel}</strong> (Référentiel) — un poste qui ne tourne pas sur ce quart ne compte pas. Utile pour lire une <strong>équipe</strong>, qui ne couvre qu&apos;un quart à la fois.{" "}
+                </>
+              ) : (
+                <>
+                  <strong>Besoin</strong> = somme, sur les postes actifs de la catégorie <em>dans l&apos;atelier</em>, de <code>effectif_requis × nombre de quarts postés</code> (Référentiel) : 1 poste à 1 place tournant matin + après-midi compte 2. La journée pleine compte 1 (elle ne se cumule pas avec matin/après-midi).{" "}
+                </>
+              )}
               <strong>Total</strong> = nombre de personnes compétentes de la catégorie (niv.&nbsp;1 à&nbsp;{nbNiveaux}, chacune comptée une fois) ; <span style={{ color: "#15803d", fontWeight: 700 }}>vert</span> si ≥ besoin, <span style={{ color: "#b91c1c", fontWeight: 700 }}>rouge</span> si &lt; besoin.
             </div>
           </div>
         </div>
 
         <ReportAtelierFilter ateliers={atD ?? []} atelier={atelier} />
-        <ReportEquipeFilter equipes={eqD ?? []} equipe={equipe} />
+        <ReportQuartFilter quarts={(quartsD ?? []).map((q) => ({ code: q.code, libelle: q.libelle }))} quart={quartSel} />
         <HabilitationsToggle strict={habilitationStricte} />
 
         {grille.services.length === 0 ? (
@@ -308,7 +323,9 @@ export default async function FeuilleRouteReport({
                           <tr key={`${svc.atelierId}:${bloc.cat}:besoin`}>
                             <td
                               style={{ padding: "3px 8px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap", color: "#334155" }}
-                              title={`Somme de (effectif_requis × nombre de quarts postés) sur les postes ${bloc.catLabel.toLowerCase()} actifs de l'atelier (Référentiel). 1 place tournant matin + après-midi = 2. Constant sur les 24 semaines : abaque de référence, pas une charge datée.`}
+                              title={quartSel
+                                ? `Effectif requis sur le quart ${quartLabel} des postes ${bloc.catLabel.toLowerCase()} actifs de l'atelier (Référentiel). Un poste qui ne tourne pas sur ce quart ne compte pas. Constant sur les 24 semaines : abaque de référence, pas une charge datée.`
+                                : `Somme de (effectif_requis × nombre de quarts postés) sur les postes ${bloc.catLabel.toLowerCase()} actifs de l'atelier (Référentiel). 1 place tournant matin + après-midi = 2. Constant sur les 24 semaines : abaque de référence, pas une charge datée.`}
                             >
                               Besoin
                             </td>
