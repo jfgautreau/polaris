@@ -944,12 +944,17 @@ prochain gros chantier, pas une optimisation cosmétique.
     ⚠️ **Filtre Équipe** (2026-09-10, `ReportEquipeFilter`, `?equipe=`) sous le
     filtre Service : restreint la POPULATION analysée — polyvalence, personnes à
     développer, personnes clés partantes, habilitations à échéance, plan de
-    formation, titulaires PTNR listés. **L'analyse structurelle des postes**
-    (relèves, verdicts, fragilité) reste **GLOBALE** — un poste avec 3 relèves ne
-    devient pas fragile parce qu'une seule est de l'équipe filtrée (décision
-    assumée : sinon la lecture « qui est en danger » deviendrait fausse). Impl.
-    dans `chargerPolyvalenceCompetences({ atelier, equipe })` via le prédicat
-    `dansEquipe(pid)`.
+    formation, titulaires PTNR listés. Le **VERDICT de fragilité reste calculé sur
+    la relève GLOBALE** — un poste avec 3 relèves ne devient pas fragile parce qu'une
+    seule est de l'équipe filtrée (décision assumée : sinon la lecture « qui est en
+    danger » deviendrait fausse). ⚠️ **MAIS** (2026-09-21) sous un filtre équipe, les
+    **postes AFFICHÉS et les compteurs** du bloc 2 (Postes critiques/fragiles **et**
+    PTNR) sont **restreints aux postes que l'équipe concerne** = au moins une personne
+    de l'équipe dans la relève (`concerneEquipe`). Un poste dont personne de l'équipe
+    n'est dans la relève (y compris « personne ne peut tenir » = relève vide) est
+    **masqué** sous ce filtre — sinon un « Chef d'équipe nuit » remontait sous le filtre
+    Jour. Impl. dans `chargerPolyvalenceCompetences({ atelier, equipe })` via
+    `dansEquipe(pid)` (population) et `concerneEquipe(poste)` (postes du bloc 2).
   - **Assez de compétences ?** (`/bilans/assez-competences`, `src/lib/assez-competences-data.ts`,
     nav quinzaine `CouvertureSemaineNav`) : aide à la **validation des congés**, avant toute
     affectation. Grille **service × jour ouvré × créneau** sur 2 semaines. **Affectation

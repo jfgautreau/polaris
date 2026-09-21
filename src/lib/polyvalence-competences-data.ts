@@ -236,8 +236,17 @@ export async function chargerPolyvalenceCompetences(
   });
   const verdictDe = new Map(analyse.map((a) => [a.id, a.verdict]));
 
-  const analyseRempl = analyse.filter((a) => a.remplacable);
-  const analysePtnr = analyse.filter((a) => !a.remplacable);
+  // Sous filtre équipe : un poste n'est retenu (listes ET compteurs du bloc 2)
+  // que si l'équipe a AU MOINS UNE personne dans sa relève (quelqu'un qui peut le
+  // tenir). Le VERDICT reste calculé sur la relève GLOBALE (un poste bien couvert
+  // ne devient pas fragile parce qu'une seule relève est de l'équipe) — on ne fait
+  // que restreindre les postes AFFICHÉS à ceux qui concernent l'équipe. Un poste
+  // dont personne de l'équipe n'est dans la relève (y compris « personne ne peut
+  // tenir » = relève vide) est donc masqué sous un filtre équipe. Sans filtre :
+  // concerneEquipe est toujours vrai → analyse globale, comportement inchangé.
+  const concerneEquipe = (a: PosteAnalyse) => !equipe || a.releve.some((m) => dansEquipe(m.id));
+  const analyseRempl = analyse.filter((a) => a.remplacable && concerneEquipe(a));
+  const analysePtnr = analyse.filter((a) => !a.remplacable && concerneEquipe(a));
   const postesCritiquesFragiles = analyseRempl
     .filter((a) => a.verdict !== "ok")
     .sort((a, b) => (a.verdict === b.verdict ? a.sure - b.sure || a.nom.localeCompare(b.nom) : a.verdict === "critique" ? -1 : 1));
