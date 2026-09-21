@@ -31,6 +31,9 @@ export type Semaine = { lundi: string; num: number; annee: number };
 export type Personne = {
   id: string;
   atelier_id: string | null;
+  // Équipe d'affectation : sert, quand un quart est filtré, à ne compter que les
+  // personnes dont l'équipe tourne (ou est fixée) sur ce quart la semaine donnée.
+  equipe_id?: string | null;
   // Affectation à un regroupement de lignes (migration 0069). Optionnel :
   // absent = comportement d'avant (aucun sous-total). Sert à ventiler
   // l'effectif du service par regroupement, sans double compte.
@@ -218,6 +221,14 @@ export type Params = {
   competencesPersonne: Map<string, Map<string, string | null>>;
   ateliers: Atelier[];
   ateliersFiltre?: string[] | null;
+  // Filtre quart : quand renseigné, on ne compte, chaque semaine, que les
+  // personnes dont l'équipe est sur CE quart cette semaine (rotation datée ou
+  // quart fixe). `quartParPersonne` résout le quart d'une personne (via son
+  // équipe) pour le lundi donné — null = pas d'équipe / pas de rotation connue,
+  // la personne n'est alors comptée dans aucun quart précis. Null / absent =
+  // « Tous » : aucun filtrage, comportement historique.
+  quartFiltre?: string | null;
+  quartParPersonne?: (equipeId: string | null | undefined, lundi: string) => string | null;
   semaines: Semaine[];
   nbNiveaux: number;
   habilitationStricte: boolean;
@@ -253,7 +264,7 @@ export function calculerGrille(p: Params): Grille {
   const {
     personnes, postes, matrice, contratsParPersonne, absencesParPersonne,
     posteCompRequise, competencesPersonne, ateliers,
-    ateliersFiltre, semaines, nbNiveaux,
+    ateliersFiltre, quartFiltre, quartParPersonne, semaines, nbNiveaux,
     habilitationStricte,
   } = p;
 
@@ -349,6 +360,13 @@ export function calculerGrille(p: Params): Grille {
         for (let wi = 0; wi < semaines.length; wi++) {
           const lundi = semaines[wi].lundi;
           for (const pe of persAtelier) {
+            // Filtre quart : ne compter que les personnes dont l'équipe est sur
+            // ce quart CETTE semaine (rotation datée / quart fixe). Une personne
+            // sans équipe ou sans rotation connue (null) n'est comptée sur aucun
+            // quart précis.
+            if (quartFiltre && quartParPersonne) {
+              if (quartParPersonne(pe.equipe_id, lundi) !== quartFiltre) continue;
+            }
             const contrats = contratsParPersonne.get(pe.id) ?? [];
             if (!personneEnEffectifLundi(contrats, lundi)) continue;
             const jours = absencesParPersonne.get(pe.id) ?? new Set<string>();

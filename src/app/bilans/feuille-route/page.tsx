@@ -11,6 +11,7 @@ import { getNbNiveauxC, getCouleursNiveauxC } from "@/lib/refdata";
 import { couleursNiveau } from "@/lib/couleurs-niveau";
 import { chargerPosteQuart, effectifSurQuart, tourneSurQuart } from "@/lib/poste-quart";
 import { chargerValidites, actifLe } from "@/lib/referentiel-validite";
+import { rotationForWeek, type RotationRef } from "@/lib/rotation";
 import HabilitationsToggle from "./HabilitationsToggle";
 import {
   calculerGrille,
@@ -72,9 +73,9 @@ export default async function FeuilleRouteReport({
   const couleursCfg = await getCouleursNiveauxC();
   const couleurs = couleursNiveau(couleursCfg);
 
-  const [{ data: atD }, { data: persD }, { data: lignesD }, matD, plD, cpD, pcD, { data: pcrD }, { data: quartsD }, pq, ligneVal, posteVal] = await Promise.all([
+  const [{ data: atD }, { data: persD }, { data: lignesD }, matD, plD, cpD, pcD, { data: pcrD }, { data: quartsD }, { data: eqRotD }, { data: rrD }, pq, ligneVal, posteVal] = await Promise.all([
     supabase.from("atelier").select("id, nom").eq("actif", true).order("nom").returns<Atelier[]>(),
-    supabase.from("personne").select("id, atelier_id, regroupement").eq("statut", "ACTIF").returns<Personne[]>(),
+    supabase.from("personne").select("id, atelier_id, equipe_id, regroupement").eq("statut", "ACTIF").returns<Personne[]>(),
     supabase
       .from("ligne")
       .select("id, atelier_id, regroupement, poste(id, actif, categorie, effectif_requis)")
@@ -103,6 +104,10 @@ export default async function FeuilleRouteReport({
     // Quarts du site + désactivations poste×quart : servent à compter les
     // quarts POSTÉS de chaque poste pour le besoin (matin + après-midi = 2).
     supabase.from("quart").select("code, libelle, creneau, ordre").order("ordre").returns<{ code: string; libelle: string; creneau: string | null; ordre: number }[]>(),
+    // Équipes (quart fixe) + références de rotation : résolvent le quart d'une
+    // personne (via son équipe) pour chaque semaine, quand un quart est filtré.
+    supabase.from("equipe").select("id, quart_fixe").eq("actif", true).returns<{ id: string; quart_fixe: string | null }[]>(),
+    supabase.from("rotation_reference").select("semaine, equipe_id, quart_code").returns<RotationRef[]>(),
     chargerPosteQuart(supabase),
     chargerValidites(supabase, "ligne"),
     chargerValidites(supabase, "poste"),
@@ -184,6 +189,19 @@ export default async function FeuilleRouteReport({
     m.set(r.competence_id, r.date_expiration);
   }
 
+  // Résolveur du quart d'une personne (via son équipe) pour une semaine donnée :
+  // quart FIXE de l'équipe s'il existe, sinon la rotation datée de la semaine.
+  // Sert au filtre quart pour ne compter que les personnes réellement sur ce quart.
+  const quartFixeParEquipe = new Map((eqRotD ?? []).map((e) => [e.id, e.quart_fixe]));
+  const rotParSemaine = new Map<string, Record<string, string>>();
+  for (const s of semaines) rotParSemaine.set(s.lundi, rotationForWeek(rrD ?? [], s.lundi));
+  const quartParPersonne = (equipeId: string | null | undefined, lundi: string): string | null => {
+    if (!equipeId) return null;
+    const fixe = quartFixeParEquipe.get(equipeId);
+    if (fixe) return fixe;
+    return rotParSemaine.get(lundi)?.[equipeId] ?? null;
+  };
+
   const grille = calculerGrille({
     personnes: persD ?? [],
     postes,
@@ -194,6 +212,8 @@ export default async function FeuilleRouteReport({
     competencesPersonne,
     ateliers: atD ?? [],
     ateliersFiltre: atelier ? [atelier] : null,
+    quartFiltre: quartSel || null,
+    quartParPersonne,
     semaines,
     nbNiveaux,
     habilitationStricte,
@@ -223,7 +243,8 @@ export default async function FeuilleRouteReport({
             <div className="sub" style={{ marginTop: 4 }}>
               {quartSel ? (
                 <>
-                  <strong>Besoin</strong> = somme, sur les postes actifs de la catégorie <em>dans l&apos;atelier</em>, de l&apos;effectif requis <strong>sur le quart {quartLabel}</strong> (Référentiel) — un poste qui ne tourne pas sur ce quart ne compte pas. Utile pour lire une <strong>équipe</strong>, qui ne couvre qu&apos;un quart à la fois.{" "}
+                  <strong>Besoin</strong> = somme, sur les postes actifs de la catégorie <em>dans l&apos;atelier</em>, de l&apos;effectif requis <strong>sur le quart {quartLabel}</strong> (Référentiel) — un poste qui ne tourne pas sur ce quart ne compte pas.{" "}
+                  <strong>Total</strong> = seules les personnes dont l&apos;équipe est sur le quart {quartLabel} <em>cette semaine-là</em> (quart fixe ou rotation datée) ; il <strong>varie d&apos;une semaine à l&apos;autre</strong> au fil de la rotation. Une personne sans équipe n&apos;est comptée dans aucun quart.{" "}
                 </>
               ) : (
                 <>

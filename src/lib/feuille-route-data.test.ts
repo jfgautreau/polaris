@@ -11,6 +11,7 @@ import {
   maxParCategorieAuJour,
   calculerGrille,
   type Params,
+  type Personne,
 } from "./feuille-route-data";
 
 describe("nbQuartsPostesDe", () => {
@@ -204,6 +205,28 @@ describe("calculerGrille — intégration", () => {
     const fab = g.services.find((s) => s.atelierId === "at-fab")!;
     const cond = fab.blocs.find((b) => b.cat === "conducteur")!;
     expect(cond.niveaux[3].parSemaine[0]).toBe(1); // niv.4
+  });
+
+  it("filtre quart : ne compte que les personnes dont l'équipe est sur ce quart la semaine donnée", () => {
+    const personnes: Personne[] = [{ id: "p1", atelier_id: "at-condi", equipe_id: "eq-a" }];
+    // eq-a tourne : matin en semaine 0, après-midi en semaine 1.
+    const quartSemaine = ["matin", "apres_midi"];
+    const quartParPersonne = (eq: string | null | undefined, lundi: string) => {
+      if (eq !== "eq-a") return null;
+      const wi = base.semaines.findIndex((s) => s.lundi === lundi);
+      return quartSemaine[wi] ?? null;
+    };
+    const g = calculerGrille({ ...base, personnes, quartFiltre: "matin", quartParPersonne });
+    const cond = g.services.find((s) => s.atelierId === "at-condi")!.blocs.find((b) => b.cat === "conducteur")!;
+    expect(cond.niveaux[2].parSemaine[0]).toBe(1); // semaine 0 : eq-a au matin → p1 compté
+    expect(cond.niveaux[2].parSemaine[1]).toBe(0); // semaine 1 : eq-a après-midi → p1 non compté
+  });
+
+  it("filtre quart : personne sans équipe n'est comptée dans aucun quart", () => {
+    const personnes: Personne[] = [{ id: "p1", atelier_id: "at-condi", equipe_id: null }];
+    const g = calculerGrille({ ...base, personnes, quartFiltre: "matin", quartParPersonne: () => null });
+    const cond = g.services.find((s) => s.atelierId === "at-condi")!.blocs.find((b) => b.cat === "conducteur")!;
+    expect(cond.niveaux[2].parSemaine[0]).toBe(0);
   });
 
   it("besoin = effectif_requis × nbQuartsPostes, ventilé par atelier des postes", () => {
