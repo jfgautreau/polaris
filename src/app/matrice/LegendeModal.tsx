@@ -39,7 +39,7 @@ export default function LegendeModal({
         </ul>
         <p className="muted" style={{ marginTop: 10 }}>
           <strong>Le petit chiffre en haut à droite d&apos;une case rappelle l&apos;autre niveau</strong> :
-          en mode <em>Actuel</em>, la pastille montre le niveau actuel et le petit
+          en mode <em>Actuelle</em>, la pastille montre le niveau actuel et le petit
           chiffre est la <strong>cible</strong> visée ; en mode <em>Cible</em>, la
           pastille montre la cible et le petit chiffre est le <strong>niveau actuel</strong>.
           On voit ainsi d&apos;un coup d&apos;œil l&apos;écart à combler.
@@ -49,7 +49,7 @@ export default function LegendeModal({
         </p>
         <p className="muted" style={{ marginTop: 6, fontWeight: 600 }}>
           Saisie : clic = +1 · clic droit = −1 · enregistrement automatique.
-          En mode <em>Actuel</em>, la cible suit automatiquement pour rester ≥ actuel.
+          En mode <em>Actuelle</em>, la cible suit automatiquement pour rester ≥ actuel.
         </p>
     </ModaleDeplacable>
   );

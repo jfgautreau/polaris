@@ -94,7 +94,7 @@ export default function MatricePanel({
           <SlideSwitch
             on={mode === "cible"}
             onChange={(v) => setMode(v ? "cible" : "actuel")}
-            offLabel="Actuel"
+            offLabel="Actuelle"
             onLabel="Cible"
             offColor="#1d4ed8"
             onColor="#16a34a"
