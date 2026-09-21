@@ -903,6 +903,23 @@ prochain gros chantier, pas une optimisation cosmétique.
   ⚠️ **`ReportActions`** (barre d'actions commune aux rapports) porte, à côté de l'icône
   imprimante, un bouton **« PDF »** explicite (2026-09-15) qui lance le même `window.print()`
   — beaucoup d'utilisateurs ne reconnaissaient pas l'imprimante comme un export PDF.
+  - **Projection de compétences — feuille de route** (`/bilans/feuille-route`,
+    `src/lib/feuille-route-data.ts`) : grille **24 semaines × service × catégorie**
+    (managers/conducteurs/opérateurs), lecture de **stock** (« ai-je assez de têtes
+    compétentes ? »), service = **atelier d'affectation** de la personne. Filtres :
+    **Service** (`ReportAtelierFilter`) + **Quart** (`ReportQuartFilter`, 2026-09-21) —
+    **le filtre Équipe a été RETIRÉ** (il laissait le besoin global tous quarts → une
+    équipe seule était structurellement en rouge). ⚠️ **Besoin = SOMME SIMPLE des quarts**
+    (journée comprise, cf. la règle additive) : « Tous » = matin + après-midi + nuit +
+    journée, **réconcilie toujours** avec le détail par quart ; un **quart choisi** réduit
+    le besoin à CE quart (via `effectifSurQuart`, un poste qui n'y tourne pas = 0).
+    ⚠️ **Total scopé par quart** : sous un quart, on ne compte QUE les personnes dont
+    l'**équipe est sur ce quart cette semaine-là** (`equipe.quart_fixe` sinon rotation
+    datée, résolveur `quartParPersonne` construit dans `page.tsx` via `rotationForWeek`) —
+    le Total **varie donc d'une semaine à l'autre** au fil de la rotation ; une personne
+    **sans équipe** n'est comptée dans aucun quart. « Tous » = chaque personne comptée une
+    fois (comportement historique). Sous-totaux par **regroupement** (0069) inchangés.
+    Params de `calculerGrille` : `ateliersFiltre`, `quartFiltre`, `quartParPersonne`.
   - **Synthèses hebdomadaires** (`/bilans/syntheses` + `SyntheseFilters`, `AgencePrintButton`,
     données dans `src/lib/synthese-data.ts`) : un écran, deux vues (bascule) sur un sélecteur
     de semaine. **Absences** = **mini-calendrier jour par jour sur 4 semaines glissantes**
