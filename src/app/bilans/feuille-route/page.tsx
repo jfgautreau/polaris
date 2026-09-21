@@ -9,7 +9,7 @@ import { requireRapportBilan } from "@/lib/permissions";
 import { fetchAll } from "@/lib/fetch-all";
 import { getNbNiveauxC, getCouleursNiveauxC } from "@/lib/refdata";
 import { couleursNiveau } from "@/lib/couleurs-niveau";
-import { chargerPosteQuart, etatQuart, tourneSurQuart } from "@/lib/poste-quart";
+import { chargerPosteQuart, effectifSurQuart, tourneSurQuart } from "@/lib/poste-quart";
 import { chargerValidites, actifLe } from "@/lib/referentiel-validite";
 import HabilitationsToggle from "./HabilitationsToggle";
 import {
@@ -118,20 +118,17 @@ export default async function FeuilleRouteReport({
     const actifs = quartCodes.filter((q) => tourneSurQuart(pq, posteId, q));
     return nbQuartsPostesDe(actifs, journeeCode);
   };
-  // Besoin d'un poste. Quart choisi (`quartSel`) : besoin = effectif de CE quart
-  // seul (0 si le poste n'y tourne pas) — une équipe ne couvre qu'un quart à la
-  // fois, on compare donc au besoin d'un quart. « Tous » (quartSel = "") : SOMME
-  // des effectifs par quart posté (matin 2 + après-midi 1 = 3), avec la même
-  // règle « journée » que nbQuartsPostesDe (la journée pleine ne se cumule pas
-  // avec matin/après-midi).
+  // Besoin d'un poste = SOMME simple des effectifs par quart. Quart choisi
+  // (`quartSel`) : ce quart seul (0 si le poste n'y tourne pas). « Tous » : la
+  // somme des quatre quarts → le total réconcilie TOUJOURS avec le détail par
+  // quart (une addition = ses parts). Un poste sain tourne soit en journée, soit
+  // en quarts postés : la journée ne double-compte donc pas avec matin/après-midi.
+  // Si un poste a la journée active EN MÊME TEMPS que des quarts postés, le total
+  // le reflète (au lieu de masquer l'anomalie) — c'est un cas à corriger au
+  // Référentiel, pas dans le rapport.
   const besoinPosteDe = (posteId: string, posteEff: number): number => {
-    if (quartSel) {
-      const e = etatQuart(pq, posteId, quartSel, posteEff);
-      return e.tourne ? e.effectif : 0;
-    }
-    const running = quartCodes.filter((q) => { const e = etatQuart(pq, posteId, q, posteEff); return e.tourne && e.effectif > 0; });
-    const effectifs = journeeCode && running.some((q) => q !== journeeCode) ? running.filter((q) => q !== journeeCode) : running;
-    return effectifs.reduce((s, q) => s + etatQuart(pq, posteId, q, posteEff).effectif, 0);
+    const quarts = quartSel ? [quartSel] : quartCodes;
+    return quarts.reduce((s, q) => s + effectifSurQuart(pq, posteId, q, posteEff), 0);
   };
 
   // Postes actifs indexés + rattachement à leur atelier (via ligne). L'atelier_id
@@ -230,7 +227,7 @@ export default async function FeuilleRouteReport({
                 </>
               ) : (
                 <>
-                  <strong>Besoin</strong> = somme, sur les postes actifs de la catégorie <em>dans l&apos;atelier</em>, de <code>effectif_requis × nombre de quarts postés</code> (Référentiel) : 1 poste à 1 place tournant matin + après-midi compte 2. La journée pleine compte 1 (elle ne se cumule pas avec matin/après-midi).{" "}
+                  <strong>Besoin</strong> = somme, sur les postes actifs de la catégorie <em>dans l&apos;atelier</em>, de l&apos;effectif requis <strong>de tous les quarts</strong> (Référentiel) : un poste à 1 place tournant matin + après-midi compte 2. « Tous » = la somme des quarts pris séparément.{" "}
                 </>
               )}
               <strong>Total</strong> = nombre de personnes compétentes de la catégorie (niv.&nbsp;1 à&nbsp;{nbNiveaux}, chacune comptée une fois) ; <span style={{ color: "#15803d", fontWeight: 700 }}>vert</span> si ≥ besoin, <span style={{ color: "#b91c1c", fontWeight: 700 }}>rouge</span> si &lt; besoin.
@@ -325,7 +322,7 @@ export default async function FeuilleRouteReport({
                               style={{ padding: "3px 8px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap", color: "#334155" }}
                               title={quartSel
                                 ? `Effectif requis sur le quart ${quartLabel} des postes ${bloc.catLabel.toLowerCase()} actifs de l'atelier (Référentiel). Un poste qui ne tourne pas sur ce quart ne compte pas. Constant sur les 24 semaines : abaque de référence, pas une charge datée.`
-                                : `Somme de (effectif_requis × nombre de quarts postés) sur les postes ${bloc.catLabel.toLowerCase()} actifs de l'atelier (Référentiel). 1 place tournant matin + après-midi = 2. Constant sur les 24 semaines : abaque de référence, pas une charge datée.`}
+                                : `Somme des effectifs de tous les quarts sur les postes ${bloc.catLabel.toLowerCase()} actifs de l'atelier (Référentiel). 1 place tournant matin + après-midi = 2 ; « Tous » réconcilie avec le détail par quart. Constant sur les 24 semaines : abaque de référence, pas une charge datée.`}
                             >
                               Besoin
                             </td>
