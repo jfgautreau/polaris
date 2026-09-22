@@ -287,14 +287,24 @@ données, RLS), `tasks/handoff.md` (détail écran par écran), `tasks/lessons.m
   devenues sans poste imprimable). N'a **aucun** effet sur le planning, les bilans ni la
   couverture. Lectures/écriture tolèrent l'absence de la colonne (repli `true`).
 - **Quarts : aucun code en dur.** `src/lib/quarts.ts` porte les deux règles qui étaient
-  recopiées partout — le **quart par défaut** d'un écran (`matin` s'il existe, sinon le
-  premier dans l'ordre) et le **repli des placements historiques** sans `quart_code`.
+  recopiées partout — le **quart par défaut** d'un écran et le **repli des placements
+  historiques** sans `quart_code`.
   ⚠️ Ces deux règles divergeaient : `/planning` utilisait `quartCodes[0]` (= `journee`,
   ordre 0) là où Placement, TV, copie et `/api/placement/cell` utilisaient `matin` — les
   mêmes lignes s'affichaient sous deux quarts selon l'écran. La migration 0038 a normalisé
   les 7 placements concernés. Un test interdit le retour d'un code de quart en dur.
   Exception documentée : `tp_config` stocke ses demi-journées sous les clés `matin`/`aprem`
   — vocabulaire distinct, à traiter avec le modèle du temps partiel, pas avec les quarts.
+  ⚠️ **DÉCALAGE code ↔ libellé (La Vraie Croix, 2026-09-22).** Le `code` d'un quart est
+  **figé à la création** (`slugifyQuart(libelle)`, PK immuable référencée par ~10 FK) ;
+  un **renommage ultérieur du libellé ne le suit pas**. Résultat à La Vraie Croix : le
+  code `matin` porte le libellé **« Jour »** (creneau null), le code `apres_midi` = **« Matin »**
+  (creneau matin), le code `journee` = **« Après-midi »** (creneau aprem). **Ne JAMAIS
+  déduire la sémantique d'un quart de son `code`** — lire la colonne **`creneau`**
+  (matin/aprem/null), l'**`ordre`** ou le **`libellé`**. `quartParDefaut` prend le quart
+  de **`creneau = "matin"`** (repli : code `matin`, puis 1ᵉʳ par ordre) ; `labelQuart`
+  (assez-competences) et `horaireTp` (`horaires.ts`, demi-journée TP) et le `creneauDe`
+  de la TV lisent **`creneau`**, jamais le code. À Le Bignon (codes alignés) rien ne change.
 - **Habilitations** : `competence` (`a_recycler=true`, `duree_validite_mois`, `ordre`,
   `groupe`, `categorie`) × `personne_competence`. ⚠️ `date_expiration` est **stockée au
   moment de la saisie**, pas recalculée en lecture : si la durée de validité change

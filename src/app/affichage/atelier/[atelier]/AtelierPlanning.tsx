@@ -265,7 +265,14 @@ export default async function AtelierPlanning({
       const mondaySet = new Set(isos.map((iso) => isoDate(mondayOf(new Date(iso + "T00:00")))));
       const rotByMonday = new Map<string, Record<string, string>>();
       for (const m of mondaySet) rotByMonday.set(m, rotationForWeek(rotRefs, m));
-      const creneauDe = (q?: string | null) => (q === "matin" ? "matin" : q === "apres_midi" ? "aprem" : null);
+      // Créneau (matin/aprem/null) d'un quart : lu sur la colonne `quart.creneau`,
+      // JAMAIS déduit du code (à La Vraie Croix le code `apres_midi` porte le
+      // créneau « matin » — deviner par le code inverserait les demi-journées TP).
+      const creneauParCode = new Map(quarts.map((q) => [q.code, q.creneau ?? null]));
+      const creneauDe = (q?: string | null): "matin" | "aprem" | null => {
+        const c = q ? creneauParCode.get(q) : null;
+        return c === "matin" || c === "aprem" ? c : null;
+      };
 
       // TP MATÉRIALISÉS (migration 0064). Sur une semaine « chargée » (tp_charge),
       // le manager a pu DÉPLACER un jour de TP dans le Planning : on lit alors les

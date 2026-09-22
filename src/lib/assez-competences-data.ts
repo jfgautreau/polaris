@@ -97,13 +97,15 @@ type LigneRow = {
 
 const JOURS_COURTS = ["Lun", "Mar", "Mer", "Jeu", "Ven"];
 
-// Libellé court d'un quart pour l'affichage par créneau.
-function labelQuart(code: string, creneau: string | null): string {
+// Libellé court d'un quart pour l'affichage par créneau. ⚠️ On se fie au `creneau`
+// (M/A) puis à l'INITIALE DU LIBELLÉ pour les quarts sans créneau (journée, nuit),
+// jamais au CODE : sur un site où le code ne colle plus au libellé (La Vraie Croix,
+// où le code `matin` porte le libellé « Jour »), keyer sur le code faisait retomber
+// « Jour » sur « M » — en collision avec la vraie colonne « Matin ».
+function labelQuart(libelle: string, creneau: string | null): string {
   if (creneau === "matin") return "M";
   if (creneau === "aprem") return "A";
-  if (code === "nuit") return "N";
-  if (code === "journee") return "J";
-  return code.slice(0, 1).toUpperCase();
+  return (libelle.trim()[0] ?? "?").toUpperCase();
 }
 
 export async function chargerCouvertureConges(
@@ -167,7 +169,7 @@ export async function chargerCouvertureConges(
     ),
     supabase.from("poste_competence_requise").select("poste_id, competence_id, competence:competence_id(duree_validite_mois)").returns<{ poste_id: string; competence_id: string; competence: { duree_validite_mois: number | null } | null }[]>(),
     supabase.from("equipe").select("id, quart_fixe").eq("actif", true).returns<{ id: string; quart_fixe: string | null }[]>(),
-    supabase.from("quart").select("code, creneau, ordre").order("ordre").returns<{ code: string; creneau: string | null; ordre: number }[]>(),
+    supabase.from("quart").select("code, libelle, creneau, ordre").order("ordre").returns<{ code: string; libelle: string; creneau: string | null; ordre: number }[]>(),
     chargerPosteQuart(supabase),
     chargerValidites(supabase, "ligne"),
     chargerValidites(supabase, "poste"),
@@ -182,7 +184,7 @@ export async function chargerCouvertureConges(
 
   const atelierNom = new Map((atD ?? []).map((a) => [a.id, a.nom]));
   const quarts = (quartsD ?? []).map((q) => q.code); // triés par ordre
-  const labelDe = new Map((quartsD ?? []).map((q) => [q.code, labelQuart(q.code, q.creneau)]));
+  const labelDe = new Map((quartsD ?? []).map((q) => [q.code, labelQuart(q.libelle, q.creneau)]));
 
   // Besoin ADDITIF (décision 2026-09-21) : chaque quart posté sur lequel le poste
   // tourne (`poste_quart`, cf. etatQuart) compte pour son effectif, journée COMPRISE.

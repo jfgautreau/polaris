@@ -45,18 +45,20 @@ function isoDow(iso: string): number {
 
 const renseigne = (h?: HM | null): boolean => !!(h && (h.debut || h.fin));
 
-// Horaire TP applicable a ce jour / ce quart, ou undefined.
-// ⚠️ Couplage assume : `tp_config` stocke ses demi-journees sous les clefs
-// « matin » / « aprem », homonymes de deux codes de quart sans etre le meme
-// vocabulaire. La correspondance est ecrite ici en dur ; un site aux quarts
-// autrement codes n'aurait pas d'horaires TP par demi-journee — repli silencieux.
-function horaireTp(cfg: TpCfg | undefined, quart: string, iso: string): HM | undefined {
+// Horaire TP applicable a ce jour / cette demi-journee, ou undefined.
+// `tp_config` stocke ses demi-journees sous les clefs « matin » / « aprem », qui
+// sont le vocabulaire du CRENEAU (colonne `quart.creneau`, 0057) — PAS le code du
+// quart. On passe donc le creneau du quart resolu, jamais son code : sur un site
+// ou le code ne colle plus au libelle (La Vraie Croix), keyer sur le code inversait
+// matin/apres-midi. Un quart sans creneau (journee, nuit) -> pas d'horaire par
+// demi-journee, repli sur l'horaire TP plein.
+function horaireTp(cfg: TpCfg | undefined, creneau: string | null, iso: string): HM | undefined {
   if (!cfg) return undefined;
   const d = String(isoDow(iso));
   let tp: { debut: string; fin: string } | undefined;
   if (cfg.demi?.source === "horaires") {
-    if (quart === "matin") tp = cfg.demi.matin?.[d];
-    else if (quart === "apres_midi") tp = cfg.demi.aprem?.[d];
+    if (creneau === "matin") tp = cfg.demi.matin?.[d];
+    else if (creneau === "aprem") tp = cfg.demi.aprem?.[d];
   }
   if (!tp && cfg.horaires) tp = cfg.horaires[d];
   return tp;
@@ -72,9 +74,10 @@ export function resoudreHoraire(
   iso: string
 ): { debut: string | null; fin: string | null } {
   const q = quartOuDefaut(quartCode, quarts);
+  const creneau = quarts.find((x) => x.code === q)?.creneau ?? null;
   const std = maps.horMap.get(`${posteId}:${q}:${dowLundi(iso)}`);
   const ex = maps.excMap.get(`${personId}:${iso}`);
-  const tp = horaireTp(maps.tpCfgMap.get(personId), q, iso);
+  const tp = horaireTp(maps.tpCfgMap.get(personId), creneau, iso);
   const source = renseigne(ex) ? ex : renseigne(tp) ? tp : std;
   return { debut: source?.debut || null, fin: source?.fin || null };
 }

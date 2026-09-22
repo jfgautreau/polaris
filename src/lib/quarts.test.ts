@@ -22,6 +22,19 @@ describe("quartParDefaut", () => {
     expect(quartParDefaut([{ code: "vsd", ordre: 2 }, { code: "sd", ordre: 1 }])).toBe("sd");
   });
 
+  it("choisit le quart du CRENEAU matin, pas le code littéral (décalage code↔libellé)", () => {
+    // Cas La Vraie Croix : le code `matin` porte le libellé « Jour » (creneau
+    // null) et c'est le code `apres_midi` qui est le vrai matin (creneau matin).
+    // Le défaut doit suivre le créneau, donc « apres_midi », pas « matin ».
+    const lvc = [
+      { code: "matin", ordre: 1, creneau: null }, // libellé « Jour »
+      { code: "apres_midi", ordre: 2, creneau: "matin" }, // libellé « Matin »
+      { code: "journee", ordre: 3, creneau: "aprem" }, // libellé « Après-midi »
+      { code: "nuit", ordre: 4, creneau: null },
+    ];
+    expect(quartParDefaut(lvc)).toBe("apres_midi");
+  });
+
   it("respecte l'ordre, pas l'ordre d'arrivee du tableau", () => {
     expect(quartParDefaut([{ code: "c", ordre: 3 }, { code: "a", ordre: 1 }, { code: "b", ordre: 2 }])).toBe("a");
   });

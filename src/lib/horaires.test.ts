@@ -2,9 +2,9 @@ import { describe, it, expect } from "vitest";
 import { resoudreHoraire, horaireTxt, dowLundi, type MapsHoraire } from "./horaires";
 
 const quarts = [
-  { code: "journee", ordre: 0 },
-  { code: "matin", ordre: 1 },
-  { code: "apres_midi", ordre: 2 },
+  { code: "journee", ordre: 0, creneau: null },
+  { code: "matin", ordre: 1, creneau: "matin" },
+  { code: "apres_midi", ordre: 2, creneau: "aprem" },
 ];
 
 const vide: MapsHoraire = { horMap: new Map(), excMap: new Map(), tpCfgMap: new Map() };

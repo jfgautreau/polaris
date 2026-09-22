@@ -16,7 +16,7 @@
 // « journee », qui porte l'ordre 0. Les memes placements historiques
 // apparaissaient donc sous deux quarts differents selon l'ecran.
 
-export type QuartRef = { code: string; ordre?: number };
+export type QuartRef = { code: string; ordre?: number; creneau?: string | null };
 
 // Code technique d'un quart, derive de son libelle : minuscules, sans accents,
 // mots relies par « _ ». Sert de cle (code, site_id) et de valeur stockee dans
@@ -36,16 +36,23 @@ export function slugifyQuart(libelle: string): string {
 
 // Quart affiche a l'ouverture d'un ecran.
 //
-// Regle : « matin » s'il existe, sinon le premier dans l'ordre d'affichage.
-// La preference pour « matin » n'est PAS un reliquat : c'est le comportement
-// attendu par les utilisateurs (cf. CLAUDE.md, « Defaut planning = matin »), et
-// le premier quart dans l'ordre est « journee ». Pour un site qui n'aurait pas
-// de quart nomme « matin », l'ordre d'affichage decide — donc plus rien a
-// modifier dans le code.
+// Regle : le quart DU MATIN s'il existe, sinon le premier dans l'ordre d'affichage.
+// La preference pour le matin n'est PAS un reliquat : c'est le comportement
+// attendu par les utilisateurs (cf. CLAUDE.md, « Defaut planning = matin »).
+// ⚠️ « Du matin » = quart dont le CRENEAU est « matin » — PAS le code litteral
+// « matin ». Sur un site ou les codes ne collent plus aux libelles (renommage
+// apres creation : a La Vraie Croix, le code `matin` porte le libelle « Jour »,
+// et c'est le code `apres_midi` qui est le vrai matin), se fier au code choisit
+// le mauvais quart. On lit donc `creneau`, avec repli sur l'ancien code litteral
+// (site sans creneau renseigne) puis sur le premier dans l'ordre.
 export function quartParDefaut(quarts: QuartRef[]): string {
   if (!quarts.length) return "";
   const parOrdre = [...quarts].sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0));
-  return parOrdre.find((q) => q.code === "matin")?.code ?? parOrdre[0].code;
+  return (
+    parOrdre.find((q) => q.creneau === "matin")?.code ??
+    parOrdre.find((q) => q.code === "matin")?.code ??
+    parOrdre[0].code
+  );
 }
 
 // Quart d'un placement dont `quart_code` est NULL.
