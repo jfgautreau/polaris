@@ -736,3 +736,35 @@ nombre de colonnes dérive du **total des rangées** (numéros + occupants), 10 
 noms), pas une unité voisine (les numéros de rotation). Un build vert ne prouve pas que la
 condition d'affichage se déclenche jamais — se méfier des features dont le déclencheur est un
 seuil : les tester sur une donnée qui **dépasse** le seuil, pas seulement à la compilation.
+
+## L45 — Le `code` d'un quart peut ne plus coller à son `libellé` : lire `creneau`, jamais le code
+
+**Symptôme (2026-09-22)** : à La Vraie Croix, le Planning s'ouvrait par défaut sur le quart
+« Jour » au lieu de « Matin » ; « Assez de compétences ? » affichait **deux colonnes « M »** ;
+les horaires TP par demi-journée étaient inversés matin ↔ après-midi. À Le Bignon, tout allait
+bien.
+
+**Racine** : le `code` d'un quart est **dérivé du libellé à sa création** (`slugifyQuart`) puis
+**figé** — c'est une clé primaire `(code, site_id)` référencée par ~10 FK, donc impossible à
+changer. Quand un site **renomme le libellé** d'un quart après coup, le code **ne suit pas**.
+À La Vraie Croix les libellés ont dérivé : code `matin` = libellé **« Jour »** (creneau null),
+code `apres_midi` = **« Matin »** (creneau matin), code `journee` = **« Après-midi »** (creneau
+aprem). Tout code qui testait `quart.code === "matin"` / `=== "journee"` / `=== "nuit"` visait
+donc le mauvais quart. Fooled : `quartParDefaut` (`code === "matin"`), `labelQuart`
+(`code === "journee/nuit"` + repli `code[0]`), `horaireTp` (`quart === "matin"/"apres_midi"`
+pour la demi-journée TP), et un `creneauDe` de la TV. Les libellés ET les `creneau` restent,
+eux, cohérents entre eux — seul le `code` a divergé, donc le site fonctionne partout où la
+logique lit `creneau`.
+
+**Fix** : ne JAMAIS déduire la sémantique d'un quart de son `code`. Lire la colonne **`creneau`**
+(matin/aprem/null), l'**`ordre`**, ou le **`libellé`**. `quartParDefaut` prend le quart de
+`creneau === "matin"` (repli : code `matin`, puis 1ᵉʳ par ordre) ; `labelQuart` s'appuie sur
+`creneau` puis l'initiale du **libellé** ; `horaireTp` reçoit le `creneau` du quart résolu ;
+le `creneauDe` de la TV lit `quart.creneau`. Test `quarts.test.ts` verrouillant le cas.
+
+**Règle** : le **code** d'un quart est un identifiant technique **immuable**, pas sa sémantique.
+La sémantique vit dans `creneau` (demi-journée), `ordre` (défaut/journée) et `libellé`
+(affichage). Un `=== "matin"` sur un `code` de quart est un bug en puissance dès qu'un site
+renomme ses quarts ; sur une **valeur de `creneau`** (`c === "matin" || c === "aprem"`), c'est
+correct. Même piège de fond que « est_conducteur déprécié » : ne pas se fier à une colonne dont
+la source de vérité a bougé.
