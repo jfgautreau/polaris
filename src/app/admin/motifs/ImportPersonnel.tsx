@@ -3,30 +3,29 @@
 import { useMemo, useRef, useState } from "react";
 
 // Import de la « Base personnel » depuis un fichier Excel (export RH). Trois temps :
-//  1. dépôt du fichier + « Analyser » -> aperçu (personnes lues, doublons repérés,
-//     sections regroupées) ;
-//  2. correspondance de chaque SECTION du fichier -> (Service, Équipe) Polaris,
-//     pré-suggérée ; cases à cocher pour exclure des personnes ;
-//  3. « Importer » -> création des personnes nouvelles + leur contrat initial.
-// L'aperçu ne touche rien ; seul « Importer » écrit. Import ADDITIF : les
-// personnes déjà présentes (matricule ou nom+prénom connus) ne sont jamais
-// modifiées.
+//  1. dépôt du fichier + « Analyser » -> aperçu (rapprochement avec l'effectif) ;
+//  2. correspondance de chaque SECTION -> (Service, Équipe) Polaris, pré-suggérée ;
+//     confirmation ligne par ligne pour les noms DOUTEUX (homonymes) ;
+//  3. « Importer » -> création des personnes retenues + leur contrat initial.
+// L'aperçu ne touche rien ; seul « Importer » écrit. Import ADDITIF : une
+// personne existante n'est jamais modifiée. La FONCTION du fichier est ignorée.
 
 type Ref = { id: string; nom: string };
+type Candidat = { id: string; libelle: string };
+type Statut = "existant" | "doute" | "nouveau";
 type Personne = {
   cle: string;
   matricule: string;
   nom: string;
   prenom: string;
   sexe: "H" | "F" | null;
-  fonction: string;
   typeSource: string;
   typeResolu: string;
   dateDebut: string | null;
   dateFin: string | null;
   section: string;
-  existe: boolean;
-  motifExiste: "matricule" | "nom" | null;
+  statut: Statut;
+  candidats: Candidat[];
 };
 type SectionApercu = { raw: string; atelierId: string | null; equipeId: string | null; effectif: number };
 type Apercu = {
@@ -34,9 +33,9 @@ type Apercu = {
   sections: SectionApercu[];
   ateliers: Ref[];
   equipes: Ref[];
-  resume: { total: number; nouveaux: number; existants: number };
+  resume: { total: number; nouveaux: number; doutes: number; existants: number };
 };
-type Resume = { crees: number; ignoresExistants: number; exclus: number };
+type Resume = { crees: number; existants: number; rapproches: number; exclus: number };
 
 const AUCUN = "__AUCUN__";
 
@@ -51,7 +50,8 @@ export default function ImportPersonnel() {
   const [fichier, setFichier] = useState<File | null>(null);
   const [apercu, setApercu] = useState<Apercu | null>(null);
   const [corr, setCorr] = useState<Record<string, { atelierId: string; equipeId: string }>>({});
-  const [inclus, setInclus] = useState<Record<string, boolean>>({});
+  // Décision par ligne : true = créer, false = ne pas créer (rapprocher/exclure).
+  const [creer, setCreer] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const [resume, setResume] = useState<Resume | null>(null);
@@ -59,7 +59,7 @@ export default function ImportPersonnel() {
   function reset() {
     setApercu(null);
     setCorr({});
-    setInclus({});
+    setCreer({});
     setResume(null);
     setErreur(null);
   }
@@ -81,9 +81,11 @@ export default function ImportPersonnel() {
       const c: Record<string, { atelierId: string; equipeId: string }> = {};
       for (const s of ap.sections) c[s.raw] = { atelierId: s.atelierId ?? "", equipeId: s.equipeId ?? "" };
       setCorr(c);
-      const inc: Record<string, boolean> = {};
-      for (const p of ap.personnes) inc[p.cle] = !p.existe; // nouveaux cochés par défaut
-      setInclus(inc);
+      // Par défaut : les « nouveau » sont créés ; les « doute » NON (à confirmer) ;
+      // les « existant » jamais.
+      const d: Record<string, boolean> = {};
+      for (const p of ap.personnes) d[p.cle] = p.statut === "nouveau";
+      setCreer(d);
     } catch (e) {
       setErreur(e instanceof Error ? e.message : "Erreur.");
     } finally {
@@ -98,18 +100,14 @@ export default function ImportPersonnel() {
     try {
       const correspondances: Record<string, { atelierId: string | null; equipeId: string | null }> = {};
       for (const [raw, v] of Object.entries(corr)) {
-        correspondances[raw] = {
-          atelierId: v.atelierId || null,
-          equipeId: v.equipeId || null,
-        };
+        correspondances[raw] = { atelierId: v.atelierId || null, equipeId: v.equipeId || null };
       }
-      // exclure = nouveaux décochés (les existants ne sont de toute façon pas créés).
-      const exclure = apercu.personnes.filter((p) => !p.existe && !inclus[p.cle]).map((p) => p.cle);
+      const aCreer = apercu.personnes.filter((p) => p.statut !== "existant" && creer[p.cle]).map((p) => p.cle);
       const fd = new FormData();
       fd.set("op", "apply");
       fd.set("fichier", fichier);
       fd.set("correspondances", JSON.stringify(correspondances));
-      fd.set("exclure", JSON.stringify(exclure));
+      fd.set("aCreer", JSON.stringify(aCreer));
       const res = await fetch("/api/import-personnel", { method: "POST", body: fd });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || "Import impossible.");
@@ -122,16 +120,15 @@ export default function ImportPersonnel() {
     }
   }
 
-  const nbInclus = useMemo(
-    () => (apercu ? apercu.personnes.filter((p) => !p.existe && inclus[p.cle]).length : 0),
-    [apercu, inclus],
+  const nbACreer = useMemo(
+    () => (apercu ? apercu.personnes.filter((p) => p.statut !== "existant" && creer[p.cle]).length : 0),
+    [apercu, creer],
   );
-  // Sections concernées par au moins une personne incluse, sans correspondance.
   const sectionsSansCorr = useMemo(() => {
     if (!apercu) return [];
-    const actives = new Set(apercu.personnes.filter((p) => !p.existe && inclus[p.cle]).map((p) => p.section));
+    const actives = new Set(apercu.personnes.filter((p) => p.statut !== "existant" && creer[p.cle]).map((p) => p.section));
     return apercu.sections.filter((s) => actives.has(s.raw) && !(corr[s.raw]?.atelierId || corr[s.raw]?.equipeId));
-  }, [apercu, inclus, corr]);
+  }, [apercu, creer, corr]);
 
   return (
     <div className="card" style={{ marginBottom: 24 }}>
@@ -171,8 +168,9 @@ export default function ImportPersonnel() {
           <strong>Import terminé.</strong>
           <ul style={{ margin: "8px 0 0", paddingLeft: 20 }}>
             <li>{resume.crees} personne(s) créée(s)</li>
-            {resume.ignoresExistants > 0 && <li>{resume.ignoresExistants} déjà présente(s), laissée(s) intacte(s)</li>}
-            {resume.exclus > 0 && <li>{resume.exclus} exclue(s) par vos soins</li>}
+            {resume.existants > 0 && <li>{resume.existants} déjà présente(s) par matricule, laissée(s) intacte(s)</li>}
+            {resume.rapproches > 0 && <li>{resume.rapproches} homonyme(s) rapproché(s) (non recréé(s))</li>}
+            {resume.exclus > 0 && <li>{resume.exclus} nouvelle(s) exclue(s) par vos soins</li>}
           </ul>
         </div>
       )}
@@ -180,9 +178,9 @@ export default function ImportPersonnel() {
       {apercu && (
         <div style={{ marginTop: 14 }}>
           <p className="muted" style={{ marginTop: 0 }}>
-            <strong>{apercu.resume.total}</strong> ligne(s) lue(s) :{" "}
-            <strong>{apercu.resume.nouveaux}</strong> nouvelle(s), <strong>{apercu.resume.existants}</strong> déjà présente(s)
-            (ignorée(s)). Seules les nouvelles cochées seront créées.
+            <strong>{apercu.resume.total}</strong> ligne(s) : <strong>{apercu.resume.nouveaux}</strong> nouvelle(s),{" "}
+            <strong>{apercu.resume.doutes}</strong> à confirmer (homonyme), <strong>{apercu.resume.existants}</strong>{" "}
+            déjà présente(s) par matricule.
           </p>
 
           {/* ---- Correspondance des sections ---- */}
@@ -254,66 +252,86 @@ export default function ImportPersonnel() {
           )}
 
           {/* ---- Personnes ---- */}
-          <h3 style={{ margin: "10px 0 6px" }}>Personnes ({nbInclus} à créer)</h3>
+          <h3 style={{ margin: "10px 0 6px" }}>Personnes ({nbACreer} à créer)</h3>
+          {apercu.resume.doutes > 0 && (
+            <p className="muted" style={{ marginTop: 0 }}>
+              Les lignes <strong style={{ color: "#92400e" }}>À confirmer</strong> ont un homonyme dans l&apos;effectif.
+              Choisissez <em>Rapprocher</em> (même personne, ne pas créer) ou <em>Créer</em> (nouvelle personne).
+            </p>
+          )}
           <div style={{ maxHeight: 380, overflow: "auto", border: "1px solid #e5e7eb", borderRadius: 8 }}>
             <table style={{ width: "100%" }}>
               <thead>
                 <tr>
-                  <th style={{ width: 40, textAlign: "center" }}>✓</th>
                   <th style={{ textAlign: "left" }}>Nom Prénom</th>
                   <th style={{ width: 80 }}>Matricule</th>
                   <th style={{ width: 40, textAlign: "center" }}>Sexe</th>
                   <th style={{ width: 90 }}>Contrat</th>
-                  <th style={{ width: 90 }}>Début</th>
+                  <th style={{ width: 80 }}>Début</th>
                   <th style={{ textAlign: "left" }}>Section</th>
-                  <th style={{ width: 110 }}>Statut</th>
+                  <th style={{ minWidth: 220 }}>Décision</th>
                 </tr>
               </thead>
               <tbody>
-                {apercu.personnes.map((p) => (
-                  <tr key={p.cle} style={{ opacity: p.existe ? 0.5 : 1, background: p.existe ? "#f9fafb" : undefined }}>
-                    <td style={{ textAlign: "center" }}>
-                      <input
-                        type="checkbox"
-                        checked={!p.existe && !!inclus[p.cle]}
-                        disabled={p.existe}
-                        onChange={(e) => setInclus((i) => ({ ...i, [p.cle]: e.target.checked }))}
-                      />
-                    </td>
-                    <td>
-                      <strong>{p.nom}</strong> {p.prenom}
-                      {p.fonction && <span className="muted" style={{ fontSize: 12 }}> · {p.fonction}</span>}
-                    </td>
-                    <td>{p.matricule || <span className="muted">—</span>}</td>
-                    <td style={{ textAlign: "center" }}>{p.sexe ?? "—"}</td>
-                    <td>
-                      {p.typeResolu}
-                      {p.typeSource && p.typeSource.toUpperCase() !== p.typeResolu && (
-                        <span className="muted" style={{ fontSize: 12 }}> ({p.typeSource})</span>
-                      )}
-                    </td>
-                    <td>{frDate(p.dateDebut)}</td>
-                    <td className="muted" style={{ fontSize: 12 }}>{p.section}</td>
-                    <td>
-                      {p.existe ? (
-                        <span style={{ background: "#fee2e2", color: "#991b1b", borderRadius: 6, padding: "2px 8px", fontSize: 12, fontWeight: 600 }}>
-                          {p.motifExiste === "matricule" ? "Matricule connu" : "Nom connu"}
-                        </span>
-                      ) : (
-                        <span style={{ background: "#dcfce7", color: "#166534", borderRadius: 6, padding: "2px 8px", fontSize: 12, fontWeight: 600 }}>
-                          Nouvelle
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                {apercu.personnes.map((p) => {
+                  const doute = p.statut === "doute";
+                  const existant = p.statut === "existant";
+                  const bg = existant ? "#f9fafb" : doute && !creer[p.cle] ? "#fffbeb" : undefined;
+                  return (
+                    <tr key={p.cle} style={{ opacity: existant ? 0.55 : 1, background: bg }}>
+                      <td><strong>{p.nom}</strong> {p.prenom}</td>
+                      <td>{p.matricule || <span className="muted">—</span>}</td>
+                      <td style={{ textAlign: "center" }}>{p.sexe ?? "—"}</td>
+                      <td>
+                        {p.typeResolu}
+                        {p.typeSource && p.typeSource.toUpperCase() !== p.typeResolu && (
+                          <span className="muted" style={{ fontSize: 12 }}> ({p.typeSource})</span>
+                        )}
+                      </td>
+                      <td>{frDate(p.dateDebut)}</td>
+                      <td className="muted" style={{ fontSize: 12 }}>{p.section}</td>
+                      <td>
+                        {existant ? (
+                          <span className="muted" style={{ fontSize: 12 }}>
+                            Déjà présent : {p.candidats[0]?.libelle ?? "matricule connu"}
+                          </span>
+                        ) : doute ? (
+                          <div>
+                            <select
+                              value={creer[p.cle] ? "creer" : "rapprocher"}
+                              onChange={(e) => setCreer((c) => ({ ...c, [p.cle]: e.target.value === "creer" }))}
+                              style={{ width: "100%" }}
+                            >
+                              <option value="rapprocher">Rapprocher (ne pas créer)</option>
+                              <option value="creer">Créer une nouvelle personne</option>
+                            </select>
+                            <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>
+                              Homonyme : {p.candidats.map((c) => c.libelle).join(" · ")}
+                            </div>
+                          </div>
+                        ) : (
+                          <label style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                            <input
+                              type="checkbox"
+                              checked={!!creer[p.cle]}
+                              onChange={(e) => setCreer((c) => ({ ...c, [p.cle]: e.target.checked }))}
+                            />
+                            <span style={{ background: "#dcfce7", color: "#166534", borderRadius: 6, padding: "2px 8px", fontSize: 12, fontWeight: 600 }}>
+                              Nouvelle
+                            </span>
+                          </label>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
 
           <div style={{ marginTop: 12 }}>
-            <button type="button" className="btn-sm" disabled={busy || nbInclus === 0} onClick={importer}>
-              {busy ? "Import…" : `Importer ${nbInclus} personne(s)`}
+            <button type="button" className="btn-sm" disabled={busy || nbACreer === 0} onClick={importer}>
+              {busy ? "Import…" : `Importer ${nbACreer} personne(s)`}
             </button>
           </div>
         </div>

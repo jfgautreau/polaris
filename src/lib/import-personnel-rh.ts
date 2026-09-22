@@ -162,6 +162,86 @@ function meilleur(sectionTokens: Set<string>, refs: Ref[]): string | null {
 
 export type Correspondance = { atelierId: string | null; equipeId: string | null };
 
+// ------------------------------------------------------------------
+// Rapprochement avec l'effectif existant (dédoublonnage)
+// ------------------------------------------------------------------
+
+// Tokens d'un nom de personne : sans accents, en capitales, ponctuation
+// éclatée, mono-lettres retirées. « Le Clainché, Anthony » -> {LE,CLAINCHE,ANTHONY}.
+function tokensNomPersonne(nom: string, prenom: string): Set<string> {
+  const src = `${nom} ${prenom}`
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toUpperCase();
+  const out = new Set<string>();
+  for (const t of src.split(/[^A-Z0-9]+/)) if (t.length >= 2) out.add(t);
+  return out;
+}
+function memeJeu(a: Set<string>, b: Set<string>): boolean {
+  if (a.size !== b.size) return false;
+  for (const x of a) if (!b.has(x)) return false;
+  return true;
+}
+function intersection(a: Set<string>, b: Set<string>): number {
+  let n = 0;
+  for (const x of a) if (b.has(x)) n++;
+  return n;
+}
+function inclus(a: Set<string>, b: Set<string>): boolean {
+  for (const x of a) if (!b.has(x)) return false;
+  return true;
+}
+
+export type EffectifItem = { id: string; nom: string; prenom: string; matricule: string | null; statut?: string | null };
+export type Candidat = { id: string; libelle: string };
+
+// « existant » : match certain par matricule -> ne pas recréer, aucune question.
+// « doute »    : le matricule ne matche pas mais un homonyme existe -> l'écran
+//                DEMANDE si c'est la même personne (rapprocher) ou une nouvelle.
+// « nouveau »  : aucun rapprochement -> à créer.
+export type StatutRapprochement = "existant" | "doute" | "nouveau";
+export type Rapprochement = { statut: StatutRapprochement; candidats: Candidat[] };
+
+/** Rapproche une personne du fichier avec l'effectif Polaris.
+ *  Certain (matricule) -> existant ; homonyme(s) -> doute (à confirmer) ;
+ *  rien -> nouveau. */
+export function rapprocher(
+  p: { matricule: string; nom: string; prenom: string },
+  effectif: EffectifItem[],
+): Rapprochement {
+  const mat = p.matricule.trim();
+  if (mat) {
+    const exact = effectif.find((e) => (e.matricule ?? "").trim() === mat);
+    if (exact) {
+      return { statut: "existant", candidats: [{ id: exact.id, libelle: libelleEffectif(exact) }] };
+    }
+  }
+  // Recherche d'homonymes (le matricule ne matche pas ou est absent).
+  const tk = tokensNomPersonne(p.nom, p.prenom);
+  const forts: Candidat[] = [];
+  const faibles: Candidat[] = [];
+  for (const e of effectif) {
+    const te = tokensNomPersonne(e.nom, e.prenom);
+    if (memeJeu(tk, te)) {
+      forts.push({ id: e.id, libelle: libelleEffectif(e) });
+      continue;
+    }
+    // Homonyme partiel crédible : ≥ 2 tokens communs et l'un inclus dans l'autre
+    // (nom identique + prénom abrégé, second prénom en plus…).
+    if (intersection(tk, te) >= 2 && (inclus(tk, te) || inclus(te, tk))) {
+      faibles.push({ id: e.id, libelle: libelleEffectif(e) });
+    }
+  }
+  const candidats = [...forts, ...faibles].slice(0, 8);
+  if (candidats.length === 0) return { statut: "nouveau", candidats: [] };
+  return { statut: "doute", candidats };
+}
+
+function libelleEffectif(e: EffectifItem): string {
+  const base = `${e.nom} ${e.prenom}`.trim();
+  return e.statut && e.statut !== "ACTIF" ? `${base} (${e.statut})` : base;
+}
+
 /** Pré-suggère (atelier, équipe) pour une section, par recoupement de mots.
  *  Best-effort : renvoie null quand rien ne recoupe (l'utilisateur choisit). */
 export function suggererCorrespondance(section: string, ateliers: Ref[], equipes: Ref[]): Correspondance {

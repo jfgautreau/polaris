@@ -9,6 +9,8 @@ import {
   parseBasePersonnel,
   resoudreTypeContrat,
   suggererCorrespondance,
+  rapprocher,
+  type EffectifItem,
   type PersonneImport,
 } from "@/lib/import-personnel-rh";
 
@@ -103,26 +105,16 @@ export async function POST(req: NextRequest) {
     if (!typesR.error) for (const r of (typesR.data ?? []) as { code: string }[]) codes.add(r.code);
     const codesArr = [...codes];
 
-    // Effectif existant pour repérer les doublons. ⚠️ >1000 possible -> fetchAll.
-    const existants = await fetchAll<{ matricule: string | null; nom: string; prenom: string }>(() =>
-      supabase.from("personne").select("matricule, nom, prenom").eq("site_id", siteId).order("nom"),
+    // Effectif existant pour le rapprochement. ⚠️ >1000 possible -> fetchAll.
+    const existants = await fetchAll<EffectifItem>(() =>
+      supabase.from("personne").select("id, matricule, nom, prenom, statut").eq("site_id", siteId).order("nom"),
     );
-    const parMatricule = new Set<string>();
-    const parNomPrenom = new Set<string>();
-    const cleNP = (nom: string, prenom: string) =>
-      `${nom.trim().toUpperCase()}|${prenom.trim().toUpperCase()}`;
-    for (const p of existants) {
-      if (p.matricule) parMatricule.add(p.matricule.trim());
-      parNomPrenom.add(cleNP(p.nom, p.prenom));
-    }
 
-    // Évalue chaque ligne : type résolu + doublon éventuel.
+    // Évalue chaque ligne : type résolu + rapprochement (existant/doute/nouveau).
     const evaluees = fichierParse.personnes.map((p) => {
       const typeResolu = resoudreTypeContrat(p.typeSource, codesArr);
-      let motifExiste: "matricule" | "nom" | null = null;
-      if (p.matricule && parMatricule.has(p.matricule.trim())) motifExiste = "matricule";
-      else if (parNomPrenom.has(cleNP(p.nom, p.prenom))) motifExiste = "nom";
-      return { ...p, typeResolu, existe: motifExiste !== null, motifExiste };
+      const rap = rapprocher(p, existants);
+      return { ...p, typeResolu, statut: rap.statut, candidats: rap.candidats };
     });
 
     if (op === "preview") {
@@ -130,7 +122,9 @@ export async function POST(req: NextRequest) {
         const sug = suggererCorrespondance(raw, ateliers, equipes);
         return { raw, atelierId: sug.atelierId, equipeId: sug.equipeId, effectif: evaluees.filter((e) => e.section === raw).length };
       });
-      const nouveaux = evaluees.filter((e) => !e.existe).length;
+      const nouveaux = evaluees.filter((e) => e.statut === "nouveau").length;
+      const doutes = evaluees.filter((e) => e.statut === "doute").length;
+      const existantsCnt = evaluees.filter((e) => e.statut === "existant").length;
       return NextResponse.json({
         ok: true,
         personnes: evaluees.map((e) => ({
@@ -139,19 +133,18 @@ export async function POST(req: NextRequest) {
           nom: e.nom,
           prenom: e.prenom,
           sexe: e.sexe,
-          fonction: e.fonction,
           typeSource: e.typeSource,
           typeResolu: e.typeResolu,
           dateDebut: e.dateDebut,
           dateFin: e.dateFin,
           section: e.section,
-          existe: e.existe,
-          motifExiste: e.motifExiste,
+          statut: e.statut,
+          candidats: e.candidats,
         })),
         sections,
         ateliers,
         equipes,
-        resume: { total: evaluees.length, nouveaux, existants: evaluees.length - nouveaux },
+        resume: { total: evaluees.length, nouveaux, doutes, existants: existantsCnt },
       });
     }
 
@@ -160,7 +153,10 @@ export async function POST(req: NextRequest) {
         string,
         { atelierId: string | null; equipeId: string | null }
       >;
-      const exclure = new Set(JSON.parse(String(form.get("exclure") ?? "[]")) as string[]);
+      // Décisions explicites de l'écran : la liste des clés à créer. Un « doute »
+      // n'est créé QUE si l'utilisateur a confirmé « nouvelle personne » ; un
+      // « existant » (matricule connu) n'est jamais créé.
+      const aCreerCles = new Set(JSON.parse(String(form.get("aCreer") ?? "[]")) as string[]);
 
       // Validation cross-site des ids de correspondance (le service_role bypass
       // la RLS : un id d'un autre site rattacherait en silence).
@@ -171,8 +167,9 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: `Équipe inconnue pour la section « ${raw} ».` }, { status: 400 });
       }
 
-      // Lignes à créer : nouvelles ET non exclues.
-      const aCreer = evaluees.filter((e) => !e.existe && !exclure.has(cle(e)));
+      // Lignes à créer : celles cochées à l'écran, jamais un « existant »
+      // (garde-fou serveur même si le client l'envoyait par erreur).
+      const aCreer = evaluees.filter((e) => aCreerCles.has(cle(e)) && e.statut !== "existant");
 
       type PersonneRow = {
         id: string;
@@ -185,7 +182,6 @@ export async function POST(req: NextRequest) {
         equipe_id: string | null;
         date_debut: string | null;
         date_fin: string | null;
-        commentaire: string | null;
         site_id: string;
       };
       type ContratRow = {
@@ -214,8 +210,6 @@ export async function POST(req: NextRequest) {
           equipe_id: corr.equipeId,
           date_debut: dateDebut,
           date_fin: e.dateFin,
-          // La fonction RH n'a pas d'équivalent structuré : on la garde en note.
-          commentaire: e.fonction || null,
           site_id: siteId,
         });
         contratsRows.push({
@@ -248,8 +242,9 @@ export async function POST(req: NextRequest) {
         ok: true,
         resume: {
           crees,
-          ignoresExistants: evaluees.filter((e) => e.existe).length,
-          exclus: evaluees.filter((e) => !e.existe && exclure.has(cle(e))).length,
+          existants: evaluees.filter((e) => e.statut === "existant").length,
+          rapproches: evaluees.filter((e) => e.statut === "doute" && !aCreerCles.has(cle(e))).length,
+          exclus: evaluees.filter((e) => e.statut === "nouveau" && !aCreerCles.has(cle(e))).length,
         },
       });
     }

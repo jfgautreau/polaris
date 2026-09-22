@@ -4,6 +4,8 @@ import {
   serieExcelVersIso,
   resoudreTypeContrat,
   suggererCorrespondance,
+  rapprocher,
+  type EffectifItem,
 } from "./import-personnel-rh";
 
 // Reproduit la forme réelle du fichier RH : colonnes A(0) matricule, B(1)
@@ -104,5 +106,38 @@ describe("suggererCorrespondance", () => {
       atelierId: null,
       equipeId: null,
     });
+  });
+});
+
+describe("rapprocher", () => {
+  const effectif: EffectifItem[] = [
+    { id: "p1", nom: "ABNER", prenom: "MAEVA", matricule: "108415", statut: "ACTIF" },
+    { id: "p2", nom: "MARTIN", prenom: "JEAN", matricule: null, statut: "ACTIF" },
+    { id: "p3", nom: "DURAND", prenom: "PAUL", matricule: "500", statut: "PARTI" },
+  ];
+
+  it("matricule connu -> existant, sans question", () => {
+    const r = rapprocher({ matricule: "108415", nom: "ABNER", prenom: "MAEVA" }, effectif);
+    expect(r.statut).toBe("existant");
+    expect(r.candidats[0].id).toBe("p1");
+  });
+
+  it("homonyme sans matricule correspondant -> doute (à confirmer)", () => {
+    // Même nom/prénom mais AUTRE matricule : peut être la même personne ou un homonyme.
+    const r = rapprocher({ matricule: "999999", nom: "Martin", prenom: "Jean" }, effectif);
+    expect(r.statut).toBe("doute");
+    expect(r.candidats.map((c) => c.id)).toContain("p2");
+  });
+
+  it("homonyme partiel (prénom en plus) -> doute avec le libellé de statut", () => {
+    const r = rapprocher({ matricule: "", nom: "DURAND", prenom: "PAUL PIERRE" }, effectif);
+    expect(r.statut).toBe("doute");
+    expect(r.candidats[0].libelle).toBe("DURAND PAUL (PARTI)");
+  });
+
+  it("aucun rapprochement -> nouveau", () => {
+    const r = rapprocher({ matricule: "777", nom: "ZORG", prenom: "ANNA" }, effectif);
+    expect(r.statut).toBe("nouveau");
+    expect(r.candidats).toEqual([]);
   });
 });

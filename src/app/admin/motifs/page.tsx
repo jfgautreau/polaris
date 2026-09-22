@@ -408,11 +408,12 @@ export default async function MotifsPage({
         <p className="muted" style={{ marginBottom: 16 }}>
           Déposez l&apos;export <strong>Excel (.xlsx)</strong> de la base du personnel (une ligne
           par personne, regroupées par section). L&apos;analyse lit nom, prénom, sexe, matricule,
-          type de contrat et date de début, et repère les personnes <strong>déjà présentes</strong>
-          {" "}(par matricule ou nom+prénom) pour ne pas les recréer. Vous rattachez ensuite chaque
-          {" "}<strong>section</strong> du fichier à un Service et une Équipe Polaris, puis
-          l&apos;import <strong>crée les nouvelles personnes</strong> et leur contrat initial.
-          L&apos;import est <strong>additif</strong> : il ne modifie jamais une personne existante.
+          type de contrat et date de début. Une personne au <strong>matricule connu</strong> est
+          ignorée ; un <strong>homonyme</strong> (même nom sans matricule correspondant) est signalé
+          {" "}<strong>« à confirmer »</strong> — vous décidez alors de la <em>rapprocher</em> ou de la
+          {" "}créer. Vous rattachez chaque <strong>section</strong> du fichier à un Service et une
+          Équipe Polaris, puis l&apos;import <strong>crée les personnes retenues</strong> et leur
+          contrat initial. Import <strong>additif</strong> : jamais destructeur.
         </p>
         <ImportPersonnel />
 
