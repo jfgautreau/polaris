@@ -15,6 +15,10 @@ export async function POST(req: NextRequest) {
   const garde = await moduleWriteGuard("ordonnancement");
   if (!garde.ok) return NextResponse.json({ error: garde.error }, { status: garde.status });
   const supabase = garde.supabase;
+  // MULTI-SITE : client admin (service_role) = bypass RLS. Toute écriture par
+  // `id` DOIT être bornée par site_id, sinon un id forgé (ou set-default) touche
+  // les profils d'un autre site. Cf. migration 0074 / audit isolation.
+  const site_id = garde.profile.siteId;
 
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
   const op = s(body?.op);
@@ -27,7 +31,7 @@ export async function POST(req: NextRequest) {
       // MULTI-SITE : site_id explicite pour le cas admin client (service_role).
       const { data, error } = await supabase
         .from("semaine_type_profil")
-        .insert({ nom, site_id: garde.profile.siteId })
+        .insert({ nom, site_id })
         .select("id, nom, par_defaut")
         .single();
       if (error) throw error;
@@ -38,7 +42,7 @@ export async function POST(req: NextRequest) {
       const id = s(body?.id);
       const nom = s(body?.nom);
       if (!id || !nom) return NextResponse.json({ error: "Champs requis" }, { status: 400 });
-      const { error } = await supabase.from("semaine_type_profil").update({ nom }).eq("id", id);
+      const { error } = await supabase.from("semaine_type_profil").update({ nom }).eq("id", id).eq("site_id", site_id);
       if (error) throw error;
       return NextResponse.json({ ok: true });
     }
@@ -46,7 +50,7 @@ export async function POST(req: NextRequest) {
     if (op === "delete") {
       const id = s(body?.id);
       if (!id) return NextResponse.json({ error: "id manquant" }, { status: 400 });
-      const { error } = await supabase.from("semaine_type_profil").delete().eq("id", id);
+      const { error } = await supabase.from("semaine_type_profil").delete().eq("id", id).eq("site_id", site_id);
       if (error) throw error;
       return NextResponse.json({ ok: true });
     }
@@ -54,10 +58,11 @@ export async function POST(req: NextRequest) {
     if (op === "set-default") {
       const id = s(body?.id);
       if (!id) return NextResponse.json({ error: "id manquant" }, { status: 400 });
-      // Un seul profil par defaut a la fois.
-      const { error: e1 } = await supabase.from("semaine_type_profil").update({ par_defaut: false }).neq("id", id);
+      // Un seul profil par defaut a la fois — DANS LE SITE COURANT. Sans le
+      // filtre site_id, ce reset effaçait le par_defaut de TOUS les sites.
+      const { error: e1 } = await supabase.from("semaine_type_profil").update({ par_defaut: false }).eq("site_id", site_id).neq("id", id);
       if (e1) throw e1;
-      const { error: e2 } = await supabase.from("semaine_type_profil").update({ par_defaut: true }).eq("id", id);
+      const { error: e2 } = await supabase.from("semaine_type_profil").update({ par_defaut: true }).eq("id", id).eq("site_id", site_id);
       if (e2) throw e2;
       return NextResponse.json({ ok: true });
     }

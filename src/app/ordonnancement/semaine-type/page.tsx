@@ -14,7 +14,7 @@ export default async function SemaineTypePage({ searchParams }: { searchParams: 
   const sp = await searchParams;
 
   const supabase = await getServerClient();
-  const profils = await getProfils(supabase);
+  const profils = await getProfils(supabase, profile.siteId);
   const selectedId =
     sp.profil && profils.some((p) => p.id === sp.profil)
       ? sp.profil
@@ -28,8 +28,8 @@ export default async function SemaineTypePage({ searchParams }: { searchParams: 
       .eq("actif", true)
       .returns<Ligne[]>(),
     chargerPosteQuart(supabase),
-    selectedId ? getSemaineType(supabase, selectedId) : Promise.resolve({}),
-    selectedId ? getSemaineOuverture(supabase, selectedId) : Promise.resolve({}),
+    selectedId ? getSemaineType(supabase, selectedId, profile.siteId) : Promise.resolve({}),
+    selectedId ? getSemaineOuverture(supabase, selectedId, profile.siteId) : Promise.resolve({}),
   ]);
 
   const quarts = quartsD ?? [];

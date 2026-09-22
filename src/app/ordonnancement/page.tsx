@@ -78,7 +78,7 @@ export default async function OrdonnancementPage({
         .returns<{ jour: string; ligne_id: string; quart_code: string; ouverte: boolean }[]>()
     ),
     chargerPosteQuart(supabase),
-    getProfils(supabase),
+    getProfils(supabase, profile.siteId),
     chargerValidites(supabase, "ligne"),
     chargerValidites(supabase, "poste"),
   ]);

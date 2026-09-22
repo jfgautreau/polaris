@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
   // ligne jour_quart est DÉRIVÉE : active dès qu'au moins un quart tournant l'est.
   const journeeCode = [...(quartsD ?? [])].filter((q) => !q.creneau).sort((a, b) => a.ordre - b.ordre)[0]?.code ?? null;
 
-  const [type, ouvType] = await Promise.all([getSemaineType(supabase, profil_id), getSemaineOuverture(supabase, profil_id)]);
+  const [type, ouvType] = await Promise.all([getSemaineType(supabase, profil_id, site_id), getSemaineOuverture(supabase, profil_id, site_id)]);
 
   // 1) Quarts actifs <- gabarit, puis journée = OU(quarts tournants) du jour.
   const rows = isos.flatMap((iso) => {
