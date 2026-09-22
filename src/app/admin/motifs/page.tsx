@@ -13,6 +13,7 @@ import AjoutModal from "./AjoutModal";
 import BandeauErreur from "@/components/BandeauErreur";
 import FenetreAffichageInline from "./FenetreAffichageInline";
 import ImportAbsences from "./ImportAbsences";
+import ImportPersonnel from "./ImportPersonnel";
 import { CheckIcon, EditIcon } from "@/components/icons";
 
 type Motif = { id: string; libelle: string; code_court: string; couleur: string; actif: boolean; non_planifie: boolean; code_gt: string | null };
@@ -401,6 +402,19 @@ export default async function MotifsPage({
           compte pour une <strong>journée entière</strong>.
         </p>
         <ImportAbsences />
+
+        {/* ---------------- Import Base personnel (fichier Excel RH) ---------------- */}
+        <h2 style={{ marginTop: 32, marginBottom: 4 }}>Import Base personnel</h2>
+        <p className="muted" style={{ marginBottom: 16 }}>
+          Déposez l&apos;export <strong>Excel (.xlsx)</strong> de la base du personnel (une ligne
+          par personne, regroupées par section). L&apos;analyse lit nom, prénom, sexe, matricule,
+          type de contrat et date de début, et repère les personnes <strong>déjà présentes</strong>
+          {" "}(par matricule ou nom+prénom) pour ne pas les recréer. Vous rattachez ensuite chaque
+          {" "}<strong>section</strong> du fichier à un Service et une Équipe Polaris, puis
+          l&apos;import <strong>crée les nouvelles personnes</strong> et leur contrat initial.
+          L&apos;import est <strong>additif</strong> : il ne modifie jamais une personne existante.
+        </p>
+        <ImportPersonnel />
 
         </LectureSeule>
       </div>
