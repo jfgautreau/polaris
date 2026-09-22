@@ -76,8 +76,8 @@ export default async function PolyvalenceReport({ searchParams }: { searchParams
 
         <div className="kpi-grid">
           <div className="kpi accent"><div className="v">{fmtMoy(r.polyvalenceMoyenne)}</div><div className="l">Polyvalence moyenne</div><div className="s">postes tenus / personne</div></div>
-          <div className={`kpi ${r.nbSansReleveSure > 0 ? "danger" : "ok"}`}><div className="v">{r.nbSansReleveSure}</div><div className="l">Postes sans personne fiable</div><div className="s">0 personne fiable à {H_DEPART} j</div></div>
-          <div className={`kpi ${r.nbFragiles > 0 ? "warn" : "ok"}`}><div className="v">{r.nbFragiles}</div><div className="l">Postes fragiles</div><div className="s">1 seule personne fiable</div></div>
+          <div className={`kpi ${r.nbSansReleveSure > 0 ? "danger" : "ok"}`}><div className="v">{r.nbSansReleveSure}</div><div className="l">Postes sans personne durablement qualifiée</div><div className="s">0 à l&apos;horizon {H_DEPART} j</div></div>
+          <div className={`kpi ${r.nbFragiles > 0 ? "warn" : "ok"}`}><div className="v">{r.nbFragiles}</div><div className="l">Postes fragiles</div><div className="s">1 seule personne durablement qualifiée</div></div>
           <div className={`kpi ${r.ecartTotal > 0 ? "warn" : "ok"}`}><div className="v">{r.ecartTotal}</div><div className="l">Écart à combler</div><div className="s">formations vers la cible</div></div>
           <div className={`kpi ${r.nbClesPartantes > 0 ? "danger" : "ok"}`}><div className="v">{r.nbClesPartantes}</div><div className="l">Personnes clés partantes</div><div className="s">seule à tenir un poste</div></div>
           <div className={`kpi ${r.nbEcheancesCritiques > 0 ? "danger" : r.echeances.length > 0 ? "warn" : "ok"}`}><div className="v">{r.echeances.length}</div><div className="l">Habilitations à échéance</div><div className="s">{r.nbEcheancesCritiques} critique(s) · ≤ {H_HAB} j</div></div>
@@ -121,7 +121,7 @@ export default async function PolyvalenceReport({ searchParams }: { searchParams
           <h2>2 · Postes — couverture &amp; fragilité</h2>
           <div className="card" style={{ overflowX: "auto" }}>
             {r.postesCritiquesFragiles.length === 0 ? (
-              <p className="muted">Aucun poste critique ou fragile : chaque poste remplaçable a au moins 2 personnes fiables pour le tenir.</p>
+              <p className="muted">Aucun poste critique ou fragile : chaque poste remplaçable a au moins 2 personnes durablement qualifiées pour le tenir.</p>
             ) : (
               <table>
                 <thead>
@@ -165,8 +165,8 @@ export default async function PolyvalenceReport({ searchParams }: { searchParams
               {" "}<strong>Niv 1…{r.nbNiveaux}</strong> = nombre de personnes formées à ce niveau sur le poste (niveau actuel).
               {" "}<strong>Besoin actuel / cible</strong> = nombre de personnes visé, renseigné dans la matrice de polyvalence.
               {" "}<strong>Nb compétence</strong> = nombre de personnes qui savent tenir le poste aujourd&apos;hui (niveau requis atteint <strong>et</strong> habilitées) <strong>et</strong> sans risque imminent (départ ≤ {H_DEPART} j, retraite, ou habilitation exigée expirant ≤ {H_HAB} j).
-              {" "}<strong>Critique</strong> = 0 personne fiable (poste que vous allez perdre) · <strong>fragile</strong> = une seule.
-              {r.nbTenus > 0 && <> {" "}· {r.nbTenus} poste{r.nbTenus > 1 ? "s" : ""} tenu{r.nbTenus > 1 ? "s" : ""} (≥ 2 personnes fiables) non listé{r.nbTenus > 1 ? "s" : ""}.</>}
+              {" "}<strong>Critique</strong> = aucune personne durablement qualifiée (poste que vous allez perdre) · <strong>fragile</strong> = une seule.
+              {r.nbTenus > 0 && <> {" "}· {r.nbTenus} poste{r.nbTenus > 1 ? "s" : ""} tenu{r.nbTenus > 1 ? "s" : ""} (≥ 2 personnes durablement qualifiées) non listé{r.nbTenus > 1 ? "s" : ""}.</>}
             </p>
           </div>
 
@@ -258,7 +258,7 @@ export default async function PolyvalenceReport({ searchParams }: { searchParams
               <p className="muted">Aucun écart individuel : tout le monde est au niveau cible.</p>
             ) : r.formations.length === 0 ? (
               <p style={{ margin: 0 }}>
-                {r.ecartTotal} formation(s) vers la cible, toutes sur des postes déjà tenus (≥ 2 personnes fiables).{" "}
+                {r.ecartTotal} formation(s) vers la cible, toutes sur des postes déjà tenus (≥ 2 personnes durablement qualifiées).{" "}
                 <Link href="/matrice" className="navlink">Détail dans la matrice &rarr;</Link>
               </p>
             ) : (

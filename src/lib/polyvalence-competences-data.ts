@@ -229,7 +229,7 @@ export async function chargerPolyvalenceCompetences(
       raison = `Les seules personnes capables de tenir le poste sont toutes à risque : ${listeRisque}.`;
     } else if (sure === 1) {
       const fiable = releve.find((m) => !m.risque);
-      raison = `Une seule personne fiable pour tenir le poste (${fiable?.nom ?? "?"})`;
+      raison = `Une seule personne durablement qualifiée pour tenir le poste (${fiable?.nom ?? "?"})`;
       raison += aRisque.length ? ` ; les autres sont à risque : ${listeRisque}.` : ", aucune autre en soutien.";
     }
     return { id: p.id, nom: p.nom, ligne: p.ligne, atelierId: p.atelierId, atelierNom: p.atelierNom, categorie: p.categorie, remplacable: p.remplacable, min: p.min, releve, sure, cible, verdict, niveaux, besoinActuel: p.besoinActuel, besoinCible: p.besoinCible, raison };
