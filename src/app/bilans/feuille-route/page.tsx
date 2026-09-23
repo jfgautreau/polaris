@@ -38,7 +38,7 @@ type LigneAtelier = {
   id: string;
   atelier_id: string | null;
   regroupement: string | null;
-  poste: { id: string; actif: boolean; categorie: string | null; effectif_requis: number | null }[];
+  poste: { id: string; actif: boolean; categorie: string | null; effectif_requis: number | null; niveau_min_requis: number | null }[];
 };
 
 type PlRow = { personne_id: string; jour: string; motif_absence_id: string | null };
@@ -106,7 +106,7 @@ export default async function FeuilleRouteReport({
     supabase.from("personne").select("id, atelier_id, equipe_id, regroupement, type_contrat").eq("statut", "ACTIF").returns<(Personne & { type_contrat: string })[]>(),
     supabase
       .from("ligne")
-      .select("id, atelier_id, regroupement, poste(id, actif, categorie, effectif_requis)")
+      .select("id, atelier_id, regroupement, poste(id, actif, categorie, effectif_requis, niveau_min_requis)")
       .eq("actif", true)
       .returns<LigneAtelier[]>(),
     fetchAll<MatCell>(() =>
@@ -193,6 +193,7 @@ export default async function FeuilleRouteReport({
         effectif_requis: p.effectif_requis ?? 0,
         nbQuartsPostes: nbQuartsDe(p.id),
         besoinPoste: besoinPosteDe(p.id, p.effectif_requis ?? 0),
+        niveauMin: p.niveau_min_requis ?? 0,
         regroupement: l.regroupement,
       });
       posteLigne.set(p.id, l.id);
@@ -353,7 +354,7 @@ export default async function FeuilleRouteReport({
                 </>
               )}
               Pour une <strong>semaine initialisée dans l&apos;ordonnancement</strong>, le besoin est <strong>actualisé</strong> = besoin du <em>jour ouvré le plus chargé</em> de la semaine (les lignes fermées ce jour-là sont retirées) ; sinon l&apos;abaque référentiel s&apos;applique.{" "}
-              <strong>Total titulaires</strong> = personnes compétentes de la catégorie <em>hors intérim</em> (niv.&nbsp;1 à&nbsp;{nbNiveaux}, chacune comptée une fois) ; <span style={{ color: "#15803d", fontWeight: 700 }}>vert</span> si ≥ besoin, <span style={{ color: "#b91c1c", fontWeight: 700 }}>rouge</span> si &lt; besoin. <strong>Total intérim</strong> = intérimaires compétents, comptés <em>à part</em> (jaune) — non inclus dans la comparaison au besoin.
+              Les lignes <strong>Niv&nbsp;1…{nbNiveaux}</strong> comptent le niveau <em>max</em> acquis par personne (compétence, sans seuil). <strong>Total titulaires</strong> = personnes <em>hors intérim</em> <strong>opérationnelles</strong> : elles tiennent au moins un poste de la catégorie (niveau&nbsp;≥&nbsp;niveau minimum requis du poste{habilitationStricte ? " + habilitation valide" : ""}) — donc <strong>Total&nbsp;≤&nbsp;somme des Niv</strong> ; <span style={{ color: "#15803d", fontWeight: 700 }}>vert</span> si ≥ besoin, <span style={{ color: "#b91c1c", fontWeight: 700 }}>rouge</span> sinon. <strong>Total intérim</strong> = intérimaires opérationnels, comptés <em>à part</em> (jaune) — non inclus dans la comparaison au besoin.
             </div>
           </div>
           <ReportActions showPrint={false} />
@@ -528,7 +529,7 @@ export default async function FeuilleRouteReport({
                         <tr style={{ borderTop: "2px solid #cbd5e1" }}>
                           <td
                             style={{ padding: "3px 8px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}
-                            title={`Titulaires ${bloc.catLabel.toLowerCase()} compétents (niv. 1 à ${nbNiveaux}), hors intérim, chacun compté une fois. Vert si ≥ besoin de la semaine, rouge sinon. L'intérim est compté séparément.`}
+                            title={`Titulaires ${bloc.catLabel.toLowerCase()} OPÉRATIONNELS, hors intérim, chacun compté une fois : comptés seulement s'ils peuvent tenir AU MOINS UN poste de la catégorie (niveau ≥ niveau minimum requis de ce poste au Référentiel${habilitationStricte ? " + habilitation valide" : ""}). Une personne compétente mais sous le niveau min de tous ses postes n'est PAS comptée (elle reste dans les lignes Niv). Vert si ≥ besoin de la semaine, rouge sinon.`}
                           >
                             Total titulaires
                           </td>
@@ -563,7 +564,7 @@ export default async function FeuilleRouteReport({
                           <tr>
                             <td
                               style={{ padding: "3px 8px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap", color: "#92400e" }}
-                              title={`Intérimaires ${bloc.catLabel.toLowerCase()} compétents (niv. 1 à ${nbNiveaux}), comptés à part — non inclus dans la comparaison au besoin ci-dessus.`}
+                              title={`Intérimaires ${bloc.catLabel.toLowerCase()} OPÉRATIONNELS (tiennent ≥ 1 poste de la catégorie : niveau ≥ niveau minimum requis${habilitationStricte ? " + habilitation valide" : ""}), comptés à part — non inclus dans la comparaison au besoin ci-dessus.`}
                             >
                               Total intérim
                             </td>

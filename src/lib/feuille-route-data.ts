@@ -14,9 +14,13 @@
 //     date du lundi (une personne dont l'habilitation « chariot » a expiré
 //     redescend au max de ses AUTRES postes conducteur).
 //
-// Le NIVEAU_MIN_REQUIS du poste est ignoré — on mesure la compétence acquise
-// (pastille de la matrice), pas la capacité opérationnelle (celle-ci est le
-// domaine de « Polyvalence & compétences »).
+// Les lignes Niv 1..N mesurent la compétence ACQUISE (pastille de la matrice),
+// NIVEAU_MIN_REQUIS ignoré. En revanche le « Total » (titulaires / intérim) et
+// ses sous-totaux par regroupement comptent la population OPÉRATIONNELLE : une
+// personne n'y est comptée que si elle peut tenir ≥ 1 poste de la catégorie
+// (niveau_actuel ≥ niveau_min_requis du poste + habilitation si mode strict).
+// Conséquence : Total ≤ somme des lignes Niv (une personne compétente mais sous
+// le niveau min de tous ses postes est dans les Niv, pas dans le Total).
 //
 // Le service = ATELIER D'AFFECTATION DE LA PERSONNE (`personne.atelier_id`).
 // Une compétence Fab tenue par un Condi compte dans la colonne Condi.
@@ -56,6 +60,9 @@ export type Poste = {
   // migration 0070). Ex. matin 2 + après-midi 1 = 3. Calculé au chargement.
   // Repli (base pré-0070) : effectif_requis × nbQuartsPostes.
   besoinPoste?: number;
+  // Niveau minimum requis du poste (Référentiel) : sert au « Total » opérationnel
+  // (une personne compte si niveau_actuel ≥ ce min sur ≥ 1 poste). Défaut 0.
+  niveauMin?: number;
   // Regroupement de la LIGNE du poste (migration 0069, hérité au chargement).
   // Sert à ventiler le Besoin par regroupement. Optionnel.
   regroupement?: string | null;
@@ -276,6 +283,35 @@ export function maxParCategorieAuJour(
   return out;
 }
 
+// Catégories où la personne est OPÉRATIONNELLE ce jour = elle peut tenir AU
+// MOINS UN poste de la catégorie : niveau_actuel ≥ niveau_min_requis DE CE POSTE
+// (et, en mode strict, habilitations valides). Sert au « Total » (titulaires /
+// intérim) et à ses sous-totaux par regroupement — distinct des lignes Niv 1..N
+// qui, elles, comptent le niveau MAX (compétence acquise, sans seuil).
+export function categoriesOperationnellesAuJour(
+  personneId: string,
+  jour: string,
+  matriceIndex: Map<string, { posteId: string; niveau: number; cat: string }[]>,
+  posteMin: Map<string, number>,
+  posteCompRequise: Map<string, string[]>,
+  competencesPersonne: Map<string, Map<string, string | null>>,
+  habilitationStricte: boolean,
+): Set<string> {
+  const out = new Set<string>();
+  const cells = matriceIndex.get(personneId);
+  if (!cells) return out;
+  const compsPers = competencesPersonne.get(personneId) ?? new Map<string, string | null>();
+  for (const cell of cells) {
+    if (habilitationStricte) {
+      const requis = posteCompRequise.get(cell.posteId) ?? [];
+      const ok = requis.every((cid) => compsPers.has(cid) && habilitationValideAu(compsPers.get(cid) ?? null, jour));
+      if (!ok) continue;
+    }
+    if (cell.niveau >= (posteMin.get(cell.posteId) ?? 0)) out.add(cell.cat);
+  }
+  return out;
+}
+
 export function calculerGrille(p: Params): Grille {
   const {
     personnes, postes, matrice, contratsParPersonne, absencesParPersonne,
@@ -285,6 +321,7 @@ export function calculerGrille(p: Params): Grille {
   } = p;
 
   const posteById = new Map(postes.map((po) => [po.id, po]));
+  const posteMin = new Map(postes.map((po) => [po.id, po.niveauMin ?? 0]));
   const ateliersRetenus = ateliersFiltre && ateliersFiltre.length > 0 ? new Set(ateliersFiltre) : null;
 
   // Index matrice → parPersonne : [(posteId, niveau, cat)] pour les niveaux
@@ -390,12 +427,21 @@ export function calculerGrille(p: Params): Grille {
             const jours = absencesParPersonne.get(pe.id) ?? new Set<string>();
             if (semainePleineAbsence(jours, lundi)) continue;
 
+            // Lignes Niv 1..N : niveau MAX acquis dans la catégorie (sans seuil).
             const maxParCat = maxParCategorieAuJour(
               pe.id, lundi, parPersonne, posteCompRequise, competencesPersonne, habilitationStricte,
             );
             const n = maxParCat.get(c.key);
             if (n !== undefined && n >= 1 && n <= nbNiveaux) {
               niveaux[n - 1].parSemaine[wi]++;
+            }
+            // Total (titulaires / intérim) + sous-totaux regroupement : population
+            // OPÉRATIONNELLE = tient ≥ 1 poste de la catégorie (niveau ≥ niveau_min
+            // du poste + habilitation si mode strict). Distinct des lignes Niv ci-dessus.
+            const opCats = categoriesOperationnellesAuJour(
+              pe.id, lundi, parPersonne, posteMin, posteCompRequise, competencesPersonne, habilitationStricte,
+            );
+            if (opCats.has(c.key)) {
               if (pe.interim) totalInterim[wi]++;
               else totalTitulaires[wi]++;
               if (hasReg) {

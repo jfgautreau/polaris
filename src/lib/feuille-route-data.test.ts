@@ -9,6 +9,7 @@ import {
   habilitationValideAu,
   nbQuartsPostesDe,
   maxParCategorieAuJour,
+  categoriesOperationnellesAuJour,
   calculerGrille,
   type Params,
   type Personne,
@@ -143,6 +144,58 @@ describe("maxParCategorieAuJour", () => {
     const persComps = new Map([["p1", new Map([["chariot", "2026-01-01"]])]]);
     const r = maxParCategorieAuJour("p1", "2026-09-07", idx, req, persComps, false);
     expect(r.get("conducteur")).toBe(3);
+  });
+});
+
+describe("categoriesOperationnellesAuJour", () => {
+  const req = new Map<string, string[]>();
+  const comps = new Map<string, Map<string, string | null>>();
+
+  it("opérationnel si niveau ≥ min sur AU MOINS UN poste de la catégorie", () => {
+    // Marie : niv 2 sur po-a (min 2) → tient ; niv 1 sur po-b (min 3) → non.
+    const idx = new Map([
+      ["marie", [
+        { posteId: "po-a", niveau: 2, cat: "conducteur" },
+        { posteId: "po-b", niveau: 1, cat: "conducteur" },
+      ]],
+    ]);
+    const min = new Map([["po-a", 2], ["po-b", 3]]);
+    const r = categoriesOperationnellesAuJour("marie", "2026-09-07", idx, min, req, comps, false);
+    expect(r.has("conducteur")).toBe(true);
+  });
+
+  it("non opérationnel si sous le min sur TOUS ses postes", () => {
+    // Paul : niv 1 partout, mais min 2 et 3 → ne tient aucun poste.
+    const idx = new Map([
+      ["paul", [
+        { posteId: "po-a", niveau: 1, cat: "conducteur" },
+        { posteId: "po-b", niveau: 1, cat: "conducteur" },
+      ]],
+    ]);
+    const min = new Map([["po-a", 2], ["po-b", 3]]);
+    const r = categoriesOperationnellesAuJour("paul", "2026-09-07", idx, min, req, comps, false);
+    expect(r.has("conducteur")).toBe(false);
+  });
+
+  it("min absent = 0 : toute compétence (niveau ≥ 1) rend opérationnel", () => {
+    const idx = new Map([["luc", [{ posteId: "po-x", niveau: 1, cat: "operateur" }]]]);
+    const r = categoriesOperationnellesAuJour("luc", "2026-09-07", idx, new Map(), req, comps, false);
+    expect(r.has("operateur")).toBe(true);
+  });
+
+  it("mode strict : habilitation expirée retire le poste, peut faire basculer en non-opérationnel", () => {
+    // po-a (min 2) exige « chariot » expiré → écarté ; reste po-b niv 1 (min 1) → tient.
+    const idx = new Map([
+      ["ana", [
+        { posteId: "po-a", niveau: 3, cat: "conducteur" },
+        { posteId: "po-b", niveau: 1, cat: "conducteur" },
+      ]],
+    ]);
+    const min = new Map([["po-a", 2], ["po-b", 1]]);
+    const reqStrict = new Map([["po-a", ["chariot"]]]);
+    const persComps = new Map([["ana", new Map([["chariot", "2026-01-01"]])]]);
+    const r = categoriesOperationnellesAuJour("ana", "2026-09-07", idx, min, reqStrict, persComps, true);
+    expect(r.has("conducteur")).toBe(true); // via po-b
   });
 });
 
