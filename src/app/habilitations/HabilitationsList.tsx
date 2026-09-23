@@ -243,8 +243,16 @@ export default function HabilitationsList({
   const [maj, setMaj] = useState<{ personneId: string; competenceId: string; dateObtention: string | null; autorisationRemise: boolean; commentaire: string | null } | null>(null);
   const [showLegende, setShowLegende] = useState(false);
   const [showBilan, setShowBilan] = useState(false);
+  // Filtre posé au clic sur un en-tête de colonne (formation / groupe / catégorie),
+  // comme la Matrice : affiche les personnes AYANT au moins une habilitation du
+  // périmètre cliqué. `null` = pas de filtre.
+  const [colFilter, setColFilter] = useState<{ kind: "cat" | "grp"; key: string; label: string } | null>(null);
+  const toggleCol = (kind: "cat" | "grp", key: string, label: string) =>
+    setColFilter((cur) => (cur && cur.kind === kind && cur.key === key ? null : { kind, key, label }));
 
   const compById = useMemo(() => new Map(comps.map((c) => [c.id, c])), [comps]);
+  // Clé de groupe d'une formation (catégorie|groupe), pour le filtre et le surlignage.
+  const grpKeyOf = (c: Comp) => `${catOf(c.categorie)}|${c.groupe ?? "—"}`;
 
   // Sous-ensemble affiche PAR DEFAUT (filtres equipe/atelier serveur). Sert de
   // base a `shownPersonnes` hors recherche, et au bilan (qui doit refleter le
@@ -325,15 +333,40 @@ export default function HabilitationsList({
   const hasPersonHit = q ? personnes.some(personMatch) : false;
   const hasCompHit = q ? ordered.some(compMatch) : false;
   const noHit = !!q && !hasPersonHit && !hasCompHit;
-  const shownPersonnes = !q ? displayedPersonnes : noHit ? [] : hasPersonHit ? personnes.filter(personMatch) : personnes;
+
+  // Périmètre du filtre par colonne : ensemble des personnes ayant AU MOINS UNE
+  // habilitation (un enregistrement) dans le groupe/la catégorie cliqué·e. Balaie
+  // TOUT l'effectif (comme la Matrice), transverse au filtre atelier/équipe.
+  const colPersonSet = useMemo(() => {
+    if (!colFilter) return null;
+    const compIds = new Set<string>();
+    for (const c of ordered) {
+      const ok = colFilter.kind === "cat" ? catOf(c.categorie) === colFilter.key : grpKeyOf(c) === colFilter.key;
+      if (ok) compIds.add(c.id);
+    }
+    const set = new Set<string>();
+    for (const r of rows) if (compIds.has(r.competence_id)) set.add(r.personne_id);
+    return set;
+  }, [colFilter, ordered, rows]);
+
+  const shownPersonnes = (() => {
+    let base = !q ? displayedPersonnes : noHit ? [] : hasPersonHit ? personnes.filter(personMatch) : personnes;
+    // Sous filtre colonne (hors recherche), on balaie tout l'effectif.
+    if (colPersonSet && !q) base = personnes;
+    return colPersonSet ? base.filter((p) => colPersonSet.has(p.id)) : base;
+  })();
   const shownOrdered = !q ? ordered : noHit ? [] : hasCompHit ? ordered.filter(compMatch) : ordered;
-  const shownRows = !q
-    ? (displayedSet ? rows.filter((r) => displayedSet.has(r.personne_id)) : rows)
-    : rows.filter((r) => {
-        const p = r.personne ? personMatch(r.personne) : false;
-        const c = compById.get(r.competence_id);
-        return p || (c ? compMatch(c) : r.competence ? norm(r.competence.nom).includes(norm(q)) : false);
-      });
+  const shownRows = (() => {
+    const r0 = !q
+      ? (displayedSet ? rows.filter((r) => displayedSet.has(r.personne_id)) : rows)
+      : rows.filter((r) => {
+          const p = r.personne ? personMatch(r.personne) : false;
+          const c = compById.get(r.competence_id);
+          return p || (c ? compMatch(c) : r.competence ? norm(r.competence.nom).includes(norm(q)) : false);
+        });
+    if (colPersonSet && !q) return rows.filter((r) => colPersonSet.has(r.personne_id));
+    return r0;
+  })();
 
   // Virtualisation des lignes de la grille (cf. usePersonGrid) : seules les
   // personnes visibles sont rendues. `rowCount` suit le filtre de recherche.
@@ -447,6 +480,29 @@ export default function HabilitationsList({
       </div>
 
       <div className="gridband">
+        {colFilter && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "4px 10px",
+              margin: "0 0 6px",
+              background: "#eef2ff",
+              border: "1px solid #c7d2fe",
+              borderRadius: 8,
+              fontSize: 13,
+            }}
+          >
+            <span>
+              Filtré : personnes habilitées {colFilter.kind === "cat" ? "dans la catégorie" : "sur le groupe"}{" "}
+              <strong>{colFilter.label}</strong> <span className="muted">({shownPersonnes.length})</span>
+            </span>
+            <button type="button" onClick={() => setColFilter(null)} className="iconbtn ghost" title="Retirer le filtre" style={{ marginLeft: "auto" }}>
+              ✕
+            </button>
+          </div>
+        )}
         {view === "grille" ? (
           <div
             className={g.grid}
@@ -487,35 +543,68 @@ export default function HabilitationsList({
                       </button>
                     </th>
                     {catSpans.map((c) => (
-                      <th key={c.key} colSpan={c.span} className={g.groupHead} title={c.label}>
+                      <th
+                        key={c.key}
+                        colSpan={c.span}
+                        className={g.groupHead}
+                        title={`${c.label} — cliquer pour filtrer les personnes de cette catégorie`}
+                        onClick={() => toggleCol("cat", c.key, c.label)}
+                        style={{ cursor: "pointer", ...(colFilter?.kind === "cat" && colFilter.key === c.key ? { background: "#c7d2fe" } : undefined) }}
+                      >
                         <div className={g.groupLabel}>{c.label}</div>
                       </th>
                     ))}
                   </tr>
                   <tr>
                     {grpSpans.map((gr) => (
-                      <th key={gr.key} colSpan={gr.span} className={g.subHead} title={gr.label}>
+                      <th
+                        key={gr.key}
+                        colSpan={gr.span}
+                        className={g.subHead}
+                        title={`${gr.label} — cliquer pour filtrer les personnes de ce groupe`}
+                        onClick={() => toggleCol("grp", gr.key, gr.label)}
+                        style={{ cursor: "pointer", ...(colFilter?.kind === "grp" && colFilter.key === gr.key ? { background: "#c7d2fe" } : undefined) }}
+                      >
                         <div className={g.groupLabel}>{gr.label}</div>
                       </th>
                     ))}
                   </tr>
                   <tr>
-                    {shownOrdered.map((c) => (
-                      <th
-                        key={c.id}
-                        title={c.a_autorisation_conduite ? `${c.nom}\nSoumise à autorisation` : c.nom}
-                        className={debutGroupe.has(c.id) ? `${g.colHead} ${g.groupStart}` : g.colHead}
-                      >
-                        <div className={g.colLabel}>
-                          {c.a_autorisation_conduite && (
-                            <span className={g.colMark}>
-                              <AutorisationMark />
-                            </span>
-                          )}
-                          {c.nom}
-                        </div>
-                      </th>
-                    ))}
+                    {shownOrdered.map((c) => {
+                      // Détail de la formation en info-bulle (item 4) : catégorie,
+                      // groupe, durée de validité, autorisation.
+                      const dureeTxt = c.duree_validite_mois ? `${c.duree_validite_mois} mois` : "sans échéance (permanente)";
+                      const titre = [
+                        c.nom,
+                        `Catégorie : ${CAT_LABEL[catOf(c.categorie)]}`,
+                        c.groupe ? `Groupe : ${c.groupe}` : null,
+                        `Validité : ${dureeTxt}`,
+                        c.a_autorisation_conduite ? "Soumise à autorisation" : null,
+                        "— Cliquer pour filtrer les personnes de ce groupe",
+                      ]
+                        .filter(Boolean)
+                        .join("\n");
+                      const grpActif = colFilter?.kind === "grp" && colFilter.key === grpKeyOf(c);
+                      const catActif = colFilter?.kind === "cat" && colFilter.key === catOf(c.categorie);
+                      return (
+                        <th
+                          key={c.id}
+                          title={titre}
+                          className={debutGroupe.has(c.id) ? `${g.colHead} ${g.groupStart}` : g.colHead}
+                          onClick={() => toggleCol("grp", grpKeyOf(c), c.groupe ?? CAT_LABEL[catOf(c.categorie)])}
+                          style={{ cursor: "pointer", ...(grpActif || catActif ? { background: "#eef2ff" } : undefined) }}
+                        >
+                          <div className={g.colLabel}>
+                            {c.a_autorisation_conduite && (
+                              <span className={g.colMark}>
+                                <AutorisationMark />
+                              </span>
+                            )}
+                            {c.nom}
+                          </div>
+                        </th>
+                      );
+                    })}
                     {shownOrdered.length === 0 && <th className="muted">Aucune formation</th>}
                   </tr>
                 </thead>
