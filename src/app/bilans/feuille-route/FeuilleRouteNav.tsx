@@ -55,7 +55,16 @@ export default function FeuilleRouteNav({
   };
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "0 0 12px", flexWrap: "wrap" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "0 0 12px", flexWrap: "nowrap" }}>
+      <button
+        type="button"
+        style={{ ...btn, opacity: auDebut || pending ? 0.5 : 1, cursor: auDebut ? "default" : "pointer" }}
+        disabled={auDebut || pending}
+        onClick={() => aller(null)}
+        title="Revenir à la semaine courante"
+      >
+        Aujourd&apos;hui
+      </button>
       <button
         type="button"
         style={{ ...btn, opacity: auDebut || pending ? 0.5 : 1, cursor: auDebut ? "default" : "pointer" }}
@@ -65,10 +74,6 @@ export default function FeuilleRouteNav({
       >
         ‹ 4 sem.
       </button>
-      <span style={{ fontSize: 13, color: "var(--muted)", minWidth: 190, textAlign: "center" }}>
-        {frCourt(debut)} → {frCourt(finIso)}
-        {auDebut && <strong style={{ color: "var(--text)" }}> · à partir d&apos;aujourd&apos;hui</strong>}
-      </span>
       <button
         type="button"
         style={{ ...btn, opacity: pending ? 0.5 : 1 }}
@@ -78,11 +83,10 @@ export default function FeuilleRouteNav({
       >
         4 sem. ›
       </button>
-      {!auDebut && (
-        <button type="button" style={btn} disabled={pending} onClick={() => aller(null)} title="Revenir à la semaine courante">
-          Aujourd&apos;hui
-        </button>
-      )}
+      <span style={{ fontSize: 13, color: "var(--muted)", textAlign: "center", whiteSpace: "nowrap" }}>
+        {frCourt(debut)} → {frCourt(finIso)}
+        {auDebut && <strong style={{ color: "var(--text)" }}> · à partir d&apos;aujourd&apos;hui</strong>}
+      </span>
     </div>
   );
 }
