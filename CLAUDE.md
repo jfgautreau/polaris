@@ -795,6 +795,12 @@ prochain gros chantier, pas une optimisation cosmétique.
   restriction −1 — une restriction n'est pas une compétence), **indépendante du filtre
   atelier** : sinon une personne toute blanche dans l'atelier affiché mais compétente
   ailleurs serait signalée à tort.
+  ⚠️ **Filtre au clic sur un en-tête** (2026-09-22, `colFilter` dans `MatrixGrid`) : clic
+  sur un **poste** (colonne) = personnes ayant niveau ≥ 1 sur CE poste ; clic sur l'en-tête
+  de **ligne** (groupe) = ≥ 1 poste de la ligne. Balaie **tout l'effectif** (comme la
+  recherche par nom, transverse au filtre atelier), calculé côté client via `cells`.
+  Bannière + croix de retrait ; re-clic sur le même en-tête enlève le filtre ; combinable
+  avec la recherche.
 - Personnel : `src/app/personnel/*` + `src/app/api/personnel/{route,merge/route,[id]/export/route,[id]/absences/route}.ts`.
   ⚠️ **Casse des noms/prénoms normalisée AUSSI à la modif inline** (2026-09-11, pas seulement
   à la création) : `normaliseNom` (NOM en capitales) / `normalisePrenom` (Prénom capitalisé)
@@ -902,6 +908,12 @@ prochain gros chantier, pas une optimisation cosmétique.
   FAB). Le **bilan** (`bilan` dans `HabilitationsList`) est calculé sur
   `displayedPersonnes` — un chef d'atelier veut le bilan de son atelier, pas celui du
   site. La vue Liste (`shownRows`) suit la même règle.
+  ⚠️ **Filtre au clic sur un en-tête** (2026-09-22, `colFilter` dans `HabilitationsList`) :
+  clic sur une **formation** (colonne) = personnes ayant CETTE habilitation ; clic sur un
+  **groupe** ou une **catégorie** = tout le groupe/la catégorie. Balaie tout l'effectif
+  (personnes avec ≥ 1 enregistrement dans le périmètre). Bannière + croix. ⚠️ **Info-bulle
+  d'en-tête de formation** détaille catégorie, groupe, **durée de validité** (mois / « sans
+  échéance ») et « soumise à autorisation ».
 - Utilisateurs : `src/app/admin/users/{page,NouvelUtilisateur,NouveauRole,UserRoleSelect,UserRowActions,LienMotDePasse,DroitsMatrix}.tsx`
   + `src/app/api/users/{create,role,active,reset-password}/route.ts` + `/api/droits`
   + `/api/roles` (création de rôles personnalisés, garde `utilisateurs: write`).
@@ -929,7 +941,19 @@ prochain gros chantier, pas une optimisation cosmétique.
     le Total **varie donc d'une semaine à l'autre** au fil de la rotation ; une personne
     **sans équipe** n'est comptée dans aucun quart. « Tous » = chaque personne comptée une
     fois (comportement historique). Sous-totaux par **regroupement** (0069) inchangés.
-    Params de `calculerGrille` : `ateliersFiltre`, `quartFiltre`, `quartParPersonne`.
+    Params de `calculerGrille` : `ateliersFiltre`, `quartFiltre`, `quartParPersonne`,
+    `besoinParCleParSemaine`. ⚠️ **Navigation temporelle** (`FeuilleRouteNav`, `?debut=`) :
+    flèches ± 4 semaines + « Aujourd'hui », bornées à la semaine courante (projection, pas
+    de passé). ⚠️ **Total scindé Titulaires / Intérim** (2026-09-22) : `bloc.totalTitulaires`
+    (hors intérim, comparé au besoin, vert/rouge) + `bloc.totalInterim` (jaune, informatif,
+    non comparé) ; drapeau intérim = `type_contrat.avec_agence` (`getTypesAgenceC`). ⚠️
+    **Besoin ACTUALISÉ par l'ordonnancement** (2026-09-23) : `bloc.besoinParSemaine` (repli
+    sur l'abaque référentiel `besoin`). Pour une **semaine initialisée** (≥ 1 jour ouvré
+    porte une ligne `jour_quart`), besoin hebdo = **« besoin max »** = total du jour ouvré le
+    plus chargé (Σ effectifs des postes×quarts ouverts : `jour_quart.actif` ET
+    `ouverture_quart.ouverte` défaut ouvert), max des 5 jours ouvrés ; lignes fermées ce
+    jour retirées. Semaine non initialisée = abaque référentiel. Calcul dans `page.tsx`
+    (`besoinParCleParSemaine`), le `Total titulaires` se compare au besoin de la semaine.
   - **Synthèses hebdomadaires** (`/bilans/syntheses` + `SyntheseFilters`, `AgencePrintButton`,
     données dans `src/lib/synthese-data.ts`) : un écran, deux vues (bascule) sur un sélecteur
     de semaine. **Absences** = **mini-calendrier jour par jour sur 4 semaines glissantes**
@@ -962,7 +986,8 @@ prochain gros chantier, pas une optimisation cosmétique.
     donnait trois définitions incohérentes de « poste fragile »). 4 blocs : ① polyvalence
     moyenne par service (**interne** : postes du service d'affectation tenables aujourd'hui)
     + personnes à développer ; ② postes critiques/fragiles par **relève sûre** (départs
-    ≤ 180 j + expirations d'habilitation ≤ 90 j déduits) + **PTNR isolés** ; ③ personnes
+    ≤ 365 j + expirations d'habilitation ≤ 90 j déduits — `H_DEPART = 365` depuis
+    2026-09-23, verdict de fragilité ET liste personnes clés) + **PTNR isolés** ; ③ personnes
     clés sur le départ + habilitations à échéance ; ④ plan de formation priorisé par
     fragilité. Le moteur de relève opérationnelle vit dans la couche données dédiée.
     ⚠️ `montee-competence` et `competences-critiques` ont été **supprimés** (pages + entrées
