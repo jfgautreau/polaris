@@ -7,7 +7,7 @@ import Bars from "@/app/bilans/Bars";
 import ReportAtelierFilter from "@/app/bilans/ReportAtelierFilter";
 import ReportEquipeFilter from "@/app/bilans/ReportEquipeFilter";
 import { requireRapportBilan } from "@/lib/permissions";
-import { chargerPolyvalenceCompetences, H_DEPART, H_HAB, type Verdict } from "@/lib/polyvalence-competences-data";
+import { chargerPolyvalenceCompetences, H_DEPART, H_DEPART_CLES, H_HAB, type Verdict } from "@/lib/polyvalence-competences-data";
 
 const fmtDate = (d: string | null) => (d ? d.split("-").reverse().join("/") : "—");
 const fmtMoy = (v: number) => v.toFixed(1).replace(".", ",");
@@ -79,7 +79,7 @@ export default async function PolyvalenceReport({ searchParams }: { searchParams
           <div className={`kpi ${r.nbSansReleveSure > 0 ? "danger" : "ok"}`}><div className="v">{r.nbSansReleveSure}</div><div className="l">Postes sans personne durablement qualifiée</div><div className="s">0 à l&apos;horizon {H_DEPART} j</div></div>
           <div className={`kpi ${r.nbFragiles > 0 ? "warn" : "ok"}`}><div className="v">{r.nbFragiles}</div><div className="l">Postes fragiles</div><div className="s">1 seule personne durablement qualifiée</div></div>
           <div className={`kpi ${r.ecartTotal > 0 ? "warn" : "ok"}`}><div className="v">{r.ecartTotal}</div><div className="l">Écart à combler</div><div className="s">formations vers la cible</div></div>
-          <div className={`kpi ${r.nbClesPartantes > 0 ? "danger" : "ok"}`}><div className="v">{r.nbClesPartantes}</div><div className="l">Personnes clés partantes</div><div className="s">seule à tenir un poste</div></div>
+          <div className={`kpi ${r.nbClesPartantes > 0 ? "danger" : "ok"}`}><div className="v">{r.nbClesPartantes}</div><div className="l">Personnes clés partantes</div><div className="s">seule à tenir un poste · ≤ {H_DEPART_CLES} j</div></div>
           <div className={`kpi ${r.nbEcheancesCritiques > 0 ? "danger" : r.echeances.length > 0 ? "warn" : "ok"}`}><div className="v">{r.echeances.length}</div><div className="l">Habilitations à échéance</div><div className="s">{r.nbEcheancesCritiques} critique(s) · ≤ {H_HAB} j</div></div>
         </div>
 
@@ -208,7 +208,7 @@ export default async function PolyvalenceReport({ searchParams }: { searchParams
             <div className="card">
               <h2 style={{ marginTop: 0, fontSize: 15 }}>Personnes clés sur le départ</h2>
               {r.clesARisque.length === 0 ? (
-                <p className="muted">Aucune personne « seule à pouvoir tenir un poste » ne quitte l&apos;effectif dans les {H_DEPART} jours.</p>
+                <p className="muted">Aucune personne « seule à pouvoir tenir un poste » ne quitte l&apos;effectif dans les {H_DEPART_CLES} jours.</p>
               ) : (
                 <table>
                   <thead><tr><th>Personne</th><th>Départ</th><th>Seule à tenir</th></tr></thead>

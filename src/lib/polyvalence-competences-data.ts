@@ -28,7 +28,8 @@ import { addMonthsIso, habValable } from "@/lib/habilitations";
 import { deriverArriveeDepart, type Periode } from "@/lib/personne-statut";
 import { getNbNiveauxC } from "@/lib/refdata";
 
-export const H_DEPART = 180; // jours : horizon de vigilance sur les départs
+export const H_DEPART = 180; // jours : horizon de vigilance sur les départs (verdict de fragilité)
+export const H_DEPART_CLES = 365; // jours : horizon plus large pour la LISTE « personnes clés sur le départ »
 export const H_HAB = 90; // jours : horizon de vigilance sur les habilitations
 
 type Named = { id: string; nom: string; prenom: string; type_contrat: string; atelier_id: string | null; equipe_id: string | null };
@@ -107,6 +108,7 @@ export async function chargerPolyvalenceCompetences(
   const equipe = opts.equipe ?? "";
   const todayIso = isoDate(new Date());
   const limDepart = isoDate(addDays(new Date(), H_DEPART));
+  const limDepartCles = isoDate(addDays(new Date(), H_DEPART_CLES));
   const limHab = isoDate(addDays(new Date(), H_HAB));
   const in30 = isoDate(addDays(new Date(), 30));
 
@@ -308,7 +310,7 @@ export async function chargerPolyvalenceCompetences(
   const clesARisque: CleARisque[] = [...soloDe.entries()]
     .filter(([id]) => dansEquipe(id))
     .map(([id, postesSolo]) => ({ id, dep: departDe.get(id), postes: postesSolo }))
-    .filter((x) => x.dep && x.dep.date <= limDepart)
+    .filter((x) => x.dep && x.dep.date <= limDepartCles)
     .map((x) => ({ id: x.id, nom: persNom(x.id), contrat: persById.get(x.id)?.type_contrat ?? "", date: x.dep!.date, retraite: estRetraite(x.dep!.motif), postes: x.postes }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
