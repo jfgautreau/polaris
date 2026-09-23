@@ -90,9 +90,13 @@ export type BlocCategorie = {
   cat: Categorie;
   catLabel: string;
   // Besoin (abaque) : somme des effectif_requis sur les postes actifs de la
-  // catégorie DANS L'ATELIER du service (via leur ligne). Constant sur les 24
-  // semaines : c'est un abaque de référentiel, pas une charge datée.
+  // catégorie DANS L'ATELIER du service (via leur ligne). Abaque de référentiel
+  // (constant), utilisé en repli et pour les sous-totaux par regroupement.
   besoin: number;
+  // Besoin PAR SEMAINE : reflète l'ordonnancement pour les semaines initialisées
+  // (max journalier des postes×quarts ouverts), sinon = `besoin` (abaque). C'est
+  // la référence de comparaison du Total titulaires.
+  besoinParSemaine: number[];
   niveaux: LigneNiveau[]; // 1..nbNiveaux
   // Total ventilé titulaires / intérim, par semaine (somme = total compétents).
   // titulaires + interim === Σ niveaux[*].parSemaine, semaine par semaine.
@@ -239,6 +243,11 @@ export type Params = {
   semaines: Semaine[];
   nbNiveaux: number;
   habilitationStricte: boolean;
+  // Besoin hebdo par (atelierId|cat) et par semaine, quand il diffère de l'abaque
+  // référentiel — calculé côté page à partir de l'ordonnancement (semaine
+  // initialisée : max journalier des postes×quarts OUVERTS ; sinon abaque). Absent
+  // ou clé absente → on retombe sur l'abaque référentiel constant `besoin`.
+  besoinParCleParSemaine?: Map<string, number[]>;
 };
 
 // Retourne, pour une personne à une date donnée, le max de son niveau dans
@@ -272,7 +281,7 @@ export function calculerGrille(p: Params): Grille {
     personnes, postes, matrice, contratsParPersonne, absencesParPersonne,
     posteCompRequise, competencesPersonne, ateliers,
     ateliersFiltre, quartFiltre, quartParPersonne, semaines, nbNiveaux,
-    habilitationStricte,
+    habilitationStricte, besoinParCleParSemaine,
   } = p;
 
   const posteById = new Map(postes.map((po) => [po.id, po]));
@@ -399,6 +408,9 @@ export function calculerGrille(p: Params): Grille {
 
         const cle = `${id}|${c.key}`;
         const besoin = besoinParCle.get(cle) ?? 0;
+        // Besoin par semaine : ordonnancement si fourni pour cette clé, sinon
+        // l'abaque référentiel constant.
+        const besoinParSemaine = besoinParCleParSemaine?.get(cle) ?? Array(semaines.length).fill(besoin);
 
         let regroupements: SousTotalRegroupement[] | undefined;
         if (hasReg) {
@@ -418,7 +430,7 @@ export function calculerGrille(p: Params): Grille {
           ];
         }
 
-        return { cat: c.key as Categorie, catLabel: c.label, besoin, niveaux, totalTitulaires, totalInterim, regroupements };
+        return { cat: c.key as Categorie, catLabel: c.label, besoin, besoinParSemaine, niveaux, totalTitulaires, totalInterim, regroupements };
       });
 
       return { atelierId: id, atelierNom: nom, blocs };

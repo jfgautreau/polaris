@@ -79,6 +79,21 @@ export default async function FeuilleRouteReport({
     return d.toISOString().slice(0, 10);
   })();
 
+  // Jours ouvrés (Lun→Ven) de chaque semaine de l'horizon : servent à lire
+  // l'ordonnancement (jour_quart / ouverture_quart) pour actualiser le besoin
+  // des semaines INITIALISÉES (cf. besoin par semaine plus bas).
+  const joursOuvresParSemaine: string[][] = semaines.map((s) => {
+    const base = new Date(s.lundi + "T00:00:00");
+    const out: string[] = [];
+    for (let k = 0; k < 5; k++) {
+      const d = new Date(base);
+      d.setDate(base.getDate() + k);
+      out.push(d.toISOString().slice(0, 10));
+    }
+    return out;
+  });
+  const joursOuvresIsos = joursOuvresParSemaine.flat();
+
   const nbNiveaux = await getNbNiveauxC();
   const couleursCfg = await getCouleursNiveauxC();
   const couleurs = couleursNiveau(couleursCfg);
@@ -86,7 +101,7 @@ export default async function FeuilleRouteReport({
   // avec_agence 0072) : séparent titulaires / intérim dans le Total.
   const agenceCodes = new Set(await getTypesAgenceC());
 
-  const [{ data: atD }, { data: persD }, { data: lignesD }, matD, plD, cpD, pcD, { data: pcrD }, { data: quartsD }, { data: eqRotD }, { data: rrD }, pq, ligneVal, posteVal] = await Promise.all([
+  const [{ data: atD }, { data: persD }, { data: lignesD }, matD, plD, cpD, pcD, { data: pcrD }, { data: quartsD }, { data: eqRotD }, { data: rrD }, pq, ligneVal, posteVal, jqD, ovD] = await Promise.all([
     supabase.from("atelier").select("id, nom").eq("actif", true).order("nom").returns<Atelier[]>(),
     supabase.from("personne").select("id, atelier_id, equipe_id, regroupement, type_contrat").eq("statut", "ACTIF").returns<(Personne & { type_contrat: string })[]>(),
     supabase
@@ -124,6 +139,16 @@ export default async function FeuilleRouteReport({
     chargerPosteQuart(supabase),
     chargerValidites(supabase, "ligne"),
     chargerValidites(supabase, "poste"),
+    // Ordonnancement sur les jours ouvrés de l'horizon : jour_quart (quart actif
+    // ce jour) + ouverture_quart (ligne ouverte ce quart/jour). Servent au besoin
+    // par semaine (semaine initialisée). fetchAll : ouverture_quart peut dépasser
+    // 1000 lignes (jours × lignes × quarts).
+    fetchAll<{ jour: string; quart_code: string; actif: boolean }>(() =>
+      supabase.from("jour_quart").select("jour, quart_code, actif").in("jour", joursOuvresIsos).order("jour").order("quart_code").returns<{ jour: string; quart_code: string; actif: boolean }[]>(),
+    ),
+    fetchAll<{ jour: string; ligne_id: string; quart_code: string; ouverte: boolean }>(() =>
+      supabase.from("ouverture_quart").select("jour, ligne_id, quart_code, ouverte").in("jour", joursOuvresIsos).order("jour").order("ligne_id").order("quart_code").returns<{ jour: string; ligne_id: string; quart_code: string; ouverte: boolean }[]>(),
+    ),
   ]);
 
   // Quarts postés par poste (référentiel) : tous les quarts du site sauf ceux
@@ -153,6 +178,8 @@ export default async function FeuilleRouteReport({
   // du POSTE est celui de sa ligne : il sert à ventiler le Besoin et la Cible par
   // service (indépendamment de l'atelier d'affectation des personnes).
   const postes: Poste[] = [];
+  const posteLigne = new Map<string, string>(); // posteId -> ligneId (pour ouverture_quart)
+  const posteEffDe = new Map<string, number>(); // posteId -> effectif de repli
   for (const l of lignesD ?? []) {
     // Fermeture datée (0071) : ligne fermée dès le début du rapport -> exclue de l'abaque.
     if (!actifLe(ligneVal.get(l.id), pivotLundi)) continue;
@@ -168,7 +195,65 @@ export default async function FeuilleRouteReport({
         besoinPoste: besoinPosteDe(p.id, p.effectif_requis ?? 0),
         regroupement: l.regroupement,
       });
+      posteLigne.set(p.id, l.id);
+      posteEffDe.set(p.id, p.effectif_requis ?? 0);
     }
+  }
+
+  // ---- Besoin PAR SEMAINE, actualisé par l'ordonnancement (décision 2026-09-23) ----
+  // Pour une semaine INITIALISÉE dans l'ordonnancement (au moins un jour ouvré
+  // porte une ligne jour_quart), le besoin hebdo d'une catégorie = le total du
+  // JOUR OUVRÉ LE PLUS CHARGÉ (« besoin max ») : pour chaque jour, on somme les
+  // effectifs des postes×quarts OUVERTS ce jour-là (jour_quart.actif ET
+  // ouverture_quart.ouverte, défaut ouvert), puis on prend le max des 5 jours. Une
+  // semaine NON initialisée garde l'abaque référentiel (somme de tous les quarts).
+  const quartsPourBesoin = quartSel ? [quartSel] : quartCodes;
+  // Pré-calcul par poste : ses (quart, effectif) actifs (>0), respectant le filtre quart.
+  const posteQuartsEff = new Map<string, { q: string; eff: number }[]>();
+  for (const p of postes) {
+    const arr: { q: string; eff: number }[] = [];
+    for (const q of quartsPourBesoin) {
+      const eff = effectifSurQuart(pq, p.id, q, posteEffDe.get(p.id) ?? 0);
+      if (eff > 0) arr.push({ q, eff });
+    }
+    posteQuartsEff.set(p.id, arr);
+  }
+  // Ordonnancement indexé.
+  const joursOrdo = new Set<string>();
+  const actMap = new Map<string, boolean>(); // `${quart}:${jour}` -> actif
+  for (const r of jqD) { actMap.set(`${r.quart_code}:${r.jour}`, r.actif); joursOrdo.add(r.jour); }
+  const ouvMap = new Map<string, boolean>(); // `${quart}:${ligne}:${jour}` -> ouverte
+  for (const r of ovD) ouvMap.set(`${r.quart_code}:${r.ligne_id}:${r.jour}`, r.ouverte);
+  // Postes groupés par clé atelier|cat.
+  const postesParCle = new Map<string, typeof postes>();
+  for (const p of postes) {
+    const cle = `${p.atelier_id}|${p.categorie}`;
+    (postesParCle.get(cle) ?? postesParCle.set(cle, []).get(cle)!).push(p);
+  }
+  const abaqueDe = (cle: string) =>
+    (postesParCle.get(cle) ?? []).reduce((s, p) => s + (posteQuartsEff.get(p.id) ?? []).reduce((a, x) => a + x.eff, 0), 0);
+  const ouvertLe = (q: string, ligneId: string, jour: string) =>
+    (actMap.get(`${q}:${jour}`) ?? false) && (ouvMap.get(`${q}:${ligneId}:${jour}`) ?? true);
+  const besoinParCleParSemaine = new Map<string, number[]>();
+  for (const cle of postesParCle.keys()) {
+    const abaque = abaqueDe(cle);
+    besoinParCleParSemaine.set(
+      cle,
+      semaines.map((_, wi) => {
+        const jours = joursOuvresParSemaine[wi];
+        if (!jours.some((d) => joursOrdo.has(d))) return abaque; // semaine non initialisée
+        let mx = 0;
+        for (const d of jours) {
+          let s = 0;
+          for (const p of postesParCle.get(cle) ?? []) {
+            const ligneId = posteLigne.get(p.id)!;
+            for (const { q, eff } of posteQuartsEff.get(p.id) ?? []) if (ouvertLe(q, ligneId, d)) s += eff;
+          }
+          if (s > mx) mx = s;
+        }
+        return mx;
+      }),
+    );
   }
 
   // Contrats indexés par personne.
@@ -232,6 +317,7 @@ export default async function FeuilleRouteReport({
     semaines,
     nbNiveaux,
     habilitationStricte,
+    besoinParCleParSemaine,
   });
 
   const semainesLabel = grille.semaines.map((s) => `S${String(s.num).padStart(2, "0")}`);
@@ -266,6 +352,7 @@ export default async function FeuilleRouteReport({
                   <strong>Besoin</strong> = somme, sur les postes actifs de la catégorie <em>dans l&apos;atelier</em>, de l&apos;effectif requis <strong>de tous les quarts</strong> (Référentiel) : un poste à 1 place tournant matin + après-midi compte 2. « Tous » = la somme des quarts pris séparément.{" "}
                 </>
               )}
+              Pour une <strong>semaine initialisée dans l&apos;ordonnancement</strong>, le besoin est <strong>actualisé</strong> = besoin du <em>jour ouvré le plus chargé</em> de la semaine (les lignes fermées ce jour-là sont retirées) ; sinon l&apos;abaque référentiel s&apos;applique.{" "}
               <strong>Total titulaires</strong> = personnes compétentes de la catégorie <em>hors intérim</em> (niv.&nbsp;1 à&nbsp;{nbNiveaux}, chacune comptée une fois) ; <span style={{ color: "#15803d", fontWeight: 700 }}>vert</span> si ≥ besoin, <span style={{ color: "#b91c1c", fontWeight: 700 }}>rouge</span> si &lt; besoin. <strong>Total intérim</strong> = intérimaires compétents, comptés <em>à part</em> (jaune) — non inclus dans la comparaison au besoin.
             </div>
           </div>
@@ -351,33 +438,40 @@ export default async function FeuilleRouteReport({
                             </span>
                           </td>
                         </tr>
-                        {/* Ligne Besoin (abaque) : constante sur l'horizon, sert
-                            de référence pour lire les niveaux ci-dessous. */}
-                        {bloc.besoin > 0 && (
+                        {/* Ligne Besoin : abaque référentiel par défaut, ACTUALISÉ
+                            par l'ordonnancement pour les semaines initialisées
+                            (max journalier des postes×quarts ouverts). Peut donc
+                            varier d'une semaine à l'autre. */}
+                        {bloc.besoinParSemaine.some((v) => v > 0) && (
                           <tr key={`${svc.atelierId}:${bloc.cat}:besoin`}>
                             <td
                               style={{ padding: "3px 8px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap", color: "#334155" }}
                               title={quartSel
-                                ? `Effectif requis sur le quart ${quartLabel} des postes ${bloc.catLabel.toLowerCase()} actifs de l'atelier (Référentiel). Un poste qui ne tourne pas sur ce quart ne compte pas. Constant sur les 24 semaines : abaque de référence, pas une charge datée.`
-                                : `Somme des effectifs de tous les quarts sur les postes ${bloc.catLabel.toLowerCase()} actifs de l'atelier (Référentiel). 1 place tournant matin + après-midi = 2 ; « Tous » réconcilie avec le détail par quart. Constant sur les 24 semaines : abaque de référence, pas une charge datée.`}
+                                ? `Effectif requis sur le quart ${quartLabel} des postes ${bloc.catLabel.toLowerCase()} actifs de l'atelier. Référentiel par défaut ; pour une semaine initialisée dans l'ordonnancement, besoin du jour ouvré le plus chargé (lignes fermées ce jour retirées).`
+                                : `Somme des effectifs de tous les quarts sur les postes ${bloc.catLabel.toLowerCase()} actifs de l'atelier (1 place matin + après-midi = 2). Référentiel par défaut ; pour une semaine initialisée dans l'ordonnancement, besoin du jour ouvré le plus chargé (lignes fermées ce jour retirées).`}
                             >
                               Besoin
                             </td>
-                            {grille.semaines.map((s, wi) => (
-                              <td
-                                key={wi}
-                                style={{
-                                  textAlign: "center",
-                                  fontSize: 12,
-                                  fontWeight: 700,
-                                  color: "#334155",
-                                  background: s.lundi === todayLundi ? "#eff6ff" : "#f8fafc",
-                                  borderLeft: wi === 0 ? "1px solid var(--border)" : "1px solid #eef2f7",
-                                }}
-                              >
-                                {bloc.besoin}
-                              </td>
-                            ))}
+                            {grille.semaines.map((s, wi) => {
+                              const b = bloc.besoinParSemaine[wi];
+                              const ordo = b !== bloc.besoin;
+                              return (
+                                <td
+                                  key={wi}
+                                  style={{
+                                    textAlign: "center",
+                                    fontSize: 12,
+                                    fontWeight: 700,
+                                    color: "#334155",
+                                    background: s.lundi === todayLundi ? "#eff6ff" : "#f8fafc",
+                                    borderLeft: wi === 0 ? "1px solid var(--border)" : "1px solid #eef2f7",
+                                  }}
+                                  title={ordo ? `Besoin ${b} — actualisé par l'ordonnancement (abaque référentiel : ${bloc.besoin})` : `Besoin ${b} (abaque référentiel)`}
+                                >
+                                  {b}
+                                </td>
+                              );
+                            })}
                           </tr>
                         )}
                         {bloc.niveaux.map((niv, ni) => {
@@ -433,13 +527,14 @@ export default async function FeuilleRouteReport({
                         <tr style={{ borderTop: "2px solid #cbd5e1" }}>
                           <td
                             style={{ padding: "3px 8px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}
-                            title={`Titulaires ${bloc.catLabel.toLowerCase()} compétents (niv. 1 à ${nbNiveaux}), hors intérim, chacun compté une fois. Vert si ≥ besoin (${bloc.besoin}), rouge sinon. L'intérim est compté séparément.`}
+                            title={`Titulaires ${bloc.catLabel.toLowerCase()} compétents (niv. 1 à ${nbNiveaux}), hors intérim, chacun compté une fois. Vert si ≥ besoin de la semaine, rouge sinon. L'intérim est compté séparément.`}
                           >
                             Total titulaires
                           </td>
                           {grille.semaines.map((s, wi) => {
                             const v = bloc.totalTitulaires[wi];
-                            const suffisant = v >= bloc.besoin;
+                            const besoinSem = bloc.besoinParSemaine[wi];
+                            const suffisant = v >= besoinSem;
                             return (
                               <td
                                 key={wi}
@@ -453,7 +548,7 @@ export default async function FeuilleRouteReport({
                                   outline: s.lundi === todayLundi ? "2px solid #1d4ed8" : undefined,
                                   outlineOffset: -2,
                                 }}
-                                title={`${v} titulaire(s) compétent(s) / besoin ${bloc.besoin}${suffisant ? "" : ` — manque ${bloc.besoin - v}`}`}
+                                title={`${v} titulaire(s) compétent(s) / besoin ${besoinSem}${suffisant ? "" : ` — manque ${besoinSem - v}`}`}
                               >
                                 {v}
                               </td>
