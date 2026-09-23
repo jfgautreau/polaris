@@ -356,7 +356,7 @@ export default async function FeuilleRouteReport({
               <strong>Total titulaires</strong> = personnes compétentes de la catégorie <em>hors intérim</em> (niv.&nbsp;1 à&nbsp;{nbNiveaux}, chacune comptée une fois) ; <span style={{ color: "#15803d", fontWeight: 700 }}>vert</span> si ≥ besoin, <span style={{ color: "#b91c1c", fontWeight: 700 }}>rouge</span> si &lt; besoin. <strong>Total intérim</strong> = intérimaires compétents, comptés <em>à part</em> (jaune) — non inclus dans la comparaison au besoin.
             </div>
           </div>
-          <ReportActions />
+          <ReportActions showPrint={false} />
         </div>
 
         <ReportAtelierFilter ateliers={atD ?? []} atelier={atelier} />

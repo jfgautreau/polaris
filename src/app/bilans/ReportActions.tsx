@@ -27,7 +27,7 @@ const boite: React.CSSProperties = {
   whiteSpace: "nowrap",
 };
 
-export default function ReportActions({ children }: { children?: React.ReactNode }) {
+export default function ReportActions({ children, showPrint = true }: { children?: React.ReactNode; showPrint?: boolean }) {
   return (
     <div className="noprint" style={{ display: "flex", alignItems: "center", gap: 8 }}>
       {children}
@@ -41,37 +41,41 @@ export default function ReportActions({ children }: { children?: React.ReactNode
         Cockpit
       </Link>
 
-      {/* Bouton « PDF » explicite : ouvre le même dialogue d'impression (Chrome
-          propose « Enregistrer au format PDF » comme destination). Beaucoup
-          d'utilisateurs ne reconnaissent pas l'icône imprimante comme un export
-          PDF — le libellé lève l'ambiguïté. */}
-      <button
-        type="button"
-        onClick={() => window.print()}
-        title="Enregistrer en PDF (dialogue d'impression → destination « PDF »)"
-        style={{ ...boite, color: "#1d4ed8" }}
-      >
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-          <path d="M14 2v6h6" />
-        </svg>
-        PDF
-      </button>
+      {showPrint && (
+        <>
+          {/* Bouton « PDF » explicite : ouvre le même dialogue d'impression (Chrome
+              propose « Enregistrer au format PDF » comme destination). Beaucoup
+              d'utilisateurs ne reconnaissent pas l'icône imprimante comme un export
+              PDF — le libellé lève l'ambiguïté. */}
+          <button
+            type="button"
+            onClick={() => window.print()}
+            title="Enregistrer en PDF (dialogue d'impression → destination « PDF »)"
+            style={{ ...boite, color: "#1d4ed8" }}
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <path d="M14 2v6h6" />
+            </svg>
+            PDF
+          </button>
 
-      <button
-        type="button"
-        onClick={() => window.print()}
-        title="Imprimer / enregistrer en PDF"
-        aria-label="Imprimer"
-        style={{ ...boite, width: TAILLE, padding: 0, color: "#1d4ed8" }}
-      >
-        {/* Meme imprimante que l'ecran Affichage : capot, corps, feuille. */}
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M7 9V3h10v6" />
-          <path d="M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2" />
-          <rect x="7" y="15" width="10" height="6" rx="1" />
-        </svg>
-      </button>
+          <button
+            type="button"
+            onClick={() => window.print()}
+            title="Imprimer / enregistrer en PDF"
+            aria-label="Imprimer"
+            style={{ ...boite, width: TAILLE, padding: 0, color: "#1d4ed8" }}
+          >
+            {/* Meme imprimante que l'ecran Affichage : capot, corps, feuille. */}
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M7 9V3h10v6" />
+              <path d="M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2" />
+              <rect x="7" y="15" width="10" height="6" rx="1" />
+            </svg>
+          </button>
+        </>
+      )}
     </div>
   );
 }
