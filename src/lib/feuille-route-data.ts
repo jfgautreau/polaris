@@ -31,6 +31,9 @@ export type Semaine = { lundi: string; num: number; annee: number };
 export type Personne = {
   id: string;
   atelier_id: string | null;
+  // Contrat piloté par agence (intérim, CDI intérimaire…) : sépare les deux
+  // « Total » (titulaires vs intérim). Absent/false = titulaire.
+  interim?: boolean;
   // Équipe d'affectation : sert, quand un quart est filtré, à ne compter que les
   // personnes dont l'équipe tourne (ou est fixée) sur ce quart la semaine donnée.
   equipe_id?: string | null;
@@ -91,6 +94,10 @@ export type BlocCategorie = {
   // semaines : c'est un abaque de référentiel, pas une charge datée.
   besoin: number;
   niveaux: LigneNiveau[]; // 1..nbNiveaux
+  // Total ventilé titulaires / intérim, par semaine (somme = total compétents).
+  // titulaires + interim === Σ niveaux[*].parSemaine, semaine par semaine.
+  totalTitulaires: number[];
+  totalInterim: number[];
   // Sous-totaux par regroupement — présent SEULEMENT si le service a au moins
   // un regroupement (sur ses lignes ou l'affectation de ses personnes). Sinon
   // absent → le rapport s'affiche exactement comme avant.
@@ -349,6 +356,8 @@ export function calculerGrille(p: Params): Grille {
           niveau: i + 1,
           parSemaine: Array(semaines.length).fill(0),
         }));
+        const totalTitulaires: number[] = Array(semaines.length).fill(0);
+        const totalInterim: number[] = Array(semaines.length).fill(0);
         // Effectif par regroupement (clé regKey → parSemaine). Le bucket SANS
         // capte les personnes non affectées à un regroupement.
         const stParSemaine = new Map<string, number[]>();
@@ -378,6 +387,8 @@ export function calculerGrille(p: Params): Grille {
             const n = maxParCat.get(c.key);
             if (n !== undefined && n >= 1 && n <= nbNiveaux) {
               niveaux[n - 1].parSemaine[wi]++;
+              if (pe.interim) totalInterim[wi]++;
+              else totalTitulaires[wi]++;
               if (hasReg) {
                 const arr = stParSemaine.get(regKeyDe(pe.regroupement)) ?? stParSemaine.get(SANS)!;
                 arr[wi]++;
@@ -407,7 +418,7 @@ export function calculerGrille(p: Params): Grille {
           ];
         }
 
-        return { cat: c.key as Categorie, catLabel: c.label, besoin, niveaux, regroupements };
+        return { cat: c.key as Categorie, catLabel: c.label, besoin, niveaux, totalTitulaires, totalInterim, regroupements };
       });
 
       return { atelierId: id, atelierNom: nom, blocs };

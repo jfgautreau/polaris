@@ -7,8 +7,10 @@ import ReportAtelierFilter from "@/app/bilans/ReportAtelierFilter";
 import ReportQuartFilter from "@/app/bilans/ReportQuartFilter";
 import { requireRapportBilan } from "@/lib/permissions";
 import { fetchAll } from "@/lib/fetch-all";
-import { getNbNiveauxC, getCouleursNiveauxC } from "@/lib/refdata";
+import { getNbNiveauxC, getCouleursNiveauxC, getTypesAgenceC } from "@/lib/refdata";
 import { couleursNiveau } from "@/lib/couleurs-niveau";
+import { INTERIM_BG } from "@/lib/interim";
+import FeuilleRouteNav from "./FeuilleRouteNav";
 import { chargerPosteQuart, effectifSurQuart, tourneSurQuart } from "@/lib/poste-quart";
 import { chargerValidites, actifLe } from "@/lib/referentiel-validite";
 import { rotationForWeek, type RotationRef } from "@/lib/rotation";
@@ -47,7 +49,7 @@ type PcReqRow = { poste_id: string; competence_id: string };
 export default async function FeuilleRouteReport({
   searchParams,
 }: {
-  searchParams: Promise<{ atelier?: string; quart?: string; hab?: string }>;
+  searchParams: Promise<{ atelier?: string; quart?: string; hab?: string; debut?: string }>;
 }) {
   const { profile } = await requireRapportBilan("feuille-route");
   const sp = await searchParams;
@@ -59,7 +61,15 @@ export default async function FeuilleRouteReport({
 
   const supabase = await getServerClient();
 
-  const pivotLundi = lundiIsoDe(new Date());
+  // Navigation temporelle (2026-09-23) : `?debut=<lundiISO>` décale la fenêtre
+  // de 24 semaines vers le futur pour « aller voir plus loin ». Défaut / borne
+  // basse = lundi de la semaine courante (la projection n'a pas de sens dans le
+  // passé). `realTodayLundi` sert à ne surligner « aujourd'hui » que s'il tombe
+  // dans la fenêtre affichée.
+  const realTodayLundi = lundiIsoDe(new Date());
+  const debutParam =
+    sp.debut && /^\d{4}-\d{2}-\d{2}$/.test(sp.debut) ? lundiIsoDe(new Date(sp.debut + "T00:00:00")) : null;
+  const pivotLundi = debutParam && debutParam > realTodayLundi ? debutParam : realTodayLundi;
   const semaines = construireSemaines(pivotLundi, HORIZON);
   const derniereIso = semaines[semaines.length - 1].lundi;
   // Fenêtre absences : du 1er lundi au vendredi de la dernière semaine.
@@ -72,10 +82,13 @@ export default async function FeuilleRouteReport({
   const nbNiveaux = await getNbNiveauxC();
   const couleursCfg = await getCouleursNiveauxC();
   const couleurs = couleursNiveau(couleursCfg);
+  // Codes de contrat pilotés par agence (intérim, CDI intérimaire…, drapeau
+  // avec_agence 0072) : séparent titulaires / intérim dans le Total.
+  const agenceCodes = new Set(await getTypesAgenceC());
 
   const [{ data: atD }, { data: persD }, { data: lignesD }, matD, plD, cpD, pcD, { data: pcrD }, { data: quartsD }, { data: eqRotD }, { data: rrD }, pq, ligneVal, posteVal] = await Promise.all([
     supabase.from("atelier").select("id, nom").eq("actif", true).order("nom").returns<Atelier[]>(),
-    supabase.from("personne").select("id, atelier_id, equipe_id, regroupement").eq("statut", "ACTIF").returns<Personne[]>(),
+    supabase.from("personne").select("id, atelier_id, equipe_id, regroupement, type_contrat").eq("statut", "ACTIF").returns<(Personne & { type_contrat: string })[]>(),
     supabase
       .from("ligne")
       .select("id, atelier_id, regroupement, poste(id, actif, categorie, effectif_requis)")
@@ -202,8 +215,10 @@ export default async function FeuilleRouteReport({
     return rotParSemaine.get(lundi)?.[equipeId] ?? null;
   };
 
+  const personnesInterim = (persD ?? []).map((p) => ({ ...p, interim: agenceCodes.has(p.type_contrat) }));
+
   const grille = calculerGrille({
-    personnes: persD ?? [],
+    personnes: personnesInterim,
     postes,
     matrice: matD,
     contratsParPersonne,
@@ -220,7 +235,7 @@ export default async function FeuilleRouteReport({
   });
 
   const semainesLabel = grille.semaines.map((s) => `S${String(s.num).padStart(2, "0")}`);
-  const todayLundi = pivotLundi;
+  const todayLundi = realTodayLundi;
   // Regroupement des semaines par année pour la rangée d'en-tête supérieure :
   // les 24 semaines peuvent enjamber le 31 décembre (…S52 2026, S01 2027…).
   const anneeSpans: { annee: number; span: number; firstIdx: number }[] = [];
@@ -251,7 +266,7 @@ export default async function FeuilleRouteReport({
                   <strong>Besoin</strong> = somme, sur les postes actifs de la catégorie <em>dans l&apos;atelier</em>, de l&apos;effectif requis <strong>de tous les quarts</strong> (Référentiel) : un poste à 1 place tournant matin + après-midi compte 2. « Tous » = la somme des quarts pris séparément.{" "}
                 </>
               )}
-              <strong>Total</strong> = nombre de personnes compétentes de la catégorie (niv.&nbsp;1 à&nbsp;{nbNiveaux}, chacune comptée une fois) ; <span style={{ color: "#15803d", fontWeight: 700 }}>vert</span> si ≥ besoin, <span style={{ color: "#b91c1c", fontWeight: 700 }}>rouge</span> si &lt; besoin.
+              <strong>Total titulaires</strong> = personnes compétentes de la catégorie <em>hors intérim</em> (niv.&nbsp;1 à&nbsp;{nbNiveaux}, chacune comptée une fois) ; <span style={{ color: "#15803d", fontWeight: 700 }}>vert</span> si ≥ besoin, <span style={{ color: "#b91c1c", fontWeight: 700 }}>rouge</span> si &lt; besoin. <strong>Total intérim</strong> = intérimaires compétents, comptés <em>à part</em> (jaune) — non inclus dans la comparaison au besoin.
             </div>
           </div>
         </div>
@@ -259,6 +274,7 @@ export default async function FeuilleRouteReport({
         <ReportAtelierFilter ateliers={atD ?? []} atelier={atelier} />
         <ReportQuartFilter quarts={(quartsD ?? []).map((q) => ({ code: q.code, libelle: q.libelle }))} quart={quartSel} />
         <HabilitationsToggle strict={habilitationStricte} />
+        <FeuilleRouteNav debut={pivotLundi} today={realTodayLundi} finIso={derniereIso} />
 
         {grille.services.length === 0 ? (
           <div className="card"><p className="muted" style={{ margin: 0 }}>Aucune personne dans ce filtre.</p></div>
@@ -411,18 +427,19 @@ export default async function FeuilleRouteReport({
                             </tr>
                           );
                         })}
-                        {/* Ligne Total : somme des niveaux (personnes compétentes,
-                            comptées une fois). Vert si ≥ besoin, rouge si en-dessous. */}
+                        {/* Total TITULAIRES : personnes compétentes hors intérim,
+                            comparées au besoin (vert ≥ besoin, rouge sinon).
+                            L'intérim est compté à part sur la ligne suivante. */}
                         <tr style={{ borderTop: "2px solid #cbd5e1" }}>
                           <td
                             style={{ padding: "3px 8px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}
-                            title={`Nombre de personnes ${bloc.catLabel.toLowerCase()} compétentes (niv. 1 à ${nbNiveaux}), chacune comptée une fois. Vert si ≥ besoin (${bloc.besoin}), rouge sinon.`}
+                            title={`Titulaires ${bloc.catLabel.toLowerCase()} compétents (niv. 1 à ${nbNiveaux}), hors intérim, chacun compté une fois. Vert si ≥ besoin (${bloc.besoin}), rouge sinon. L'intérim est compté séparément.`}
                           >
-                            Total
+                            Total titulaires
                           </td>
                           {grille.semaines.map((s, wi) => {
-                            const total = bloc.niveaux.reduce((acc, niv) => acc + niv.parSemaine[wi], 0);
-                            const suffisant = total >= bloc.besoin;
+                            const v = bloc.totalTitulaires[wi];
+                            const suffisant = v >= bloc.besoin;
                             return (
                               <td
                                 key={wi}
@@ -436,13 +453,45 @@ export default async function FeuilleRouteReport({
                                   outline: s.lundi === todayLundi ? "2px solid #1d4ed8" : undefined,
                                   outlineOffset: -2,
                                 }}
-                                title={`${total} compétent(s) / besoin ${bloc.besoin}${suffisant ? "" : ` — manque ${bloc.besoin - total}`}`}
+                                title={`${v} titulaire(s) compétent(s) / besoin ${bloc.besoin}${suffisant ? "" : ` — manque ${bloc.besoin - v}`}`}
                               >
-                                {total}
+                                {v}
                               </td>
                             );
                           })}
                         </tr>
+                        {/* Total INTÉRIM : informatif (jaune intérim), compté à
+                            part — non inclus dans la comparaison au besoin.
+                            Rendu seulement si la catégorie compte des intérimaires. */}
+                        {bloc.totalInterim.some((v) => v > 0) && (
+                          <tr>
+                            <td
+                              style={{ padding: "3px 8px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap", color: "#92400e" }}
+                              title={`Intérimaires ${bloc.catLabel.toLowerCase()} compétents (niv. 1 à ${nbNiveaux}), comptés à part — non inclus dans la comparaison au besoin ci-dessus.`}
+                            >
+                              Total intérim
+                            </td>
+                            {grille.semaines.map((s, wi) => {
+                              const v = bloc.totalInterim[wi];
+                              return (
+                                <td
+                                  key={wi}
+                                  style={{
+                                    textAlign: "center",
+                                    fontSize: 12,
+                                    fontWeight: v > 0 ? 700 : 400,
+                                    color: v > 0 ? "#78350f" : "#cbd5e1",
+                                    background: v > 0 ? INTERIM_BG : (s.lundi === todayLundi ? "#eff6ff" : undefined),
+                                    borderLeft: wi === 0 ? "1px solid var(--border)" : "1px solid #eef2f7",
+                                  }}
+                                  title={`${v} intérimaire(s) compétent(s)`}
+                                >
+                                  {v || "·"}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        )}
                         {/* Sous-totaux par regroupement de lignes (0069) : « en
                             plus », sous chaque catégorie. Effectif ventilé par
                             personne.regroupement, besoin par ligne.regroupement.
