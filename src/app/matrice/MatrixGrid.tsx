@@ -87,17 +87,21 @@ export default function MatrixGrid({
     [personnes, displayedSet],
   );
 
-  // Filtre « ligne » posé au clic sur un en-tête de colonne (poste) ou de groupe
-  // (ligne) : on affiche les personnes ayant AU MOINS UNE compétence (niveau
-  // actuel ≥ 1) sur AU MOINS UN poste de cette ligne. `null` = pas de filtre.
-  const [ligneFilter, setLigneFilter] = useState<string | null>(null);
-  const toggleLigne = (ligneId: string) => setLigneFilter((cur) => (cur === ligneId ? null : ligneId));
-  const ligneNomDe = (id: string) => groups.find((gr) => gr.ligneId === id)?.ligneNom ?? "";
-  const ligneSet = useMemo(() => {
-    if (!ligneFilter) return null;
-    const gr = groups.find((g0) => g0.ligneId === ligneFilter);
-    if (!gr) return null;
-    const posteIds = gr.postes.map((po) => po.id);
+  // Filtre posé au clic sur un en-tête : sur un GROUPE (ligne) = personnes ayant
+  // ≥ 1 compétence (niveau actuel ≥ 1) sur ≥ 1 poste de cette ligne ; sur une
+  // COLONNE (poste) = personnes ayant ≥ 1 compétence sur CE poste précis.
+  const [colFilter, setColFilter] = useState<{ kind: "ligne" | "poste"; id: string; label: string } | null>(null);
+  const toggleFiltre = (kind: "ligne" | "poste", id: string, label: string) =>
+    setColFilter((cur) => (cur && cur.kind === kind && cur.id === id ? null : { kind, id, label }));
+  const filterSet = useMemo(() => {
+    if (!colFilter) return null;
+    let posteIds: string[];
+    if (colFilter.kind === "poste") posteIds = [colFilter.id];
+    else {
+      const gr = groups.find((g0) => g0.ligneId === colFilter.id);
+      if (!gr) return null;
+      posteIds = gr.postes.map((po) => po.id);
+    }
     const set = new Set<string>();
     for (const pe of personnes) {
       for (const poid of posteIds) {
@@ -105,17 +109,17 @@ export default function MatrixGrid({
       }
     }
     return set;
-  }, [ligneFilter, groups, personnes, cells]);
+  }, [colFilter, groups, personnes, cells]);
 
   // Recherche sur le nom (accents ignorés) : balaie TOUT l'effectif, ce qui
   // permet de faire apparaître quelqu'un hors du filtre atelier/équipe courant.
-  // Le filtre « ligne » (clic sur en-tête) balaie aussi tout l'effectif. Hors
-  // recherche ET hors filtre ligne, on se limite au sous-ensemble affiché.
+  // Le filtre en-tête (clic ligne/poste) balaie aussi tout l'effectif. Hors
+  // recherche ET hors filtre, on se limite au sous-ensemble affiché.
   const rech = search.trim();
   const shown =
-    rech || ligneFilter
+    rech || colFilter
       ? personnes.filter(
-          (p) => (!rech || norm(p.label).includes(norm(rech))) && (!ligneSet || ligneSet.has(p.id)),
+          (p) => (!rech || norm(p.label).includes(norm(rech))) && (!filterSet || filterSet.has(p.id)),
         )
       : bilanPersonnes;
   // Virtualisation des lignes : seules les personnes visibles sont rendues (cf.
@@ -299,7 +303,7 @@ export default function MatrixGrid({
           {saveLabel}
         </div>
 
-        {ligneFilter && (
+        {colFilter && (
           <div
             style={{
               display: "flex",
@@ -314,12 +318,12 @@ export default function MatrixGrid({
             }}
           >
             <span>
-              Filtré : personnes compétentes sur la ligne <strong>{ligneNomDe(ligneFilter)}</strong>{" "}
-              <span className="muted">({shown.length})</span>
+              Filtré : personnes compétentes sur {colFilter.kind === "poste" ? "le poste" : "la ligne"}{" "}
+              <strong>{colFilter.label}</strong> <span className="muted">({shown.length})</span>
             </span>
             <button
               type="button"
-              onClick={() => setLigneFilter(null)}
+              onClick={() => setColFilter(null)}
               className="iconbtn ghost"
               title="Retirer le filtre"
               style={{ marginLeft: "auto" }}
@@ -349,8 +353,8 @@ export default function MatrixGrid({
                   colSpan={gr.postes.length}
                   className={g.groupHead}
                   title={`${gr.ligneNom} — cliquer pour filtrer les personnes compétentes sur cette ligne`}
-                  onClick={() => toggleLigne(gr.ligneId)}
-                  style={{ cursor: "pointer", ...(ligneFilter === gr.ligneId ? { background: "#c7d2fe" } : undefined) }}
+                  onClick={() => toggleFiltre("ligne", gr.ligneId, gr.ligneNom)}
+                  style={{ cursor: "pointer", ...(colFilter?.kind === "ligne" && colFilter.id === gr.ligneId ? { background: "#c7d2fe" } : undefined) }}
                 >
                   <div className={g.groupLabel}>{gr.ligneNom}</div>
                 </th>
@@ -361,10 +365,16 @@ export default function MatrixGrid({
                 gr.postes.map((p, i) => (
                   <th
                     key={p.id}
-                    title={`${p.nom} — cliquer pour filtrer les personnes compétentes sur la ligne ${gr.ligneNom}`}
+                    title={`${p.nom} — cliquer pour filtrer les personnes compétentes sur ce poste`}
                     className={i === 0 ? `${g.colHead} ${g.groupStart}` : g.colHead}
-                    onClick={() => toggleLigne(gr.ligneId)}
-                    style={{ cursor: "pointer", ...(ligneFilter === gr.ligneId ? { background: "#eef2ff" } : undefined) }}
+                    onClick={() => toggleFiltre("poste", p.id, p.nom)}
+                    style={{
+                      cursor: "pointer",
+                      ...((colFilter?.kind === "poste" && colFilter.id === p.id) ||
+                      (colFilter?.kind === "ligne" && colFilter.id === gr.ligneId)
+                        ? { background: "#eef2ff" }
+                        : undefined),
+                    }}
                   >
                     {/* Nom de poste vertical, sur une seule ligne (table plus haute mais lisible). */}
                     <div className={g.colLabel}>{p.nom}</div>

@@ -246,8 +246,8 @@ export default function HabilitationsList({
   // Filtre posé au clic sur un en-tête de colonne (formation / groupe / catégorie),
   // comme la Matrice : affiche les personnes AYANT au moins une habilitation du
   // périmètre cliqué. `null` = pas de filtre.
-  const [colFilter, setColFilter] = useState<{ kind: "cat" | "grp"; key: string; label: string } | null>(null);
-  const toggleCol = (kind: "cat" | "grp", key: string, label: string) =>
+  const [colFilter, setColFilter] = useState<{ kind: "cat" | "grp" | "comp"; key: string; label: string } | null>(null);
+  const toggleCol = (kind: "cat" | "grp" | "comp", key: string, label: string) =>
     setColFilter((cur) => (cur && cur.kind === kind && cur.key === key ? null : { kind, key, label }));
 
   const compById = useMemo(() => new Map(comps.map((c) => [c.id, c])), [comps]);
@@ -341,7 +341,10 @@ export default function HabilitationsList({
     if (!colFilter) return null;
     const compIds = new Set<string>();
     for (const c of ordered) {
-      const ok = colFilter.kind === "cat" ? catOf(c.categorie) === colFilter.key : grpKeyOf(c) === colFilter.key;
+      const ok =
+        colFilter.kind === "cat" ? catOf(c.categorie) === colFilter.key
+        : colFilter.kind === "grp" ? grpKeyOf(c) === colFilter.key
+        : c.id === colFilter.key; // comp : la formation précise
       if (ok) compIds.add(c.id);
     }
     const set = new Set<string>();
@@ -495,7 +498,8 @@ export default function HabilitationsList({
             }}
           >
             <span>
-              Filtré : personnes habilitées {colFilter.kind === "cat" ? "dans la catégorie" : "sur le groupe"}{" "}
+              Filtré : personnes habilitées{" "}
+              {colFilter.kind === "cat" ? "dans la catégorie" : colFilter.kind === "grp" ? "sur le groupe" : "sur la formation"}{" "}
               <strong>{colFilter.label}</strong> <span className="muted">({shownPersonnes.length})</span>
             </span>
             <button type="button" onClick={() => setColFilter(null)} className="iconbtn ghost" title="Retirer le filtre" style={{ marginLeft: "auto" }}>
@@ -580,10 +584,11 @@ export default function HabilitationsList({
                         c.groupe ? `Groupe : ${c.groupe}` : null,
                         `Validité : ${dureeTxt}`,
                         c.a_autorisation_conduite ? "Soumise à autorisation" : null,
-                        "— Cliquer pour filtrer les personnes de ce groupe",
+                        "— Cliquer pour filtrer les personnes ayant cette formation",
                       ]
                         .filter(Boolean)
                         .join("\n");
+                      const compActif = colFilter?.kind === "comp" && colFilter.key === c.id;
                       const grpActif = colFilter?.kind === "grp" && colFilter.key === grpKeyOf(c);
                       const catActif = colFilter?.kind === "cat" && colFilter.key === catOf(c.categorie);
                       return (
@@ -591,8 +596,8 @@ export default function HabilitationsList({
                           key={c.id}
                           title={titre}
                           className={debutGroupe.has(c.id) ? `${g.colHead} ${g.groupStart}` : g.colHead}
-                          onClick={() => toggleCol("grp", grpKeyOf(c), c.groupe ?? CAT_LABEL[catOf(c.categorie)])}
-                          style={{ cursor: "pointer", ...(grpActif || catActif ? { background: "#eef2ff" } : undefined) }}
+                          onClick={() => toggleCol("comp", c.id, c.nom)}
+                          style={{ cursor: "pointer", ...(compActif || grpActif || catActif ? { background: "#eef2ff" } : undefined) }}
                         >
                           <div className={g.colLabel}>
                             {c.a_autorisation_conduite && (
