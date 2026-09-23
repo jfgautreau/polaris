@@ -13,6 +13,7 @@ import AutorisationMark from "./AutorisationMark";
 import PageTitle from "@/components/PageTitle";
 import SlideSwitch from "@/components/SlideSwitch";
 import AtelierEquipeFiltres from "@/components/AtelierEquipeFiltres";
+import ConducteurFiltre from "@/components/ConducteurFiltre";
 import Link from "next/link";
 
 type Row = {
@@ -477,6 +478,7 @@ export default function HabilitationsList({
             title="Basculer entre la grille et la liste par échéance"
           />
           <span className="hb-fin">
+            <ConducteurFiltre />
             <AtelierEquipeFiltres base="/habilitations" ateliers={ateliers} equipes={equipes} atelier={atelier} equipe={equipe} />
           </span>
         </div>

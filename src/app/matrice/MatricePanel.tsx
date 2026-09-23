@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import AtelierEquipeFiltres from "@/components/AtelierEquipeFiltres";
+import ConducteurFiltre from "@/components/ConducteurFiltre";
 import SlideSwitch from "@/components/SlideSwitch";
 import PageTitle from "@/components/PageTitle";
 import Link from "next/link";
@@ -102,6 +103,7 @@ export default function MatricePanel({
             title="Basculer entre niveau actuel et niveau cible"
           />
           <span className="hb-fin">
+            <ConducteurFiltre />
             <AtelierEquipeFiltres base="/matrice" ateliers={ateliers} equipes={equipes} atelier={atelier} equipe={equipe} />
           </span>
         </div>

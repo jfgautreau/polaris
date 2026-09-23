@@ -22,11 +22,12 @@ type Row = {
 export default async function HabilitationsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ atelier?: string; equipe?: string }>;
+  searchParams: Promise<{ atelier?: string; equipe?: string; cond?: string }>;
 }) {
   const { profile, perms } = await requireModule("habilitations", "read");
   const sp = await searchParams;
   const canEdit = canWrite(perms, "habilitations");
+  const filtreConducteurs = sp.cond === "1";
 
   const supabase = await getServerClient();
   // On charge TOUT l'effectif actif — les filtres atelier/equipe ne sont PAS
@@ -60,12 +61,34 @@ export default async function HabilitationsPage({
 
   const comps = compsD ?? [];
   const personnes = persD ?? [];
-  // Sous-ensemble affiche par defaut (filtres equipe + atelier). La recherche par
-  // nom (client) passe outre et balaie `personnes` en entier — meme pattern que
-  // la Matrice. Toutes les personnes actives sont dans `personnes`, si bien que
-  // taper le nom d'un intermittent hors atelier filtre le remonte.
+  // Filtre Conducteurs (?cond=1) : personnes ayant ≥ 1 compétence (niveau_actuel
+  // ≥ 1) sur ≥ 1 poste `categorie = 'conducteur'` actif — critère orthogonal au
+  // filtre atelier, même que Matrice / Planning. fetchAll : `matrice` > 1000 (L8).
+  const conducteurIds = new Set<string>();
+  if (filtreConducteurs) {
+    const cr = await fetchAll<{ personne_id: string }>(() =>
+      supabase
+        .from("matrice")
+        .select("personne_id, poste!inner(categorie, actif)")
+        .eq("poste.categorie", "conducteur")
+        .eq("poste.actif", true)
+        .gte("niveau_actuel", 1)
+        .order("id")
+        .returns<{ personne_id: string }[]>(),
+    );
+    for (const r of cr) conducteurIds.add(r.personne_id);
+  }
+  // Sous-ensemble affiche par defaut (filtres equipe + atelier + Conducteurs). La
+  // recherche par nom (client) passe outre et balaie `personnes` en entier — meme
+  // pattern que la Matrice. Toutes les personnes actives sont dans `personnes`, si
+  // bien que taper le nom d'un intermittent hors atelier filtre le remonte.
   const displayedIds = personnes
-    .filter((p) => (!sp.equipe || p.equipe_id === sp.equipe) && (!sp.atelier || p.atelier_id === sp.atelier))
+    .filter(
+      (p) =>
+        (!sp.equipe || p.equipe_id === sp.equipe) &&
+        (!sp.atelier || p.atelier_id === sp.atelier) &&
+        (!filtreConducteurs || conducteurIds.has(p.id)),
+    )
     .map((p) => p.id);
   // La vue « Liste » repose sur les personnes actives (toutes) ; le filtre par
   // sous-ensemble se fait cote client via `displayedIds`, hors recherche.

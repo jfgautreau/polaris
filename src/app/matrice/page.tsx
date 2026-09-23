@@ -29,7 +29,7 @@ type MatriceRow = {
 export default async function MatricePage({
   searchParams,
 }: {
-  searchParams: Promise<{ atelier?: string; equipe?: string }>;
+  searchParams: Promise<{ atelier?: string; equipe?: string; cond?: string }>;
 }) {
   const { profile, perms } = await requireModule("matrice", "read");
 
@@ -154,10 +154,36 @@ export default async function MatricePage({
     for (const r of rows) avecCompetence.add(r.personne_id);
   }
 
+  // Filtre Conducteurs (?cond=1) : personnes ayant au moins une compétence
+  // (niveau_actuel ≥ 1) sur au moins un poste `categorie = 'conducteur'` actif.
+  // Critère orthogonal au filtre atelier (« sait conduire », partout dans l'usine).
+  // fetchAll : `matrice` dépasse 1000 lignes (L8).
+  const filtreConducteurs = sp.cond === "1";
+  const conducteurIds = new Set<string>();
+  if (filtreConducteurs) {
+    const rows = await fetchAll<{ personne_id: string }>(() =>
+      supabase
+        .from("matrice")
+        .select("personne_id, poste!inner(categorie, actif)")
+        .eq("poste.categorie", "conducteur")
+        .eq("poste.actif", true)
+        .gte("niveau_actuel", 1)
+        .order("id")
+        .returns<{ personne_id: string }[]>(),
+    );
+    for (const r of rows) conducteurIds.add(r.personne_id);
+  }
+
   // Sous-ensemble affiché par défaut : les personnes passant les filtres
-  // équipe + atelier. La recherche par nom (client) passe outre et balaie tout.
+  // équipe + atelier (+ Conducteurs). La recherche par nom (client) passe outre
+  // et balaie tout.
   const displayedIds = personnes
-    .filter((p) => (!sp.equipe || p.equipe_id === sp.equipe) && (!sp.atelier || p.atelier_id === sp.atelier))
+    .filter(
+      (p) =>
+        (!sp.equipe || p.equipe_id === sp.equipe) &&
+        (!sp.atelier || p.atelier_id === sp.atelier) &&
+        (!filtreConducteurs || conducteurIds.has(p.id)),
+    )
     .map((p) => p.id);
 
   // Contrats pilotés par agence (drapeau avec_agence, 0072) : surlignés en jaune
