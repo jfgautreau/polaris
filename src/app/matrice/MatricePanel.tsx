@@ -1,9 +1,10 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import AtelierEquipeFiltres from "@/components/AtelierEquipeFiltres";
 import ConducteurFiltre from "@/components/ConducteurFiltre";
+import CompteurResultats from "@/components/CompteurResultats";
 import SlideSwitch from "@/components/SlideSwitch";
 import PageTitle from "@/components/PageTitle";
 import Link from "next/link";
@@ -47,6 +48,14 @@ export default function MatricePanel({
 }) {
   const [mode, setMode] = useState<"actuel" | "cible">("actuel");
   const [showLegende, setShowLegende] = useState(false);
+  // Compteur « affichés / total » remonté par la grille (reflète recherche +
+  // filtres atelier/équipe + filtre ligne/poste). Initialisé au sous-ensemble
+  // affiché pour éviter un flash « 0 » avant le 1er rendu de la grille.
+  const [counts, setCounts] = useState(() => ({ n: displayedIds ? displayedIds.length : personnes.length, t: personnes.length }));
+  const onCount = useCallback(
+    (n: number, t: number) => setCounts((prev) => (prev.n === n && prev.t === t ? prev : { n, t })),
+    [],
+  );
   // La recherche vit dans l'en-tete (ligne 1) et pilote la grille. ⚠️ PORTÉE PAR
   // L'URL (?search=) : survit au rafraîchissement et VOYAGE entre Planning /
   // Personnel / Matrice / Habilitations (cf. MainNav). État local pour la
@@ -81,6 +90,7 @@ export default function MatricePanel({
               <button type="button" className="clear" onClick={() => chooseSearch("")} title="Effacer la recherche">✕</button>
             )}
           </span>
+          <CompteurResultats affiches={counts.n} total={counts.t} />
           <span className="hb-fin">
             <button type="button" className="btn-sm btn-ghost" style={{ width: "auto", margin: 0 }} onClick={() => setShowLegende(true)}>
               📖 Légende
@@ -103,8 +113,8 @@ export default function MatricePanel({
             title="Basculer entre niveau actuel et niveau cible"
           />
           <span className="hb-fin">
-            <ConducteurFiltre />
             <AtelierEquipeFiltres base="/matrice" ateliers={ateliers} equipes={equipes} atelier={atelier} equipe={equipe} />
+            <ConducteurFiltre />
           </span>
         </div>
       </div>
@@ -113,7 +123,7 @@ export default function MatricePanel({
         {groups.length === 0 ? (
           <p className="muted">Aucun poste actif (vérifiez le référentiel / le filtre atelier).</p>
         ) : (
-          <MatrixGrid groups={groups} personnes={personnes} displayedIds={displayedIds} initial={initial} canEditObjectif={canEditObjectif} mode={mode} search={search} nbNiveaux={nbNiveaux} seuilCompetent={seuilCompetent} couleurs={couleurs} />
+          <MatrixGrid groups={groups} personnes={personnes} displayedIds={displayedIds} initial={initial} canEditObjectif={canEditObjectif} mode={mode} search={search} nbNiveaux={nbNiveaux} seuilCompetent={seuilCompetent} couleurs={couleurs} onCount={onCount} />
         )}
       </div>
 

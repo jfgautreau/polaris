@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { LevelMark, FILL, RESTRICT } from "./Pie";
 import { usePersonGrid } from "@/components/usePersonGrid";
 import { INTERIM_BG } from "@/lib/interim";
@@ -33,6 +33,7 @@ export default function MatrixGrid({
   nbNiveaux = 4,
   seuilCompetent = 2,
   couleurs = FILL,
+  onCount,
 }: {
   groups?: Group[];
   personnes?: Personne[];
@@ -46,6 +47,7 @@ export default function MatrixGrid({
   nbNiveaux?: number; // niveaux positifs activés pour le site (1..nbNiveaux)
   seuilCompetent?: number; // niveau minimal « compétent » (bilan Compétences ≥N)
   couleurs?: Record<number, string | null>; // couleur par niveau (0 = contour)
+  onCount?: (affiches: number, total: number) => void; // compteur remonté à l'en-tête
 }) {
   const EMPTY_STAT = useMemo(() => emptyStat(nbNiveaux), [nbNiveaux]);
   const CYCLE = useMemo(() => buildCycle(nbNiveaux), [nbNiveaux]);
@@ -128,6 +130,11 @@ export default function MatrixGrid({
     rowCount: shown.length,
   });
   const rowsShown = virtual ? shown.slice(virtual.start, virtual.end) : shown;
+  // Remonte le compteur (affichés / total) à l'en-tête (MatricePanel), qui le
+  // rend à droite de la recherche. Deps primitives → pas de boucle de rendu.
+  useEffect(() => {
+    onCount?.(shown.length, personnes.length);
+  }, [shown.length, personnes.length, onCount]);
   const key = (pid: string, poid: string) => `${pid}:${poid}`;
   const get = (k: string): Cell => cells[k] ?? { a: 0, c: 0 };
 

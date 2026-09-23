@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import PageTitle from "@/components/PageTitle";
+import CompteurResultats from "@/components/CompteurResultats";
 import ConfirmForm from "@/components/ConfirmForm";
 import ModaleDeplacable from "@/components/ModaleDeplacable";
 import TempsPartielModal from "./TempsPartielModal";
@@ -676,6 +677,7 @@ export default function PersonnelEditor({
               <button type="button" className="clear" onClick={() => chooseSearch("")} title="Effacer la recherche">✕</button>
             )}
           </span>
+          <CompteurResultats affiches={filtered.length} total={rows.length} />
           <span className="hb-fin">
             {nbIncompletActifs > 0 && !incompletFilter && (
               <button
@@ -699,9 +701,6 @@ export default function PersonnelEditor({
                 ⚠ {nbIncompletActifs} à compléter
               </button>
             )}
-            <span className="muted" style={{ fontSize: 13, fontWeight: 600, whiteSpace: "nowrap" }}>
-              {filtered.length === rows.length ? `${rows.length} personnes` : `${filtered.length} / ${rows.length}`}
-            </span>
             <span style={{ minWidth: 92, textAlign: "right", fontSize: 12, fontWeight: 600, color: saveColor }}>{saveLabel}</span>
           </span>
         </div>

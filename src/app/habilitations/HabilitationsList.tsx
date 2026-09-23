@@ -14,6 +14,7 @@ import PageTitle from "@/components/PageTitle";
 import SlideSwitch from "@/components/SlideSwitch";
 import AtelierEquipeFiltres from "@/components/AtelierEquipeFiltres";
 import ConducteurFiltre from "@/components/ConducteurFiltre";
+import CompteurResultats from "@/components/CompteurResultats";
 import Link from "next/link";
 
 type Row = {
@@ -454,6 +455,7 @@ export default function HabilitationsList({
               </button>
             )}
           </span>
+          <CompteurResultats affiches={shownPersonnes.length} total={personnes.length} />
           <span className="hb-fin">
             <button type="button" className="btn-sm btn-ghost" style={{ width: "auto", margin: 0 }} onClick={() => setShowLegende(true)}>
               📖 Légende
@@ -478,8 +480,8 @@ export default function HabilitationsList({
             title="Basculer entre la grille et la liste par échéance"
           />
           <span className="hb-fin">
-            <ConducteurFiltre />
             <AtelierEquipeFiltres base="/habilitations" ateliers={ateliers} equipes={equipes} atelier={atelier} equipe={equipe} />
+            <ConducteurFiltre />
           </span>
         </div>
       </div>
