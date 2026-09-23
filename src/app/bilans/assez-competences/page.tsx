@@ -129,7 +129,7 @@ export default async function AssezCompetencesPage({ searchParams }: { searchPar
                     <tr>
                       <th style={{ textAlign: "left", position: "sticky", left: 0, background: "#fff", zIndex: 2, paddingLeft: 12 }}>Service / poste</th>
                       <th style={{ background: "#f8fafc", fontSize: 11, minWidth: 46 }}>Cat.</th>
-                      <th style={{ background: "#f8fafc", fontSize: 11, minWidth: 78 }}>Besoin</th>
+                      <th style={{ background: "#f8fafc", fontSize: 11, minWidth: 78 }} title="Besoin de référence issu du Référentiel (tous les quarts postés, effectif par quart). Les cellules par jour, elles, suivent l'ordonnancement quand le jour est initialisé.">Besoin réf.</th>
                       {cols.map((c, ci) => (
                         <th key={c.iso} style={{ textAlign: "center", minWidth: 62, fontSize: 12, background: "#f8fafc", ...sep(ci) }}>
                           {c.jourCourt}<br /><span className="muted" style={{ fontWeight: 400, fontSize: 9 }}>{c.num}</span>
@@ -195,7 +195,7 @@ export default async function AssezCompetencesPage({ searchParams }: { searchPar
               <div className="card">
                 <h2 style={{ marginTop: 0, fontSize: 15 }}>Périmètre du calcul</h2>
                 <ul className="muted" style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.7 }}>
-                  <li><strong>Besoin par créneau</strong> = effectif requis du poste (Référentiel, effectif <em>par quart</em>), <strong>sur chaque quart où il tourne</strong> — <strong>additif, journée comprise</strong> : un poste matin + après-midi = 2× l&apos;effectif ; un effectif en journée <em>et</em> en matin/après-midi = des personnes distinctes, donc on les <strong>somme</strong> (la journée ne double-compte que sur un poste où <code>poste_quart</code> l&apos;active vraiment). Jour <strong>initialisé par l&apos;ordonnancement</strong> → on ne garde que ses quarts actifs et lignes ouvertes (une ligne fermée par l&apos;ordo tombe à 0).</li>
+                  <li><strong>Besoin par créneau</strong> = effectif requis du poste (Référentiel, effectif <em>par quart</em>), <strong>sur chaque quart où il tourne</strong> — <strong>additif, journée comprise</strong> : un poste matin + après-midi = 2× l&apos;effectif ; un effectif en journée <em>et</em> en matin/après-midi = des personnes distinctes, donc on les <strong>somme</strong> (la journée ne double-compte que sur un poste où <code>poste_quart</code> l&apos;active vraiment). Jour <strong>initialisé par l&apos;ordonnancement</strong> → on ne garde que ses quarts actifs et lignes ouvertes (une ligne fermée par l&apos;ordo tombe à 0). La colonne <strong>« Besoin réf. »</strong> affiche le besoin <em>de référence</em> (Référentiel, tous quarts) ; ce sont les <strong>cellules par jour</strong> qui suivent l&apos;ordonnancement.</li>
                   <li><strong>Compétent</strong> = niveau ≥ niveau minimum du poste <em>et</em> habilitations valides ce jour-là.</li>
                   <li><strong>Présent</strong> = hors congé et absence, hors temps partiel indisponible, dans l&apos;effectif ce jour.</li>
                   <li>Postes à titulaire unique (PTNR) exclus. Affectation calculée <strong>globalement</strong> chaque jour.</li>
