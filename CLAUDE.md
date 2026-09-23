@@ -947,6 +947,14 @@ prochain gros chantier, pas une optimisation cosmétique.
     de passé). ⚠️ **Total scindé Titulaires / Intérim** (2026-09-22) : `bloc.totalTitulaires`
     (hors intérim, comparé au besoin, vert/rouge) + `bloc.totalInterim` (jaune, informatif,
     non comparé) ; drapeau intérim = `type_contrat.avec_agence` (`getTypesAgenceC`). ⚠️
+    **Total = population OPÉRATIONNELLE** (2026-09-23) : les lignes **Niv 1..N** comptent le
+    niveau **MAX** acquis (compétence, sans seuil, via `maxParCategorieAuJour`), MAIS les
+    deux Total (et les sous-totaux par regroupement) ne comptent que les personnes qui
+    **tiennent ≥ 1 poste de la catégorie** = `niveau_actuel ≥ poste.niveau_min_requis`
+    (+ habilitation valide en mode strict), via la fonction pure
+    `categoriesOperationnellesAuJour` (`Poste.niveauMin` chargé en page). Conséquence
+    assumée : **Total ≤ somme des lignes Niv**. Info-bulles « Total titulaires / intérim »
+    et sous-titre l'expliquent. ⚠️
     **Besoin ACTUALISÉ par l'ordonnancement** (2026-09-23) : `bloc.besoinParSemaine` (repli
     sur l'abaque référentiel `besoin`). Pour une **semaine initialisée** (≥ 1 jour ouvré
     porte une ligne `jour_quart`), besoin hebdo = **« besoin max »** = total du jour ouvré le
@@ -1021,7 +1029,13 @@ prochain gros chantier, pas une optimisation cosmétique.
     tout besoin de journée fantôme sur un poste posté (journée y est « – »). L'ancienne règle
     « journée = agrégat jamais ajoutée » (`quartsEffectifs`, supprimée) sous-comptait le besoin.
     PTNR exclus. Présence = hors congé, hors TP indisponible (rotation datée), dans l'effectif
-    (contrats).
+    (contrats). ⚠️ **Ordre des postes = Référentiel** (2026-09-23, `ligne.ordre_affichage` →
+    `poste.ordre_affichage` → nom ; `postesBesoin` trié après construction). ⚠️ La colonne
+    **« Besoin réf. »** affiche le besoin de RÉFÉRENCE (Référentiel, tous quarts postés,
+    `resumeDe`) ; ce sont les **cellules par jour** (`besoinsJour`) qui suivent
+    l'ordonnancement quand le jour est initialisé. Le sous-titre « Périmètre du calcul »
+    décrivait à tort l'ancienne règle « journée jamais additionnée » — corrigé (besoin
+    additif journée comprise, aligné feuille de route).
   - ⚠️ **PTR/PTNR dans les rapports** (`poste.remplacable`, migration 0059) : « nettoyer +
     isoler ». Cockpit, **Polyvalence & compétences** et **Assez de compétences ?**
     **excluent** les PTNR des « postes fragiles / sans relève / écart-cible / besoin »
