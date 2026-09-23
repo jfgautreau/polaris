@@ -84,6 +84,7 @@ type LigneRow = {
   id: string;
   nom: string;
   atelier_id: string | null;
+  ordre_affichage: number | null;
   poste: {
     id: string;
     nom: string;
@@ -92,6 +93,7 @@ type LigneRow = {
     niveau_min_requis: number;
     categorie: string | null;
     remplacable: boolean | null;
+    ordre_affichage: number | null;
   }[];
 };
 
@@ -158,7 +160,7 @@ export async function chargerCouvertureConges(
     { data: tpP },
     { data: tpF },
   ] = await Promise.all([
-    supabase.from("ligne").select("id, nom, atelier_id, poste(id, nom, actif, effectif_requis, niveau_min_requis, categorie, remplacable)").eq("actif", true).returns<LigneRow[]>(),
+    supabase.from("ligne").select("id, nom, atelier_id, ordre_affichage, poste(id, nom, actif, effectif_requis, niveau_min_requis, categorie, remplacable, ordre_affichage)").eq("actif", true).returns<LigneRow[]>(),
     supabase.from("atelier").select("id, nom").eq("actif", true).order("nom").returns<{ id: string; nom: string }[]>(),
     supabase.from("personne").select("id, equipe_id").returns<{ id: string; equipe_id: string | null }[]>(),
     fetchAll<{ personne_id: string; date_debut: string | null; date_fin: string | null }>(() =>
@@ -196,7 +198,7 @@ export async function chargerCouvertureConges(
   // Postes du besoin : actifs, remplaçables (PTNR exclus), et qui tournent avec un
   // effectif > 0 sur AU MOINS UN quart (effectif par quart, cf. src/lib/poste-quart.ts).
   // `posteEff` = effectif par défaut du poste, repli du helper.
-  type PosteBesoin = { id: string; nom: string; categorie: string; ligneId: string; atelierId: string; atelierNom: string; posteEff: number };
+  type PosteBesoin = { id: string; nom: string; categorie: string; ligneId: string; atelierId: string; atelierNom: string; posteEff: number; ligneOrdre: number; posteOrdre: number };
   const postesBesoin: PosteBesoin[] = [];
   const posteMin = new Map<string, number>();
   const posteService = new Map<string, string>();
@@ -209,10 +211,13 @@ export async function chargerCouvertureConges(
       const posteEff = p.effectif_requis ?? 0;
       const aBesoin = quarts.some((q) => { const e = etatQuart(pq, p.id, q, posteEff); return e.tourne && e.effectif > 0; });
       if (!aBesoin) continue;
-      postesBesoin.push({ id: p.id, nom: p.nom, categorie: p.categorie ?? "operateur", ligneId: l.id, atelierId: aid, atelierNom: l.atelier_id ? atelierNom.get(l.atelier_id) ?? "—" : "Sans service", posteEff });
+      postesBesoin.push({ id: p.id, nom: p.nom, categorie: p.categorie ?? "operateur", ligneId: l.id, atelierId: aid, atelierNom: l.atelier_id ? atelierNom.get(l.atelier_id) ?? "—" : "Sans service", posteEff, ligneOrdre: l.ordre_affichage ?? 0, posteOrdre: p.ordre_affichage ?? 0 });
       posteService.set(p.id, aid);
     }
   }
+  // Ordre d'affichage du Référentiel : ligne (ordre_affichage) → poste
+  // (ordre_affichage) → nom. `postesDuService` (filter) conserve cet ordre.
+  postesBesoin.sort((a, b) => a.ligneOrdre - b.ligneOrdre || a.posteOrdre - b.posteOrdre || a.nom.localeCompare(b.nom));
   const besoinPosteIds = new Set(postesBesoin.map((p) => p.id));
 
   // Ordonnancement réel + détection « jour ordonnancé ».
