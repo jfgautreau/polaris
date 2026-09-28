@@ -8,8 +8,11 @@ import { INTERIM_BG } from "@/lib/interim";
 import ModaleDeplacable from "@/components/ModaleDeplacable";
 import { FillIcon } from "@/components/icons";
 
-type Jour = { iso: string; nom: string; num: string; firstOfWeek: boolean; closed?: boolean };
-type WeekBlock = { num: number; span: number; year: number; isCurrent: boolean; monday: string };
+// `wi` : index de la semaine affichée (0..2) ; `quart` : quart affiché ce jour-là —
+// le même partout en « Suivre le quart », celui de l'équipe en « Suivre l'équipe ».
+type Jour = { iso: string; nom: string; num: string; firstOfWeek: boolean; closed?: boolean; wi: number; quart: string };
+// `quart` : pastille de la semaine, posée seulement en « Suivre l'équipe ».
+type WeekBlock = { num: number; span: number; year: number; isCurrent: boolean; monday: string; quart?: { libelle: string; couleur: string | null } };
 type Poste = { id: string; nom: string; niveauMin: number; effectif: number; categorie?: string };
 
 const CAT_BILANS: { key: string; label: string }[] = [
@@ -295,7 +298,7 @@ const LignePlanning = memo(function LignePlanning({
           hors ? "Hors effectif ce jour-là (avant arrivée, après départ ou entre deux contrats)" : "",
           infoCompetence,
           manque.length ? `⚠ Placement forcé — habilitation manquante : ${manque.join(", ")}` : "",
-          over ? `Sur-effectif (${overN}/${ctx.effectif[v] ?? 0})` : "",
+          over ? `Sur-effectif (${overN}/${ctx.effectif[`${d.quart}:${v}`] ?? 0})` : "",
           ...excInfo,
         ].filter(Boolean).join(" · ");
         return (
@@ -401,7 +404,7 @@ const LignePlanning = memo(function LignePlanning({
               const canEditExc = pers.editable && (isPoste(v) || estFormation(ctx, v) || !!e);
               if (!e && !canEditExc) return null;
               // Horaire par defaut (standard du poste pour ce quart / jour de semaine).
-              const std = isPoste(v) ? ctx.horaireStd[`${v}:${dowMon(d.iso)}`] : undefined;
+              const std = isPoste(v) ? ctx.horaireStd[`${d.quart}:${v}:${dowMon(d.iso)}`] : undefined;
               const stdTxt = std && (std.debut || std.fin) ? `${std.debut || "?"}-${std.fin || "?"}` : "";
               // Info-bulle de la pendule, hors JSX (même contrainte du React Compiler
               // que `titreCase` ci-dessus : pas de « [ternaires…].join() || … »).
@@ -500,7 +503,6 @@ export default function PlanningGrid({
   habPoste = {},
   habComp = {},
   habPers = {},
-  quart = "",
   otherByCell = {},
   otherPosteByCell = {},
   tpBlocked = {},
@@ -527,10 +529,12 @@ export default function PlanningGrid({
   // ce qui permet de retrouver quelqu'un hors filtre courant.
   displayedIds?: string[] | null;
   statIds?: string[];
-  groups?: Group[];
+  // Lignes et postes affichés, UN JEU PAR SEMAINE (index = `Jour.wi`) : ceux qui
+  // tournent sur le quart de la semaine, effectif requis sur ce quart.
+  groups?: Group[][];
   // Tous les ateliers (indépendant du filtre atelier) : le panneau d'affectation
-  // propose toute l'usine, pas seulement l'atelier filtré.
-  allGroups?: Group[];
+  // propose toute l'usine, pas seulement l'atelier filtré. Un jeu par semaine.
+  allGroups?: Group[][];
   openByIso?: Record<string, string[]>;
   // Ouverture des lignes de TOUS les ateliers (pour le panneau d'affectation).
   openAllByIso?: Record<string, string[]>;
@@ -541,7 +545,6 @@ export default function PlanningGrid({
   habPoste?: Record<string, string[]>; // poste -> habilitations exigees
   habComp?: Record<string, string>; // habilitation -> nom
   habPers?: Record<string, string>; // `${personne}:${habilitation}` -> echeance ("" = sans echeance)
-  quart?: string;
   otherByCell?: Record<string, string>;
   otherPosteByCell?: Record<string, string>; // nom complet du poste occupe sur cet autre quart
   tpBlocked?: Record<string, boolean>;
@@ -552,7 +555,7 @@ export default function PlanningGrid({
   quartLabel?: Record<string, string>;
   posteLabelAll?: Record<string, string>;
   exceptions?: Record<string, { debut: string; fin: string; motif: string }>;
-  horaireStd?: Record<string, { debut: string; fin: string }>; // `${poste}:${dow}` -> horaire par defaut
+  horaireStd?: Record<string, { debut: string; fin: string }>; // `${quart}:${poste}:${dow}` -> horaire par defaut
   formationMotifId?: string | null; // motif "Formation" -> pendule active (horaires + sujet)
   weekNav?: React.ReactNode;
   /** Recherche initiale (portee par l'URL, pour survivre a la navigation). */
@@ -752,45 +755,70 @@ export default function PlanningGrid({
     return arr;
   }, [days]);
 
+  // Quart de chaque semaine (index `Jour.wi`), et quart d'un jour donné.
+  const { quartDeSemaine, quartParIso } = useMemo(() => {
+    const qs: string[] = [];
+    const qi: Record<string, string> = {};
+    for (const d of days) {
+      qs[d.wi] = d.quart;
+      qi[d.iso] = d.quart;
+    }
+    return { quartDeSemaine: qs, quartParIso: qi };
+  }, [days]);
+
+  // Effectif requis par « quart:poste » (il dépend du quart) ; le reste est propre
+  // au poste, donc lu sur l'union des semaines.
   const { niveauMin, effectif } = useMemo(() => {
     const nm: Record<string, number> = {};
     const ef: Record<string, number> = {};
-    for (const g of groups)
-      for (const p of g.postes) {
-        nm[p.id] = p.niveauMin;
-        ef[p.id] = p.effectif;
-      }
+    for (let wi = 0; wi < groups.length; wi++)
+      for (const g of groups[wi])
+        for (const p of g.postes) {
+          nm[p.id] = p.niveauMin;
+          ef[`${quartDeSemaine[wi]}:${p.id}`] = p.effectif;
+        }
     return { niveauMin: nm, effectif: ef };
-  }, [groups]);
+  }, [groups, quartDeSemaine]);
 
   const { posteLigne, posteLabel, posteCat, allLigneIds } = useMemo(() => {
     const pl: Record<string, string> = {};
     const lab: Record<string, string> = {};
     const cat: Record<string, string> = {};
-    const ids: string[] = [];
-    for (const g of groups) {
-      ids.push(g.ligneId);
-      for (const p of g.postes) {
-        pl[p.id] = g.ligneId;
-        lab[p.id] = p.nom;
-        cat[p.id] = p.categorie ?? "operateur";
+    const ids = new Set<string>();
+    for (const gs of groups)
+      for (const g of gs) {
+        ids.add(g.ligneId);
+        for (const p of g.postes) {
+          pl[p.id] = g.ligneId;
+          lab[p.id] = p.nom;
+          cat[p.id] = p.categorie ?? "operateur";
+        }
       }
-    }
-    return { posteLigne: pl, posteLabel: lab, posteCat: cat, allLigneIds: ids };
+    return { posteLigne: pl, posteLabel: lab, posteCat: cat, allLigneIds: [...ids] };
   }, [groups]);
 
   // Données du panneau d'affectation, calculées sur TOUS les ateliers (allGroups).
   // Le panneau propose toute l'usine ; il n'est plus borné au filtre atelier.
   // Repli sur `groups` si allGroups n'est pas fourni.
   const pickSource = allGroups.length ? allGroups : groups;
-  const { pickPosteLigne, pickAllLigneIds } = useMemo(() => {
+  // `postesTournant[wi]` : postes (toute l'usine) qui tournent sur le quart de la
+  // semaine — la recopie ne pose jamais un poste sur un quart où il ne tourne pas.
+  const { pickPosteLigne, pickAllLigneIds, postesTournant } = useMemo(() => {
     const pl: Record<string, string> = {};
-    const ids: string[] = [];
-    for (const g of pickSource) {
-      ids.push(g.ligneId);
-      for (const p of g.postes) pl[p.id] = g.ligneId;
+    const ids = new Set<string>();
+    const tournant: Set<string>[] = [];
+    for (let wi = 0; wi < pickSource.length; wi++) {
+      const t = new Set<string>();
+      for (const g of pickSource[wi]) {
+        ids.add(g.ligneId);
+        for (const p of g.postes) {
+          pl[p.id] = g.ligneId;
+          t.add(p.id);
+        }
+      }
+      tournant[wi] = t;
     }
-    return { pickPosteLigne: pl, pickAllLigneIds: ids };
+    return { pickPosteLigne: pl, pickAllLigneIds: [...ids], postesTournant: tournant };
   }, [pickSource]);
   // Compétence d'une personne sur un poste, à partir de l'objet poste (niveauMin
   // porté par le poste) : pas besoin d'une table niveauMin couvrant toute l'usine.
@@ -840,11 +868,11 @@ export default function PlanningGrid({
       }
     }
     let overCount = 0;
-    for (const [pid, c] of Object.entries(counts)) if (c > (effectif[pid] ?? 0)) overCount++;
+    for (const [pid, c] of Object.entries(counts)) if (c > (effectif[`${d.quart}:${pid}`] ?? 0)) overCount++;
     // Besoin par categorie = effectifs requis des postes sur les lignes ouvertes ce jour.
     const openLines = new Set(openByIso[d.iso] ?? allLigneIds);
     const catRequis: Record<string, number> = { manager: 0, conducteur: 0, operateur: 0 };
-    for (const g of groups)
+    for (const g of groups[d.wi] ?? [])
       if (openLines.has(g.ligneId))
         for (const p of g.postes) {
           const c = p.categorie ?? "operateur";
@@ -856,8 +884,10 @@ export default function PlanningGrid({
   // ⚠️ Ne jamais ajouter `numero` ici : son ABSENCE indique a l'API que l'appel
   // vient du Planning, qui n'a pas de cases numerotees, et qu'elle doit prendre
   // la premiere place libre (cf. /api/placement/cell).
+  // Le quart envoyé est celui du JOUR (il change d'une semaine à l'autre en
+  // « Suivre l'équipe »).
   function postCell(pid: string, iso: string, equipe_id: string | null, value: string, forcer = false) {
-    return envoyerCase({ personne_id: pid, jour: iso, equipe_id, value, quart, ...(forcer ? { forcer: true } : {}) });
+    return envoyerCase({ personne_id: pid, jour: iso, equipe_id, value, quart: quartParIso[iso], ...(forcer ? { forcer: true } : {}) });
   }
 
   // Pré-remplissage des postes fixes d'UNE semaine (bouton dans l'entête, à la
@@ -940,7 +970,7 @@ export default function PlanningGrid({
       from: { personne_id: fromPid, jour: fromIso },
       to: { personne_id: toPid, jour: toIso },
       equipe_id: toPers.equipe_id,
-      quart,
+      quart: quartParIso[toIso],
       ...(forcer ? { forcer: true } : {}),
     });
     if (r.ok) {
@@ -963,14 +993,27 @@ export default function PlanningGrid({
   //    seule semaine ; le week-end en cours n'est pas touche, les jours non
   //    affiches ne sont pas remplis).
   // On ne touche jamais aux jours ou la personne est deja placee sur un autre quart.
+  // Chaque jour est ecrit sur SON quart : en « Suivre l'equipe », la semaine
+  // suivante est sur le quart de l'equipe (ex. apres-midi apres le matin). Un poste
+  // qui n'y tourne pas n'est pas recopie ce jour-la, et on le dit.
   async function fillWeek(pers: Personne, dayIndex: number) {
     const value = vals[key(pers.id, days[dayIndex].iso)] ?? "";
     const wk = weekIdx[dayIndex];
     const avantVendredi = dowMon(days[dayIndex].iso) < 4; // 0 = lundi .. 4 = vendredi
-    const targets = days
+    const candidats = days
       .filter((_, j) => (avantVendredi ? j > dayIndex && weekIdx[j] === wk : weekIdx[j] === wk + 1))
       .filter((t) => !t.closed && !otherByCell[key(pers.id, t.iso)]);
-    if (targets.length === 0) return; // rien a recopier (fin de semaine / plus de semaine affichee)
+    const horsCycle = isPoste(value) ? candidats.filter((t) => !postesTournant[t.wi]?.has(value)) : [];
+    const targets = candidats.filter((t) => !horsCycle.includes(t));
+    const nomPoste = posteLabel[value] ?? posteLabelAll[value] ?? "?";
+    const texteHorsCycle = horsCycle.length
+      ? `Le poste ${nomPoste} ne tourne pas sur le quart ${[...new Set(horsCycle.map((t) => weekBlocks[t.wi]?.quart?.libelle ?? quartLabel[t.quart] ?? t.quart))].join(", ")} : ${horsCycle.length} jour(s) non recopié(s).`
+      : "";
+    if (targets.length === 0) {
+      // rien a recopier (fin de semaine / plus de semaine affichee / poste hors cycle)
+      if (texteHorsCycle) window.alert(texteHorsCycle);
+      return;
+    }
     const hasExisting = targets.some((t) => (vals[key(pers.id, t.iso)] ?? "") !== "");
     if (
       hasExisting &&
@@ -982,6 +1025,7 @@ export default function PlanningGrid({
     ) {
       return;
     }
+    const avant = targets.map((t) => vals[key(pers.id, t.iso)] ?? "");
     setVals((s) => {
       const next = { ...s };
       for (const t of targets) next[key(pers.id, t.iso)] = value;
@@ -993,8 +1037,21 @@ export default function PlanningGrid({
     // jour recopie n'apprendrait rien. Chaque ligne reste tracee, et le rouge
     // se recalcule a l'affichage.
     const resultats = await Promise.all(targets.map((t) => postCell(pers.id, t.iso, pers.equipe_id, value, true)));
-    setSaving(resultats.every((r) => r.ok) ? "saved" : "error");
+    // Jours refuses par le serveur (hors effectif, poste hors cycle…) : la case
+    // revient a sa valeur enregistree au lieu de garder une valeur fausse.
+    const refuses = targets.filter((_, j) => !resultats[j].ok).length;
+    if (refuses > 0)
+      setVals((s) => {
+        const next = { ...s };
+        targets.forEach((t, j) => {
+          if (!resultats[j].ok) next[key(pers.id, t.iso)] = avant[j];
+        });
+        return next;
+      });
+    setSaving(refuses === 0 ? "saved" : "error");
     setTimeout(() => setSaving("idle"), 1200);
+    const texteRefus = refuses > 0 ? `${refuses} jour(s) refusé(s) : cases remises à leur valeur.` : "";
+    if (texteHorsCycle || texteRefus) window.alert(`Recopie partielle.\n${[texteHorsCycle, texteRefus].filter(Boolean).join("\n")}`);
   }
 
   // Clavier : Suppr/Retour efface la case selectionnee ; Echap ferme.
@@ -1198,6 +1255,15 @@ export default function PlanningGrid({
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontWeight: w.isCurrent ? 700 : undefined }}>
                   {w.year} · Semaine {w.num}
                   {w.isCurrent && <span className="muted" style={{ fontWeight: 400 }}>(en cours)</span>}
+                  {w.quart && (
+                    <span
+                      title="Quart de l'équipe cette semaine"
+                      style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "#fff", color: "#111827", border: "1px solid var(--border)", borderRadius: 6, padding: "0 8px", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.3 }}
+                    >
+                      <span style={{ width: 10, height: 10, borderRadius: 2, background: w.quart.couleur || "#cbd5e1", boxShadow: "0 0 0 1px rgba(0,0,0,.2)" }} />
+                      {w.quart.libelle}
+                    </span>
+                  )}
                   {canPrefill && (
                     <button
                       type="button"
@@ -1333,7 +1399,7 @@ export default function PlanningGrid({
                 .map((d, i) => {
                   const v = vals[key(pers.id, d.iso)] ?? "";
                   const n = isPoste(v) ? perDay[i].counts[v] ?? 0 : 0;
-                  return isPoste(v) && n > (effectif[v] ?? 0) ? String(n) : "";
+                  return isPoste(v) && n > (effectif[`${d.quart}:${v}`] ?? 0) ? String(n) : "";
                 })
                 .join("|")}
               selIso={isoDeLaLigne(selected, pers.id)}
@@ -1460,7 +1526,9 @@ export default function PlanningGrid({
         // Panneau = TOUTE l'usine (indépendant du filtre atelier) : lignes ouvertes
         // tous ateliers ce jour-là.
         const oset = new Set(openAllByIso[pick.iso] ?? pickAllLigneIds);
-        const og = pickSource.filter((g) => oset.has(g.ligneId));
+        // Postes du quart de la semaine de la case (il change en « Suivre l'équipe »).
+        const pwi = days.find((d) => d.iso === pick.iso)?.wi ?? 0;
+        const og = (pickSource[pwi] ?? []).filter((g) => oset.has(g.ligneId));
         // Comptage global (postes competents / total) pour afficher la bascule.
         // On garde toujours le poste actuellement occupe visible, meme s'il ne
         // passe pas le filtre : sinon on ne pourrait plus le distinguer.

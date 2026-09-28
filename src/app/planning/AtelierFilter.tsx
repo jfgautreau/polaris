@@ -13,6 +13,7 @@ export default function AtelierFilter({
   semaine = "",
   search = "",
   cond = false,
+  vue = "",
 }: {
   ateliers?: Opt[];
   atelier?: string;
@@ -21,6 +22,7 @@ export default function AtelierFilter({
   semaine?: string;
   search?: string;
   cond?: boolean;
+  vue?: string;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -33,6 +35,7 @@ export default function AtelierFilter({
     if (quart) p.set("quart", quart);
     if (search) p.set("search", search);
     if (cond) p.set("cond", "1");
+    if (vue) p.set("vue", vue);
     const qs = p.toString();
     start(() => router.push(qs ? `/planning?${qs}` : "/planning"));
   }

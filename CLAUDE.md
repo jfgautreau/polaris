@@ -270,7 +270,10 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
 - **Planning** (`src/app/planning/`) : 3 semaines, la choisie à gauche puis S+1, S+2. Filtres
   Quart / Service / Équipe (mode AUTO = équipes du quart ∪ personnes réellement placées sur
   ce quart). Bandeau de rappel du quart (`QuartBandeau`, couleur `quart.couleur`, gris en
-  AUTO). Jours de semaine toujours affichés (jour fermé = message fusionné). Bascule
+  AUTO). Bascule **Suivre le quart / Suivre l'équipe** (`?vue=equipe`, une équipe
+  tournante exigée) : chaque semaine prend le quart de l'équipe (`Jour.quart`, groupes
+  et effectifs **par semaine** dans la grille) ; `»` écrit chaque jour sur son quart et
+  saute un poste hors cycle. Jours de semaine toujours affichés (jour fermé = message fusionné). Bascule
   Conducteurs (`?cond=1`). Pendule 🕐 (horaire + commentaire, `horaire_exception`),
   recopie `»`, glisser-déposer, croix de survol. Le bouton de pré-remplissage recharge la vue.
 - **Placement** (`src/app/placement/`, droit `placement`) : plan par ligne → postes → cases

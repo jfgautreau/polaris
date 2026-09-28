@@ -19,6 +19,7 @@ export default function PlanningFilters({
   atelier = "",
   search = "",
   cond = false,
+  vue = "",
 }: {
   equipes?: Opt[];
   equipe?: string;
@@ -27,6 +28,7 @@ export default function PlanningFilters({
   atelier?: string;
   search?: string;
   cond?: boolean;
+  vue?: string;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -39,6 +41,7 @@ export default function PlanningFilters({
     if (quart) p.set("quart", quart);
     if (search) p.set("search", search);
     if (cond) p.set("cond", "1");
+    if (vue) p.set("vue", vue);
     const qs = p.toString();
     start(() => router.push(qs ? `/planning?${qs}` : "/planning"));
   }

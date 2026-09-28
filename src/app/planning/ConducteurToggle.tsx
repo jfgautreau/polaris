@@ -15,6 +15,7 @@ export default function ConducteurToggle({
   atelier = "",
   equipe = "",
   search = "",
+  vue = "",
 }: {
   actif?: boolean;
   semaine?: string;
@@ -22,6 +23,7 @@ export default function ConducteurToggle({
   atelier?: string;
   equipe?: string;
   search?: string;
+  vue?: string;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -33,6 +35,7 @@ export default function ConducteurToggle({
     if (semaine) p.set("semaine", semaine);
     if (quart) p.set("quart", quart);
     if (search) p.set("search", search);
+    if (vue) p.set("vue", vue);
     if (!actif) p.set("cond", "1"); // on l'active
     const qs = p.toString();
     start(() => router.push(qs ? `/planning?${qs}` : "/planning"));

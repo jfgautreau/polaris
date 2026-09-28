@@ -22,7 +22,60 @@ function luminance(hex: string): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
-export default function QuartBandeau({ quart, quarts }: { quart: string; quarts: Q[] }) {
+// « Suivre l'équipe » (`suivi`) : chaque semaine a son quart. Bandeau neutre qui
+// nomme l'équipe suivie et égrène le quart de chaque semaine, chacun dans sa
+// couleur (les mêmes pastilles coiffent les semaines de la grille).
+type Suivi = { equipe: string; semaines: { num: number; quart: string }[] };
+
+export default function QuartBandeau({ quart, quarts, suivi = null }: { quart: string; quarts: Q[]; suivi?: Suivi | null }) {
+  if (suivi) {
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        style={{
+          background: "#f8fafc",
+          color: "#111827",
+          border: "1px solid rgba(0,0,0,.08)",
+          borderRadius: 8,
+          padding: "8px 16px",
+          margin: "6px 0 8px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexWrap: "wrap",
+          gap: 10,
+          fontWeight: 700,
+          fontSize: 15,
+        }}
+      >
+        <span style={{ opacity: 0.75, fontWeight: 500, fontSize: 13 }}>Vous suivez l&apos;équipe</span>
+        <span style={{ textTransform: "uppercase", letterSpacing: 0.3 }}>{suivi.equipe}</span>
+        <span style={{ opacity: 0.4 }}>·</span>
+        {suivi.semaines.map((s, i) => {
+          const qs = quarts.find((x) => x.code === s.quart);
+          const c = qs?.couleur || "#e5e7eb";
+          return (
+            <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              {i > 0 && <span style={{ opacity: 0.4, fontWeight: 400 }}>→</span>}
+              <span
+                style={{
+                  background: c,
+                  color: luminance(c) < 0.55 ? "#fff" : "#111827",
+                  borderRadius: 6,
+                  padding: "2px 10px",
+                  textTransform: "uppercase",
+                  letterSpacing: 0.3,
+                }}
+              >
+                S{s.num} · {qs?.libelle ?? s.quart}
+              </span>
+            </span>
+          );
+        })}
+      </div>
+    );
+  }
   const q = quart ? quarts.find((x) => x.code === quart) : null;
   const auto = !q;
   const couleur = q?.couleur || null;

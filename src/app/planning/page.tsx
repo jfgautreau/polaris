@@ -68,7 +68,7 @@ type Motif = { id: string; code_court: string; libelle: string; couleur: string 
 export default async function PlanningPage({
   searchParams,
 }: {
-  searchParams: Promise<{ equipe?: string; semaine?: string; quart?: string; atelier?: string; search?: string; cond?: string }>;
+  searchParams: Promise<{ equipe?: string; semaine?: string; quart?: string; atelier?: string; search?: string; cond?: string; vue?: string }>;
 }) {
   const { profile, perms } = await requireModule("planning", "read");
   // Droit "planning: write" (hors chef) : édition complète ; le chef garde son périmètre.
@@ -191,6 +191,25 @@ export default async function PlanningPage({
   if (!quart) quart = valeurValide((await cookies()).get(COOKIE_QUART)?.value, quartCodes);
   if (!quart) quart = quartParDefaut(quarts);
 
+  // Vue « Suivre l'équipe » (?vue=equipe) : chaque semaine affichée prend le quart
+  // de l'équipe choisie CETTE semaine-là (S matin, S+1 après-midi, S+2 matin…), pour
+  // recopier une affectation d'une semaine sur l'autre sans changer de quart.
+  // Exige UNE équipe tournante : en Auto / Toutes, ou pour une équipe à quart fixe,
+  // on reste sur « Suivre le quart » (le même quart sur les 3 semaines). Semaine
+  // sans rotation connue : repli sur le quart de la première semaine.
+  const eqSel = equipeIdSel ? (equipesD ?? []).find((e) => e.id === equipeIdSel) : undefined;
+  const suivreEquipePossible = !!eqSel && !eqSel.quart_fixe;
+  const suivreEquipe = suivreEquipePossible && sp.vue === "equipe";
+  const quartDeSemaine = (wi: number): string => {
+    const q = suivreEquipe ? rotByWeek[wi]?.[equipeIdSel] : undefined;
+    return q && quartCodes.includes(q) ? q : "";
+  };
+  if (suivreEquipe && quartDeSemaine(0)) quart = quartDeSemaine(0);
+  const quartsSemaine = weekMondays.map((_, wi) => quartDeSemaine(wi) || quart);
+  const quartsDistincts = [...new Set(quartsSemaine)];
+  const wiDuJour = new Map(rawDays.map((d) => [d.iso, d.wi]));
+  const quartDuJour = (iso: string) => quartsSemaine[wiDuJour.get(iso) ?? 0];
+
   // Ensemble des equipes AUTO pour le quart courant : celles que la rotation de la
   // semaine place sur ce quart + celles dont `quart_fixe` vaut ce quart. Union, pas
   // ecrasement : une equipe fixe matin ET une equipe tournante au matin cohabitent.
@@ -243,23 +262,29 @@ export default async function PlanningPage({
 
   // Filtre poste x quart : un poste qui ne tourne pas sur le quart affiché (« – »)
   // n'apparaît pas. Un poste « tourne à 0 » reste visible (besoin 0). Effectif par
-  // quart, cf. src/lib/poste-quart.ts.
-  const groups = (atelier ? groupsAll.filter((g) => g.atelierId === atelier) : groupsAll)
-    .map((g) => ({ ...g, postes: g.postes.filter((p) => tourneSurQuart(pq, p.id, quart, p.effectif_requis)) }))
-    .filter((g) => g.postes.length > 0);
+  // quart, cf. src/lib/poste-quart.ts. Un jeu de lignes PAR QUART affiché (un seul
+  // en « Suivre le quart », jusqu'à trois en « Suivre l'équipe »).
+  const postesDuQuart = <G extends { postes: PosteRow[] }>(gs: G[], q: string) =>
+    gs
+      .map((g) => ({ ...g, postes: g.postes.filter((p) => tourneSurQuart(pq, p.id, q, p.effectif_requis)) }))
+      .filter((g) => g.postes.length > 0);
+  const groupsAtelier = atelier ? groupsAll.filter((g) => g.atelierId === atelier) : groupsAll;
+  const groupsParQuart = new Map(quartsDistincts.map((q) => [q, postesDuQuart(groupsAtelier, q)]));
+  const groupsDe = (q: string) => groupsParQuart.get(q) ?? [];
 
   // Besoin de ligne = somme des effectifs requis SUR LE QUART AFFICHÉ (et non plus
-  // l'effectif unique du poste, qui ignorait le quart).
+  // l'effectif unique du poste, qui ignorait le quart). Clé « quart:ligne ».
   const lineEffectif: Record<string, number> = {};
-  for (const g of groups)
-    lineEffectif[g.ligneId] = g.postes.reduce((s, p) => s + effectifSurQuart(pq, p.id, quart, p.effectif_requis), 0);
+  for (const q of quartsDistincts)
+    for (const g of groupsDe(q))
+      lineEffectif[`${q}:${g.ligneId}`] = g.postes.reduce((s, p) => s + effectifSurQuart(pq, p.id, q, p.effectif_requis), 0);
 
   // Perf P5 (2026-09-28) — VAGUE 2. Ces lectures ne dépendent que de l'effectif
   // (vague 1), des postes affichés ou des 3 semaines : elles partent ICI, en même
   // temps que l'ouverture, et chaque bloc plus bas attend la sienne au lieu de les
   // enchaîner. Les blocs de traitement sont inchangés.
   const idsEffectif = (allActiveD ?? []).map((p) => p.id);
-  const postesAffichesIds = groups.flatMap((g) => g.postes.map((p) => p.id));
+  const postesAffichesIds = [...new Set(quartsDistincts.flatMap((q) => groupsDe(q).flatMap((g) => g.postes.map((p) => p.id))))];
   type TpRow = { id: string; personne_id: string; date_debut: string; date_fin: string | null; tp_config: { off?: Record<string, string[]> } | null };
   const pPersAtelier = enAvance<{ data: { id: string; atelier_id: string | null }[] | null; error: { message: string } | null }>(
     atelier && idsEffectif.length
@@ -342,27 +367,29 @@ export default async function PlanningPage({
   // ~420 lignes aujourd'hui mais 1000 des ~48 lignes de production (cf. L8 —
   // PostgREST tronque a 1000 SANS erreur, et le planning afficherait alors des
   // lignes fermees comme ouvertes). `jour_quart` reste direct : 21 lignes au plus.
+  // En « Suivre l'équipe », on lit les quarts des 3 semaines et on ne retient,
+  // pour chaque jour, que les lignes du quart de SA semaine.
   const [ouv, { data: jq }] = await Promise.all([
-    fetchAll<{ jour: string; ligne_id: string; ouverte: boolean }>(() =>
+    fetchAll<{ jour: string; ligne_id: string; ouverte: boolean; quart_code: string }>(() =>
       supabase
         .from("ouverture_quart")
-        .select("jour, ligne_id, ouverte")
-        .eq("quart_code", quart)
+        .select("jour, ligne_id, ouverte, quart_code")
+        .in("quart_code", quartsDistincts)
         .in("jour", allIsos)
         .order("jour").order("ligne_id").order("quart_code")
-        .returns<{ jour: string; ligne_id: string; ouverte: boolean }[]>()
+        .returns<{ jour: string; ligne_id: string; ouverte: boolean; quart_code: string }[]>()
     ),
     supabase
       .from("jour_quart")
-      .select("jour, actif")
-      .eq("quart_code", quart)
+      .select("jour, actif, quart_code")
+      .in("quart_code", quartsDistincts)
       .in("jour", allIsos)
-      .returns<{ jour: string; actif: boolean }[]>(),
+      .returns<{ jour: string; actif: boolean; quart_code: string }[]>(),
   ]);
   const ouvMap = new Map<string, boolean>();
-  for (const r of ouv) ouvMap.set(`${r.jour}:${r.ligne_id}`, r.ouverte);
+  for (const r of ouv) if (r.quart_code === quartDuJour(r.jour)) ouvMap.set(`${r.jour}:${r.ligne_id}`, r.ouverte);
   const actMap = new Map<string, boolean>();
-  for (const r of jq ?? []) actMap.set(r.jour, r.actif);
+  for (const r of jq ?? []) if (r.quart_code === quartDuJour(r.jour)) actMap.set(r.jour, r.actif);
 
   const quartActif = (iso: string) => (actMap.has(iso) ? actMap.get(iso)! : false);
   const lineOpen = (iso: string, ligneId: string) =>
@@ -385,8 +412,9 @@ export default async function PlanningPage({
   const visible = rawDays
     .map((d) => {
       const qa = quartActif(d.iso);
-      const openIds = qa ? groups.filter((g) => lineOpen(d.iso, g.ligneId)).map((g) => g.ligneId) : [];
-      const besoin = openIds.reduce((s, lid) => s + (lineEffectif[lid] ?? 0), 0);
+      const q = quartsSemaine[d.wi];
+      const openIds = qa ? groupsDe(q).filter((g) => lineOpen(d.iso, g.ligneId)).map((g) => g.ligneId) : [];
+      const besoin = openIds.reduce((s, lid) => s + (lineEffectif[`${q}:${lid}`] ?? 0), 0);
       // open (= not-closed) ne dépend plus que du quart : une colonne où toutes les
       // lignes sont fermées par l'ordo reste ouverte, avec besoin/catRequis à 0.
       return { ...d, open: qa, besoin, openIds };
@@ -404,7 +432,7 @@ export default async function PlanningPage({
   for (const d of visible)
     openAllByIso[d.iso] = quartActif(d.iso) ? groupsAll.map((g) => g.ligneId) : [];
 
-  const days = visible.map((d) => ({ iso: d.iso, nom: d.nom, num: d.num, firstOfWeek: d.firstOfWeek, closed: !d.open }));
+  const days = visible.map((d) => ({ iso: d.iso, nom: d.nom, num: d.num, firstOfWeek: d.firstOfWeek, closed: !d.open, wi: d.wi, quart: quartsSemaine[d.wi] }));
   const besoin = visible.map((d) => d.besoin);
   const visIsos = visible.map((d) => d.iso);
 
@@ -459,10 +487,10 @@ export default async function PlanningPage({
       avecCases
         ? supabase
             .from("horaire_poste")
-            .select("poste_id, jour, debut, fin")
-            .eq("quart_code", quart)
-            .returns<{ poste_id: string; jour: number; debut: string | null; fin: string | null }[]>()
-        : Promise.resolve({ data: [] as { poste_id: string; jour: number; debut: string | null; fin: string | null }[], error: null }),
+            .select("poste_id, jour, debut, fin, quart_code")
+            .in("quart_code", quartsDistincts)
+            .returns<{ poste_id: string; jour: number; debut: string | null; fin: string | null; quart_code: string }[]>()
+        : Promise.resolve({ data: [] as { poste_id: string; jour: number; debut: string | null; fin: string | null; quart_code: string }[], error: null }),
       // TP MATÉRIALISÉS (0064) — best-effort, cf. plus bas.
       avecCases
         ? supabase
@@ -476,9 +504,12 @@ export default async function PlanningPage({
     ] as const)
   );
 
-  const weekBlocks: { num: number; span: number; year: number; isCurrent: boolean; monday: string }[] = [];
+  // `quart` (libellé + couleur) : posé seulement en « Suivre l'équipe », où chaque
+  // semaine a le sien ; sinon le bandeau unique suffit.
+  const weekBlocks: { num: number; span: number; year: number; isCurrent: boolean; monday: string; quart?: { libelle: string; couleur: string | null } }[] = [];
   for (let wi = 0; wi < 3; wi++) {
     const span = visible.filter((d) => d.wi === wi).length;
+    const qw = quarts.find((x) => x.code === quartsSemaine[wi]);
     if (span > 0)
       weekBlocks.push({
         num: isoWeekNumber(weekMondays[wi]),
@@ -486,6 +517,7 @@ export default async function PlanningPage({
         span,
         isCurrent: isoDate(weekMondays[wi]) === todayMondayIso,
         monday: isoDate(weekMondays[wi]),
+        ...(suivreEquipe && qw ? { quart: { libelle: qw.libelle, couleur: qw.couleur ?? null } } : {}),
       });
   }
   const seenWeek = new Set<number>();
@@ -554,25 +586,26 @@ export default async function PlanningPage({
   // repli commun (`memeQuart`) : cet ecran utilisait `quartCodes[0]` — « journee » —
   // la ou le Placement et la TV utilisaient « matin », si bien que les memes lignes
   // s'affichaient sous deux quarts differents selon l'ecran.
-  const matchQuart = (qc: string | null) => memeQuart(qc, quart, quarts);
+  const matchQuart = (qc: string | null, iso: string) => memeQuart(qc, quartDuJour(iso), quarts);
 
   const initial: Record<string, string> = {};
   const otherByCell: Record<string, string> = {}; // place sur un autre quart -> code du quart
   const otherPosteByCell: Record<string, string> = {}; // ... et nom complet du poste occupe
   const matrice: Record<string, number> = {};
   const exceptions: Record<string, { debut: string; fin: string; motif: string }> = {};
-  // Horaire standard par poste (quart affiche) et jour de semaine (0=lundi..6=dimanche),
-  // sert a afficher l'horaire par defaut dans l'infobulle de la pendule.
+  // Horaire standard par quart, poste et jour de semaine (0=lundi..6=dimanche), clé
+  // « quart:poste:jour » : sert a afficher l'horaire par defaut dans l'infobulle de
+  // la pendule.
   const horaireStd: Record<string, { debut: string; fin: string }> = {};
   if (allIds.length && visIsos.length) {
     // Lancées en vague 3 (placements, matrice, exceptions, horaires, TP réels).
     const [pl, mat, { data: exc }, { data: horStd }, { data: tpReal, error: tpRealErr }] = await pCases;
-    for (const h of horStd ?? []) horaireStd[`${h.poste_id}:${h.jour}`] = { debut: h.debut ?? "", fin: h.fin ?? "" };
+    for (const h of horStd ?? []) horaireStd[`${h.quart_code}:${h.poste_id}:${h.jour}`] = { debut: h.debut ?? "", fin: h.fin ?? "" };
     for (const r of pl) {
       const k = `${r.personne_id}:${r.jour}`;
       if (r.non_travaille) initial[k] = "X";
       else if (r.motif_absence_id) initial[k] = `m:${r.motif_absence_id}`;
-      else if (r.poste_id && matchQuart(r.quart_code)) initial[k] = r.poste_id;
+      else if (r.poste_id && matchQuart(r.quart_code, r.jour)) initial[k] = r.poste_id;
       else if (r.poste_id) {
         // Toutes les personnes actives, pas seulement l'ensemble affiche par
         // defaut : une recherche par nom peut faire apparaitre quelqu'un hors
@@ -744,7 +777,7 @@ export default async function PlanningPage({
   }));
   const displayedIds = displayed.map((p) => p.id);
 
-  const mapGroup = (g: { ligneNom: string; ligneId: string; atelierNom: string; postes: PosteRow[] }) => ({
+  const mapGroup = (q: string) => (g: { ligneNom: string; ligneId: string; atelierNom: string; postes: PosteRow[] }) => ({
     ligneNom: g.ligneNom,
     ligneId: g.ligneId,
     atelierNom: g.atelierNom,
@@ -752,28 +785,28 @@ export default async function PlanningPage({
       id: p.id,
       nom: (p.nom_court || p.nom).slice(0, 6),
       niveauMin: p.niveau_min_requis,
-      effectif: effectifSurQuart(pq, p.id, quart, p.effectif_requis),
+      effectif: effectifSurQuart(pq, p.id, q, p.effectif_requis),
       categorie: p.categorie,
     })),
   });
-  const gridGroups = groups.map(mapGroup);
+  // Un jeu de lignes par semaine affichée (celui du quart de la semaine). Même
+  // référence d'une semaine à l'autre quand le quart ne change pas.
+  const gridParQuart = new Map(quartsDistincts.map((q) => [q, groupsDe(q).map(mapGroup(q))]));
+  const gridGroups = quartsSemaine.map((q) => gridParQuart.get(q) ?? []);
   // Tous les ateliers (indépendant du filtre atelier), même filtrage poste×quart :
   // alimente le panneau d'affectation « Voir tous » -> toute l'usine.
-  const allGridGroups = groupsAll
-    .map((g) => ({ ...g, postes: g.postes.filter((p) => tourneSurQuart(pq, p.id, quart, p.effectif_requis)) }))
-    .filter((g) => g.postes.length > 0)
-    .map(mapGroup);
+  const allGridParQuart = new Map(quartsDistincts.map((q) => [q, postesDuQuart(groupsAll, q).map(mapGroup(q))]));
+  const allGridGroups = quartsSemaine.map((q) => allGridParQuart.get(q) ?? []);
 
   // Habilitations exigees par les postes affiches, et celles que les gens detiennent.
   // Meme lecture qu'au Placement : le manque est RECALCULE a l'affichage, si bien
   // qu'un placement force redevient normal des la regularisation et repasse en
   // rouge si l'habilitation expire. On ne se fie donc pas au drapeau `forcage_*`
   // stocke, qui n'est qu'une trace d'audit.
-  const posteIdsAffiches = groups.flatMap((g) => g.postes.map((p) => p.id));
   const habPoste: Record<string, string[]> = {};
   const habComp: Record<string, string> = {};
   const habPers: Record<string, string> = {};
-  if (posteIdsAffiches.length) {
+  if (postesAffichesIds.length) {
     const dureeComp: Record<string, number | null> = {};
     const { data: pcrD } = await pPcr; // lancée en vague 2
     for (const r of pcrD ?? []) {
@@ -794,7 +827,11 @@ export default async function PlanningPage({
   for (const q of quarts) quartLabel[q.code] = q.libelle.slice(0, 3);
 
   const searchParam = sp.search ?? "";
+  // `vue` reste dans l'URL même quand elle ne s'applique pas (Auto, Toutes, équipe à
+  // quart fixe) : revenir sur une équipe tournante retrouve « Suivre l'équipe ».
+  const vue = sp.vue === "equipe" ? "equipe" : "";
   const extra: Record<string, string> = { quart };
+  if (vue) extra.vue = vue;
   if (spEquipe) extra.equipe = spEquipe;
   if (atelier) extra.atelier = atelier;
   if (searchParam) extra.search = searchParam;
@@ -814,8 +851,24 @@ export default async function PlanningPage({
               32 px par .planning-top .filterrow -> alignée avec la colonne de
               gauche (Année/Mois/Semaine). */}
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <QuartSelector quarts={quarts} current={quart} semaine={centerIso} atelier={atelier} equipe={spEquipe} search={searchParam} cond={filtreConducteurs} />
-            <AtelierFilter ateliers={ateliers} atelier={atelier} equipe={spEquipe} quart={quart} semaine={centerIso} search={searchParam} cond={filtreConducteurs} />
+            <QuartSelector
+              quarts={quarts}
+              current={quart}
+              semaine={centerIso}
+              atelier={atelier}
+              equipe={spEquipe}
+              search={searchParam}
+              cond={filtreConducteurs}
+              suivreEquipe={suivreEquipe}
+              suivreEquipeRaison={
+                suivreEquipePossible
+                  ? ""
+                  : eqSel
+                    ? `L'équipe ${eqSel.nom} est à quart fixe : son quart ne change pas d'une semaine à l'autre`
+                    : "Choisissez une équipe pour suivre sa rotation d'une semaine sur l'autre"
+              }
+            />
+            <AtelierFilter ateliers={ateliers} atelier={atelier} equipe={spEquipe} quart={quart} semaine={centerIso} search={searchParam} cond={filtreConducteurs} vue={vue} />
             <PlanningFilters
               equipes={(equipesD ?? []).map((e) => ({ id: e.id, label: e.nom, couleur: e.couleur }))}
               equipe={spEquipe}
@@ -824,6 +877,7 @@ export default async function PlanningPage({
               atelier={atelier}
               search={searchParam}
               cond={filtreConducteurs}
+              vue={vue}
             />
           </div>
           {/* La colonne d'icônes à droite du bandeau a été retirée le 2026-09-10 :
@@ -836,7 +890,7 @@ export default async function PlanningPage({
         {/* La grille prend toute la largeur de la fenetre. */}
         <div className="gridband" style={{ paddingBottom: 12 }}>
         <PlanningGrid
-          key={`${spEquipe}|${atelier}|${quart}|${centerIso}`}
+          key={`${spEquipe}|${atelier}|${quartsSemaine.join(",")}|${centerIso}`}
           days={days}
           weekBlocks={weekBlocks}
           canPrefill={canEditPlanningFull}
@@ -856,7 +910,6 @@ export default async function PlanningPage({
           habPoste={habPoste}
           habComp={habComp}
           habPers={habPers}
-          quart={quart}
           otherByCell={otherByCell}
           otherPosteByCell={otherPosteByCell}
           tpBlocked={tpBlocked}
@@ -915,10 +968,21 @@ export default async function PlanningPage({
                 atelier={atelier}
                 equipe={spEquipe}
                 search={searchParam}
+                vue={vue}
               />
             </>
           }
-          quartBandeau={<QuartBandeau quart={quart} quarts={quarts} />}
+          quartBandeau={
+            <QuartBandeau
+              quart={quart}
+              quarts={quarts}
+              suivi={
+                suivreEquipe && eqSel
+                  ? { equipe: eqSel.nom, semaines: weekMondays.map((wm, wi) => ({ num: isoWeekNumber(wm), quart: quartsSemaine[wi] })) }
+                  : null
+              }
+            />
+          }
         />
         </div>
       </div>
