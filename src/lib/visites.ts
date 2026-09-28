@@ -125,7 +125,13 @@ export const PARAMETRES_DEFAUT: Parametres = {
   embaucheMois: 3,
   postePlacements: 3,
   posteSemaines: 12,
-  alertePlacementContrainte: true,
+  // Les quatre avertissements du Placement partent ÉTEINTS. Le module démarre
+  // vide : tant que l'historique des visites n'est pas repris, tout le monde
+  // serait « en retard » et l'avertissement perdrait tout son sens. Les RH les
+  // allument un par un depuis « Param. Visites → Alertes », quand les données
+  // sont là. Aucun contrôle activé = la route de placement ne lit rien de plus
+  // que les réglages (cf. src/lib/visites-placement.ts).
+  alertePlacementContrainte: false,
   alertePlacementAnci: false,
   alertePlacementSir: false,
   alertePlacementReprise: false,

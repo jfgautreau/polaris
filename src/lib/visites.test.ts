@@ -124,6 +124,16 @@ describe("réglages", () => {
     expect(lireParametres(null)).toEqual(PARAMETRES_DEFAUT);
   });
 
+  it("aucun avertissement de placement n'est actif par défaut", () => {
+    const p = lireParametres(null);
+    expect([p.alertePlacementContrainte, p.alertePlacementAnci, p.alertePlacementSir, p.alertePlacementReprise]).toEqual([
+      false,
+      false,
+      false,
+      false,
+    ]);
+  });
+
   it("lit les nombres et les booléens, ignore l'inconnu", () => {
     const p = lireParametres([
       { cle: "repriseJours", valeur: "45" },

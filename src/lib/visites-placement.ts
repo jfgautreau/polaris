@@ -5,9 +5,11 @@
 // sorte, et elle ne dit jamais pourquoi : un chef d'équipe apprend qu'il y a un
 // point à vérifier, pas ce qu'il est.
 //
-// Chaque cas s'active séparément dans « Param. Visites → Alertes ». Par défaut,
-// seule la contrainte d'affectation avertit : c'est la seule qui soit une
-// consigne d'organisation, et non la conséquence lisible d'un dossier médical.
+// Chaque cas s'active séparément dans « Param. Visites → Alertes », et TOUS
+// partent éteints : sur un module encore vide, chaque personne serait signalée
+// et l'avertissement ne voudrait plus rien dire. Le premier à allumer sera
+// la contrainte d'affectation — la seule qui soit une consigne d'organisation
+// plutôt que la conséquence lisible d'un dossier médical.
 //
 // COÛT. Les contrôles activés partent ensemble, et chacun se limite à UNE
 // personne. Quand aucun cas n'est coché — le réglage d'origine hors contrainte —

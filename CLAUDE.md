@@ -91,7 +91,8 @@ L'historique des décisions est dans git et dans l'en-tête de chaque migration.
   (déclencheurs), accordés au rôle `rh` par défaut et **à personne d'autre**. Aucune
   donnée de santé en base : dates, type de visite, et `avis` borné par CHECK à
   quatre valeurs. Seule chose qui sorte du module : l'avertissement du Placement,
-  **sans motif** (cf. `src/lib/visites-placement.ts`).
+  **sans motif** (cf. `src/lib/visites-placement.ts`) — les quatre cas partent
+  **éteints** (module vide = tout le monde en défaut), les RH les allument.
 
 ## Modèle métier — invariants et pièges
 - **« Atelier » (code) = « Service » (UI).** `atelier` partout dans le code et la base ;

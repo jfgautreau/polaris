@@ -781,6 +781,12 @@ export default function VisitesParamEditor(props: {
               une demande de confirmation <strong>sans aucun détail</strong> — « à vérifier avec les
               RH ». Le placement reste possible après confirmation.
             </p>
+            <p style={{ fontSize: 13, background: "#fdf0dc", border: "1px solid #fcd34d", borderRadius: 8, padding: "10px 12px", maxWidth: "85ch" }}>
+              Tout est <strong>éteint au départ</strong>, volontairement : tant que l&apos;historique
+              des visites n&apos;est pas repris, presque tout le monde apparaîtrait en défaut et
+              l&apos;avertissement ne voudrait plus rien dire. Allumez-les un par un une fois les
+              données en place.
+            </p>
             <table style={{ width: "100%" }}>
               <thead>
                 <tr>
