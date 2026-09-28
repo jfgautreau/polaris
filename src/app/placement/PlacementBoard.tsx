@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { isoDate, addDays } from "@/lib/week";
 import { habValable, habManqueTxt } from "@/lib/habilitations";
 import { parseNumeros } from "@/lib/numeros-rotation";
@@ -120,14 +120,57 @@ export default function PlacementBoard({
   const [autreQuart, setAutreQuart] = useState<Record<string, string>>(autreQuartInit);
   const [saving, setSaving] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [msg, setMsg] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
+  // Recherche et equipe PORTEES PAR L'URL (?search= / ?equipe=, 2026-09-28) : elles
+  // survivent au changement de jour / quart / plan (le board est remonte, cf. `key`
+  // dans page.tsx) et voyagent avec le menu (report contextuel, cf. MainNav).
+  const urlParams = useSearchParams();
+  const [search, setSearchState] = useState(() => urlParams.get("search") ?? "");
   // Pre-filtre des noms. Deux formes de valeur :
   //   ""            -> tout le monde
   //   "q:<code>"    -> les equipes qui travaillent ce quart ce jour (fixe + rotation)
   //   "<equipe_id>" -> une equipe precise
   // Par defaut : le quart affiche, donc « Fixe matin + A » plutot qu'une seule
   // des deux equipes comme auparavant.
-  const [fEquipe, setFEquipe] = useState(`q:${quart}`);
+  // En URL, meme dialecte que le Planning : absent = equipes du quart (defaut),
+  // `all` = toutes, sinon un id d'equipe.
+  const [fEquipe, setFEquipeState] = useState(() => {
+    const e = urlParams.get("equipe") ?? "";
+    if (e === "all") return "";
+    if (e && equipes.some((x) => x.id === e)) return e;
+    return `q:${quart}`;
+  });
+  const equipeUrl = (v: string) => (v === "" ? "all" : v.startsWith("q:") ? "" : v);
+  // Ecriture dans l'URL SANS aller-retour serveur : history.replaceState est
+  // synchronise par Next avec useSearchParams (le menu voit la valeur a jour).
+  const ecrireUrl = (patch: Record<string, string>) => {
+    const p = new URLSearchParams(window.location.search);
+    for (const [k, v] of Object.entries(patch)) {
+      if (v) p.set(k, v);
+      else p.delete(k);
+    }
+    const qs = p.toString();
+    window.history.replaceState(null, "", qs ? `${window.location.pathname}?${qs}` : window.location.pathname);
+  };
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const setSearch = (v: string) => {
+    setSearchState(v);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => ecrireUrl({ search: v.trim() }), 400);
+  };
+  const setFEquipe = (v: string) => {
+    setFEquipeState(v);
+    ecrireUrl({ equipe: equipeUrl(v) });
+  };
+  // Plan (service) et quart resolus cote serveur — eventuellement depuis la
+  // memoire de session — reportes dans l'URL : le menu les transmet alors aux
+  // autres ecrans, et le dernier plan vu est memorise (cookie, cf. MainNav).
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    if ((atelierId && p.get("atelier") !== atelierId) || p.get("quart") !== quart) {
+      ecrireUrl({ atelier: atelierId, quart });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [atelierId, quart]);
   // Pre-filtre atelier : celui du plan affiche (elargissable pour aller chercher un renfort).
   const [fAtelier, setFAtelier] = useState(atelierId);
   const [hidePlaced, setHidePlaced] = useState(true);
@@ -193,6 +236,10 @@ export default function PlacementBoard({
     });
     const vue = patch.vue !== undefined ? patch.vue : vueAbsences ? VUE_ABSENCES : "";
     if (vue) params.set("vue", vue);
+    // Filtres de la colonne des noms : conserves d'un jour / quart / plan a l'autre.
+    if (search.trim()) params.set("search", search.trim());
+    const eq = equipeUrl(fEquipe);
+    if (eq) params.set("equipe", eq);
     router.push(`/placement?${params.toString()}`);
   };
 

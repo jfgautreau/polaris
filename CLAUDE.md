@@ -483,12 +483,23 @@ hauteur de rangée constante : `.refpostes` sur la table des postes,
   reprend le même style en inline.
 - **Filtres** : `.filterrow` (label + segments), navigation en `useTransition`.
   Planning : ordre **Quart / Atelier / Équipe**.
-- ⚠️ **Report contextuel des filtres (2026-09-15, `src/components/MainNav.tsx`)** : le nom
-  recherché, l'**équipe** et le **service** VOYAGENT quand on bascule par le menu entre
-  **Planning ↔ Personnel ↔ Matrice ↔ Habilitations**. Contextuel, PAS collant : le filtre
-  ne suit que ce saut (le quart du Planning et le statut/fiche du Personnel ne voyagent
-  pas). Le param « service » change de nom selon l'écran : `service` côté Personnel,
-  `atelier` partout ailleurs (`serviceParam()` dans `MainNav`). Pour que le report
+- ⚠️ **Report contextuel des filtres (2026-09-15, étendu 2026-09-28, `src/components/MainNav.tsx`)** :
+  table `ECRANS` = filtres compris par chaque écran et nom de leur param. Voyagent au saut
+  de menu entre **Planning, Placement, Personnel, Matrice, Habilitations, Absences et
+  Bilans** : recherche, **équipe** (deux dialectes traduits : Planning/Placement « absent =
+  auto, `all` = toutes » ↔ Personnel/Matrice/Habilitations « absent = toutes »),
+  **service** (`service` côté Personnel, `atelier` ailleurs) et **quart** (Planning,
+  Placement, Bilans). Bilans = service + quart seulement : le **Cockpit** les transmet aux
+  rapports avec un bandeau « Filtres repris … ✕ Ne pas appliquer ». Le statut/fiche du
+  Personnel ne voyage pas.
+  ⚠️ **Mémoire de SESSION** (`src/lib/filtres-session.ts`, cookies sans Max-Age écrits par
+  `MainNav`) : `polaris-quart` (dernier quart de Planning/Placement) et
+  `polaris-placement-service` (dernier plan de Placement). Relus comme **défaut** quand
+  l'URL ne précise rien — Planning : `?quart` > équipe choisie > cookie > défaut site ;
+  Placement : idem + plan = `?atelier` > cookie > 1ᵉʳ service (réponse à « Service : tous »).
+  Valeurs **toujours revalidées** contre les quarts/ateliers du site (`valeurValide`).
+  Placement porte désormais `?search` / `?equipe` (écriture par `history.replaceState`,
+  sans aller-retour serveur) et recopie dans l'URL le plan/quart résolus. Pour que le report
   **atterrisse ET survive au rafraîchissement**, la recherche par nom est désormais
   **portée par l'URL** (`?search=`) sur Personnel, Matrice et Habilitations (écriture
   débouncée 500 ms), comme le Planning. `MainNav` (client, `usePathname`/`useSearchParams`)
@@ -717,7 +728,10 @@ prochain gros chantier, pas une optimisation cosmétique.
   bouton draggable, prioritaire sur l'aperçu TP calculé.
 - Placement (saisie glisser-déposer, droit **`placement`**) : `src/app/placement/{page,PlacementBoard,JourNav,placement.module.css}`.
   Plan par ligne → postes → **cases numérotées** ; bascule **Plan / Absences** (`?vue=absences`,
-  absences filtrées par l'atelier affiché) ; copie **écraser / compléter**.
+  absences filtrées par l'atelier affiché) ; copie **écraser / compléter**
+  (`/api/placement/copy`, postes du quart affiché, **tout le site**). ⚠️ Depuis 2026-09-28,
+  **aucun des deux modes ne touche une ligne sans poste** du jour cible (absence, NT, TP) ;
+  « Écraser les affectations » ne remplace que des postes et ne supprime personne.
   ⚠️ **Rangs d'un poste en 2-3 colonnes (écran, 2026-09-16)** : chaque **numéro de rotation
   ET chaque occupant** compte pour UNE ligne ; au-delà de **10 lignes par colonne** (plafond
   **3 colonnes**), les rangs se répartissent en colonnes (multi-colonnes CSS pilotées par la

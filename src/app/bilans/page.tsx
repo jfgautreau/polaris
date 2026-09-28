@@ -5,7 +5,7 @@ import PageTitle from "@/components/PageTitle";
 import PrintButton from "@/components/PrintButton";
 import { requireModule } from "@/lib/permissions";
 import { getModulesMasquesC } from "@/lib/site-modules";
-import { getSeuilCompetentC } from "@/lib/refdata";
+import { getSeuilCompetentC, getAteliersC, getQuartsC } from "@/lib/refdata";
 import { RAPPORTS_BILAN } from "@/lib/bilans-rapports";
 import { fetchAll } from "@/lib/fetch-all";
 import { chargerValidites, actifLe } from "@/lib/referentiel-validite";
@@ -26,8 +26,25 @@ type Mat = { personne_id: string; poste_id: string };
 
 const fmtDate = (d: string | null) => (d ? d.split("-").reverse().join("/") : "—");
 
-export default async function CockpitPage() {
+export default async function CockpitPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ atelier?: string; quart?: string }>;
+}) {
   const { profile } = await requireModule("bilans", "read");
+
+  // Filtres REPRIS de l'écran d'où l'on vient (report contextuel du menu, cf.
+  // MainNav) : service + quart, transmis aux rapports détaillés. Le Cockpit
+  // lui-même n'est pas filtré. Bandeau explicite + lien pour ne pas les
+  // appliquer : un rapport doit s'ouvrir sur un périmètre que l'on a vu.
+  const sp = await searchParams;
+  const [ateliersRef, quartsRef] = await Promise.all([getAteliersC(), getQuartsC()]);
+  const atelierRepris = ateliersRef.find((a) => a.id === sp.atelier);
+  const quartRepris = quartsRef.find((q) => q.code === sp.quart);
+  const qsRepris = new URLSearchParams();
+  if (atelierRepris) qsRepris.set("atelier", atelierRepris.id);
+  if (quartRepris) qsRepris.set("quart", quartRepris.code);
+  const suffixe = qsRepris.toString() ? `?${qsRepris.toString()}` : "";
 
   const today = new Date();
   const todayIso = isoDate(today);
@@ -110,7 +127,7 @@ export default async function CockpitPage() {
   // les menus). Une carte masquée disparaît du Cockpit ; sa page redirige.
   const masques = await getModulesMasquesC();
   const categories = RAPPORTS_BILAN.filter((r) => !masques.has(r.key)).map((r) => ({
-    href: r.href,
+    href: r.href + suffixe,
     ic: r.ic,
     t: r.t,
     d: r.d,
@@ -224,6 +241,23 @@ export default async function CockpitPage() {
         {/* Navigation par categorie */}
         <div className="report-section">
           <h2>Rapports détaillés</h2>
+          {suffixe && (
+            <div
+              className="noprint"
+              style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", margin: "0 0 12px", padding: "8px 12px", borderRadius: 8, background: "#fff7ed", border: "1px solid #fdba74", fontSize: 13 }}
+            >
+              <span>
+                Filtres repris :{" "}
+                {atelierRepris && <strong>Service {atelierRepris.nom}</strong>}
+                {atelierRepris && quartRepris && " · "}
+                {quartRepris && <strong>Quart {quartRepris.libelle}</strong>}
+                {" "}— appliqués à l&apos;ouverture des rapports.
+              </span>
+              <Link href="/bilans" prefetch={false} style={{ marginLeft: "auto", fontWeight: 600 }}>
+                ✕ Ne pas appliquer
+              </Link>
+            </div>
+          )}
           <div className="navcards">
             {categories.map((c) => (
               <Link key={c.t} href={c.on ? c.href : "#"} className={`navcard ${c.on ? "" : "disabled"}`}>

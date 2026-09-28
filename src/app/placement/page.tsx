@@ -1,4 +1,6 @@
+import { cookies } from "next/headers";
 import { getServerClient } from "@/lib/supabase-server";
+import { COOKIE_QUART, COOKIE_PLACEMENT_SERVICE, valeurValide } from "@/lib/filtres-session";
 import { getCurrentSite } from "@/lib/current-site";
 import AppHeader from "@/components/AppHeader";
 import PageTitle from "@/components/PageTitle";
@@ -109,11 +111,24 @@ export default async function PlacementPage({
     conducteurIds.push(...uniq);
   }
 
-  const quart = sp.quart && quartCodes.includes(sp.quart) ? sp.quart : quartParDefaut(quarts);
+  // Defauts de SESSION (cookies, cf. src/lib/filtres-session.ts) quand l'URL ne
+  // precise rien : dernier quart choisi (Planning ou Placement), dernier plan
+  // (service) ouvert ici — c'est aussi la reponse a « Service : tous » au Planning.
+  // Valeurs revalidees contre les quarts / ateliers du site.
+  const jar = await cookies();
+  const quart =
+    (sp.quart && quartCodes.includes(sp.quart) ? sp.quart : "") ||
+    valeurValide(jar.get(COOKIE_QUART)?.value, quartCodes) ||
+    quartParDefaut(quarts);
   // Bascule Plan / Absences portee par ?vue : l'atelier reste selectionne dans les
   // deux cas, c'est lui qui filtre les absences affichees.
   const vueAbsences = sp.vue === "absences";
-  const atelierId = ateliers.find((a) => a.id === sp.atelier)?.id ?? ateliers[0]?.id ?? "";
+  const atelierIds = ateliers.map((a) => a.id);
+  const atelierId =
+    (sp.atelier && atelierIds.includes(sp.atelier) ? sp.atelier : "") ||
+    valeurValide(jar.get(COOKIE_PLACEMENT_SERVICE)?.value, atelierIds) ||
+    ateliers[0]?.id ||
+    "";
 
   // Postes de l'atelier + desactivations poste x quart + placements du jour + matrice.
   const [{ data: lignesD }, pq, { data: plD }, mat, ligneVal, posteVal] = await Promise.all([

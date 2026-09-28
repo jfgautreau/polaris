@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { getServerClient } from "@/lib/supabase-server";
+import { COOKIE_QUART, valeurValide } from "@/lib/filtres-session";
 import { fetchAll } from "@/lib/fetch-all";
 import AppHeader from "@/components/AppHeader";
 import PlanningNav from "@/components/PlanningNav";
@@ -163,7 +165,8 @@ export default async function PlanningPage({
   const rotByWeek = weekMondays.map((wm) => rotationForWeek(rotRefs, isoDate(wm)));
 
   // Quart selectionne : ?quart, sinon quart fixe de l'equipe choisie, sinon
-  // rotation de la semaine pour cette equipe, sinon "matin".
+  // rotation de la semaine pour cette equipe, sinon quart memorise pour la
+  // session (cookie, cf. src/lib/filtres-session.ts), sinon quart par defaut.
   let quart = sp.quart && quartCodes.includes(sp.quart) ? sp.quart : "";
   if (!quart && equipeIdSel) {
     const eqRow = (equipesD ?? []).find((e) => e.id === equipeIdSel);
@@ -173,6 +176,7 @@ export default async function PlanningPage({
       quart = rotWeek[equipeIdSel];
     }
   }
+  if (!quart) quart = valeurValide((await cookies()).get(COOKIE_QUART)?.value, quartCodes);
   if (!quart) quart = quartParDefaut(quarts);
 
   // Ensemble des equipes AUTO pour le quart courant : celles que la rotation de la

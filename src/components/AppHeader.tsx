@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { cookies } from "next/headers";
 import { getServerClient } from "@/lib/supabase-server";
 import { getCurrentProfile } from "@/lib/current-user";
 import { getCurrentSite } from "@/lib/current-site";
@@ -8,6 +9,7 @@ import { sortirDuMode } from "@/app/platform/actions";
 import { isoDate, addDays } from "@/lib/week";
 import { MODULES, getPermissions, canRead, canWrite } from "@/lib/permissions";
 import { getModulesMasquesC } from "@/lib/site-modules";
+import { COOKIE_QUART } from "@/lib/filtres-session";
 import MainNav from "@/components/MainNav";
 import SettingsMenu from "@/components/SettingsMenu";
 import UserMenu from "@/components/UserMenu";
@@ -67,6 +69,12 @@ export default async function AppHeader({
   } catch {
     masques = new Set<string>();
   }
+
+  // Quart mémorisé pour la session (cf. src/lib/filtres-session.ts) : transmis au
+  // menu pour qu'un saut depuis un écran sans quart (Personnel…) vers Planning /
+  // Placement / Bilans le reprenne. Simple défaut d'affichage : chaque page le
+  // revalide contre les quarts du site.
+  const quartSession = (await cookies()).get(COOKIE_QUART)?.value ?? "";
 
   // Une entree s'affiche des que la page est ACCESSIBLE, donc des la lecture — les
   // ecrans de parametrage s'ouvrent desormais en consultation seule (cf. LectureSeule).
@@ -164,6 +172,7 @@ export default async function AppHeader({
           <MainNav
             links={mainLinks.map((l) => ({ key: l.key, href: l.href, label: l.label }))}
             active={active}
+            quartSession={quartSession}
           />
         </Suspense>
       </nav>
