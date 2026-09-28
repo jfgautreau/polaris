@@ -272,7 +272,8 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   ce quart). Bandeau de rappel du quart (`QuartBandeau`, couleur `quart.couleur`, gris en
   AUTO). Bascule **Suivre le quart / Suivre l'équipe** (`?vue=equipe`, une équipe
   tournante exigée) : chaque semaine prend le quart de l'équipe (`Jour.quart`, groupes
-  et effectifs **par semaine** dans la grille) ; `»` écrit chaque jour sur son quart et
+  et effectifs **par semaine** dans la grille ; bande de quart colorée par semaine en tête,
+  `BANDE_H` décale tous les en-têtes figés) ; `»` écrit chaque jour sur son quart et
   saute un poste hors cycle. Jours de semaine toujours affichés (jour fermé = message fusionné). Bascule
   Conducteurs (`?cond=1`). Pendule 🕐 (horaire + commentaire, `horaire_exception`),
   recopie `»`, glisser-déposer, croix de survol. Le bouton de pré-remplissage recharge la vue.
