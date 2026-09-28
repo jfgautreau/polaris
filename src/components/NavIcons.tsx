@@ -16,6 +16,7 @@ export const NAV_COLOR: Record<string, string> = {
   planning: "#0d9488",
   absences: "#db2777",
   placement: "#4f46e5",
+  visites: "#0891b2",
   bilans: "#e11d48",
 };
 
@@ -46,6 +47,16 @@ export function NavIcon({ name, size = 14 }: { name: string; size?: number }): R
           <path d="M6.5 10.2 12 12.8l5.5-2.6V14c0 1.7-2.5 3-5.5 3s-5.5-1.3-5.5-3z" fill="#fff" />
           <path d="M22 8.2v4.3" stroke="#fff" strokeWidth="1.2" fill="none" strokeLinecap="round" />
           <circle cx="22" cy="13.2" r="1.3" fill="#fff" />
+        </Svg>
+      );
+
+    // Visites médicales : porte-bloc marque d'une croix
+    case "visites":
+      return (
+        <Svg size={size}>
+          <rect x="4" y="3.6" width="16" height="17.4" rx="2.4" fill="#fff" />
+          <rect x="8.4" y="2" width="7.2" height="3.6" rx="1.4" fill="#fff" stroke={DETAIL} strokeWidth="1" />
+          <path d="M11 9.4h2v2.6h2.6v2H13v2.6h-2V14H8.4v-2H11z" fill={DETAIL} />
         </Svg>
       );
 

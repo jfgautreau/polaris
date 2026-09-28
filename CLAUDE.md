@@ -33,7 +33,8 @@ L'historique des décisions est dans git et dans l'en-tête de chaque migration.
    Pour de la *donnée* seulement, un script Node lisant `SUPABASE_SERVICE_ROLE_KEY` de
    `.env.local` est acceptable (simulation d'abord, écriture après accord).
    Projet Supabase : ref `stcxlsmmnplxpirrnefm`, eu-west-3.
-   **Dernière migration appliquée : `0075`.** Toute nouvelle policy RLS s'écrit
+   **Dernière migration appliquée : `0075`** — `0076` (visites médicales) est
+   écrite et **attend d'être exécutée**. Toute nouvelle policy RLS s'écrit
    `site_id = (select public.current_site_id())` (forme InitPlan, calculée une fois par
    requête) — idem pour `is_admin()`, `has_role('x')`, `auth.uid()`.
 6. **PowerShell 5.1** : message de commit multi-lignes via here-string `@'…'@` (le `'@`
@@ -86,6 +87,11 @@ L'historique des décisions est dans git et dans l'en-tête de chaque migration.
 - **Mot de passe** : jamais choisi par l'admin ; `/admin/users` génère un **lien**
   `{base}/reset?token_hash=…` (`src/lib/password-link.ts`) — ne pas revenir à `action_link`.
 - **RGPD** (export / anonymiser / supprimer) : droit dédié `rgpd`, distinct de `personnel`.
+- **Visites médicales** : deux droits, `visites` (écran de suivi) et `visites_param`
+  (déclencheurs), accordés au rôle `rh` par défaut et **à personne d'autre**. Aucune
+  donnée de santé en base : dates, type de visite, et `avis` borné par CHECK à
+  quatre valeurs. Seule chose qui sorte du module : l'avertissement du Placement,
+  **sans motif** (cf. `src/lib/visites-placement.ts`).
 
 ## Modèle métier — invariants et pièges
 - **« Atelier » (code) = « Service » (UI).** `atelier` partout dans le code et la base ;
@@ -316,6 +322,21 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
 - **Affichage TV** (`src/app/affichage/`, public) : rattachement par service d'affectation ;
   sections Matin / Après-midi / Nuit classées par `creneau` ; fenêtre relative ou absolue
   (`getFenetreAffichage`, `joursDeFenetre`) ; PDF A3 portrait multi-pages.
+- **Visites médicales** (`src/app/visites/`, droit `visites`) : deux écrans seulement,
+  Suivi et Paramètres — pas de troisième. Le **régime** (`simple` / `adapte` / `renforce`)
+  n'est jamais saisi : il est **calculé** (`src/lib/visites.ts`, pur et testé ;
+  `visites-data.ts` pour les lectures) à partir des quarts de nuit, des postes tenus
+  (titulaire **ou** N placements sur M semaines) et des habilitations détenues — le plus
+  exigeant l'emporte, et l'écran dit toujours *pourquoi*. Les plafonds sont des **maxima**
+  (`MAX_LEGAL`) : une valeur au-delà passe mais s'affiche en rouge ; une `prochaine_date`
+  fixée par le médecin l'emporte si elle est plus proche. **ANCI** (attestation de non
+  contre-indication) : un *usage* (`visite_anci_usage`, conduite / électrique) est **exigé**
+  par un poste ou une habilitation et **délivré** par une visite — c'est ce qui distingue
+  deux visites simples. Reprise : seuil en jours **calendaires** sur les motifs cochés.
+  Intérim **exclu** (suivi par l'agence, R4625-8). Pas de date de naissance, donc pas de
+  visite de mi-carrière. Paramétrage (`/admin/visites-param`, droit `visites_param`) :
+  régimes, déclencheurs (quarts / postes / habilitations / motifs), catalogue, alertes —
+  **séparé de Param. RH**, ce sont deux métiers.
 - **Param. RH** (`/admin/motifs`, droit `motifs`) : motifs (code GT, planifié ou non),
   agences, types de contrat (`avec_agence`), fenêtre d'affichage TV, import des absences RH
   (`src/lib/import-absences-rh.ts`).

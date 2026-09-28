@@ -32,10 +32,18 @@ type Group = { ligneNom: string; ligneId: string; atelierNom?: string; postes: P
 // Le poste exige des habilitations que la personne n'a pas (ou plus) : l'API
 // répond 428 en les nommant → `manquantes`, pour demander confirmation au lieu
 // de faire revenir la case en silence. `manquantes: null` = autre échec.
-type ResultatEcriture = { ok: true } | { ok: false; manquantes: string[] | null };
-async function lireManquantes(res: Response): Promise<string[]> {
-  const j = (await res.json().catch(() => ({}))) as { manquantes?: string[] };
-  return Array.isArray(j.manquantes) ? j.manquantes : [];
+//
+// Le module Visites medicales peut par ailleurs demander une confirmation, SANS
+// jamais dire pourquoi : `alertes` porte alors un message generique. Les deux
+// arrivent par le meme 428 et la meme modale — une seule confirmation suffit.
+type Refus = { manquantes: string[]; alertes: string[] };
+type ResultatEcriture = { ok: true } | { ok: false; refus: Refus | null };
+async function lireRefus(res: Response): Promise<Refus> {
+  const j = (await res.json().catch(() => ({}))) as { manquantes?: string[]; alertesRh?: string[] };
+  return {
+    manquantes: Array.isArray(j.manquantes) ? j.manquantes : [],
+    alertes: Array.isArray(j.alertesRh) ? j.alertesRh : [],
+  };
 }
 async function envoyerCase(body: Record<string, unknown>): Promise<ResultatEcriture> {
   try {
@@ -45,10 +53,10 @@ async function envoyerCase(body: Record<string, unknown>): Promise<ResultatEcrit
       body: JSON.stringify(body),
     });
     if (res.ok) return { ok: true };
-    if (res.status === 428) return { ok: false, manquantes: await lireManquantes(res) };
-    return { ok: false, manquantes: null };
+    if (res.status === 428) return { ok: false, refus: await lireRefus(res) };
+    return { ok: false, refus: null };
   } catch {
-    return { ok: false, manquantes: null };
+    return { ok: false, refus: null };
   }
 }
 async function envoyerDeplacement(body: Record<string, unknown>): Promise<ResultatEcriture> {
@@ -59,10 +67,10 @@ async function envoyerDeplacement(body: Record<string, unknown>): Promise<Result
       body: JSON.stringify(body),
     });
     if (res.ok) return { ok: true };
-    if (res.status === 428) return { ok: false, manquantes: await lireManquantes(res) };
-    return { ok: false, manquantes: null };
+    if (res.status === 428) return { ok: false, refus: await lireRefus(res) };
+    return { ok: false, refus: null };
   } catch {
-    return { ok: false, manquantes: null };
+    return { ok: false, refus: null };
   }
 }
 type NonPlace = { personne: string; poste: string; semaine: string; raison: string };
@@ -606,10 +614,10 @@ export default function PlanningGrid({
   const [selected, setSelected] = useState<string | null>(null);
   const [pick, setPick] = useState<{ pid: string; iso: string; eq: string | null; left: number; right: number; top: number; bottom: number } | null>(null);
   // Demande de forcage en attente : le poste vise exige une habilitation absente.
-  const [askHab, setAskHab] = useState<{ pid: string; iso: string; eq: string | null; value: string; manquantes: string[] } | null>(null);
+  const [askHab, setAskHab] = useState<{ pid: string; iso: string; eq: string | null; value: string; refus: Refus } | null>(null);
   // Glisser-deposer : demande de forcage sur un DEPLACEMENT (poste deplace sur une
   // personne non habilitee), case source/cible en cours de drag/survol.
-  const [askMove, setAskMove] = useState<{ fromPid: string; fromIso: string; toPid: string; toIso: string; value: string; manquantes: string[] } | null>(null);
+  const [askMove, setAskMove] = useState<{ fromPid: string; fromIso: string; toPid: string; toIso: string; value: string; refus: Refus } | null>(null);
   const [dragKey, setDragKey] = useState<string | null>(null);
   const [overKey, setOverKey] = useState<string | null>(null);
   // Recherche par nom : filtre uniquement les lignes affichees (indicateurs inchanges).
@@ -939,11 +947,11 @@ export default function PlanningGrid({
       setSaving("saved");
     } else {
       setVals((s) => ({ ...s, [k]: prev })); // refus serveur : on annule le changement
-      if (r.manquantes) {
+      if (r.refus) {
         // Meme comportement qu'au Placement : on propose de forcer, en nommant
         // ce qui manque. Sans cette fenetre, le Planning refusait sans rien dire.
         setSaving("idle");
-        setAskHab({ pid, iso, eq: equipe_id, value, manquantes: r.manquantes });
+        setAskHab({ pid, iso, eq: equipe_id, value, refus: r.refus });
         return;
       }
       setSaving("error");
@@ -976,10 +984,10 @@ export default function PlanningGrid({
     });
     if (r.ok) {
       setSaving("saved");
-    } else if (r.manquantes) {
+    } else if (r.refus) {
       setVals((s) => ({ ...s, [toK]: prevTo, [fromK]: value })); // annule l'optimiste
       setSaving("idle");
-      setAskMove({ fromPid, fromIso, toPid, toIso, value, manquantes: r.manquantes });
+      setAskMove({ fromPid, fromIso, toPid, toIso, value, refus: r.refus });
       return;
     } else {
       setVals((s) => ({ ...s, [toK]: prevTo, [fromK]: value })); // rollback complet
@@ -1476,19 +1484,26 @@ export default function PlanningGrid({
           sans cette fenetre, le Planning refusait le placement sans rien expliquer. */}
       {askHab && (
         <ModaleDeplacable onClose={() => setAskHab(null)} largeur={440} zIndex={90}>
-            <h2 className="mdd-drag" style={{ margin: "0 0 8px", fontSize: 18, color: "#b91c1c", cursor: "grab" }}>⚠ Habilitation manquante</h2>
+            <h2 className="mdd-drag" style={{ margin: "0 0 8px", fontSize: 18, color: "#b91c1c", cursor: "grab" }}>
+              ⚠ {askHab.refus.manquantes.length ? "Habilitation manquante" : "À vérifier avec les RH"}
+            </h2>
             <p style={{ margin: "0 0 6px", fontSize: 14 }}>
-              <strong>{persById.get(askHab.pid)?.label ?? ""}</strong> n&apos;est pas habilité(e) pour le
-              poste <strong>{posteLabel[askHab.value] ?? posteLabelAll[askHab.value] ?? "?"}</strong>.
+              <strong>{persById.get(askHab.pid)?.label ?? ""}</strong>
+              {askHab.refus.manquantes.length ? " n'est pas habilité(e) pour le poste " : " — poste "}
+              <strong>{posteLabel[askHab.value] ?? posteLabelAll[askHab.value] ?? "?"}</strong>.
             </p>
-            {askHab.manquantes.length > 0 && (
+            {askHab.refus.manquantes.length > 0 && (
               <p style={{ margin: "0 0 14px", fontSize: 14 }}>
-                Manque : <strong style={{ color: "#b91c1c" }}>{askHab.manquantes.join(", ")}</strong>
+                Manque : <strong style={{ color: "#b91c1c" }}>{askHab.refus.manquantes.join(", ")}</strong>
               </p>
             )}
+            {askHab.refus.alertes.map((a, i) => (
+              <p key={i} style={{ margin: "0 0 10px", fontSize: 14 }}>{a}</p>
+            ))}
             <p className="muted" style={{ margin: "0 0 14px", fontSize: 12 }}>
-              Un placement forcé est tracé (auteur et date) et s&apos;affiche en rouge tant que
-              l&apos;habilitation n&apos;est pas régularisée.
+              {askHab.refus.manquantes.length
+                ? "Un placement forcé est tracé (auteur et date) et s'affiche en rouge tant que l'habilitation n'est pas régularisée."
+                : "Le placement reste possible : confirmez si vous avez vérifié auprès des RH."}
             </p>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
               <button type="button" className="btn-sm btn-ghost" onClick={() => setAskHab(null)}>
@@ -1514,19 +1529,26 @@ export default function PlanningGrid({
           de forcage que la saisie, mais sur le DEPLACEMENT. */}
       {askMove && (
         <ModaleDeplacable onClose={() => setAskMove(null)} largeur={440} zIndex={90}>
-            <h2 className="mdd-drag" style={{ margin: "0 0 8px", fontSize: 18, color: "#b91c1c", cursor: "grab" }}>⚠ Habilitation manquante</h2>
+            <h2 className="mdd-drag" style={{ margin: "0 0 8px", fontSize: 18, color: "#b91c1c", cursor: "grab" }}>
+              ⚠ {askMove.refus.manquantes.length ? "Habilitation manquante" : "À vérifier avec les RH"}
+            </h2>
             <p style={{ margin: "0 0 6px", fontSize: 14 }}>
-              <strong>{persById.get(askMove.toPid)?.label ?? ""}</strong> n&apos;est pas habilité(e) pour le
-              poste <strong>{posteLabel[askMove.value] ?? posteLabelAll[askMove.value] ?? "?"}</strong>.
+              <strong>{persById.get(askMove.toPid)?.label ?? ""}</strong>
+              {askMove.refus.manquantes.length ? " n'est pas habilité(e) pour le poste " : " — poste "}
+              <strong>{posteLabel[askMove.value] ?? posteLabelAll[askMove.value] ?? "?"}</strong>.
             </p>
-            {askMove.manquantes.length > 0 && (
+            {askMove.refus.manquantes.length > 0 && (
               <p style={{ margin: "0 0 14px", fontSize: 14 }}>
-                Manque : <strong style={{ color: "#b91c1c" }}>{askMove.manquantes.join(", ")}</strong>
+                Manque : <strong style={{ color: "#b91c1c" }}>{askMove.refus.manquantes.join(", ")}</strong>
               </p>
             )}
+            {askMove.refus.alertes.map((a, i) => (
+              <p key={i} style={{ margin: "0 0 10px", fontSize: 14 }}>{a}</p>
+            ))}
             <p className="muted" style={{ margin: "0 0 14px", fontSize: 12 }}>
-              Un placement forcé est tracé (auteur et date) et s&apos;affiche en rouge tant que
-              l&apos;habilitation n&apos;est pas régularisée.
+              {askMove.refus.manquantes.length
+                ? "Un placement forcé est tracé (auteur et date) et s'affiche en rouge tant que l'habilitation n'est pas régularisée."
+                : "Le placement reste possible : confirmez si vous avez vérifié auprès des RH."}
             </p>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
               <button type="button" className="btn-sm btn-ghost" onClick={() => setAskMove(null)}>

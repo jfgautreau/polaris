@@ -6,6 +6,7 @@ import { getQuartsC } from "@/lib/refdata";
 import { quartOuDefaut } from "@/lib/quarts";
 import { habManquantes, premierNumeroLibre, posteNeTournePas, MSG_HORS_CYCLE, refusInactivite } from "@/lib/placement-helpers";
 import { verifierIdSite } from "@/lib/verifier-site";
+import { alertesVisite } from "@/lib/visites-placement";
 
 // POST /api/placement/cell { personne_id, jour, equipe_id, value, forcer }
 //   value = ""  -> efface le placement
@@ -87,7 +88,7 @@ export async function POST(req: NextRequest) {
   // meme si un identifiant est refuse ensuite.
   const siteId = profile.siteId;
   const quartVise = poste_id ? quartOuDefaut(quart_code, quarts) : null;
-  const [errPers, errPo, errEq, errMo, numeroLibre, existingRes, manquantes, cycleRes, inactif] = await Promise.all([
+  const [errPers, errPo, errEq, errMo, numeroLibre, existingRes, manquantes, cycleRes, inactif, alertesRh] = await Promise.all([
     verifierIdSite(supabase, "personne", personne_id, siteId, "Personne"),
     poste_id ? verifierIdSite(supabase, "poste", poste_id, siteId, "Poste") : null,
     body?.equipe_id ? verifierIdSite(supabase, "equipe", body.equipe_id, siteId, "Equipe") : null,
@@ -107,6 +108,10 @@ export async function POST(req: NextRequest) {
     // Personne partie / hors effectif ce jour : aucune affectation (le retrait,
     // value === "", est traité plus haut et reste toujours permis).
     refusInactivite(supabase, personne_id, jour, siteId),
+    // Visites medicales : avertissement SANS detail, si les RH l'ont active.
+    poste_id
+      ? alertesVisite(supabase, { personne_id, poste_id, quart: quart_code, jour, siteId })
+      : ([] as string[]),
   ]);
   if (errPers) return NextResponse.json({ error: errPers }, { status: 400 });
   if (errPo) return NextResponse.json({ error: errPo }, { status: 400 });
@@ -140,8 +145,11 @@ export async function POST(req: NextRequest) {
   // refuse et on renvoie ce qui manque : c'est ce qui alimente la modale de forcage.
   // (`manquantes` lu avec les autres controles ci-dessus.)
   const forcer = body?.forcer === true;
-  if (manquantes.length && !forcer) {
-    return NextResponse.json({ error: "Habilitation manquante", manquantes }, { status: 428 });
+  if ((manquantes.length || alertesRh.length) && !forcer) {
+    return NextResponse.json(
+      { error: manquantes.length ? "Habilitation manquante" : "À vérifier avec les RH", manquantes, alertesRh },
+      { status: 428 },
+    );
   }
 
   // MULTI-SITE : site_id explicite pour le cas admin client (service_role).

@@ -20,6 +20,11 @@ export const MODULES: { key: string; label: string; href: string; admin: boolean
   // en est la page. L'ecriture reste soumise au perimetre RLS pour le chef d'equipe.
   { key: "absences", label: "Absences", href: "/absences-specifiques", admin: false },
   { key: "placement", label: "Placement", href: "/placement", admin: false },
+  // Visites médicales : suivi des DATES et des TYPES de visites, jamais d'info
+  // médicale. Réservé aux RH par défaut (aucun autre rôle n'en reçoit le droit) ;
+  // le paramétrage des déclencheurs a sa propre clé pour rester ouvrable sans
+  // donner accès au dossier des personnes.
+  { key: "visites", label: "Visites méd.", href: "/visites", admin: false },
   { key: "ordonnancement", label: "Ordonnancement", href: "/ordonnancement", admin: false },
   { key: "bilans", label: "Bilans", href: "/bilans", admin: false },
   { key: "journal", label: "Journal", href: "/journal", admin: false },
@@ -32,6 +37,7 @@ export const MODULES: { key: string; label: string; href: string; admin: boolean
   // reinitialiserait les droits deja accordes. Seul le libelle a change, l'ecran
   // couvrant desormais les motifs d'absence ET les agences d'interim.
   { key: "motifs", label: "Param. RH", href: "/admin/motifs", admin: true },
+  { key: "visites_param", label: "Param. Visites", href: "/admin/visites-param", admin: true },
   { key: "horaires", label: "Horaires", href: "/admin/horaires", admin: true },
   { key: "utilisateurs", label: "Utilisateurs", href: "/admin/users", admin: true },
   { key: "rgpd", label: "RGPD", href: "/admin/rgpd", admin: true },
@@ -57,7 +63,10 @@ export function defaultsFor(role: string): Perms {
       set({ personnel: "read", matrice: "read", habilitations: "read", planning: "read", bilans: "read", ordonnancement: "write", absences: "read" });
       break;
     case "rh":
-      set({ personnel: "read", matrice: "read", habilitations: "read", planning: "read", bilans: "read", absences: "read" });
+      // Visites médicales : le module est à eux, paramétrage compris — ce sont
+      // les RH qui règlent les déclencheurs (quarts de nuit, postes à risque,
+      // habilitations, motifs d'absence) sans passer par un administrateur.
+      set({ personnel: "read", matrice: "read", habilitations: "read", planning: "read", bilans: "read", absences: "read", visites: "write", visites_param: "write" });
       break;
     case "codir":
       set({ personnel: "read", matrice: "read", habilitations: "read", planning: "read", ordonnancement: "read", bilans: "read", journal: "read", absences: "read" });

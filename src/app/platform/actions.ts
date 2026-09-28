@@ -188,7 +188,7 @@ async function copierReferentiels(admin: AdminClient, sourceId: string, cibleId:
   {
     const { data } = await admin
       .from("motif_absence")
-      .select("libelle, code_court, couleur, actif")
+      .select("libelle, code_court, couleur, actif, visite_reprise")
       .eq("site_id", sourceId);
     if (data && data.length > 0) {
       const rows = data.map((r) => ({ ...r, site_id: cibleId }));
@@ -227,7 +227,7 @@ async function copierReferentiels(admin: AdminClient, sourceId: string, cibleId:
   {
     const { data } = await admin
       .from("competence")
-      .select("nom, type, a_recycler, duree_validite_mois, actif, categorie, groupe, ordre, a_autorisation_conduite")
+      .select("nom, type, a_recycler, duree_validite_mois, actif, categorie, groupe, ordre, a_autorisation_conduite, suivi_renforce, anci_usage")
       .eq("site_id", sourceId);
     if (data && data.length > 0) {
       const rows = data.map((r) => ({ ...r, site_id: cibleId }));
@@ -285,12 +285,35 @@ async function copierReferentiels(admin: AdminClient, sourceId: string, cibleId:
   {
     const { data } = await admin
       .from("quart")
-      .select("code, libelle, ordre, debut, fin, rotation, creneau")
+      .select("code, libelle, ordre, debut, fin, rotation, creneau, nuit")
       .eq("site_id", sourceId);
     if (data && data.length > 0) {
       const rows = data.map((r) => ({ ...r, site_id: cibleId }));
       const { error } = await admin.from("quart").insert(rows);
       if (error) console.error("[createSite] copie quarts :", error.message);
+    }
+  }
+
+  // --- Visites médicales : régimes, types, usages d'attestation, réglages ---
+  //    Le module part donc configuré comme sur le site source : mêmes plafonds,
+  //    même catalogue, mêmes seuils. Les drapeaux qui déclenchent les visites
+  //    (quart.nuit, poste.suivi_renforce, competence.suivi_renforce,
+  //    motif_absence.visite_reprise) suivent leurs tables respectives.
+  {
+    const tables: { nom: string; cols: string }[] = [
+      { nom: "visite_regime", cols: "code, libelle, mois_renouvellement, mois_intermediaire, ordre" },
+      { nom: "visite_anci_usage", cols: "code, libelle, actif, ordre" },
+      { nom: "visite_type", cols: "code, libelle, categorie, actif, ordre" },
+      { nom: "visite_parametre", cols: "cle, valeur" },
+    ];
+    for (const t of tables) {
+      const { data } = await admin.from(t.nom).select(t.cols).eq("site_id", sourceId).returns<Record<string, unknown>[]>();
+      if (!data || data.length === 0) continue;
+      const rows = data.map((r) => ({ ...r, site_id: cibleId }));
+      // La migration 0076 seede déjà régimes, types et usages à la création du
+      // site : on ignore les doublons plutôt que d'échouer sur la clé (code, site).
+      const { error } = await admin.from(t.nom).upsert(rows, { ignoreDuplicates: true });
+      if (error) console.error(`[createSite] copie ${t.nom} :`, error.message);
     }
   }
 

@@ -211,6 +211,9 @@ export default function PlacementBoard({
   // par /api/placement/cell). On propose de la retirer de l'autre quart puis de
   // la placer ici, au lieu d'un echec muet (P1c).
   const [askAutreQuart, setAskAutreQuart] = useState<{ persId: string; value: string; num: string | null; forcer: boolean } | null>(null);
+  // Visites medicales : le serveur demande une confirmation SANS dire pourquoi
+  // (cf. src/lib/visites-placement.ts). Le chef confirme, ou renonce et voit les RH.
+  const [askRh, setAskRh] = useState<{ persId: string; value: string; num: string | null; alertes: string[] } | null>(null);
 
   const printRef = useRef<HTMLDivElement>(null);
   // La feuille n'est montee QU'AU moment d'imprimer : la garder en permanence
@@ -323,9 +326,11 @@ export default function PlacementBoard({
     });
     if (!res.ok) {
       const j = await res.json().catch(() => ({}));
-      const err = new Error(j.error ?? "Échec de l'enregistrement.") as Error & { autreQuart?: boolean };
+      const err = new Error(j.error ?? "Échec de l'enregistrement.") as Error & { autreQuart?: boolean; alertes?: string[] };
       // 409 sur /api/placement/cell = « déjà placée sur un autre quart ce jour-là ».
       if (res.status === 409) err.autreQuart = true;
+      // 428 avec `alertesRh` = point a verifier avec les RH, sans detail.
+      if (res.status === 428 && Array.isArray(j.alertesRh) && j.alertesRh.length) err.alertes = j.alertesRh as string[];
       throw err;
     }
   }
@@ -390,6 +395,12 @@ export default function PlacementBoard({
       if ((e as { autreQuart?: boolean }).autreQuart) {
         setSaving("idle");
         setAskAutreQuart({ persId, value, num, forcer });
+        return;
+      }
+      const alertes = (e as { alertes?: string[] }).alertes;
+      if (alertes?.length) {
+        setSaving("idle");
+        setAskRh({ persId, value, num, alertes });
         return;
       }
       setSaving("error");
@@ -1454,6 +1465,40 @@ export default function PlacementBoard({
                 }}
               >
                 Oui, je force
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {askRh && (
+        <div className={s.overlay} onClick={() => setAskRh(null)}>
+          <div className="card" onClick={(e) => e.stopPropagation()} style={{ margin: 0, width: "100%", maxWidth: 460 }}>
+            <h2 style={{ margin: "0 0 8px", fontSize: 18, color: "#b45309" }}>À vérifier avec les RH</h2>
+            <p style={{ margin: "0 0 10px", fontSize: 14 }}>
+              <strong>{(() => { const p = persById.get(askRh.persId); return p ? `${p.nom} ${p.prenom}` : ""; })()}</strong>{" "}
+              sur <strong>{posteNom.get(askRh.value) ?? "ce poste"}</strong> :
+            </p>
+            {askRh.alertes.map((a, i) => (
+              <p key={i} style={{ margin: "0 0 10px", fontSize: 14 }}>{a}</p>
+            ))}
+            <p className="muted" style={{ margin: "0 0 14px", fontSize: 12 }}>
+              Le placement reste possible : confirmez si vous avez vérifié auprès des RH.
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button type="button" className={s.cancelSel} style={{ padding: "7px 16px", fontSize: 13 }} onClick={() => setAskRh(null)}>
+                Annuler
+              </button>
+              <button
+                type="button"
+                style={{ width: "auto", margin: 0, padding: "7px 16px", fontSize: 13, fontWeight: 700, background: "#b45309", border: "1px solid #b45309", borderRadius: 8, cursor: "pointer" }}
+                onClick={() => {
+                  const a = askRh;
+                  setAskRh(null);
+                  void assign(a.persId, a.value, true, a.num);
+                }}
+              >
+                Placer quand même
               </button>
             </div>
           </div>
