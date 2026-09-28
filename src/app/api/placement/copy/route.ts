@@ -10,10 +10,18 @@ import { memeQuart } from "@/lib/quarts";
 // cible (upsert par personne/jour). Les absences ne sont pas copiees (specifiques
 // au jour). Perimetre : planning:write -> admin ; sinon RLS (chef -> son equipe).
 //
-// mode = "ecraser"   : la journee cible prend l'etat du jour source (defaut) ;
-//        "completer" : ne touche a AUCUNE ligne deja saisie ce jour-la — ni un
-//        placement sur poste, ni une absence. Sert a completer un debut de saisie
-//        sans defaire ce qui vient d'etre fait a la main.
+// ⚠️ Dans LES DEUX modes, une ligne du jour cible qui n'est pas sur poste —
+// absence, non travaille (NT) ou temps partiel materialise (TP) — n'est JAMAIS
+// touchee (2026-09-28). Avant, « ecraser » remplacait l'absence du jour cible
+// par le poste du jour source des qu'on y etait place.
+//
+// mode = "ecraser"   : les affectations SUR POSTE du jour source remplacent celles
+//        deja en place pour les memes personnes (defaut). Rien n'est supprime :
+//        une personne placee le jour cible mais absente de la source garde son
+//        affectation ;
+//        "completer" : ne touche a AUCUNE ligne deja saisie ce jour-la, poste
+//        compris. Sert a completer un debut de saisie sans defaire ce qui vient
+//        d'etre fait a la main.
 const isDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
 
 export async function POST(req: NextRequest) {
@@ -47,23 +55,28 @@ export async function POST(req: NextRequest) {
     .returns<{ personne_id: string; poste_id: string; equipe_id: string | null; quart_code: string | null; numero_rotation: string | null }[]>();
   if (e1) return NextResponse.json({ error: e1.message }, { status: 403 });
 
-  // Mode « completer » : on releve d'abord qui a DEJA une ligne le jour cible —
-  // poste comme absence — pour ne pas y toucher.
-  const dejaSaisi = new Set<string>();
-  if (completer) {
-    const { data: cbl, error: e0 } = await supabase
-      .from("placement")
-      .select("personne_id")
-      .eq("site_id", profile.siteId)
-      .eq("jour", cible)
-      .returns<{ personne_id: string }[]>();
-    if (e0) return NextResponse.json({ error: e0.message }, { status: 403 });
-    for (const r of cbl ?? []) dejaSaisi.add(r.personne_id);
-  }
+  // Etat du jour cible, dans les deux modes : une ligne SANS poste (absence, NT,
+  // TP) est protegee ; une ligne SUR poste n'est protegee qu'en mode « completer ».
+  const protegees = new Set<string>();
+  const placees = new Set<string>();
+  const { data: cbl, error: e0 } = await supabase
+    .from("placement")
+    .select("personne_id, poste_id")
+    .eq("site_id", profile.siteId)
+    .eq("jour", cible)
+    .returns<{ personne_id: string; poste_id: string | null }[]>();
+  if (e0) return NextResponse.json({ error: e0.message }, { status: 403 });
+  for (const r of cbl ?? []) (r.poste_id ? placees : protegees).add(r.personne_id);
 
+  let absencesConservees = 0;
+  let dejaPlacees = 0;
   const rows = (src ?? [])
     .filter((r) => memeQuart(r.quart_code, quart, quarts))
-    .filter((r) => !completer || !dejaSaisi.has(r.personne_id))
+    .filter((r) => {
+      if (protegees.has(r.personne_id)) { absencesConservees++; return false; }
+      if (completer && placees.has(r.personne_id)) { dejaPlacees++; return false; }
+      return true;
+    })
     .map((r) => ({
       personne_id: r.personne_id,
       jour: cible,
@@ -77,14 +90,15 @@ export async function POST(req: NextRequest) {
       site_id: profile.siteId,
     }));
 
-  if (!rows.length) return NextResponse.json({ ok: true, copied: 0, ignores: dejaSaisi.size });
+  if (!rows.length) return NextResponse.json({ ok: true, copied: 0, absencesConservees, dejaPlacees });
 
   const { error: e2 } = await supabase.from("placement").upsert(rows, { onConflict: "personne_id,jour" });
   if (e2) return NextResponse.json({ error: e2.message }, { status: 403 });
   return NextResponse.json({
     ok: true,
     copied: rows.length,
-    ignores: dejaSaisi.size,
+    absencesConservees,
+    dejaPlacees,
     rows: rows.map((r) => ({ personne_id: r.personne_id, poste_id: r.poste_id })),
   });
 }

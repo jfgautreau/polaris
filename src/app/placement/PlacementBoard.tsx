@@ -464,7 +464,7 @@ export default function PlacementBoard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ source: src, cible: dst, quart, mode }),
       });
-      const j = (await res.json().catch(() => ({}))) as { rows?: { personne_id: string; poste_id: string }[]; copied?: number; ignores?: number; error?: string };
+      const j = (await res.json().catch(() => ({}))) as { rows?: { personne_id: string; poste_id: string }[]; copied?: number; absencesConservees?: number; dejaPlacees?: number; error?: string };
       if (!res.ok) throw new Error(j.error ?? "Échec de la copie.");
       setShowCopy(false);
       if (dst !== jour) {
@@ -482,7 +482,11 @@ export default function PlacementBoard({
         return n;
       });
       setSaving("saved");
-      setMsg(`${j.copied ?? 0} affectation(s) copiée(s).${mode === "completer" && j.ignores ? ` ${j.ignores} déjà saisie(s) conservée(s).` : ""}`);
+      setMsg(
+        `${j.copied ?? 0} affectation(s) copiée(s).` +
+          (j.absencesConservees ? ` ${j.absencesConservees} absence(s) conservée(s).` : "") +
+          (j.dejaPlacees ? ` ${j.dejaPlacees} déjà placée(s) conservée(s).` : "")
+      );
       setTimeout(() => {
         setSaving("idle");
         setMsg(null);
@@ -1278,7 +1282,7 @@ export default function PlacementBoard({
             </div>
             <p className="muted" style={{ marginTop: 0, marginBottom: 12, fontSize: 13 }}>
               Recopie les affectations sur poste du quart <strong>{quartLib[quart] ?? quart}</strong>.
-              Les absences ne sont pas copiées.
+              Les absences ne sont ni copiées, ni jamais écrasées (absence, NT ou TP du jour de destination conservés).
             </p>
             <div className="field">
               <span>Jour à copier</span>
@@ -1331,9 +1335,9 @@ export default function PlacementBoard({
                 style={{ width: "100%", margin: 0, padding: "9px 16px", fontSize: 13, fontWeight: 700, borderRadius: 8, cursor: "pointer", textAlign: "left", background: "#b45309", border: "1px solid #b45309" }}
                 onClick={() => copyDates(copySrc, copyDst, "ecraser")}
               >
-                {copying ? "Copie…" : "Écraser toute la journée"}
+                {copying ? "Copie…" : "Écraser les affectations"}
                 <span style={{ display: "block", fontWeight: 500, fontSize: 11.5, opacity: 0.9 }}>
-                  Les affectations du jour source remplacent celles déjà en place.
+                  Les postes du jour source remplacent ceux déjà en place. Absences conservées, personne n&apos;est retiré.
                 </span>
               </button>
               <button type="button" className={s.cancelSel} style={{ padding: "7px 16px", fontSize: 13, alignSelf: "flex-end" }} onClick={() => setShowCopy(false)}>
