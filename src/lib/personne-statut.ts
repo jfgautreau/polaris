@@ -117,3 +117,19 @@ function isoToday(): string {
   const j = String(d.getDate()).padStart(2, "0");
   return `${d.getFullYear()}-${m}-${j}`;
 }
+
+/** Raison de REFUSER une affectation (poste, absence, NT, TP) d'une personne ce
+ *  jour-là, ou `null` si elle est dans l'effectif (2026-09-28). Règle unique des
+ *  routes d'écriture de placement :
+ *   - contrats connus : il faut qu'un contrat couvre le jour — sinon partie,
+ *     pas encore arrivée, ou entre deux contrats. L'historique d'une personne
+ *     partie reste donc corrigeable sur les jours où elle était sous contrat ;
+ *   - aucun contrat (données historiques) : seul le statut PARTI bloque.
+ *  Retirer une affectation n'est jamais bloqué (c'est l'appelant qui l'exempte). */
+export function motifInactivite(statut: string | null | undefined, contrats: Periode[], iso: string): string | null {
+  if (contrats.length) {
+    if (contratCouvreLe(contrats, iso)) return null;
+    return statut === "PARTI" ? "personne partie (inactive)" : "hors effectif ce jour (aucun contrat ne couvre cette date)";
+  }
+  return statut === "PARTI" ? "personne partie (inactive)" : null;
+}

@@ -7,7 +7,7 @@ import { quartParDefaut, quartJournee } from "@/lib/quarts";
 import { quartsDuPoste, quartPourPosteFixe, type PqMap } from "@/lib/poste-quart";
 import { rotationForWeek } from "@/lib/rotation";
 import { parseMonday, weekDays, dowMon } from "@/lib/week";
-import { contratCouvreLe, type Periode } from "@/lib/personne-statut";
+import { motifInactivite, type Periode } from "@/lib/personne-statut";
 import { addMonthsIso, habValable } from "@/lib/habilitations";
 
 // POST /api/placement/prefill { semaines?: string[], semaine?: string }
@@ -197,11 +197,22 @@ export async function POST(req: NextRequest) {
     for (const c of cpD ?? [])
       (contratsDe.get(c.personne_id) ?? contratsDe.set(c.personne_id, []).get(c.personne_id)!).push(c as Periode);
   }
-  const dansEffectif = (persId: string, iso: string): boolean => {
-    const cs = contratsDe.get(persId) ?? [];
-    // Aucun contrat renseigné : on fait confiance (données historiques).
-    return !cs.length || contratCouvreLe(cs, iso);
-  };
+  // Statut des personnes concernées : une personne PARTIE sans contrat renseigné
+  // ne reçoit rien non plus (règle unique motifInactivite, 2026-09-28).
+  const statutDe = new Map<string, string>();
+  if (idsContrats.length) {
+    const { data: stD } = await supabase
+      .from("personne")
+      .select("id, statut")
+      .eq("site_id", siteId)
+      .in("id", idsContrats)
+      .returns<{ id: string; statut: string }[]>();
+    for (const r of stD ?? []) statutDe.set(r.id, r.statut);
+  }
+  const dansEffectif = (persId: string, iso: string): boolean =>
+    // Contrats connus : un contrat doit couvrir le jour. Sans contrat (données
+    // historiques) : on fait confiance, sauf statut PARTI.
+    motifInactivite(statutDe.get(persId), contratsDe.get(persId) ?? [], iso) === null;
 
   // Cases déjà occupées (toutes personnes concernées) : ni TP ni poste fixe ne
   // les touche. Recalcul implicite entre passes via ignoreDuplicates au niveau DB.

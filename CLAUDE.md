@@ -771,6 +771,12 @@ présent dans `.next/static/chunks/app/<écran>/page-*.js`.
   **Garde serveur** : `/api/placement/cell` et `/move` refusent (**422**, pas 409 — au
   Placement 409 = « autre quart ») un poste marqué « – » sur le quart (`posteNeTournePas`,
   `placement-helpers.ts`) ; `/copy` ne recopie pas ces affectations (`horsCycle`).
+  **Personnes parties / hors effectif** (2026-09-28, règle unique `motifInactivite` dans
+  `personne-statut.ts`, testée) : aucune affectation (poste, absence, NT, TP) un jour
+  qu'aucun contrat ne couvre — ou, sans contrat, si le statut est PARTI. Appliqué par
+  `/cell` et `/move` (**422**, `refusInactivite`), `/copy` (`inactives`, non recopiées) et
+  le pré-remplissage. **Retirer** une affectation reste toujours permis (nettoyage).
+  L'historique d'une personne partie reste corrigeable sur ses jours sous contrat.
   **Placement — « placés hors plan »** (`horsPlan`, calculé par `placement/page.tsx`) : une
   personne placée sur ce quart sur un poste qu'aucun plan ne dessine (ne tourne pas sur
   ce quart, désactivé, fermé, service désactivé ou absent) — ou elle-même absente de la

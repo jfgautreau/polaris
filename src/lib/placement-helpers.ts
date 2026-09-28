@@ -4,6 +4,7 @@
 import type { getServerClient } from "@/lib/supabase-server";
 import { addMonthsIso, habValable } from "@/lib/habilitations";
 import { parseNumeros } from "@/lib/numeros-rotation";
+import { motifInactivite } from "@/lib/personne-statut";
 import { quartOuDefaut, memeQuart, type QuartRef } from "@/lib/quarts";
 
 type SupabaseClient = Awaited<ReturnType<typeof getServerClient>>;
@@ -109,3 +110,26 @@ export async function posteNeTournePas(
 }
 export const MSG_HORS_CYCLE =
   "Ce poste ne tourne pas sur ce quart (Référentiel) : affectation refusée. Choisissez le quart où le poste tourne, ou modifiez son cycle au Référentiel.";
+
+// Personne hors effectif ce jour (partie, pas encore arrivée, entre deux
+// contrats) : message de refus, ou null si elle peut être affectée
+// (2026-09-28, règle `motifInactivite` de personne-statut.ts). Partagé par les
+// routes d'écriture de placement ; la copie filtre en lot.
+export async function refusInactivite(
+  supabase: SupabaseClient,
+  personne_id: string,
+  jour: string,
+  siteId: string,
+): Promise<string | null> {
+  const [{ data: p }, { data: contrats }] = await Promise.all([
+    supabase.from("personne").select("statut").eq("id", personne_id).eq("site_id", siteId).maybeSingle<{ statut: string }>(),
+    supabase
+      .from("contrat_periode")
+      .select("date_debut, date_fin")
+      .eq("personne_id", personne_id)
+      .eq("site_id", siteId)
+      .returns<{ date_debut: string | null; date_fin: string | null }[]>(),
+  ]);
+  const motif = motifInactivite(p?.statut, contrats ?? [], jour);
+  return motif ? `Affectation refusée : ${motif}.` : null;
+}

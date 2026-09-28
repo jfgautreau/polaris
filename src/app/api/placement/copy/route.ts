@@ -4,6 +4,7 @@ import { getCurrentProfile } from "@/lib/current-user";
 import { canWritePlacementData } from "@/lib/permissions";
 import { getQuartsC } from "@/lib/refdata";
 import { memeQuart } from "@/lib/quarts";
+import { motifInactivite } from "@/lib/personne-statut";
 
 // POST /api/placement/copy { source, cible, quart, mode }
 // Copie les affectations SUR POSTE d'un quart depuis un jour source vers un jour
@@ -86,12 +87,34 @@ export async function POST(req: NextRequest) {
     for (const r of pqD ?? []) horsCycleIds.add(r.poste_id);
   }
 
+  // Personnes parties / hors effectif le jour CIBLE (2026-09-28, motifInactivite) :
+  // pas de recopie — on n'affecte pas quelqu'un qui n'est plus (ou pas encore) là.
+  const personnesSource = [...new Set((src ?? []).map((r) => r.personne_id))];
+  const inactivesIds = new Set<string>();
+  if (personnesSource.length) {
+    const [{ data: persD, error: eP }, { data: cpD, error: eC }] = await Promise.all([
+      supabase.from("personne").select("id, statut").eq("site_id", profile.siteId).in("id", personnesSource).returns<{ id: string; statut: string }[]>(),
+      supabase
+        .from("contrat_periode")
+        .select("personne_id, date_debut, date_fin")
+        .eq("site_id", profile.siteId)
+        .in("personne_id", personnesSource)
+        .returns<{ personne_id: string; date_debut: string | null; date_fin: string | null }[]>(),
+    ]);
+    if (eP || eC) return NextResponse.json({ error: (eP ?? eC)!.message }, { status: 403 });
+    const contratsDe = new Map<string, { date_debut: string | null; date_fin: string | null }[]>();
+    for (const c of cpD ?? []) (contratsDe.get(c.personne_id) ?? contratsDe.set(c.personne_id, []).get(c.personne_id)!).push(c);
+    for (const p of persD ?? []) if (motifInactivite(p.statut, contratsDe.get(p.id) ?? [], cible)) inactivesIds.add(p.id);
+  }
+
   let absencesConservees = 0;
   let dejaPlacees = 0;
   let horsCycle = 0;
+  let inactives = 0;
   const rows = (src ?? [])
     .filter((r) => memeQuart(r.quart_code, quart, quarts))
     .filter((r) => {
+      if (inactivesIds.has(r.personne_id)) { inactives++; return false; }
       if (horsCycleIds.has(r.poste_id)) { horsCycle++; return false; }
       if (protegees.has(r.personne_id)) { absencesConservees++; return false; }
       if (completer && placees.has(r.personne_id)) { dejaPlacees++; return false; }
@@ -110,7 +133,7 @@ export async function POST(req: NextRequest) {
       site_id: profile.siteId,
     }));
 
-  if (!rows.length) return NextResponse.json({ ok: true, copied: 0, absencesConservees, dejaPlacees, horsCycle });
+  if (!rows.length) return NextResponse.json({ ok: true, copied: 0, absencesConservees, dejaPlacees, horsCycle, inactives });
 
   const { error: e2 } = await supabase.from("placement").upsert(rows, { onConflict: "personne_id,jour" });
   if (e2) return NextResponse.json({ error: e2.message }, { status: 403 });
@@ -120,6 +143,7 @@ export async function POST(req: NextRequest) {
     absencesConservees,
     dejaPlacees,
     horsCycle,
+    inactives,
     rows: rows.map((r) => ({ personne_id: r.personne_id, poste_id: r.poste_id })),
   });
 }

@@ -515,7 +515,7 @@ export default function PlacementBoard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ source: src, cible: dst, quart, mode }),
       });
-      const j = (await res.json().catch(() => ({}))) as { rows?: { personne_id: string; poste_id: string }[]; copied?: number; absencesConservees?: number; dejaPlacees?: number; horsCycle?: number; error?: string };
+      const j = (await res.json().catch(() => ({}))) as { rows?: { personne_id: string; poste_id: string }[]; copied?: number; absencesConservees?: number; dejaPlacees?: number; horsCycle?: number; inactives?: number; error?: string };
       if (!res.ok) throw new Error(j.error ?? "Échec de la copie.");
       setShowCopy(false);
       if (dst !== jour) {
@@ -537,7 +537,8 @@ export default function PlacementBoard({
         `${j.copied ?? 0} affectation(s) copiée(s).` +
           (j.absencesConservees ? ` ${j.absencesConservees} absence(s) conservée(s).` : "") +
           (j.dejaPlacees ? ` ${j.dejaPlacees} déjà placée(s) conservée(s).` : "") +
-          (j.horsCycle ? ` ${j.horsCycle} non recopiée(s) : poste ne tournant pas sur ce quart.` : "")
+          (j.horsCycle ? ` ${j.horsCycle} non recopiée(s) : poste ne tournant pas sur ce quart.` : "") +
+          (j.inactives ? ` ${j.inactives} non recopiée(s) : personne partie ou hors effectif ce jour.` : "")
       );
       setTimeout(() => {
         setSaving("idle");

@@ -6,6 +6,7 @@ import {
   estAuTravailLe,
   libelleStatut,
   deriverArriveeDepart,
+  motifInactivite,
 } from "./personne-statut";
 
 describe("statutALaDate", () => {
@@ -172,5 +173,26 @@ describe("deriverArriveeDepart", () => {
         { date_debut: "2026-01-01", date_fin: "2026-06-30" },
       ]),
     ).toEqual({ date_arrivee: "2026-01-01", date_depart_prevu: "2026-06-30" });
+  });
+});
+
+describe("motifInactivite — blocage des affectations (2026-09-28)", () => {
+  const contrat = [{ date_debut: "2026-01-01", date_fin: "2026-09-30" }];
+  it("sous contrat ce jour → autorisé, même si le statut est PARTI (correction d'historique)", () => {
+    expect(motifInactivite("PARTI", contrat, "2026-09-15")).toBeNull();
+    expect(motifInactivite("ACTIF", contrat, "2026-09-30")).toBeNull();
+  });
+  it("après le départ → refusé, « personne partie »", () => {
+    expect(motifInactivite("PARTI", contrat, "2026-10-05")).toContain("partie");
+  });
+  it("avant l'arrivée / entre deux contrats → refusé, « hors effectif »", () => {
+    expect(motifInactivite("A_VENIR", [{ date_debut: "2026-11-01", date_fin: null }], "2026-10-05")).toContain("hors effectif");
+    const deux = [{ date_debut: "2026-01-01", date_fin: "2026-03-31" }, { date_debut: "2026-06-01", date_fin: null }];
+    expect(motifInactivite("ACTIF", deux, "2026-04-15")).toContain("hors effectif");
+    expect(motifInactivite("ACTIF", deux, "2026-07-01")).toBeNull();
+  });
+  it("sans contrat : seul le statut PARTI bloque", () => {
+    expect(motifInactivite("PARTI", [], "2026-10-05")).toContain("partie");
+    expect(motifInactivite("ACTIF", [], "2026-10-05")).toBeNull();
   });
 });
