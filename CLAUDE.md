@@ -610,19 +610,26 @@ motif donne une expérience « le clic n'a rien fait » pendant une demi-minute.
 audit P2 (2026-09-10).
 
 **Grandes grilles** : Matrice et Habilitations sont **virtualisées** (lignes, via
-`usePersonGrid` / `virt`) — l'ancien plafond des ~22 000 cellules est levé. Restent NON
-virtualisés et sans mémoïsation : `PlanningGrid`, `PlacementBoard` (prochains candidats
-au React Compiler).
+`usePersonGrid` / `virt`) — l'ancien plafond des ~22 000 cellules est levé. Reste NON
+virtualisé et sans mémoïsation : `PlacementBoard` (prochain candidat au React Compiler).
 
 **React Compiler (2026-09-28)** — `reactCompiler: { compilationMode: "annotation" }`
 (`next.config.ts`, devDep `babel-plugin-react-compiler`) : seul le code marqué `"use memo"`
 est compilé. **Actif sur Personnel** : `PersonnelEditor` + `LignePersonne` (ligne extraite,
 `memo`, actions d'identité stable via `useState` à initialiseur + ref « dernière version »)
-→ une frappe ne redessine plus que SA ligne. ⚠️ Le compilateur **renonce en silence** à un
+→ une frappe ne redessine plus que SA ligne. **Actif sur Planning** : `PlanningGrid` +
+`LignePlanning` — la ligne reçoit ses cases en CHAÎNES (`valsSig`, `overSig` = sureffectifs),
+la sélection / le survol de glisser-déposer / la pendule ouverte SEULEMENT si ça la concerne
+(`isoDeLaLigne`), les données de référence dans `ctx` (useMemo) et les gestionnaires dans
+`actionsLigne` (la prop `actions` du Planning = boutons du bandeau, ne pas confondre). Appels
+réseau en fonctions de module qui ne lèvent pas (`envoyerCase`, `envoyerDeplacement`,
+`envoyerPrefill`) ; `HabManquanteError` supprimée. ⚠️ Le compilateur **renonce en silence** à un
 composant si : un `eslint-disable` des règles hooks traîne dans le fichier ; un `try … finally`,
 un `throw` ou un opérateur conditionnel (`??`, `?.`, `||`) est DANS un `try/catch` (sortir les
 appels réseau dans des fonctions de module qui ne lèvent pas, cf. `appelApiPersonnel`) ; un
-`useMemo(…, [])` ne peut être « préservé ». **Vérifier** après build : `react.memo_cache_sentinel`
+`useMemo(…, [])` ne peut être « préservé » ; `x++` sur une variable capturée dans une lambda
+(`forEach` → boucle `for`) ; une expression `[ternaires…].join() || …` (calculer hors JSX) ;
+une fonction utilisée AVANT sa déclaration (déplacer le bloc qui l'appelle). **Vérifier** après build : `react.memo_cache_sentinel`
 présent dans `.next/static/chunks/app/<écran>/page-*.js`.
 
 ## Carte des fichiers

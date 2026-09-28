@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { dowMon } from "@/lib/week";
 import { habValable } from "@/lib/habilitations";
@@ -19,22 +19,459 @@ const CAT_BILANS: { key: string; label: string }[] = [
 ];
 type Group = { ligneNom: string; ligneId: string; atelierNom?: string; postes: Poste[] };
 
-// Le poste exige des habilitations que la personne n'a pas (ou plus). L'API repond
-// 428 en les nommant : on remonte la liste pour demander confirmation, au lieu de
-// faire revenir la case en silence. Definie au niveau du module — dans le corps du
-// composant, la classe serait recreee a chaque rendu et `instanceof` deviendrait
-// dependant du moment ou l'erreur a ete levee.
-class HabManquanteError extends Error {
-  manquantes: string[];
-  constructor(manquantes: string[]) {
-    super("Habilitation manquante");
-    this.manquantes = manquantes;
+// ─── Appels réseau (niveau module) ────────────────────────────────────────────
+// Sortis du composant (2026-09-28) : le React Compiler ne sait pas encore traiter
+// un `throw` ni des opérateurs conditionnels DANS un `try/catch`, et renonçait
+// alors à toute la grille. Ces fonctions ne lèvent JAMAIS : elles rendent un
+// résultat que le composant interprète. Comportement identique à l'ancien code.
+//
+// Le poste exige des habilitations que la personne n'a pas (ou plus) : l'API
+// répond 428 en les nommant → `manquantes`, pour demander confirmation au lieu
+// de faire revenir la case en silence. `manquantes: null` = autre échec.
+type ResultatEcriture = { ok: true } | { ok: false; manquantes: string[] | null };
+async function lireManquantes(res: Response): Promise<string[]> {
+  const j = (await res.json().catch(() => ({}))) as { manquantes?: string[] };
+  return Array.isArray(j.manquantes) ? j.manquantes : [];
+}
+async function envoyerCase(body: Record<string, unknown>): Promise<ResultatEcriture> {
+  try {
+    const res = await fetch("/api/placement/cell", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) return { ok: true };
+    if (res.status === 428) return { ok: false, manquantes: await lireManquantes(res) };
+    return { ok: false, manquantes: null };
+  } catch {
+    return { ok: false, manquantes: null };
+  }
+}
+async function envoyerDeplacement(body: Record<string, unknown>): Promise<ResultatEcriture> {
+  try {
+    const res = await fetch("/api/placement/move", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) return { ok: true };
+    if (res.status === 428) return { ok: false, manquantes: await lireManquantes(res) };
+    return { ok: false, manquantes: null };
+  } catch {
+    return { ok: false, manquantes: null };
+  }
+}
+type ReponsePrefill = { crees?: number; tp?: number; fixe?: number; site?: string; marqueur?: string; error?: string };
+// `reseau` : la requête n'a pas abouti (exception) ; sinon `ok` + corps décodé.
+async function envoyerPrefill(monday: string): Promise<{ reseau: true } | { reseau: false; ok: boolean; j: ReponsePrefill }> {
+  try {
+    const r = await fetch("/api/placement/prefill", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ semaines: [monday] }),
+    });
+    const j = (await r.json().catch(() => ({}))) as ReponsePrefill;
+    return { reseau: false, ok: r.ok, j };
+  } catch {
+    return { reseau: true };
   }
 }
 type Motif = { id: string; code: string; couleur: string };
 type Personne = { id: string; label: string; equipe_id: string | null; editable: boolean; color?: string; interim?: boolean };
 
 const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+
+// ─── Ligne de la grille (perf, React Compiler — 2026-09-28) ──────────────────
+// Composant SÉPARÉ et mémoïsé : un clic, une saisie ou un survol de glisser-
+// déposer ne redessine plus que la (ou les) ligne(s) concernée(s), pas les
+// centaines de lignes × 15 jours. Condition : des props STABLES pour une ligne
+// non touchée —
+//   - ses valeurs de cases et ses sureffectifs passent en CHAÎNES (`valsSig`,
+//     `overSig`) : égales d'un rendu à l'autre tant que la ligne ne change pas ;
+//   - la case sélectionnée / survolée / dont la pendule est ouverte n'est passée
+//     qu'à SA ligne (`selIso`, `overIso`, `excAtIso`, `draft`), `null` ailleurs ;
+//   - les données de référence (matrice, habilitations, TP…) sont regroupées dans
+//     `ctx`, et les gestionnaires dans `actions` : deux objets d'identité stable.
+type Brouillon = { debut: string; fin: string; motif: string };
+type ContexteGrille = {
+  matrice: Record<string, number>;
+  niveauMin: Record<string, number>;
+  effectif: Record<string, number>;
+  habPoste: Record<string, string[]>;
+  habComp: Record<string, string>;
+  habPers: Record<string, string>;
+  motifColor: Record<string, string>;
+  motifs: Motif[];
+  tpBlocked: Record<string, boolean>;
+  horsEffectif: Record<string, boolean>;
+  otherByCell: Record<string, string>;
+  otherPosteByCell: Record<string, string>;
+  quartLabel: Record<string, string>;
+  horaireStd: Record<string, { debut: string; fin: string }>;
+  formationMotifId: string | null;
+  posteLabel: Record<string, string>;
+  posteLabelAll: Record<string, string>;
+};
+type ActionsPlanning = {
+  survol: (k: string) => void;
+  quitterSurvol: (k: string) => void;
+  deposer: (from: string, toPid: string, toIso: string) => void;
+  demarrerGlisser: (k: string) => void;
+  finGlisser: () => void;
+  clicCase: (pers: Personne, iso: string, r: DOMRect) => void;
+  recopier: (pers: Personne, dayIndex: number) => void;
+  ouvrirHoraire: (pid: string, iso: string) => void;
+  fermerHoraire: () => void;
+  majBrouillon: (patch: Partial<Brouillon>) => void;
+  enregistrerHoraire: (pid: string, iso: string) => void;
+  effacerHoraire: (pid: string, iso: string) => void;
+};
+
+const key = (pid: string, iso: string) => `${pid}:${iso}`;
+const excKey = key;
+// "TP" = temps partiel matérialisé (jeton, comme "X"/"m:") : ni poste ni absence.
+const isPoste = (v: string) => v !== "" && v !== "X" && v !== "TP" && !v.startsWith("m:");
+const excLabel = (e: { debut: string; fin: string }) => `${e.debut || "?"}-${e.fin || "?"}`;
+const sep = (d: Jour): React.CSSProperties => (d.firstOfWeek ? { borderLeft: "3px solid #94a3b8" } : {});
+// Partie « jour » d'une clé « pid:iso » si elle concerne cette personne, sinon null.
+const isoDeLaLigne = (k: string | null, pid: string) => (k && k.startsWith(`${pid}:`) ? k.slice(pid.length + 1) : null);
+// Motif "Formation" : la pendule reste active pour saisir horaires / sujet (commentaire).
+const estFormation = (ctx: ContexteGrille, v: string) => !!ctx.formationMotifId && v === `m:${ctx.formationMotifId}`;
+const horsComp = (ctx: ContexteGrille, pid: string, v: string) =>
+  isPoste(v) && (ctx.matrice[`${pid}:${v}`] ?? 0) < (ctx.niveauMin[v] ?? 0);
+// Habilitations exigées par le poste occupé que la personne n'a pas (ou plus).
+// Recalculé à l'affichage, comme au Placement : le rouge s'efface de lui-même
+// dès la régularisation, et revient si l'habilitation expire.
+const habManque = (ctx: ContexteGrille, pid: string, v: string): string[] =>
+  !isPoste(v)
+    ? []
+    : (ctx.habPoste[v] ?? [])
+        .filter((cid) => {
+          const e = ctx.habPers[`${pid}:${cid}`];
+          return !habValable(e === undefined ? null : { expiration: e === "" ? null : e });
+        })
+        .map((cid) => ctx.habComp[cid] ?? "habilitation");
+// Libellé compact de la valeur d'une case (poste / motif / NT / vide).
+const valueLabel = (ctx: ContexteGrille, v: string) =>
+  v === "" ? "—"
+  : v === "X" ? "NT"
+  : v === "TP" ? "TP"
+  : v.startsWith("m:") ? (ctx.motifs.find((mo) => `m:${mo.id}` === v)?.code ?? "?")
+  : (ctx.posteLabel[v] ?? ctx.posteLabelAll[v] ?? "?");
+const BROUILLON_VIDE: Brouillon = { debut: "", fin: "", motif: "" };
+
+const LignePlanning = memo(function LignePlanning({
+  pers,
+  days,
+  fusion,
+  valsSig,
+  overSig,
+  selIso,
+  overIso,
+  excAtIso,
+  draft,
+  highlight,
+  exc,
+  todayIso,
+  ctx,
+  actions,
+}: {
+  pers: Personne;
+  days: Jour[];
+  /** Hauteur de fusion des colonnes « jour sans production » : nombre de lignes
+   *  affichées pour la 1re ligne, 0 pour les suivantes (couvertes par la fusion). */
+  fusion: number;
+  valsSig: string;
+  overSig: string;
+  selIso: string | null;
+  overIso: string | null;
+  excAtIso: string | null;
+  draft: Brouillon | null;
+  highlight: { iso: string; type: "hc" | "over" } | null;
+  exc: Record<string, { debut: string; fin: string; motif: string }>;
+  todayIso: string;
+  ctx: ContexteGrille;
+  actions: ActionsPlanning;
+}) {
+  "use memo"; // React Compiler (mode opt-in, cf. next.config.ts)
+  const valeurs = valsSig.split("|");
+  const surEff = overSig.split("|");
+  const brouillon = draft ?? BROUILLON_VIDE;
+  return (
+    <tr>
+      <td style={{ background: "#fff", whiteSpace: "nowrap" }}>
+        <span
+          style={{
+            display: "inline-block",
+            width: 11,
+            height: 11,
+            borderRadius: "50%",
+            background: pers.color ?? "#fff",
+            boxShadow: "0 0 0 1px rgba(0,0,0,0.25)",
+            marginRight: 7,
+            verticalAlign: "middle",
+          }}
+        />
+        <span style={pers.interim ? { background: INTERIM_BG, borderRadius: 3, padding: "0 4px" } : undefined}>{pers.label}</span>
+        {!pers.editable && <span className="muted"> (lecture)</span>}
+      </td>
+      {days.map((d, i) => {
+        // Jour fermé (aucune ligne ouverte / semaine non initialisée) : une
+        // seule cellule fusionnée sur toute la colonne (rowSpan) porte le
+        // message. Rendue à la 1re ligne ; les suivantes n'émettent rien
+        // dans cette colonne (la fusion les couvre) → alignement préservé.
+        if (d.closed) {
+          if (fusion === 0) return null;
+          return (
+            <td
+              key={d.iso}
+              rowSpan={fusion}
+              style={{ background: "#f8fafc", verticalAlign: "top", textAlign: "center", ...sep(d) }}
+            >
+              <div style={{ color: "#64748b", fontSize: 12, lineHeight: 1.5, padding: "10px 8px" }}>
+                Jour sans production
+                <br />
+                <span style={{ fontSize: 11 }}>pour l&apos;activer, contacter l&apos;ordo</span>
+              </div>
+            </td>
+          );
+        }
+        const v = valeurs[i] ?? "";
+        const alert = horsComp(ctx, pers.id, v);
+        // Placement force : habilitation exigee manquante ou perimee.
+        const manque = habManque(ctx, pers.id, v);
+        const overN = surEff[i] ?? "";
+        const over = overN !== "";
+        // Restriction (medicale/physique) : niveau -1 dans la matrice pour ce poste.
+        const restricted = isPoste(v) && ctx.matrice[key(pers.id, v)] === -1;
+        // Bouton de recopie aussi sur une case vide : permet de propager le
+        // « non-affecte » sur la semaine. Masque seulement si placee sur un autre quart.
+        const tpb = !!ctx.tpBlocked[key(pers.id, d.iso)];
+        const hors = !!ctx.horsEffectif[key(pers.id, d.iso)];
+        // Case bloquee : soit temps partiel (sans motif d'absence), soit
+        // hors effectif ce jour-la. Quand le TP coexiste avec un motif
+        // d'absence, le motif prime : la case reste modifiable et affiche
+        // la couleur du motif au lieu de « TP ».
+        const tpAbsence = tpb && !!ctx.motifColor[v];
+        // TP materialise (jeton "TP") : vraie ligne, deplacable, effacable.
+        const vTP = v === "TP";
+        const bloque = (tpb && !tpAbsence) || hors;
+        const showFill = pers.editable && !ctx.otherByCell[key(pers.id, d.iso)] && !bloque && !vTP;
+        const other = v === "" ? ctx.otherByCell[key(pers.id, d.iso)] : undefined;
+        // Glisser-deposer. Source draggable : poste, NT ou TP reel (jamais
+        // une absence, jamais le vide). Cible d'un depot : case VIDE,
+        // editable, non bloquee (ni hors-effectif, ni TP calcule, ni « autre
+        // quart »). On ne lache jamais sur une case occupee.
+        const kCell = key(pers.id, d.iso);
+        const dragSource = pers.editable && (isPoste(v) || v === "X" || vTP);
+        const dropTarget = pers.editable && v === "" && !hors && !(tpb && !tpAbsence) && !other;
+        const isOver = overIso === d.iso && dropTarget;
+        // Horaire spécifique + commentaire du jour (saisis via la pendule) :
+        // remontés dans le title de TOUTE la case — pas seulement de la
+        // pendule — pour qu'ils s'affichent au survol de la cellule entière.
+        const exCell = exc[excKey(pers.id, d.iso)];
+        const excInfo = exCell
+          ? [
+              exCell.debut || exCell.fin ? `Horaire : ${excLabel(exCell)}` : "",
+              exCell.motif ? `Commentaire : ${exCell.motif}` : "",
+            ].filter(Boolean)
+          : [];
+        // Surlignage : cette case correspond-elle au type d'anomalie selectionne ce jour-la ?
+        const hiActive = highlight?.iso === d.iso;
+        const matchHi = !!hiActive && ((highlight!.type === "hc" && alert) || (highlight!.type === "over" && over));
+        const dimHi = !!hiActive && !matchHi;
+        // Info-bulle de la case, calculée hors JSX : le React Compiler ne sait pas
+        // (encore) analyser une expression « [ternaires…].join() || undefined ».
+        const infoCompetence = restricted ? "⛔ Restriction médicale/physique sur ce poste" : alert ? "Hors compétence" : "";
+        const titreCase = [
+          hors ? "Hors effectif ce jour-là (avant arrivée, après départ ou entre deux contrats)" : "",
+          infoCompetence,
+          manque.length ? `⚠ Placement forcé — habilitation manquante : ${manque.join(", ")}` : "",
+          over ? `Sur-effectif (${overN}/${ctx.effectif[v] ?? 0})` : "",
+          ...excInfo,
+        ].filter(Boolean).join(" · ");
+        return (
+          <td
+            key={d.iso}
+            className={`pcell${alert ? " hc" : ""}${over ? " over" : ""}${manque.length ? " forced" : ""}${matchHi ? " hi" : ""}${dimHi ? " dim" : ""}`}
+            style={{
+              textAlign: "center",
+              // Priorite des fonds, alignee sur le Placement :
+              // hors effectif > temps partiel > motif d'absence >
+              // rouge (competence ou habilitation) > jaune (sureffectif)
+              // > aujourd'hui.
+              background: hors
+                ? "#f1f5f9"
+                : vTP
+                ? "#e0e7ff"
+                : tpb && !tpAbsence
+                ? "#e0e7ff"
+                : ctx.motifColor[v]
+                ? ctx.motifColor[v]
+                : alert || manque.length
+                ? "#fef2f2"
+                : over
+                ? "#fffbeb"
+                : d.iso === todayIso
+                ? "#eff6ff"
+                : undefined,
+              padding: 0,
+              position: "relative",
+              outline: isOver ? "2px dashed #4f46e5" : undefined,
+              outlineOffset: isOver ? -2 : undefined,
+              ...sep(d),
+            }}
+            title={titreCase === "" ? undefined : titreCase}
+            onDragOver={dropTarget ? (e) => { e.preventDefault(); if (overIso !== d.iso) actions.survol(kCell); } : undefined}
+            onDragLeave={dropTarget ? () => actions.quitterSurvol(kCell) : undefined}
+            onDrop={dropTarget ? (e) => {
+              e.preventDefault();
+              actions.deposer(e.dataTransfer.getData("text/plain"), pers.id, d.iso);
+            } : undefined}
+          >
+            {hors ? (
+              // Case grisee, aucun label : la personne n'est pas dans
+              // l'effectif ce jour-la. Distincte du TP (fond violet).
+              <div className="cell-other" style={{ color: "#94a3b8" }} aria-hidden="true">·</div>
+            ) : tpb && !tpAbsence && !vTP ? (
+              // TP CALCULÉ (virtuel) : aperçu non déplaçable. Un TP RÉEL
+              // (vTP) passe par le bouton ci-dessous, donc reste draggable.
+              <div className="cell-other" style={{ color: "#3730a3" }} title="Temps partiel — journée entière non travaillée">TP</div>
+            ) : other ? (
+              <div
+                className="cell-other"
+                title={
+                  `Déjà placé sur le quart ${ctx.quartLabel[other] ?? other} ce jour-là` +
+                  (ctx.otherPosteByCell[key(pers.id, d.iso)]
+                    ? `\nPoste : ${ctx.otherPosteByCell[key(pers.id, d.iso)]}`
+                    : "")
+                }
+              >
+                &rarr; {ctx.quartLabel[other] ?? other}
+              </div>
+            ) : (
+            <button
+              type="button"
+              className={`cellbtn${isPoste(v) ? " poste" : ""}${selIso === d.iso ? " sel" : ""}`}
+              disabled={!pers.editable}
+              draggable={dragSource}
+              onDragStart={dragSource ? (e) => {
+                e.dataTransfer.setData("text/plain", kCell);
+                e.dataTransfer.effectAllowed = "move";
+                actions.demarrerGlisser(kCell);
+              } : undefined}
+              onDragEnd={() => actions.finGlisser()}
+              title={excInfo.length ? excInfo.join(" · ") : undefined}
+              onClick={(e) => actions.clicCase(pers, d.iso, e.currentTarget.getBoundingClientRect())}
+            >
+              {valueLabel(ctx, v)}
+            </button>
+            )}
+            {showFill && (
+              <button
+                type="button"
+                className="fillw"
+                title={dowMon(d.iso) < 4 ? "Recopier jusqu'à la fin de cette semaine" : "Recopier sur la semaine suivante"}
+                onClick={() => actions.recopier(pers, i)}
+              >
+                &raquo;
+              </button>
+            )}
+            {restricted && (
+              <span
+                title="Restriction médicale/physique sur ce poste"
+                style={{ position: "absolute", left: 1, top: 0, fontSize: 11, fontWeight: 800, color: "#dc2626", lineHeight: 1, pointerEvents: "none" }}
+              >
+                ✕
+              </span>
+            )}
+            {(() => {
+              const ek = excKey(pers.id, d.iso);
+              const e = exc[ek];
+              // Editable si la case est affectee, ou si une exception subsiste (pour
+              // pouvoir la modifier / l'effacer meme apres suppression de l'affectation).
+              const canEditExc = pers.editable && (isPoste(v) || estFormation(ctx, v) || !!e);
+              if (!e && !canEditExc) return null;
+              // Horaire par defaut (standard du poste pour ce quart / jour de semaine).
+              const std = isPoste(v) ? ctx.horaireStd[`${v}:${dowMon(d.iso)}`] : undefined;
+              const stdTxt = std && (std.debut || std.fin) ? `${std.debut || "?"}-${std.fin || "?"}` : "";
+              // Info-bulle de la pendule, hors JSX (même contrainte du React Compiler
+              // que `titreCase` ci-dessus : pas de « [ternaires…].join() || … »).
+              const detailExc = e
+                ? [(e.debut || e.fin) ? `Horaire : ${excLabel(e)}` : "", e.motif ? `Commentaire : ${e.motif}` : ""].filter(Boolean).join(" · ")
+                : "";
+              const titrePendule = e
+                ? (detailExc !== "" ? detailExc : "Horaire spécifique")
+                : stdTxt
+                  ? `Horaire par défaut : ${stdTxt} · Définir un horaire spécifique`
+                  : "Définir un horaire spécifique";
+              return (
+                <>
+                  {canEditExc ? (
+                    <button
+                      type="button"
+                      className={`horx${e ? " has" : ""}`}
+                      title={titrePendule}
+                      onClick={() => actions.ouvrirHoraire(pers.id, d.iso)}
+                    >
+                      🕐
+                    </button>
+                  ) : (
+                    e && <span className="horx has" title={`Horaire spécifique : ${excLabel(e)}`}>🕐</span>
+                  )}
+                  {excAtIso === d.iso && (
+                    <div className="exc-pop" onClick={(ev) => ev.stopPropagation()}>
+                      {/* Croix de fermeture en haut à droite de la fenêtre. */}
+                      <button
+                        type="button"
+                        onClick={() => actions.fermerHoraire()}
+                        title="Fermer"
+                        aria-label="Fermer"
+                        style={{ position: "absolute", top: 4, right: 4, width: 18, height: 18, margin: 0, padding: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", lineHeight: 1, fontSize: 13, border: "none", background: "transparent", color: "var(--muted)", cursor: "pointer" }}
+                      >
+                        ✕
+                      </button>
+                      <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 4, paddingRight: 16 }}>Horaire spécifique</div>
+                      {stdTxt && (
+                        <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>Par défaut : {stdTxt}</div>
+                      )}
+                      {/* Deux colonnes étiquetées : à 168 px, les deux
+                          champs `time` se chevauchaient et le champ Fin,
+                          rogné, restait souvent incomplet (heure sans
+                          minutes) — donc vide, donc non enregistré. */}
+                      <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+                        <label style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2, fontSize: 10, color: "var(--muted)" }}>
+                          Début
+                          <input type="time" value={brouillon.debut} onChange={(ev) => actions.majBrouillon({ debut: ev.target.value })} style={{ fontSize: 12, padding: "2px 3px", width: "100%" }} />
+                        </label>
+                        <label style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2, fontSize: 10, color: "var(--muted)" }}>
+                          Fin
+                          <input type="time" value={brouillon.fin} onChange={(ev) => actions.majBrouillon({ fin: ev.target.value })} style={{ fontSize: 12, padding: "2px 3px", width: "100%" }} />
+                        </label>
+                      </div>
+                      <input
+                        placeholder="commentaire (affiché à la TV)"
+                        value={brouillon.motif}
+                        onChange={(ev) => actions.majBrouillon({ motif: ev.target.value })}
+                        style={{ width: "100%", fontSize: 12, padding: "2px 3px", marginBottom: 6 }}
+                      />
+                      <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
+                        <button type="button" className="btn-sm" style={{ padding: "2px 8px" }} onClick={() => actions.enregistrerHoraire(pers.id, d.iso)}>OK</button>
+                        {e && (
+                          <button type="button" className="btn-sm btn-ghost" style={{ padding: "2px 8px" }} onClick={() => actions.effacerHoraire(pers.id, d.iso)}>Effacer</button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+          </td>
+        );
+      })}
+    </tr>
+  );
+});
 
 export default function PlanningGrid({
   days,
@@ -119,6 +556,7 @@ export default function PlanningGrid({
    *  pour rappeler visuellement au manager quel quart il édite. */
   quartBandeau?: React.ReactNode;
 }) {
+  "use memo"; // React Compiler (mode opt-in, cf. next.config.ts)
   const [vals, setVals] = useState<Record<string, string>>(initial);
   const [saving, setSaving] = useState<"idle" | "saving" | "saved" | "error">("idle");
   // Semaine (lundi) dont le pré-remplissage « postes fixes » est en cours.
@@ -247,7 +685,6 @@ export default function PlanningGrid({
   const [exc, setExc] = useState(exceptions);
   const [excAt, setExcAt] = useState<string | null>(null); // cle "pid:iso"
   const [draft, setDraft] = useState<{ debut: string; fin: string; motif: string }>({ debut: "", fin: "", motif: "" });
-  const excKey = (pid: string, iso: string) => `${pid}:${iso}`;
   function openExc(pid: string, iso: string) {
     const e = exc[excKey(pid, iso)] ?? { debut: "", fin: "", motif: "" };
     setDraft({ debut: e.debut, fin: e.fin, motif: e.motif });
@@ -285,11 +722,7 @@ export default function PlanningGrid({
       setExcAt(null);
     }
   }
-  const excLabel = (e: { debut: string; fin: string }) => `${e.debut || "?"}-${e.fin || "?"}`;
 
-  const key = (pid: string, iso: string) => `${pid}:${iso}`;
-  // "TP" = temps partiel matérialisé (jeton, comme "X"/"m:") : ni poste ni absence.
-  const isPoste = (v: string) => v !== "" && v !== "X" && v !== "TP" && !v.startsWith("m:");
   // Motif "Formation" : la pendule reste active pour saisir horaires / sujet (commentaire).
   const isFormation = (v: string) => !!formationMotifId && v === `m:${formationMotifId}`;
   const motifColor = useMemo(() => {
@@ -300,12 +733,14 @@ export default function PlanningGrid({
 
   // Index de semaine par colonne (pour le remplissage de semaine)
   const weekIdx = useMemo(() => {
+    // Boucle `for` (et non `forEach` + `w++` dans la lambda) : forme que le React
+    // Compiler sait traiter.
     const arr: number[] = [];
     let w = -1;
-    days.forEach((d, i) => {
-      if (d.firstOfWeek) w++;
+    for (let i = 0; i < days.length; i++) {
+      if (days[i].firstOfWeek) w++;
       arr[i] = w;
-    });
+    }
     return arr;
   }, [days]);
 
@@ -360,49 +795,10 @@ export default function PlanningGrid({
   const horsComp = (pid: string, v: string) =>
     isPoste(v) && (matrice[`${pid}:${v}`] ?? 0) < (niveauMin[v] ?? 0);
 
-  // Habilitations exigees par le poste occupe que la personne n'a pas (ou plus).
-  // Recalcule a l'affichage, comme au Placement : le rouge s'efface de lui-meme
-  // des la regularisation, et revient si l'habilitation expire.
-  const habDetenue = (pid: string, cid: string) => {
-    const e = habPers[`${pid}:${cid}`];
-    return e === undefined ? null : { expiration: e === "" ? null : e };
-  };
-  const habManque = (pid: string, v: string): string[] =>
-    !isPoste(v)
-      ? []
-      : (habPoste[v] ?? [])
-          .filter((cid) => !habValable(habDetenue(pid, cid)))
-          .map((cid) => habComp[cid] ?? "habilitation");
-
-  // Libelle compact de la valeur d'une case (poste / motif / NT / vide).
+  // (Habilitations manquantes et libellé d'une case : calculés par la ligne,
+  // cf. `habManque` / `valueLabel` au niveau du module.)
   const persById = useMemo(() => new Map(personnes.map((p) => [p.id, p])), [personnes]);
-  const valueLabel = (v: string) =>
-    v === "" ? "—"
-    : v === "X" ? "NT"
-    : v === "TP" ? "TP"
-    : v.startsWith("m:") ? (motifs.find((mo) => `m:${mo.id}` === v)?.code ?? "?")
-    : (posteLabel[v] ?? posteLabelAll[v] ?? "?");
 
-  // Clavier : Suppr/Retour efface la case selectionnee ; Echap ferme.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement | null)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA") return;
-      if (e.key === "Escape") { setPick(null); setSelected(null); return; }
-      if ((e.key === "Delete" || e.key === "Backspace") && selected) {
-        const [pid, iso] = selected.split(":");
-        const p = persById.get(pid);
-        if (p && p.editable) {
-          e.preventDefault();
-          change(pid, iso, p.equipe_id, "");
-        }
-        setPick(null); // referme le panneau d'affectation des l'appui sur Suppr
-      }
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, persById]);
 
   // Fermer le panneau au clic en dehors.
   useEffect(() => {
@@ -452,18 +848,8 @@ export default function PlanningGrid({
   // ⚠️ Ne jamais ajouter `numero` ici : son ABSENCE indique a l'API que l'appel
   // vient du Planning, qui n'a pas de cases numerotees, et qu'elle doit prendre
   // la premiere place libre (cf. /api/placement/cell).
-  async function postCell(pid: string, iso: string, equipe_id: string | null, value: string, forcer = false) {
-    const res = await fetch("/api/placement/cell", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ personne_id: pid, jour: iso, equipe_id, value, quart, ...(forcer ? { forcer: true } : {}) }),
-    });
-    if (res.ok) return;
-    if (res.status === 428) {
-      const j = (await res.json().catch(() => ({}))) as { manquantes?: string[] };
-      throw new HabManquanteError(Array.isArray(j.manquantes) ? j.manquantes : []);
-    }
-    throw new Error();
+  function postCell(pid: string, iso: string, equipe_id: string | null, value: string, forcer = false) {
+    return envoyerCase({ personne_id: pid, jour: iso, equipe_id, value, quart, ...(forcer ? { forcer: true } : {}) });
   }
 
   // Pré-remplissage des postes fixes d'UNE semaine (bouton dans l'entête, à la
@@ -476,34 +862,30 @@ export default function PlanningGrid({
     if (!window.confirm(`Charger la semaine ${label} ?\n\n1. Temps partiel : les jours de TP sont posés (déplaçables ensuite au glisser-déposer).\n2. Postes fixes : chaque personne à poste fixe est placée sur son poste, au quart de son équipe.\n\nLes cases déjà remplies (absence, autre poste) ne sont jamais écrasées.`)) return;
     setPrefillWk(monday);
     setSaving("saving");
-    try {
-      const r = await fetch("/api/placement/prefill", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ semaines: [monday] }),
-      });
-      const j = (await r.json().catch(() => ({}))) as { crees?: number; tp?: number; fixe?: number; site?: string; marqueur?: string; error?: string };
-      if (!r.ok) {
-        setSaving("error");
-        setPrefillWk(null);
-        window.alert(`Chargement impossible : ${j.error ?? "erreur inconnue"}`);
-        setTimeout(() => setSaving("idle"), 3000);
-        return;
-      }
-      if ((j.crees ?? 0) === 0) {
-        setSaving("saved");
-        setPrefillWk(null);
-        // Rien créé : on explique pourquoi (souvent : cases déjà remplies).
-        window.alert(`Semaine ${label} : rien à créer (TP ${j.tp ?? 0}, postes fixes ${j.fixe ?? 0}). Cases déjà remplies non écrasées. Marqueur TP : ${j.marqueur ?? "?"}.`);
-        setTimeout(() => setSaving("idle"), 2000);
-        return; // rien à ajouter (déjà rempli) : pas besoin de recharger
-      }
-      window.location.reload();
-    } catch {
+    const r = await envoyerPrefill(monday);
+    if (r.reseau) {
       setSaving("error");
       setPrefillWk(null);
       setTimeout(() => setSaving("idle"), 3000);
+      return;
     }
+    const j = r.j;
+    if (!r.ok) {
+      setSaving("error");
+      setPrefillWk(null);
+      window.alert(`Chargement impossible : ${j.error ?? "erreur inconnue"}`);
+      setTimeout(() => setSaving("idle"), 3000);
+      return;
+    }
+    if ((j.crees ?? 0) === 0) {
+      setSaving("saved");
+      setPrefillWk(null);
+      // Rien créé : on explique pourquoi (souvent : cases déjà remplies).
+      window.alert(`Semaine ${label} : rien à créer (TP ${j.tp ?? 0}, postes fixes ${j.fixe ?? 0}). Cases déjà remplies non écrasées. Marqueur TP : ${j.marqueur ?? "?"}.`);
+      setTimeout(() => setSaving("idle"), 2000);
+      return; // rien à ajouter (déjà rempli) : pas besoin de recharger
+    }
+    window.location.reload();
   }
 
   async function change(pid: string, iso: string, equipe_id: string | null, value: string, forcer = false) {
@@ -511,16 +893,16 @@ export default function PlanningGrid({
     const prev = vals[k] ?? "";
     setVals((s) => ({ ...s, [k]: value }));
     setSaving("saving");
-    try {
-      await postCell(pid, iso, equipe_id, value, forcer);
+    const r = await postCell(pid, iso, equipe_id, value, forcer);
+    if (r.ok) {
       setSaving("saved");
-    } catch (e) {
+    } else {
       setVals((s) => ({ ...s, [k]: prev })); // refus serveur : on annule le changement
-      if (e instanceof HabManquanteError) {
+      if (r.manquantes) {
         // Meme comportement qu'au Placement : on propose de forcer, en nommant
         // ce qui manque. Sans cette fenetre, le Planning refusait sans rien dire.
         setSaving("idle");
-        setAskHab({ pid, iso, eq: equipe_id, value, manquantes: e.manquantes });
+        setAskHab({ pid, iso, eq: equipe_id, value, manquantes: r.manquantes });
         return;
       }
       setSaving("error");
@@ -544,30 +926,21 @@ export default function PlanningGrid({
     const prevTo = vals[toK] ?? "";
     setVals((s) => ({ ...s, [toK]: value, [fromK]: "" }));
     setSaving("saving");
-    try {
-      const res = await fetch("/api/placement/move", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          from: { personne_id: fromPid, jour: fromIso },
-          to: { personne_id: toPid, jour: toIso },
-          equipe_id: toPers.equipe_id,
-          quart,
-          ...(forcer ? { forcer: true } : {}),
-        }),
-      });
-      if (res.ok) {
-        setSaving("saved");
-      } else if (res.status === 428) {
-        const j = (await res.json().catch(() => ({}))) as { manquantes?: string[] };
-        setVals((s) => ({ ...s, [toK]: prevTo, [fromK]: value })); // annule l'optimiste
-        setSaving("idle");
-        setAskMove({ fromPid, fromIso, toPid, toIso, value, manquantes: Array.isArray(j.manquantes) ? j.manquantes : [] });
-        return;
-      } else {
-        throw new Error();
-      }
-    } catch {
+    const r = await envoyerDeplacement({
+      from: { personne_id: fromPid, jour: fromIso },
+      to: { personne_id: toPid, jour: toIso },
+      equipe_id: toPers.equipe_id,
+      quart,
+      ...(forcer ? { forcer: true } : {}),
+    });
+    if (r.ok) {
+      setSaving("saved");
+    } else if (r.manquantes) {
+      setVals((s) => ({ ...s, [toK]: prevTo, [fromK]: value })); // annule l'optimiste
+      setSaving("idle");
+      setAskMove({ fromPid, fromIso, toPid, toIso, value, manquantes: r.manquantes });
+      return;
+    } else {
       setVals((s) => ({ ...s, [toK]: prevTo, [fromK]: value })); // rollback complet
       setSaving("error");
     }
@@ -605,21 +978,44 @@ export default function PlanningGrid({
       return next;
     });
     setSaving("saving");
-    try {
-      // `forcer` : la recopie duplique une affectation DEJA a l'ecran, donc deja
-      // acceptee (au besoin en la forcant). Redemander confirmation pour chaque
-      // jour recopie n'apprendrait rien. Chaque ligne reste tracee, et le rouge
-      // se recalcule a l'affichage.
-      await Promise.all(targets.map((t) => postCell(pers.id, t.iso, pers.equipe_id, value, true)));
-      setSaving("saved");
-    } catch {
-      setSaving("error");
-    }
+    // `forcer` : la recopie duplique une affectation DEJA a l'ecran, donc deja
+    // acceptee (au besoin en la forcant). Redemander confirmation pour chaque
+    // jour recopie n'apprendrait rien. Chaque ligne reste tracee, et le rouge
+    // se recalcule a l'affichage.
+    const resultats = await Promise.all(targets.map((t) => postCell(pers.id, t.iso, pers.equipe_id, value, true)));
+    setSaving(resultats.every((r) => r.ok) ? "saved" : "error");
     setTimeout(() => setSaving("idle"), 1200);
   }
 
+  // Clavier : Suppr/Retour efface la case selectionnee ; Echap ferme.
+  // `change` passe par une référence « dernière version » (mise à jour après
+  // chaque rendu) au lieu d'un eslint-disable, qui empêchait le React Compiler de
+  // traiter tout le composant. Même comportement : l'écouteur n'est réinstallé
+  // qu'au changement de sélection.
+  const effacerCaseRef = useRef<(pid: string, iso: string, equipeId: string | null) => void>(() => {});
+  useLayoutEffect(() => {
+    effacerCaseRef.current = (pid, iso, equipeId) => { change(pid, iso, equipeId, ""); };
+  });
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      if (e.key === "Escape") { setPick(null); setSelected(null); return; }
+      if ((e.key === "Delete" || e.key === "Backspace") && selected) {
+        const [pid, iso] = selected.split(":");
+        const p = persById.get(pid);
+        if (p && p.editable) {
+          e.preventDefault();
+          effacerCaseRef.current(pid, iso, p.equipe_id);
+        }
+        setPick(null); // referme le panneau d'affectation des l'appui sur Suppr
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [selected, persById]);
+
   const deltaColor = (d: number) => (d < 0 ? "var(--danger)" : d > 0 ? "#9a3412" : "var(--ok)");
-  const sep = (d: Jour): React.CSSProperties => (d.firstOfWeek ? { borderLeft: "3px solid #94a3b8" } : {});
   const isToday = (d: Jour) => d.iso === todayIso;
   // En-tetes figes : les lignes d'indicateurs (Besoin..Alertes) restent collees sous
   // les en-tetes de jours quand on descend. Offsets cumulables (a recalibrer si besoin).
@@ -652,6 +1048,75 @@ export default function PlanningGrid({
     </colgroup>
   );
   const tStyle: React.CSSProperties = { borderCollapse: "collapse", width: "100%", tableLayout: "fixed" };
+
+  // Données de référence des lignes (perf, 2026-09-28) : un seul objet, recréé
+  // seulement si l'une d'elles change (jamais pendant la saisie).
+  const ctx = useMemo<ContexteGrille>(
+    () => ({
+      matrice, niveauMin, effectif, habPoste, habComp, habPers, motifColor, motifs,
+      tpBlocked, horsEffectif, otherByCell, otherPosteByCell, quartLabel, horaireStd,
+      formationMotifId, posteLabel, posteLabelAll,
+    }),
+    [matrice, niveauMin, effectif, habPoste, habComp, habPers, motifColor, motifs,
+     tpBlocked, horsEffectif, otherByCell, otherPosteByCell, quartLabel, horaireStd,
+     formationMotifId, posteLabel, posteLabelAll],
+  );
+
+  // Gestionnaires passés aux lignes (`actionsLigne` — `actions` est déjà la prop
+  // des boutons du bandeau) : objet d'IDENTITÉ constante (sinon toutes les
+  // lignes se redessinent à chaque rendu). Motif « dernière version », comme au
+  // Personnel : chaque action appelle l'implémentation du dernier rendu, qui voit
+  // donc toujours l'état courant (sélection, panneau, glisser en cours…).
+  const implRef = useRef<ActionsPlanning | null>(null);
+  useLayoutEffect(() => {
+    implRef.current = {
+      survol: (k) => setOverKey(k),
+      quitterSurvol: (k) => setOverKey((o) => (o === k ? null : o)),
+      deposer: (fromData, toPid, toIso) => {
+        const from = fromData || dragKey;
+        setOverKey(null);
+        setDragKey(null);
+        if (from) {
+          const [fp, fi] = from.split(":");
+          if (fp && fi) moveCell(fp, fi, toPid, toIso);
+        }
+      },
+      demarrerGlisser: (k) => setDragKey(k),
+      finGlisser: () => {
+        setDragKey(null);
+        setOverKey(null);
+      },
+      clicCase: (pers, iso, r) => {
+        setSelected(key(pers.id, iso));
+        if (pick && pick.pid === pers.id && pick.iso === iso) {
+          setPick(null);
+          return;
+        }
+        setShowAllPostes(false); // chaque ouverture repart sur « compétents »
+        setPick({ pid: pers.id, iso, eq: pers.equipe_id, left: r.left, right: r.right, top: r.top, bottom: r.bottom });
+      },
+      recopier: (pers, dayIndex) => fillWeek(pers, dayIndex),
+      ouvrirHoraire: (pid, iso) => openExc(pid, iso),
+      fermerHoraire: () => setExcAt(null),
+      majBrouillon: (patch) => setDraft((d) => ({ ...d, ...patch })),
+      enregistrerHoraire: (pid, iso) => saveExc(pid, iso),
+      effacerHoraire: (pid, iso) => clearExc(pid, iso),
+    };
+  });
+  const [actionsLigne] = useState<ActionsPlanning>(() => ({
+    survol: (k) => implRef.current?.survol(k),
+    quitterSurvol: (k) => implRef.current?.quitterSurvol(k),
+    deposer: (from, toPid, toIso) => implRef.current?.deposer(from, toPid, toIso),
+    demarrerGlisser: (k) => implRef.current?.demarrerGlisser(k),
+    finGlisser: () => implRef.current?.finGlisser(),
+    clicCase: (pers, iso, r) => implRef.current?.clicCase(pers, iso, r),
+    recopier: (pers, dayIndex) => implRef.current?.recopier(pers, dayIndex),
+    ouvrirHoraire: (pid, iso) => implRef.current?.ouvrirHoraire(pid, iso),
+    fermerHoraire: () => implRef.current?.fermerHoraire(),
+    majBrouillon: (patch) => implRef.current?.majBrouillon(patch),
+    enregistrerHoraire: (pid, iso) => implRef.current?.enregistrerHoraire(pid, iso),
+    effacerHoraire: (pid, iso) => implRef.current?.effacerHoraire(pid, iso),
+  }));
 
   return (
     <>
@@ -848,273 +1313,29 @@ export default function PlanningGrid({
         <Cols />
         <tbody>
           {shown.map((pers, rowIndex) => (
-            <tr key={pers.id}>
-              <td style={{ background: "#fff", whiteSpace: "nowrap" }}>
-                <span
-                  style={{
-                    display: "inline-block",
-                    width: 11,
-                    height: 11,
-                    borderRadius: "50%",
-                    background: pers.color ?? "#fff",
-                    boxShadow: "0 0 0 1px rgba(0,0,0,0.25)",
-                    marginRight: 7,
-                    verticalAlign: "middle",
-                  }}
-                />
-                <span style={pers.interim ? { background: INTERIM_BG, borderRadius: 3, padding: "0 4px" } : undefined}>{pers.label}</span>
-                {!pers.editable && <span className="muted"> (lecture)</span>}
-              </td>
-              {days.map((d, i) => {
-                // Jour fermé (aucune ligne ouverte / semaine non initialisée) : une
-                // seule cellule fusionnée sur toute la colonne (rowSpan) porte le
-                // message. Rendue à la 1re ligne ; les suivantes n'émettent rien
-                // dans cette colonne (la fusion les couvre) → alignement préservé.
-                if (d.closed) {
-                  if (rowIndex !== 0) return null;
-                  return (
-                    <td
-                      key={d.iso}
-                      rowSpan={shown.length}
-                      style={{ background: "#f8fafc", verticalAlign: "top", textAlign: "center", ...sep(d) }}
-                    >
-                      <div style={{ color: "#64748b", fontSize: 12, lineHeight: 1.5, padding: "10px 8px" }}>
-                        Jour sans production
-                        <br />
-                        <span style={{ fontSize: 11 }}>pour l&apos;activer, contacter l&apos;ordo</span>
-                      </div>
-                    </td>
-                  );
-                }
-                const v = vals[key(pers.id, d.iso)] ?? "";
-                const alert = horsComp(pers.id, v);
-                // Placement force : habilitation exigee manquante ou perimee.
-                const manque = habManque(pers.id, v);
-                const over = isPoste(v) && (perDay[i].counts[v] ?? 0) > (effectif[v] ?? 0);
-                // Restriction (medicale/physique) : niveau -1 dans la matrice pour ce poste.
-                const restricted = isPoste(v) && matrice[key(pers.id, v)] === -1;
-                // Bouton de recopie aussi sur une case vide : permet de propager le
-                // « non-affecte » sur la semaine. Masque seulement si placee sur un autre quart.
-                const tpb = !!tpBlocked[key(pers.id, d.iso)];
-                const hors = !!horsEffectif[key(pers.id, d.iso)];
-                // Case bloquee : soit temps partiel (sans motif d'absence), soit
-                // hors effectif ce jour-la. Quand le TP coexiste avec un motif
-                // d'absence, le motif prime : la case reste modifiable et affiche
-                // la couleur du motif au lieu de « TP ».
-                const tpAbsence = tpb && !!motifColor[v];
-                // TP materialise (jeton "TP") : vraie ligne, deplacable, effacable.
-                const vTP = v === "TP";
-                const bloque = (tpb && !tpAbsence) || hors;
-                const showFill = pers.editable && !otherByCell[key(pers.id, d.iso)] && !bloque && !vTP;
-                const other = v === "" ? otherByCell[key(pers.id, d.iso)] : undefined;
-                // Glisser-deposer. Source draggable : poste, NT ou TP reel (jamais
-                // une absence, jamais le vide). Cible d'un depot : case VIDE,
-                // editable, non bloquee (ni hors-effectif, ni TP calcule, ni « autre
-                // quart »). On ne lache jamais sur une case occupee.
-                const kCell = key(pers.id, d.iso);
-                const dragSource = pers.editable && (isPoste(v) || v === "X" || vTP);
-                const dropTarget = pers.editable && v === "" && !hors && !(tpb && !tpAbsence) && !other;
-                const isOver = overKey === kCell && dropTarget;
-                // Horaire spécifique + commentaire du jour (saisis via la pendule) :
-                // remontés dans le title de TOUTE la case — pas seulement de la
-                // pendule — pour qu'ils s'affichent au survol de la cellule entière.
-                const exCell = exc[excKey(pers.id, d.iso)];
-                const excInfo = exCell
-                  ? [
-                      exCell.debut || exCell.fin ? `Horaire : ${excLabel(exCell)}` : "",
-                      exCell.motif ? `Commentaire : ${exCell.motif}` : "",
-                    ].filter(Boolean)
-                  : [];
-                // Surlignage : cette case correspond-elle au type d'anomalie selectionne ce jour-la ?
-                const hiActive = highlight?.iso === d.iso;
-                const matchHi = !!hiActive && ((highlight!.type === "hc" && alert) || (highlight!.type === "over" && over));
-                const dimHi = !!hiActive && !matchHi;
-                return (
-                  <td
-                    key={d.iso}
-                    className={`pcell${alert ? " hc" : ""}${over ? " over" : ""}${manque.length ? " forced" : ""}${matchHi ? " hi" : ""}${dimHi ? " dim" : ""}`}
-                    style={{
-                      textAlign: "center",
-                      // Priorite des fonds, alignee sur le Placement :
-                      // hors effectif > temps partiel > motif d'absence >
-                      // rouge (competence ou habilitation) > jaune (sureffectif)
-                      // > aujourd'hui.
-                      background: hors
-                        ? "#f1f5f9"
-                        : vTP
-                        ? "#e0e7ff"
-                        : tpb && !tpAbsence
-                        ? "#e0e7ff"
-                        : motifColor[v]
-                        ? motifColor[v]
-                        : alert || manque.length
-                        ? "#fef2f2"
-                        : over
-                        ? "#fffbeb"
-                        : isToday(d)
-                        ? "#eff6ff"
-                        : undefined,
-                      padding: 0,
-                      position: "relative",
-                      outline: isOver ? "2px dashed #4f46e5" : undefined,
-                      outlineOffset: isOver ? -2 : undefined,
-                      ...sep(d),
-                    }}
-                    title={[
-                      hors ? "Hors effectif ce jour-là (avant arrivée, après départ ou entre deux contrats)" : "",
-                      restricted ? "⛔ Restriction médicale/physique sur ce poste" : alert ? "Hors compétence" : "",
-                      manque.length ? `⚠ Placement forcé — habilitation manquante : ${manque.join(", ")}` : "",
-                      over ? `Sur-effectif (${perDay[i].counts[v]}/${effectif[v] ?? 0})` : "",
-                      ...excInfo,
-                    ].filter(Boolean).join(" · ") || undefined}
-                    onDragOver={dropTarget ? (e) => { e.preventDefault(); if (overKey !== kCell) setOverKey(kCell); } : undefined}
-                    onDragLeave={dropTarget ? () => setOverKey((o) => (o === kCell ? null : o)) : undefined}
-                    onDrop={dropTarget ? (e) => {
-                      e.preventDefault();
-                      const from = e.dataTransfer.getData("text/plain") || dragKey;
-                      setOverKey(null);
-                      setDragKey(null);
-                      if (from) { const [fp, fi] = from.split(":"); if (fp && fi) moveCell(fp, fi, pers.id, d.iso); }
-                    } : undefined}
-                  >
-                    {hors ? (
-                      // Case grisee, aucun label : la personne n'est pas dans
-                      // l'effectif ce jour-la. Distincte du TP (fond violet).
-                      <div className="cell-other" style={{ color: "#94a3b8" }} aria-hidden="true">·</div>
-                    ) : tpb && !tpAbsence && !vTP ? (
-                      // TP CALCULÉ (virtuel) : aperçu non déplaçable. Un TP RÉEL
-                      // (vTP) passe par le bouton ci-dessous, donc reste draggable.
-                      <div className="cell-other" style={{ color: "#3730a3" }} title="Temps partiel — journée entière non travaillée">TP</div>
-                    ) : other ? (
-                      <div
-                        className="cell-other"
-                        title={
-                          `Déjà placé sur le quart ${quartLabel[other] ?? other} ce jour-là` +
-                          (otherPosteByCell[key(pers.id, d.iso)]
-                            ? `\nPoste : ${otherPosteByCell[key(pers.id, d.iso)]}`
-                            : "")
-                        }
-                      >
-                        &rarr; {quartLabel[other] ?? other}
-                      </div>
-                    ) : (
-                    <button
-                      type="button"
-                      className={`cellbtn${isPoste(v) ? " poste" : ""}${selected === key(pers.id, d.iso) ? " sel" : ""}`}
-                      disabled={!pers.editable}
-                      draggable={dragSource}
-                      onDragStart={dragSource ? (e) => {
-                        e.dataTransfer.setData("text/plain", kCell);
-                        e.dataTransfer.effectAllowed = "move";
-                        setDragKey(kCell);
-                      } : undefined}
-                      onDragEnd={() => { setDragKey(null); setOverKey(null); }}
-                      title={excInfo.length ? excInfo.join(" · ") : undefined}
-                      onClick={(e) => {
-                        const k = key(pers.id, d.iso);
-                        setSelected(k);
-                        if (pick && pick.pid === pers.id && pick.iso === d.iso) { setPick(null); return; }
-                        setShowAllPostes(false); // chaque ouverture repart sur « compétents »
-                        const r = e.currentTarget.getBoundingClientRect();
-                        setPick({ pid: pers.id, iso: d.iso, eq: pers.equipe_id, left: r.left, right: r.right, top: r.top, bottom: r.bottom });
-                      }}
-                    >
-                      {valueLabel(v)}
-                    </button>
-                    )}
-                    {showFill && (
-                      <button
-                        type="button"
-                        className="fillw"
-                        title={dowMon(d.iso) < 4 ? "Recopier jusqu'à la fin de cette semaine" : "Recopier sur la semaine suivante"}
-                        onClick={() => fillWeek(pers, i)}
-                      >
-                        &raquo;
-                      </button>
-                    )}
-                    {restricted && (
-                      <span
-                        title="Restriction médicale/physique sur ce poste"
-                        style={{ position: "absolute", left: 1, top: 0, fontSize: 11, fontWeight: 800, color: "#dc2626", lineHeight: 1, pointerEvents: "none" }}
-                      >
-                        ✕
-                      </span>
-                    )}
-                    {(() => {
-                      const ek = excKey(pers.id, d.iso);
-                      const e = exc[ek];
-                      // Editable si la case est affectee, ou si une exception subsiste (pour
-                      // pouvoir la modifier / l'effacer meme apres suppression de l'affectation).
-                      const canEditExc = pers.editable && (isPoste(v) || isFormation(v) || !!e);
-                      if (!e && !canEditExc) return null;
-                      // Horaire par defaut (standard du poste pour ce quart / jour de semaine).
-                      const std = isPoste(v) ? horaireStd[`${v}:${dowMon(d.iso)}`] : undefined;
-                      const stdTxt = std && (std.debut || std.fin) ? `${std.debut || "?"}-${std.fin || "?"}` : "";
-                      return (
-                        <>
-                          {canEditExc ? (
-                            <button
-                              type="button"
-                              className={`horx${e ? " has" : ""}`}
-                              title={e ? ([(e.debut || e.fin) ? `Horaire : ${excLabel(e)}` : "", e.motif ? `Commentaire : ${e.motif}` : ""].filter(Boolean).join(" · ") || "Horaire spécifique") : stdTxt ? `Horaire par défaut : ${stdTxt} · Définir un horaire spécifique` : "Définir un horaire spécifique"}
-                              onClick={() => openExc(pers.id, d.iso)}
-                            >
-                              🕐
-                            </button>
-                          ) : (
-                            e && <span className="horx has" title={`Horaire spécifique : ${excLabel(e)}`}>🕐</span>
-                          )}
-                          {excAt === ek && (
-                            <div className="exc-pop" onClick={(ev) => ev.stopPropagation()}>
-                              {/* Croix de fermeture en haut à droite de la fenêtre. */}
-                              <button
-                                type="button"
-                                onClick={() => setExcAt(null)}
-                                title="Fermer"
-                                aria-label="Fermer"
-                                style={{ position: "absolute", top: 4, right: 4, width: 18, height: 18, margin: 0, padding: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", lineHeight: 1, fontSize: 13, border: "none", background: "transparent", color: "var(--muted)", cursor: "pointer" }}
-                              >
-                                ✕
-                              </button>
-                              <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 4, paddingRight: 16 }}>Horaire spécifique</div>
-                              {stdTxt && (
-                                <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>Par défaut : {stdTxt}</div>
-                              )}
-                              {/* Deux colonnes étiquetées : à 168 px, les deux
-                                  champs `time` se chevauchaient et le champ Fin,
-                                  rogné, restait souvent incomplet (heure sans
-                                  minutes) — donc vide, donc non enregistré. */}
-                              <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
-                                <label style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2, fontSize: 10, color: "var(--muted)" }}>
-                                  Début
-                                  <input type="time" value={draft.debut} onChange={(ev) => setDraft((s) => ({ ...s, debut: ev.target.value }))} style={{ fontSize: 12, padding: "2px 3px", width: "100%" }} />
-                                </label>
-                                <label style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2, fontSize: 10, color: "var(--muted)" }}>
-                                  Fin
-                                  <input type="time" value={draft.fin} onChange={(ev) => setDraft((s) => ({ ...s, fin: ev.target.value }))} style={{ fontSize: 12, padding: "2px 3px", width: "100%" }} />
-                                </label>
-                              </div>
-                              <input
-                                placeholder="commentaire (affiché à la TV)"
-                                value={draft.motif}
-                                onChange={(ev) => setDraft((s) => ({ ...s, motif: ev.target.value }))}
-                                style={{ width: "100%", fontSize: 12, padding: "2px 3px", marginBottom: 6 }}
-                              />
-                              <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
-                                <button type="button" className="btn-sm" style={{ padding: "2px 8px" }} onClick={() => saveExc(pers.id, d.iso)}>OK</button>
-                                {e && (
-                                  <button type="button" className="btn-sm btn-ghost" style={{ padding: "2px 8px" }} onClick={() => clearExc(pers.id, d.iso)}>Effacer</button>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                        </>
-                      );
-                    })()}
-                  </td>
-                );
-              })}
-            </tr>
+            <LignePlanning
+              key={pers.id}
+              pers={pers}
+              days={days}
+              fusion={rowIndex === 0 ? shown.length : 0}
+              valsSig={days.map((d) => vals[key(pers.id, d.iso)] ?? "").join("|")}
+              overSig={days
+                .map((d, i) => {
+                  const v = vals[key(pers.id, d.iso)] ?? "";
+                  const n = isPoste(v) ? perDay[i].counts[v] ?? 0 : 0;
+                  return isPoste(v) && n > (effectif[v] ?? 0) ? String(n) : "";
+                })
+                .join("|")}
+              selIso={isoDeLaLigne(selected, pers.id)}
+              overIso={isoDeLaLigne(overKey, pers.id)}
+              excAtIso={isoDeLaLigne(excAt, pers.id)}
+              draft={isoDeLaLigne(excAt, pers.id) ? draft : null}
+              highlight={highlight}
+              exc={exc}
+              todayIso={todayIso}
+              ctx={ctx}
+              actions={actionsLigne}
+            />
           ))}
           {shown.length === 0 && (
             <tr>
