@@ -4,7 +4,7 @@ import { getCurrentProfile } from "@/lib/current-user";
 import { canWritePlacementData } from "@/lib/permissions";
 import { getQuartsC } from "@/lib/refdata";
 import { quartOuDefaut } from "@/lib/quarts";
-import { habManquantes, premierNumeroLibre } from "@/lib/placement-helpers";
+import { habManquantes, premierNumeroLibre, posteNeTournePas, MSG_HORS_CYCLE } from "@/lib/placement-helpers";
 import { verifierIdSite } from "@/lib/verifier-site";
 
 // POST /api/placement/cell { personne_id, jour, equipe_id, value, forcer }
@@ -86,7 +86,8 @@ export async function POST(req: NextRequest) {
   // habilitations) sont toutes bornees par site_id : rien ne fuit d'un autre site
   // meme si un identifiant est refuse ensuite.
   const siteId = profile.siteId;
-  const [errPers, errPo, errEq, errMo, numeroLibre, existingRes, manquantes] = await Promise.all([
+  const quartVise = poste_id ? quartOuDefaut(quart_code, quarts) : null;
+  const [errPers, errPo, errEq, errMo, numeroLibre, existingRes, manquantes, cycleRes] = await Promise.all([
     verifierIdSite(supabase, "personne", personne_id, siteId, "Personne"),
     poste_id ? verifierIdSite(supabase, "poste", poste_id, siteId, "Poste") : null,
     body?.equipe_id ? verifierIdSite(supabase, "equipe", body.equipe_id, siteId, "Equipe") : null,
@@ -102,11 +103,17 @@ export async function POST(req: NextRequest) {
           .maybeSingle<{ poste_id: string | null; quart_code: string | null }>()
       : null,
     poste_id ? habManquantes(supabase, personne_id, poste_id, siteId) : ([] as string[]),
+    poste_id && quartVise ? posteNeTournePas(supabase, poste_id, quartVise, siteId) : false,
   ]);
   if (errPers) return NextResponse.json({ error: errPers }, { status: 400 });
   if (errPo) return NextResponse.json({ error: errPo }, { status: 400 });
   if (errEq) return NextResponse.json({ error: errEq }, { status: 400 });
   if (errMo) return NextResponse.json({ error: errMo }, { status: 400 });
+  // Cycle du poste (2026-09-28) : un poste marqué « – » sur ce quart au Référentiel
+  // n'existe pas sur ce quart. L'écran ne le propose pas ; le serveur le refuse
+  // aussi — sinon la personne devient invisible au Placement (poste non dessiné).
+  // 422 et non 409 : au Placement, 409 signifie « déjà placé sur un autre quart ».
+  if (cycleRes) return NextResponse.json({ error: MSG_HORS_CYCLE }, { status: 422 });
   const numero_rotation = numeroAuto ? numeroLibre : numeroSaisi;
 
   // Une personne placee sur un poste un quart ne peut pas etre placee sur un

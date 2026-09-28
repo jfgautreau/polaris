@@ -59,3 +59,33 @@ export const effectifSurQuart = (pq: PqMap, posteId: string, quart: string, post
   const e = etatQuart(pq, posteId, quart, posteEff);
   return e.tourne ? e.effectif : 0;
 };
+
+// Quarts sur lesquels le poste tourne (« cycle » du poste), dans l'ordre donné.
+export const quartsDuPoste = (pq: PqMap, posteId: string, quartCodes: string[]): string[] =>
+  quartCodes.filter((q) => tourneSurQuart(pq, posteId, q));
+
+// Quart d'une affectation AUTOMATIQUE sur un poste fixe (pré-remplissage), 2026-09-28.
+// Le CYCLE DU POSTE décide ; l'équipe ne sert qu'à choisir PARMI ses quarts :
+//   1. le quart de l'équipe (quart fixe, sinon rotation ; défaut du site sans
+//      équipe) fait partie du cycle → ce quart (cas normal) ;
+//   2. le poste ne tourne QU'EN JOURNÉE → Journée, quelle que soit l'équipe
+//      (ex. RA Fab tenu par un titulaire d'équipe tournante) ;
+//   3. sinon → PAS de placement, avec la raison : le Référentiel ou le choix du
+//      titulaire est incohérent, on ne devine pas (ex. titulaire d'Après-midi
+//      fixe sur un poste du Matin seul).
+export type ChoixQuartFixe = { quart: string } | { quart: null; raison: string };
+export function quartPourPosteFixe(opts: {
+  quartsPoste: string[];
+  quartEquipe: string;
+  quartJournee: string | null;
+  libelle: (code: string) => string;
+}): ChoixQuartFixe {
+  const { quartsPoste, quartEquipe, quartJournee, libelle } = opts;
+  if (!quartsPoste.length) return { quart: null, raison: "le poste ne tourne sur aucun quart" };
+  if (quartsPoste.includes(quartEquipe)) return { quart: quartEquipe };
+  if (quartJournee && quartsPoste.length === 1 && quartsPoste[0] === quartJournee) return { quart: quartJournee };
+  return {
+    quart: null,
+    raison: `le poste ne tourne pas en ${libelle(quartEquipe)} (quart de l'équipe) — cycle du poste : ${quartsPoste.map(libelle).join(", ")}`,
+  };
+}

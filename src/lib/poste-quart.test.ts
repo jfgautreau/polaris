@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { etatQuart, tourneSurQuart, effectifSurQuart, type PqMap } from "@/lib/poste-quart";
+import { etatQuart, tourneSurQuart, effectifSurQuart, quartsDuPoste, quartPourPosteFixe, type PqMap } from "@/lib/poste-quart";
+import { quartJournee } from "@/lib/quarts";
 
 // Trois états d'une case (poste × quart) :
 //   aucune ligne = repli sur l'effectif par défaut du poste ;
@@ -39,5 +40,68 @@ describe("poste-quart — trois états", () => {
 
   it("ligne active sans effectif renseigné = repli sur le défaut du poste", () => {
     expect(effectifSurQuart(pq, "p3", "matin", 4)).toBe(4);
+  });
+});
+
+// ── Pré-remplissage des postes fixes : le cycle du poste décide (2026-09-28) ──
+describe("quartsDuPoste / quartPourPosteFixe", () => {
+  const LIB: Record<string, string> = { journee: "Journée", matin: "Matin", apres_midi: "Après-midi", nuit: "Nuit" };
+  const libelle = (c: string) => LIB[c] ?? c;
+  const codes = ["journee", "matin", "apres_midi", "nuit"];
+  const choix = (quartsPoste: string[], quartEquipe: string, quartJournee: string | null = "journee") =>
+    quartPourPosteFixe({ quartsPoste, quartEquipe, quartJournee, libelle });
+
+  it("cycle du poste : aucune ligne = tourne, « – » = ne tourne pas", () => {
+    const pq = new Map([
+      ["RAFAB:matin", { actif: false, effectif: null }],
+      ["RAFAB:apres_midi", { actif: false, effectif: null }],
+      ["RAFAB:nuit", { actif: false, effectif: null }],
+      ["RAFAB:journee", { actif: true, effectif: 1 }],
+    ]);
+    expect(quartsDuPoste(pq, "RAFAB", codes)).toEqual(["journee"]);
+    expect(quartsDuPoste(new Map(), "NEUF", codes)).toEqual(codes);
+  });
+
+  it("le quart de l'équipe fait partie du cycle → ce quart (rotation suivie)", () => {
+    expect(choix(["matin", "apres_midi"], "apres_midi")).toEqual({ quart: "apres_midi" });
+  });
+
+  it("poste de Journée seule → Journée, même pour une équipe tournante (RA Fab, équipe A)", () => {
+    expect(choix(["journee"], "matin")).toEqual({ quart: "journee" });
+    expect(choix(["journee"], "apres_midi")).toEqual({ quart: "journee" });
+  });
+
+  it("incohérent → pas de placement, raison nommée (Aide Broyeur Matin seul, titulaire Fixe AM)", () => {
+    const r = choix(["matin"], "apres_midi");
+    expect(r.quart).toBeNull();
+    expect("raison" in r && r.raison).toContain("Après-midi");
+    expect("raison" in r && r.raison).toContain("Matin");
+  });
+
+  it("équipe de Nuit sur un poste qui ne tourne pas la nuit → pas de placement (AT1)", () => {
+    expect(choix(["journee", "matin", "apres_midi"], "nuit").quart).toBeNull();
+  });
+
+  it("poste Matin seul tenu par l'équipe Journée → pas de placement (on ne devine pas)", () => {
+    expect(choix(["matin"], "journee").quart).toBeNull();
+  });
+
+  it("poste qui ne tourne sur aucun quart → pas de placement", () => {
+    expect(choix([], "matin").quart).toBeNull();
+  });
+
+  it("site sans quart Journée : la règle 2 ne s'applique pas", () => {
+    expect(choix(["matin"], "apres_midi", null).quart).toBeNull();
+  });
+
+  it("quartJournee : quart sans créneau au plus petit ordre, jamais le code", () => {
+    // La Vraie Croix : la pleine journée porte le code `matin` (libellé « Jour »).
+    expect(quartJournee([
+      { code: "apres_midi", ordre: 1, creneau: "matin" },
+      { code: "matin", ordre: 0, creneau: null },
+      { code: "journee", ordre: 2, creneau: "aprem" },
+      { code: "nuit", ordre: 3, creneau: null },
+    ])).toBe("matin");
+    expect(quartJournee([{ code: "matin", ordre: 0, creneau: "matin" }])).toBeNull();
   });
 });

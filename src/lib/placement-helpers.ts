@@ -87,3 +87,25 @@ export async function premierNumeroLibre(
   );
   return numeros.find((n) => !pris.has(n)) ?? null;
 }
+
+// Cycle du poste (2026-09-28) : vrai si le poste est marqué « – » (ne tourne
+// pas) sur ce quart au Référentiel. Aucune ligne poste_quart = le poste tourne
+// (repli historique, cf. src/lib/poste-quart.ts). Partagé par les routes
+// d'écriture de placement (cell, move) — la copie filtre en lot.
+export async function posteNeTournePas(
+  supabase: SupabaseClient,
+  poste_id: string,
+  quart: string,
+  siteId: string,
+): Promise<boolean> {
+  const { data } = await supabase
+    .from("poste_quart")
+    .select("actif")
+    .eq("poste_id", poste_id)
+    .eq("quart_code", quart)
+    .eq("site_id", siteId)
+    .maybeSingle<{ actif: boolean }>();
+  return data?.actif === false;
+}
+export const MSG_HORS_CYCLE =
+  "Ce poste ne tourne pas sur ce quart (Référentiel) : affectation refusée. Choisissez le quart où le poste tourne, ou modifiez son cycle au Référentiel.";

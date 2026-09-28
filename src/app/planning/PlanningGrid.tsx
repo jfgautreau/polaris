@@ -61,7 +61,15 @@ async function envoyerDeplacement(body: Record<string, unknown>): Promise<Result
     return { ok: false, manquantes: null };
   }
 }
-type ReponsePrefill = { crees?: number; tp?: number; fixe?: number; site?: string; marqueur?: string; error?: string };
+type NonPlace = { personne: string; poste: string; semaine: string; raison: string };
+type ReponsePrefill = { crees?: number; tp?: number; fixe?: number; nonPlaces?: NonPlace[]; site?: string; marqueur?: string; error?: string };
+// Titulaires que le pré-remplissage n'a PAS placés : le cycle du poste (quarts
+// où il tourne) ne contient pas le quart de leur équipe (cf. quartPourPosteFixe).
+const texteNonPlaces = (np: NonPlace[] | undefined): string =>
+  np && np.length
+    ? "\n\nNon placé(s) — le poste ne tourne pas sur le quart de l'équipe, à placer à la main ou à corriger au Référentiel :\n" +
+      np.map((n) => `• ${n.personne} — ${n.poste} : ${n.raison}`).join("\n")
+    : "";
 // `reseau` : la requête n'a pas abouti (exception) ; sinon `ok` + corps décodé.
 async function envoyerPrefill(monday: string): Promise<{ reseau: true } | { reseau: false; ok: boolean; j: ReponsePrefill }> {
   try {
@@ -881,10 +889,12 @@ export default function PlanningGrid({
       setSaving("saved");
       setPrefillWk(null);
       // Rien créé : on explique pourquoi (souvent : cases déjà remplies).
-      window.alert(`Semaine ${label} : rien à créer (TP ${j.tp ?? 0}, postes fixes ${j.fixe ?? 0}). Cases déjà remplies non écrasées. Marqueur TP : ${j.marqueur ?? "?"}.`);
+      window.alert(`Semaine ${label} : rien à créer (TP ${j.tp ?? 0}, postes fixes ${j.fixe ?? 0}). Cases déjà remplies non écrasées. Marqueur TP : ${j.marqueur ?? "?"}.${texteNonPlaces(j.nonPlaces)}`);
       setTimeout(() => setSaving("idle"), 2000);
       return; // rien à ajouter (déjà rempli) : pas besoin de recharger
     }
+    // Des titulaires non placés : on le dit AVANT de recharger la vue.
+    if (j.nonPlaces?.length) window.alert(`Semaine ${label} chargée.${texteNonPlaces(j.nonPlaces)}`);
     window.location.reload();
   }
 

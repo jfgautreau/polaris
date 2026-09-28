@@ -761,8 +761,20 @@ présent dans `.next/static/chunks/app/<écran>/page-*.js`.
   `/api/placement/prefill`, droit Planning/Placement complet) : pose d'abord les **TP**
   matérialisés (cf. migration 0064), **puis** place chaque personne à **poste fixe**
   (`personne.poste_fixe_id`) sur son poste, **pour la semaine cliquée** (lundi→vendredi,
-  une seule semaine), au **quart de son équipe** (quart fixe, sinon rotation de la semaine,
-  sinon défaut) — indépendamment du quart affiché. ⚠️ **Affectation automatique : ne demande
+  une seule semaine), indépendamment du quart affiché. ⚠️ **Le CYCLE DU POSTE décide du
+  quart** (2026-09-28, `quartPourPosteFixe` dans `src/lib/poste-quart.ts`, testé) : quart de
+  l'équipe (fixe, sinon rotation, sinon défaut) **s'il fait partie du cycle** du poste ;
+  **Journée** pour un poste de Journée seule (ex. RA Fab tenu par un titulaire d'équipe
+  tournante) ; **sinon PAS de placement**, liste `nonPlaces` renvoyée et affichée dans
+  l'alerte du bouton. Bug vécu : seul le quart de l'équipe comptait → titulaires de RA Fab
+  posés en Matin/Après-midi où le poste n'existe pas, invisibles au Placement.
+  **Garde serveur** : `/api/placement/cell` et `/move` refusent (**422**, pas 409 — au
+  Placement 409 = « autre quart ») un poste marqué « – » sur le quart (`posteNeTournePas`,
+  `placement-helpers.ts`) ; `/copy` ne recopie pas ces affectations (`horsCycle`).
+  **Placement — « placés hors plan »** (`horsPlan`, calculé par `placement/page.tsx`) : une
+  personne placée sur ce quart sur un poste qu'aucun plan ne dessine (ne tourne pas sur
+  ce quart, désactivé, fermé) n'est **jamais masquée** : en tête de liste, statut orange
+  « ⚠ poste — raison », bandeau de décompte. ⚠️ **Affectation automatique : ne demande
   pas, ne force pas** — une personne **non habilitée** pour son poste fixe **n'est pas
   placée** (contrôle groupé). `upsert ignoreDuplicates` sur `(personne, jour)` → **n'écrase
   jamais** une case remplie (absence/affectation) ; saute les jours **hors effectif** (contrat

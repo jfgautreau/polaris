@@ -62,6 +62,7 @@ export default function PlacementBoard({
   quartOuvert = true,
   siteNom = "",
   tpIds = [],
+  horsPlan = {},
   openDays = [],
   winStart,
   winEnd,
@@ -96,6 +97,9 @@ export default function PlacementBoard({
   quartOuvert?: boolean; // le quart est-il ouvert ce jour-la (Ordonnancement) ?
   siteNom?: string; // multi-tenant : nom d'usine dans le pied de page du PDF
   tpIds?: string[]; // personnes en temps partiel (indisponibles) ce jour-la
+  // Placés sur ce quart sur un poste qu'aucun plan ne dessine (ne tourne pas sur ce
+  // quart, désactivé, fermé) : personne -> { poste, libellé }. Jamais masqués.
+  horsPlan?: Record<string, { posteId: string; libelle: string }>;
   openDays?: string[]; // jours (iso) avec au moins une ligne ouverte (quart courant)
   winStart?: string; // borne basse de la fenêtre d'ouverture (calendrier)
   winEnd?: string; // borne haute
@@ -511,7 +515,7 @@ export default function PlacementBoard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ source: src, cible: dst, quart, mode }),
       });
-      const j = (await res.json().catch(() => ({}))) as { rows?: { personne_id: string; poste_id: string }[]; copied?: number; absencesConservees?: number; dejaPlacees?: number; error?: string };
+      const j = (await res.json().catch(() => ({}))) as { rows?: { personne_id: string; poste_id: string }[]; copied?: number; absencesConservees?: number; dejaPlacees?: number; horsCycle?: number; error?: string };
       if (!res.ok) throw new Error(j.error ?? "Échec de la copie.");
       setShowCopy(false);
       if (dst !== jour) {
@@ -532,7 +536,8 @@ export default function PlacementBoard({
       setMsg(
         `${j.copied ?? 0} affectation(s) copiée(s).` +
           (j.absencesConservees ? ` ${j.absencesConservees} absence(s) conservée(s).` : "") +
-          (j.dejaPlacees ? ` ${j.dejaPlacees} déjà placée(s) conservée(s).` : "")
+          (j.dejaPlacees ? ` ${j.dejaPlacees} déjà placée(s) conservée(s).` : "") +
+          (j.horsCycle ? ` ${j.horsCycle} non recopiée(s) : poste ne tournant pas sur ce quart.` : "")
       );
       setTimeout(() => {
         setSaving("idle");
@@ -636,6 +641,10 @@ export default function PlacementBoard({
   // partagé par le filtre « à placer » (les TP en sont retirés) et par la carte
   // « Temps partiel » du volet Absences (où ils apparaissent regroupés).
   const tpSetPourListe = useMemo(() => new Set(tpIds), [tpIds]);
+  // Placé hors plan : vrai tant que la personne occupe ENCORE le poste repéré par le
+  // serveur (un retrait ✕ ou un déplacement vers un poste du plan l'efface).
+  const estHorsPlan = (pid: string) => !!horsPlan[pid] && place[pid] === horsPlan[pid].posteId;
+  const nbHorsPlan = personnes.filter((p) => estHorsPlan(p.id)).length;
 
   // Liste des noms filtree + regroupee : a placer -> absents -> sur poste -> autre quart.
   // Une recherche cherche dans TOUT l'effectif : les pre-filtres equipe/atelier ne sont
@@ -643,8 +652,13 @@ export default function PlacementBoard({
   const shown = useMemo(() => {
     const q = norm(search.trim());
     const list = personnes.filter((p) => {
+      // Placé hors plan : JAMAIS masqué (ni par les pré-filtres, ni par « Masquer
+      // les placés ») — sinon la personne n'apparaît nulle part.
+      const hp = estHorsPlan(p.id);
       if (q) {
         if (!norm(`${p.nom} ${p.prenom}`).includes(q)) return false;
+      } else if (hp) {
+        return true;
       } else {
         if (!equipeOk(p)) return false;
         if (p.atelier_id && fAtelier && p.atelier_id !== fAtelier) return false;
@@ -656,10 +670,11 @@ export default function PlacementBoard({
         // Un TP DÉJÀ placé reste visible pour permettre le retrait (rank=2).
         if (tpSetPourListe.has(p.id) && !place[p.id] && !autreQuart[p.id]) return false;
       }
-      if (hidePlaced && (place[p.id] || autreQuart[p.id])) return false;
+      if (hidePlaced && (place[p.id] || autreQuart[p.id]) && !hp) return false;
       return true;
     });
     const rank = (p: Personne) => {
+      if (estHorsPlan(p.id)) return -1; // en tête : à traiter
       const v = place[p.id];
       if (v && v !== "X" && !v.startsWith("m:")) return 2; // sur poste
       if (v === "X" || v?.startsWith("m:")) return 1; // absent
@@ -667,7 +682,7 @@ export default function PlacementBoard({
       return 0; // a placer
     };
     return [...list].sort((a, b) => rank(a) - rank(b) || `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`));
-  }, [personnes, search, fEquipe, fAtelier, place, autreQuart, hidePlaced, onlyCond, condSet, tpSetPourListe]);
+  }, [personnes, search, fEquipe, fAtelier, place, autreQuart, hidePlaced, onlyCond, condSet, tpSetPourListe, horsPlan]);
 
   // Vue Absences : une carte par motif d'absence, plus « Non travaillé ».
   // Restreinte a l'atelier affiche. Les personnes dont l'atelier n'est pas
@@ -718,6 +733,7 @@ export default function PlacementBoard({
   const nbAbsents = personnes.filter((p) => inScope(p) && isAbsent(p.id)).length;
 
   const statutOf = (p: Personne): { txt: string; color: string } => {
+    if (estHorsPlan(p.id)) return { txt: `⚠ ${horsPlan[p.id].libelle}`, color: "#b45309" };
     const v = place[p.id];
     if (v && v !== "X" && !v.startsWith("m:")) return { txt: `→ ${posteNom.get(v) ?? "poste"}`, color: "#0d9488" };
     if (v?.startsWith("m:")) return { txt: motifById.get(v.slice(2))?.code ?? "absent", color: "#b45309" };
@@ -1113,6 +1129,15 @@ export default function PlacementBoard({
               )}
             </div>
           </div>
+          {nbHorsPlan > 0 && (
+            <div
+              role="status"
+              style={{ margin: "6px 0", padding: "6px 8px", borderRadius: 6, background: "#fff7ed", border: "1px solid #fdba74", color: "#9a3412", fontSize: 12, fontWeight: 600 }}
+              title="Le poste occupé n'apparaît dans aucun plan : il ne tourne pas sur ce quart (Référentiel), ou il est désactivé / fermé. Retirez la personne (✕) ou glissez-la sur un poste du plan."
+            >
+              ⚠ {nbHorsPlan} personne{nbHorsPlan > 1 ? "s" : ""} placée{nbHorsPlan > 1 ? "s" : ""} sur un poste absent du plan — en tête de liste
+            </div>
+          )}
           <div className={s.namesList}>
             {shown.map((p) => {
               const st = statutOf(p);

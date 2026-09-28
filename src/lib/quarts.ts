@@ -75,3 +75,11 @@ export function quartOuDefaut(code: string | null | undefined, quarts: QuartRef[
 export function memeQuart(code: string | null | undefined, quart: string, quarts: QuartRef[]): boolean {
   return quartOuDefaut(code, quarts) === quart;
 }
+
+// Quart « Journée » (pleine journée) du site : le quart SANS créneau au plus
+// petit `ordre` — même détection que l'Ordonnancement (activation dérivée), sans
+// code en dur. `null` si le site n'en a pas. ⚠️ Ne jamais se fier au code : à La
+// Vraie Croix, la pleine journée porte le code `matin` (libellé « Jour »).
+export function quartJournee(quarts: QuartRef[]): string | null {
+  return [...quarts].filter((q) => !q.creneau).sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0))[0]?.code ?? null;
+}

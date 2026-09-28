@@ -3,7 +3,8 @@ import { getAdminClient } from "@/lib/supabase-server";
 import { getCurrentProfile } from "@/lib/current-user";
 import { canWritePlacementData } from "@/lib/permissions";
 import { getQuartsC, getRotationRefsC } from "@/lib/refdata";
-import { quartParDefaut } from "@/lib/quarts";
+import { quartParDefaut, quartJournee } from "@/lib/quarts";
+import { quartsDuPoste, quartPourPosteFixe, type PqMap } from "@/lib/poste-quart";
 import { rotationForWeek } from "@/lib/rotation";
 import { parseMonday, weekDays, dowMon } from "@/lib/week";
 import { contratCouvreLe, type Periode } from "@/lib/personne-statut";
@@ -21,7 +22,13 @@ import { addMonthsIso, habValable } from "@/lib/habilitations";
 //      calculé (src/app/planning/page.tsx) : « TP » = journée entière off OU
 //      équipe, cette semaine, sur le créneau que la personne ne travaille pas.
 //   2. POSTES FIXES : place chaque personne à poste fixe (personne.poste_fixe_id)
-//      sur son poste, jours ouvrés lundi→vendredi, au quart de son équipe.
+//      sur son poste, jours ouvrés lundi→vendredi. ⚠️ Le CYCLE DU POSTE décide du
+//      quart (2026-09-28, cf. quartPourPosteFixe) : quart de l'équipe s'il en fait
+//      partie ; Journée pour un poste de Journée seule ; sinon la personne n'est
+//      PAS placée et la réponse le signale (`nonPlaces`). Avant, seul le quart de
+//      l'équipe comptait : un titulaire de RA Fab (poste de Journée) en équipe
+//      tournante était posé en Matin / Après-midi, où le poste n'existe pas —
+//      invisible au Placement.
 //
 // Les deux passes insèrent en `ignoreDuplicates` (onConflict personne,jour) :
 // jamais d'écrasement. Faire le TP D'ABORD garantit qu'un jour de TP d'une
@@ -47,6 +54,9 @@ export async function POST(req: NextRequest) {
 
   const quarts = await getQuartsC();
   const quartDefaut = quartParDefaut(quarts);
+  const codeJournee = quartJournee(quarts);
+  const quartCodes = quarts.map((q) => q.code);
+  const libelleQuart = (code: string) => quarts.find((q) => q.code === code)?.libelle ?? code;
   const rotRefs = await getRotationRefsC();
   const rotByMonday = new Map(mondays.map((m) => [m, rotationForWeek(rotRefs, m)]));
 
@@ -152,12 +162,26 @@ export async function POST(req: NextRequest) {
   // ---------- Passe 2 : POSTES FIXES (personnes + poste actif) ----------
   const { data: persFixe } = await supabase
     .from("personne")
-    .select("id, equipe_id, poste_fixe_id, poste:poste_fixe_id(actif)")
+    .select("id, nom, prenom, equipe_id, poste_fixe_id, poste:poste_fixe_id(actif, nom)")
     .eq("site_id", siteId)
     .not("poste_fixe_id", "is", null)
     .neq("statut", "PARTI")
-    .returns<{ id: string; equipe_id: string | null; poste_fixe_id: string; poste: { actif: boolean } | null }[]>();
+    .returns<{ id: string; nom: string; prenom: string; equipe_id: string | null; poste_fixe_id: string; poste: { actif: boolean; nom: string } | null }[]>();
   const cibles = (persFixe ?? []).filter((p) => p.poste?.actif !== false);
+
+  // Cycle des postes fixes (quarts où ils tournent), borné au site.
+  const pqFixe: PqMap = new Map();
+  const idsPostesFixes = [...new Set(cibles.map((p) => p.poste_fixe_id))];
+  if (idsPostesFixes.length) {
+    const { data: pqD, error: pqErr } = await supabase
+      .from("poste_quart")
+      .select("poste_id, quart_code, actif")
+      .eq("site_id", siteId)
+      .in("poste_id", idsPostesFixes)
+      .returns<{ poste_id: string; quart_code: string; actif: boolean }[]>();
+    if (pqErr) return NextResponse.json({ error: `poste_quart: ${pqErr.message}` }, { status: 500 });
+    for (const r of pqD ?? []) pqFixe.set(`${r.poste_id}:${r.quart_code}`, { actif: r.actif, effectif: null });
+  }
 
   // Contrats de toutes les personnes concernées (TP + postes fixes) : ne pas
   // placer hors effectif (avant l'arrivée, dans un trou, après le départ).
@@ -263,11 +287,24 @@ export async function POST(req: NextRequest) {
 
   // Construire les lignes postes fixes.
   const posteRows: Record<string, unknown>[] = [];
+  // Titulaires NON placés faute de quart compatible avec le cycle du poste : une
+  // entrée par personne et par semaine, renvoyée au client pour être signalée.
+  const nonPlaces: { personne: string; poste: string; semaine: string; raison: string }[] = [];
   for (const sem of semaines) {
     for (const p of cibles) {
       // Non habilité(e) pour son poste fixe : on ne le/la place pas (aucun forçage).
       if (!habilitePourFixe(p.id, p.poste_fixe_id)) continue;
-      const q = quartDe(p.equipe_id, sem.monday);
+      const choix = quartPourPosteFixe({
+        quartsPoste: quartsDuPoste(pqFixe, p.poste_fixe_id, quartCodes),
+        quartEquipe: quartDe(p.equipe_id, sem.monday),
+        quartJournee: codeJournee,
+        libelle: libelleQuart,
+      });
+      if (choix.quart === null) {
+        nonPlaces.push({ personne: `${p.nom} ${p.prenom}`, poste: p.poste?.nom ?? "?", semaine: sem.monday, raison: choix.raison });
+        continue;
+      }
+      const q = choix.quart;
       for (const iso of sem.isosOuvres) {
         if (occ.has(`${p.id}:${iso}`)) continue;
         if (!dansEffectif(p.id, iso)) continue;
@@ -321,6 +358,7 @@ export async function POST(req: NextRequest) {
     crees: rows.length,
     tp: tpRows.length,
     fixe: posteRows.length,
+    nonPlaces,
     site: siteId,
     marqueur: mErr ? `ignoré (${mErr.message})` : "posé",
   });

@@ -68,11 +68,31 @@ export async function POST(req: NextRequest) {
   if (e0) return NextResponse.json({ error: e0.message }, { status: 403 });
   for (const r of cbl ?? []) (r.poste_id ? placees : protegees).add(r.personne_id);
 
+  // Cycle des postes (2026-09-28) : une affectation source sur un poste marqué
+  // « – » pour ce quart (ne tourne pas) n'est PAS recopiée — sinon la copie
+  // propagerait une erreur invisible au Placement de jour en jour.
+  const postesSource = [...new Set((src ?? []).map((r) => r.poste_id))];
+  const horsCycleIds = new Set<string>();
+  if (postesSource.length) {
+    const { data: pqD, error: ePq } = await supabase
+      .from("poste_quart")
+      .select("poste_id")
+      .eq("site_id", profile.siteId)
+      .eq("quart_code", quart)
+      .eq("actif", false)
+      .in("poste_id", postesSource)
+      .returns<{ poste_id: string }[]>();
+    if (ePq) return NextResponse.json({ error: ePq.message }, { status: 403 });
+    for (const r of pqD ?? []) horsCycleIds.add(r.poste_id);
+  }
+
   let absencesConservees = 0;
   let dejaPlacees = 0;
+  let horsCycle = 0;
   const rows = (src ?? [])
     .filter((r) => memeQuart(r.quart_code, quart, quarts))
     .filter((r) => {
+      if (horsCycleIds.has(r.poste_id)) { horsCycle++; return false; }
       if (protegees.has(r.personne_id)) { absencesConservees++; return false; }
       if (completer && placees.has(r.personne_id)) { dejaPlacees++; return false; }
       return true;
@@ -90,7 +110,7 @@ export async function POST(req: NextRequest) {
       site_id: profile.siteId,
     }));
 
-  if (!rows.length) return NextResponse.json({ ok: true, copied: 0, absencesConservees, dejaPlacees });
+  if (!rows.length) return NextResponse.json({ ok: true, copied: 0, absencesConservees, dejaPlacees, horsCycle });
 
   const { error: e2 } = await supabase.from("placement").upsert(rows, { onConflict: "personne_id,jour" });
   if (e2) return NextResponse.json({ error: e2.message }, { status: 403 });
@@ -99,6 +119,7 @@ export async function POST(req: NextRequest) {
     copied: rows.length,
     absencesConservees,
     dejaPlacees,
+    horsCycle,
     rows: rows.map((r) => ({ personne_id: r.personne_id, poste_id: r.poste_id })),
   });
 }

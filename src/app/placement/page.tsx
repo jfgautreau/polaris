@@ -327,6 +327,38 @@ export default async function PlacementPage({
     } else if (r.poste_id) autreQuart[r.personne_id] = quartOuDefaut(r.quart_code, quarts);
   }
 
+  // Placés « HORS PLAN » (2026-09-28) : personne placée sur ce quart sur un poste
+  // qu'AUCUN plan ne peut dessiner — le poste ne tourne pas sur ce quart (« – » au
+  // Référentiel), ou le poste / sa ligne est désactivé(e) ou fermé(e) à la date.
+  // Sans ce repérage, ces personnes étaient INVISIBLES : poste non dessiné, et nom
+  // retiré de la liste par « Masquer les placés ». Le poste d'un AUTRE service
+  // n'est pas concerné : il est dessiné dans le plan de ce service.
+  const horsPlan: Record<string, { posteId: string; libelle: string }> = {};
+  {
+    const placesQuart = (plD ?? []).filter((r) => r.poste_id && memeQuart(r.quart_code, quart, quarts));
+    const idsPostes = [...new Set(placesQuart.map((r) => r.poste_id as string))];
+    if (idsPostes.length) {
+      const { data: postesD } = await supabase
+        .from("poste")
+        .select("id, nom, actif, ligne_id, ligne:ligne_id(actif)")
+        .in("id", idsPostes)
+        .returns<{ id: string; nom: string; actif: boolean; ligne_id: string; ligne: { actif: boolean } | null }[]>();
+      const posteInfo = new Map((postesD ?? []).map((p) => [p.id, p]));
+      for (const r of placesQuart) {
+        const p = posteInfo.get(r.poste_id as string);
+        if (!p) continue;
+        const raison = !tourneSurQuart(pq, p.id, quart)
+          ? "ne tourne pas sur ce quart"
+          : !p.actif || p.ligne?.actif === false
+            ? "poste désactivé"
+            : !actifLe(posteVal.get(p.id), todayIsoRef) || !actifLe(ligneVal.get(p.ligne_id), todayIsoRef)
+              ? "poste fermé à cette date"
+              : null;
+        if (raison) horsPlan[r.personne_id] = { posteId: p.id, libelle: `${p.nom} — ${raison}` };
+      }
+    }
+  }
+
   // Commentaires du jour (horaire_exception.motif, saisis au Planning via la
   // petite pendule) : affichés à côté du nom dans les PDF du Placement. Bornés
   // à UN jour → petite lecture, pas de fetchAll ; la table est site-scopée (RLS
@@ -448,6 +480,7 @@ export default async function PlacementPage({
         personnes={persos}
         placeInit={placeInit}
         autreQuart={autreQuart}
+        horsPlan={horsPlan}
         matrice={matrice}
         motifs={motifs.map((m) => ({ id: m.id, code: m.code_court, libelle: m.libelle, couleur: m.couleur }))}
         equipesParQuart={parQuart}

@@ -3,7 +3,8 @@ import { getServerClient, getAdminClient } from "@/lib/supabase-server";
 import { getCurrentProfile } from "@/lib/current-user";
 import { canWritePlacementData } from "@/lib/permissions";
 import { getQuartsC } from "@/lib/refdata";
-import { habManquantes, premierNumeroLibre } from "@/lib/placement-helpers";
+import { habManquantes, premierNumeroLibre, posteNeTournePas, MSG_HORS_CYCLE } from "@/lib/placement-helpers";
+import { quartOuDefaut } from "@/lib/quarts";
 
 // POST /api/placement/move
 //   { from:{personne_id, jour}, to:{personne_id, jour}, equipe_id, quart, forcer }
@@ -79,10 +80,13 @@ export async function POST(req: NextRequest) {
 
   // Habilitations : un poste déplacé sur une autre personne re-vérifie ses droits.
   // Numéro libre lu en même temps (perf) ; il n'est utilisé qu'après le verdict.
-  const [manquantes, numero_rotation] = await Promise.all([
+  const [manquantes, numero_rotation, horsCycle] = await Promise.all([
     poste_id ? habManquantes(supabase, toPid, poste_id, profile.siteId) : ([] as string[]),
     poste_id ? premierNumeroLibre(supabase, poste_id, toJour, quart_code, toPid, quarts, profile.siteId) : null,
+    // Cycle du poste (2026-09-28) : jamais de poste sur un quart où il ne tourne pas.
+    poste_id ? posteNeTournePas(supabase, poste_id, quartOuDefaut(quart_code, quarts), profile.siteId) : false,
   ]);
+  if (horsCycle) return NextResponse.json({ error: MSG_HORS_CYCLE }, { status: 422 });
   const forcer = body?.forcer === true;
   if (manquantes.length && !forcer) {
     return NextResponse.json({ error: "Habilitation manquante", manquantes }, { status: 428 });
