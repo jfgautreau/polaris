@@ -583,6 +583,23 @@ compteurs du bilan matrice agrégés **en une passe** (`useMemo`, pas un balayag
   100dvh) portent l'en-tête dans leur colonne ; le déplacer casserait leur mise en page.
   Le préchargement + cache donne l'essentiel du gain.
 
+**Lot perf 2 (2026-09-28) — écriture et navigation :**
+- ⚠️ **`cache()` de React ne mémorise RIEN hors rendu** (routes API, parfois server
+  actions) : vérifié dans react.react-server (`if (!dispatcher) return fn.apply(...)`).
+  D'où **`parRequete(fn)`** (`src/lib/par-requete.ts`, testé) : mémo par requête HTTP clé
+  sur l'objet `cookies()` de Next (même objet pendant une requête, jamais partagé),
+  repli `cache()`. Appliqué à `getServerClient`, `getCurrentProfile`, `getCurrentSite`,
+  `getPermissions`, modules masqués. **Toute nouvelle fonction de socle appelée depuis
+  des routes doit passer par `parRequete`, pas `cache()`.**
+- Routes de saisie : contrôles de lecture lancés en `Promise.all` puis verdicts examinés
+  dans l'ordre historique (`/api/placement/cell` ≈ 13-15 allers-retours → 4-5 ;
+  `/api/placement/move`, `/api/matrice/cell`) ; `habManquantes` et `premierNumeroLibre`
+  font leurs deux lectures en parallèle.
+- `getAdminClient()` = client service_role **unique** par instance (sans session : aucun
+  mélange possible ; le périmètre reste posé par chaque requête).
+- `loading.tsx` sur Habilitations, Ordonnancement, Absences, Journal, Horaires spécifiques
+  et tout `/admin/*` (retour visuel immédiat au clic de menu).
+
 ⚠️ **Invalidation immédiate du cache refdata** : toutes les entrées portent un tag
 exporté (`ATELIERS_TAG`, `EQUIPES_TAG`, `QUARTS_TAG`, `MOTIFS_TAG`, `NIVEAUX_TAG`,
 `NB_NIVEAUX_TAG`, `SEUIL_COMPETENT_TAG`, `ROTATION_TAG`). **Toute server action ou
@@ -592,11 +609,11 @@ déroulants du planning. Sans cette invalidation, créer un atelier / une équip
 motif donne une expérience « le clic n'a rien fait » pendant une demi-minute. Cf.
 audit P2 (2026-09-10).
 
-⚠️ **Plafond connu** : `/matrice` sans filtre atelier construit **~22 000 cellules**
-(268 personnes × 82 postes), chacune un `<button>` + un `<svg>` ; le HTML dépasse 1,8 Mo
-et l'hydratation devient très lourde. Les habilitations sont dans le même ordre de grandeur
-(231 × 31). La **virtualisation** des grandes grilles est la seule sortie — c'est le
-prochain gros chantier, pas une optimisation cosmétique.
+**Grandes grilles** : Matrice et Habilitations sont **virtualisées** (lignes, via
+`usePersonGrid` / `virt`) — l'ancien plafond des ~22 000 cellules est levé. Restent NON
+virtualisés et sans mémoïsation : `PersonnelEditor` (un seul état `rows` → chaque frappe
+redessine ~270 lignes), `PlanningGrid`, `PlacementBoard`. Piste : React Compiler ou
+mémoïsation des lignes (audit perf 2026-09-28, point 3).
 
 ## Carte des fichiers
 - Socle : `src/lib/{permissions,roles,roles-server,current-user,current-site,site-modules,week,refdata,parametres,habilitations,horaires,supabase-server,fetch-all,numeros-rotation,password-link,placement-helpers,rotation,password,erreurs,absence,absences-periodes,calendrier,quarts,poste-quart,referentiel-validite,semaine-type,interim,noms,bilans-rapports,synthese-data,verifier-site}.ts`, `src/proxy.ts`.

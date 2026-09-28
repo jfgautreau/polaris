@@ -1,4 +1,4 @@
-import { cache } from "react";
+import { parRequete } from "@/lib/par-requete";
 import { getServerClient, getAdminClient } from "@/lib/supabase-server";
 
 export type CurrentProfile = {
@@ -19,7 +19,8 @@ type SiteRow = { id: string; slug: string; nom: string; statut: "actif" | "suspe
 // - `getClaims()` verifie le JWT LOCALEMENT (cles asymetriques) sans appel reseau
 //   au serveur Auth ; il retombe automatiquement sur getUser() si le projet est
 //   encore en HS256 (aucune regression, gain effectif des l'activation des cles).
-// - `cache()` deduplique l'appel sur toute la requete (requireModule + page).
+// - `parRequete` deduplique l'appel sur toute la requete (requireModule + page),
+//   y compris dans les routes API ou `cache()` de React ne memorise rien.
 //
 // MULTI-SITE (cf. tasks/multi-site.md) : le profil porte `siteId` et
 // `estSuperAdmin`. Les colonnes sont posees sur app_user par la migration
@@ -27,7 +28,7 @@ type SiteRow = { id: string; slug: string; nom: string; statut: "actif" | "suspe
 // sur SITE_LEBIGNON_ID ont ete retires (audit O2 / S6, 2026-09-10). Une
 // ligne app_user sans site_id est desormais un bug : on refuse la session
 // avec un log d'erreur plutot que de rattacher silencieusement a Lebignon.
-export const getCurrentProfile = cache(async function getCurrentProfile(): Promise<CurrentProfile | null> {
+export const getCurrentProfile = parRequete(async function getCurrentProfile(): Promise<CurrentProfile | null> {
   const supabase = await getServerClient();
   const { data: claimsData } = await supabase.auth.getClaims();
   const userId = claimsData?.claims?.sub as string | undefined;

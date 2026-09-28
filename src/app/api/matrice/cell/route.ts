@@ -42,9 +42,13 @@ export async function POST(req: NextRequest) {
   // un poste_id d'un autre site, la ligne matrice ne se rattacherait a rien
   // de visible. Chef d'equipe : la RLS bloque deja les personne_id hors
   // perimetre, mais le poste_id passait sans controle.
-  const errPers = await verifierIdSite(supabase, "personne", personne_id, profile.siteId, "Personne");
+  // Perf (2026-09-28) : les deux controles partent ensemble ; verdicts examines
+  // dans le meme ordre qu'avant.
+  const [errPers, errPoste] = await Promise.all([
+    verifierIdSite(supabase, "personne", personne_id, profile.siteId, "Personne"),
+    verifierIdSite(supabase, "poste", poste_id, profile.siteId, "Poste"),
+  ]);
   if (errPers) return NextResponse.json({ error: errPers }, { status: 400 });
-  const errPoste = await verifierIdSite(supabase, "poste", poste_id, profile.siteId, "Poste");
   if (errPoste) return NextResponse.json({ error: errPoste }, { status: 400 });
 
   const { error } = await supabase.from("matrice").upsert(

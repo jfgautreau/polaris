@@ -1,4 +1,4 @@
-import { cache } from "react";
+import { parRequete } from "@/lib/par-requete";
 import { getAdminClient } from "@/lib/supabase-server";
 
 // Contexte multi-site (SaaS multi-tenant). Une seule base Supabase, un
@@ -35,9 +35,9 @@ const FALLBACK_LEBIGNON: CurrentSite = {
 };
 
 // STABLE tant que la V1a (single-site) : le site est lu une fois par
-// requête. `cache()` de React déduplique l'appel entre AppHeader, les
-// pages et les server actions.
-export const getCurrentSite = cache(async function getCurrentSite(): Promise<CurrentSite> {
+// requête. `parRequete` déduplique l'appel entre AppHeader, les pages,
+// les server actions ET les routes API (où `cache()` de React est inopérant).
+export const getCurrentSite = parRequete(async function getCurrentSite(): Promise<CurrentSite> {
   // Le site courant = le site du compte connecté (getCurrentProfile.siteId),
   // qui est DÉJÀ conscient de l'impersonation : site cible quand un super_admin
   // est « entré » dans un site, sinon son site de rattachement. C'est l'exact

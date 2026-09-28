@@ -61,29 +61,10 @@ export async function POST(req: NextRequest) {
   else if (value.startsWith("m:")) motif_absence_id = value.slice(2);
   else poste_id = value;
 
-  // Validation cross-site (audit S2) : les UUID injectes par le client doivent
-  // appartenir au site de l'appelant. Sans ca, le service_role ecrirait un
-  // placement rattache a un poste/equipe d'un autre site (grille silencieusement
-  // cassee cote lecture).
-  const errPers = await verifierIdSite(supabase, "personne", personne_id, profile.siteId, "Personne");
-  if (errPers) return NextResponse.json({ error: errPers }, { status: 400 });
-  if (poste_id) {
-    const errPo = await verifierIdSite(supabase, "poste", poste_id, profile.siteId, "Poste");
-    if (errPo) return NextResponse.json({ error: errPo }, { status: 400 });
-  }
-  if (body?.equipe_id) {
-    const errEq = await verifierIdSite(supabase, "equipe", body.equipe_id, profile.siteId, "Equipe");
-    if (errEq) return NextResponse.json({ error: errEq }, { status: 400 });
-  }
-  if (motif_absence_id) {
-    const errMo = await verifierIdSite(supabase, "motif_absence", motif_absence_id, profile.siteId, "Motif");
-    if (errMo) return NextResponse.json({ error: errMo }, { status: 400 });
-  }
-
   // Le quart ne s'applique qu'a un placement sur poste (une absence/NT vaut
   // pour toute la journee, tous quarts). Idem pour le numero de rotation.
   const quart_code = poste_id ? (body?.quart ?? null) : null;
-  let numero_rotation = poste_id ? String(body?.numero ?? "").trim() || null : null;
+  const numeroSaisi = poste_id ? String(body?.numero ?? "").trim() || null : null;
 
   // Le Planning affecte a un POSTE sans choisir de place : le champ `numero` est
   // alors ABSENT de la requete, et on prend le premier numero libre dans l'ordre du
@@ -91,20 +72,47 @@ export async function POST(req: NextRequest) {
   // une case numerotee, `null` pour la zone « sans numero ». Tester `undefined` et
   // non la faussete distingue les deux : sinon un depot volontaire hors numero se
   // verrait attribuer une place automatiquement.
-  if (poste_id && body?.numero === undefined) {
-    numero_rotation = await premierNumeroLibre(supabase, poste_id, jour, quart_code, personne_id, quarts, profile.siteId);
-  }
+  const numeroAuto = !!poste_id && body?.numero === undefined;
+
+  // Perf (2026-09-28) : toutes les LECTURES de controle sont independantes — elles
+  // partent ENSEMBLE (un aller-retour au lieu de sept a neuf en serie). Les
+  // verdicts sont ensuite examines dans le MEME ORDRE qu'avant : meme reponse,
+  // memes codes d'erreur. Aucune ecriture n'a lieu avant ces verdicts.
+  //
+  // Validation cross-site (audit S2) : les UUID injectes par le client doivent
+  // appartenir au site de l'appelant. Sans ca, le service_role ecrirait un
+  // placement rattache a un poste/equipe d'un autre site (grille silencieusement
+  // cassee cote lecture). Les lectures annexes (numero, placement existant,
+  // habilitations) sont toutes bornees par site_id : rien ne fuit d'un autre site
+  // meme si un identifiant est refuse ensuite.
+  const siteId = profile.siteId;
+  const [errPers, errPo, errEq, errMo, numeroLibre, existingRes, manquantes] = await Promise.all([
+    verifierIdSite(supabase, "personne", personne_id, siteId, "Personne"),
+    poste_id ? verifierIdSite(supabase, "poste", poste_id, siteId, "Poste") : null,
+    body?.equipe_id ? verifierIdSite(supabase, "equipe", body.equipe_id, siteId, "Equipe") : null,
+    motif_absence_id ? verifierIdSite(supabase, "motif_absence", motif_absence_id, siteId, "Motif") : null,
+    numeroAuto && poste_id ? premierNumeroLibre(supabase, poste_id, jour, quart_code, personne_id, quarts, siteId) : null,
+    poste_id
+      ? supabase
+          .from("placement")
+          .select("poste_id, quart_code")
+          .eq("personne_id", personne_id)
+          .eq("jour", jour)
+          .eq("site_id", siteId)
+          .maybeSingle<{ poste_id: string | null; quart_code: string | null }>()
+      : null,
+    poste_id ? habManquantes(supabase, personne_id, poste_id, siteId) : ([] as string[]),
+  ]);
+  if (errPers) return NextResponse.json({ error: errPers }, { status: 400 });
+  if (errPo) return NextResponse.json({ error: errPo }, { status: 400 });
+  if (errEq) return NextResponse.json({ error: errEq }, { status: 400 });
+  if (errMo) return NextResponse.json({ error: errMo }, { status: 400 });
+  const numero_rotation = numeroAuto ? numeroLibre : numeroSaisi;
 
   // Une personne placee sur un poste un quart ne peut pas etre placee sur un
   // poste d'un autre quart le meme jour (legacy quart null = matin).
   if (poste_id) {
-    const { data: existing } = await supabase
-      .from("placement")
-      .select("poste_id, quart_code")
-      .eq("personne_id", personne_id)
-      .eq("jour", jour)
-      .eq("site_id", profile.siteId)
-      .maybeSingle<{ poste_id: string | null; quart_code: string | null }>();
+    const existing = existingRes?.data;
     if (existing?.poste_id) {
       const exQ = quartOuDefaut(existing.quart_code, quarts);
       const newQ = quartOuDefaut(quart_code, quarts);
@@ -119,7 +127,7 @@ export async function POST(req: NextRequest) {
 
   // Habilitations exigees par le poste. Sans confirmation explicite du client, on
   // refuse et on renvoie ce qui manque : c'est ce qui alimente la modale de forcage.
-  const manquantes = poste_id ? await habManquantes(supabase, personne_id, poste_id, profile.siteId) : [];
+  // (`manquantes` lu avec les autres controles ci-dessus.)
   const forcer = body?.forcer === true;
   if (manquantes.length && !forcer) {
     return NextResponse.json({ error: "Habilitation manquante", manquantes }, { status: 428 });

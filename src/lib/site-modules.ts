@@ -1,4 +1,4 @@
-import { cache } from "react";
+import { parRequete } from "@/lib/par-requete";
 import { getAdminClient } from "@/lib/supabase-server";
 import { getCurrentSite } from "@/lib/current-site";
 
@@ -17,11 +17,11 @@ export const CLES_MASQUABLES_EXTRA: string[] = MASQUABLES_EXTRA.map((m) => m.key
 //
 // Lecture NON mise en cache inter-requête (contrairement à refdata) : un
 // changement de menu doit se refléter tout de suite à la navigation suivante,
-// sans attendre l'expiration d'un cache. `cache()` de React déduplique quand
-// même l'appel DANS une même requête (requireModule + AppHeader). La table est
+// sans attendre l'expiration d'un cache. `parRequete` déduplique quand même
+// l'appel DANS une même requête (requireModule + AppHeader, routes API comprises). La table est
 // minuscule et indexée par site_id : le coût est négligeable.
 
-const getMasquesBySite = cache(async function getMasquesBySite(site: string): Promise<Set<string>> {
+const getMasquesBySite = parRequete(async function getMasquesBySite(site: string): Promise<Set<string>> {
   const { data } = await getAdminClient()
     .from("site_module")
     .select("module_key")

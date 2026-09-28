@@ -16,21 +16,25 @@ export async function habManquantes(
   poste_id: string,
   siteId: string,
 ): Promise<string[]> {
-  const { data: reqs } = await supabase
-    .from("poste_competence_requise")
-    .select("competence_id, competence:competence_id(nom, duree_validite_mois)")
-    .eq("poste_id", poste_id)
-    .eq("site_id", siteId)
-    .returns<{ competence_id: string; competence: { nom: string; duree_validite_mois: number | null } | null }[]>();
+  // Perf (2026-09-28) : les deux lectures partent ENSEMBLE. On lit toutes les
+  // habilitations de la personne (quelques dizaines de lignes au plus) plutot que
+  // d'attendre la liste des exigences pour filtrer : un aller-retour de moins par
+  // saisie. Le filtrage se fait ci-dessous, sur les seules exigences du poste.
+  const [{ data: reqs }, { data: det }] = await Promise.all([
+    supabase
+      .from("poste_competence_requise")
+      .select("competence_id, competence:competence_id(nom, duree_validite_mois)")
+      .eq("poste_id", poste_id)
+      .eq("site_id", siteId)
+      .returns<{ competence_id: string; competence: { nom: string; duree_validite_mois: number | null } | null }[]>(),
+    supabase
+      .from("personne_competence")
+      .select("competence_id, date_obtention, date_expiration")
+      .eq("personne_id", personne_id)
+      .eq("site_id", siteId)
+      .returns<{ competence_id: string; date_obtention: string | null; date_expiration: string | null }[]>(),
+  ]);
   if (!reqs?.length) return [];
-
-  const { data: det } = await supabase
-    .from("personne_competence")
-    .select("competence_id, date_obtention, date_expiration")
-    .eq("personne_id", personne_id)
-    .eq("site_id", siteId)
-    .in("competence_id", reqs.map((r) => r.competence_id))
-    .returns<{ competence_id: string; date_obtention: string | null; date_expiration: string | null }[]>();
 
   const parComp = new Map((det ?? []).map((d) => [d.competence_id, d]));
   return reqs
@@ -56,22 +60,24 @@ export async function premierNumeroLibre(
   quarts: QuartRef[],
   siteId: string,
 ): Promise<string | null> {
-  const { data: poste } = await supabase
-    .from("poste")
-    .select("numero_rotation")
-    .eq("id", poste_id)
-    .eq("site_id", siteId)
-    .maybeSingle<{ numero_rotation: string | null }>();
+  // Perf (2026-09-28) : numeros du poste et places occupees lus ENSEMBLE.
+  const [{ data: poste }, { data: occ }] = await Promise.all([
+    supabase
+      .from("poste")
+      .select("numero_rotation")
+      .eq("id", poste_id)
+      .eq("site_id", siteId)
+      .maybeSingle<{ numero_rotation: string | null }>(),
+    supabase
+      .from("placement")
+      .select("personne_id, numero_rotation, quart_code")
+      .eq("jour", jour)
+      .eq("poste_id", poste_id)
+      .eq("site_id", siteId)
+      .returns<{ personne_id: string; numero_rotation: string | null; quart_code: string | null }[]>(),
+  ]);
   const numeros = parseNumeros(poste?.numero_rotation);
   if (!numeros.length) return null;
-
-  const { data: occ } = await supabase
-    .from("placement")
-    .select("personne_id, numero_rotation, quart_code")
-    .eq("jour", jour)
-    .eq("poste_id", poste_id)
-    .eq("site_id", siteId)
-    .returns<{ personne_id: string; numero_rotation: string | null; quart_code: string | null }[]>();
 
   const q = quartOuDefaut(quart_code, quarts);
   const pris = new Set(

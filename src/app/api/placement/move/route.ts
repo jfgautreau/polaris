@@ -45,27 +45,30 @@ export async function POST(req: NextRequest) {
   const supabase = (await canWritePlacementData(profile.role)) ? getAdminClient() : await getServerClient();
   const quarts = await getQuartsC();
 
-  // Ligne source.
-  const { data: src } = await supabase
+  // Perf (2026-09-28) : ligne source et case cible lues ENSEMBLE ; verdicts
+  // examinés dans le même ordre qu'avant (source d'abord, puis cible occupée).
+  const [{ data: src }, { data: dst }] = await Promise.all([
+    supabase
     .from("placement")
     .select("poste_id, motif_absence_id, non_travaille, tp, quart_code")
     .eq("site_id", profile.siteId)
     .eq("personne_id", fromPid)
     .eq("jour", fromJour)
-    .maybeSingle<{ poste_id: string | null; motif_absence_id: string | null; non_travaille: boolean; tp: boolean | null; quart_code: string | null }>();
+    .maybeSingle<{ poste_id: string | null; motif_absence_id: string | null; non_travaille: boolean; tp: boolean | null; quart_code: string | null }>(),
+    // Cible occupée (n'importe quelle ligne) -> refus, pas d'écrasement.
+    supabase
+      .from("placement")
+      .select("personne_id")
+      .eq("site_id", profile.siteId)
+      .eq("personne_id", toPid)
+      .eq("jour", toJour)
+      .maybeSingle<{ personne_id: string }>(),
+  ]);
   if (!src) return NextResponse.json({ error: "Rien à déplacer" }, { status: 400 });
   if (src.motif_absence_id) {
     return NextResponse.json({ error: "Une absence ne se déplace pas." }, { status: 400 });
   }
 
-  // Cible occupée (n'importe quelle ligne) -> refus, pas d'écrasement.
-  const { data: dst } = await supabase
-    .from("placement")
-    .select("personne_id")
-    .eq("site_id", profile.siteId)
-    .eq("personne_id", toPid)
-    .eq("jour", toJour)
-    .maybeSingle<{ personne_id: string }>();
   if (dst) return NextResponse.json({ error: "Case occupée" }, { status: 409 });
 
   const poste_id = src.poste_id;
@@ -75,15 +78,15 @@ export async function POST(req: NextRequest) {
   const quart_code = poste_id ? (body?.quart ?? src.quart_code ?? null) : null;
 
   // Habilitations : un poste déplacé sur une autre personne re-vérifie ses droits.
-  const manquantes = poste_id ? await habManquantes(supabase, toPid, poste_id, profile.siteId) : [];
+  // Numéro libre lu en même temps (perf) ; il n'est utilisé qu'après le verdict.
+  const [manquantes, numero_rotation] = await Promise.all([
+    poste_id ? habManquantes(supabase, toPid, poste_id, profile.siteId) : ([] as string[]),
+    poste_id ? premierNumeroLibre(supabase, poste_id, toJour, quart_code, toPid, quarts, profile.siteId) : null,
+  ]);
   const forcer = body?.forcer === true;
   if (manquantes.length && !forcer) {
     return NextResponse.json({ error: "Habilitation manquante", manquantes }, { status: 428 });
   }
-
-  const numero_rotation = poste_id
-    ? await premierNumeroLibre(supabase, poste_id, toJour, quart_code, toPid, quarts, profile.siteId)
-    : null;
 
   // 1. Insertion de la cible.
   const { error: insErr } = await supabase.from("placement").upsert(

@@ -1,4 +1,4 @@
-import { cache } from "react";
+import { parRequete } from "@/lib/par-requete";
 import { redirect } from "next/navigation";
 import { getServerClient } from "@/lib/supabase-server";
 import { getCurrentProfile } from "@/lib/current-user";
@@ -167,12 +167,13 @@ export async function canWritePlacementData(role: string): Promise<boolean> {
 }
 
 // Droits effectifs d'un role = defauts surchargés par la table role_permission.
-// `cache()` : dedupe la requete role_permission par role sur toute la requete HTTP.
+// `parRequete` : dedupe la requete role_permission par role sur toute la requete
+// HTTP — routes API comprises (cf. src/lib/par-requete.ts).
 //
 // MULTI-SITE : depuis 0053, role_permission.site_id est NOT NULL. La RLS filtre
 // déjà par site_id = current_site_id(), mais on ajoute `.eq('site_id', siteId)`
 // explicite (défense en profondeur + planner Postgres qui touche l'index composite).
-export const getPermissions = cache(async function getPermissions(role: string): Promise<Perms> {
+export const getPermissions = parRequete(async function getPermissions(role: string): Promise<Perms> {
   const p = defaultsFor(role);
   try {
     const { getCurrentSite } = await import("@/lib/current-site");
@@ -313,7 +314,7 @@ export async function requireModule(module: string, level: "read" | "write") {
   // peut lui-même être masqué → boucle).
   // Perf (P2/P4, 2026-09-28) : modules masqués, droits et compteur d'alertes de
   // l'en-tête lancés EN PARALLÈLE. Les trois sont dédupliqués par requête
-  // (cache()) : quand AppHeader les redemande, ils sont déjà résolus — l'en-tête
+  // (parRequete / cache()) : quand AppHeader les redemande, ils sont déjà résolus — l'en-tête
   // n'ajoute plus d'aller-retour en série après les données de la page.
   const { getModulesMasquesC } = await import("@/lib/site-modules");
   const { getAlertesHabilitationsC } = await import("@/lib/refdata");
