@@ -1,16 +1,16 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { cookies } from "next/headers";
-import { getServerClient } from "@/lib/supabase-server";
 import { getCurrentProfile } from "@/lib/current-user";
 import { getCurrentSite } from "@/lib/current-site";
 import { getImpersonationPayload } from "@/lib/impersonation";
 import { sortirDuMode } from "@/app/platform/actions";
-import { isoDate, addDays } from "@/lib/week";
 import { MODULES, getPermissions, canRead, canWrite } from "@/lib/permissions";
 import { getModulesMasquesC } from "@/lib/site-modules";
+import { getAlertesHabilitationsC } from "@/lib/refdata";
 import { COOKIE_QUART } from "@/lib/filtres-session";
 import MainNav from "@/components/MainNav";
+import GardeCacheNavigation from "@/components/GardeCacheNavigation";
 import SettingsMenu from "@/components/SettingsMenu";
 import UserMenu from "@/components/UserMenu";
 import Logo from "@/components/Logo";
@@ -25,50 +25,24 @@ export default async function AppHeader({
   role: string;
   active?: string;
 }) {
-  const perms = await getPermissions(role);
-  const profile = await getCurrentProfile();
-
-  // Nom du site (multi-tenant, cf. tasks/multi-site.md). Affiché à côté
-  // du logo pour qu'un utilisateur voit toujours DANS QUELLE USINE il
-  // travaille. Un throw ici ne doit pas casser l'en-tête (login, /affichage
-  // avant middleware sitisé...), d'où le try/catch avec un nom vide.
-  let siteNom = "";
-  try {
-    const site = await getCurrentSite();
-    siteNom = site.nom;
-  } catch {
-    siteNom = "";
-  }
-
-  // Mode support (impersonation) : bandeau rouge permanent en haut de
-  // toute page tant que le cookie polaris-impersonate est actif. Bouton
-  // « Sortir » qui trace la fin dans audit_impersonation.
-  const impersonation = await getImpersonationPayload();
-
-  // Compteur d'alertes habilitations (<= 90 jours)
-  let alertCount = 0;
-  try {
-    const supabase = await getServerClient();
-    const limit = isoDate(addDays(new Date(), 90));
-    const { count } = await supabase
-      .from("personne_competence")
-      .select("*", { count: "exact", head: true })
-      .not("date_expiration", "is", null)
-      .lte("date_expiration", limit);
-    alertCount = count ?? 0;
-  } catch {
-    alertCount = 0;
-  }
-
-  // Modules MASQUÉS pour ce site (0056) : pilotés depuis /platform, ils
-  // disparaissent de la navigation pour tout le monde. Un throw ne doit pas
-  // casser l'en-tête (login, /affichage) : ensemble vide en repli.
-  let masques = new Set<string>();
-  try {
-    masques = await getModulesMasquesC();
-  } catch {
-    masques = new Set<string>();
-  }
+  // Perf (P4, 2026-09-28) : tout est lancé EN PARALLÈLE, et chaque source est
+  // dédupliquée par requête (cache()) — requireModule en a déjà lancé la plupart
+  // (droits, profil, site, modules masqués, compteur d'alertes). L'en-tête
+  // n'ajoute donc plus d'allers-retours en série après les données de la page.
+  //
+  // Nom du site (multi-tenant) : affiché à côté du logo pour qu'un utilisateur
+  // voie toujours DANS QUELLE USINE il travaille. Mode support (impersonation) :
+  // bandeau rouge permanent. Compteur d'alertes habilitations (<= 90 j, cache
+  // 60 s par site, cf. refdata). Modules MASQUÉS pour ce site (0056). Aucune de
+  // ces lectures ne doit casser l'en-tête (login, /affichage) : replis vides.
+  const [perms, profile, siteNom, impersonation, alertCount, masques] = await Promise.all([
+    getPermissions(role),
+    getCurrentProfile(),
+    getCurrentSite().then((s) => s.nom).catch(() => ""),
+    getImpersonationPayload(),
+    getAlertesHabilitationsC().catch(() => 0),
+    getModulesMasquesC().catch(() => new Set<string>()),
+  ]);
 
   // Quart mémorisé pour la session (cf. src/lib/filtres-session.ts) : transmis au
   // menu pour qu'un saut depuis un écran sans quart (Personnel…) vers Planning /
@@ -174,6 +148,8 @@ export default async function AppHeader({
             active={active}
             quartSession={quartSession}
           />
+          {/* Cache de navigation 30 s (P8) : jamais d'état antérieur à une saisie. */}
+          <GardeCacheNavigation />
         </Suspense>
       </nav>
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>

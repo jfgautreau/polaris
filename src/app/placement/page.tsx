@@ -6,6 +6,7 @@ import AppHeader from "@/components/AppHeader";
 import PageTitle from "@/components/PageTitle";
 import { requireModule, canWritePlacementData } from "@/lib/permissions";
 import { fetchAll } from "@/lib/fetch-all";
+import { enAvance } from "@/lib/en-avance";
 import { quartParDefaut, quartOuDefaut, memeQuart } from "@/lib/quarts";
 import { chargerPosteQuart, tourneSurQuart, effectifSurQuart } from "@/lib/poste-quart";
 import { chargerValidites, actifLe } from "@/lib/referentiel-validite";
@@ -44,6 +45,46 @@ export default async function PlacementPage({
   const supabase = await getServerClient();
   const jour = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) ? sp.date : isoDate(new Date());
 
+  // Perf P5 (2026-09-28) : lectures qui ne dépendent que du JOUR ou de l'appelant,
+  // lancées dès maintenant ; chaque bloc plus bas attend la sienne au lieu de les
+  // enchaîner (≈ 12 allers-retours en série auparavant). Traitements inchangés.
+  type TpConf = { off?: Record<string, string[]> } | null;
+  const pConducteurs = enAvance(
+    fetchAll<{ personne_id: string }>(() =>
+      supabase
+        .from("matrice")
+        .select("personne_id, poste!inner(categorie, actif)")
+        .eq("poste.categorie", "conducteur")
+        .eq("poste.actif", true)
+        .gte("niveau_actuel", 1)
+        .order("id")
+        .returns<{ personne_id: string }[]>()
+    )
+  );
+  const pPlacementsJour = enAvance(
+    supabase.from("placement").select("personne_id, poste_id, motif_absence_id, non_travaille, quart_code, numero_rotation").eq("jour", jour).returns<Placement[]>()
+  );
+  const pCommentaires = enAvance(
+    supabase.from("horaire_exception").select("personne_id, motif").eq("jour", jour).returns<{ personne_id: string; motif: string | null }[]>()
+  );
+  const pFullWrite = enAvance(canWritePlacementData(profile.role));
+  const pChefTeams = enAvance(
+    supabase.from("equipe_chef").select("equipe_id").eq("app_user_id", profile.authId).returns<{ equipe_id: string }[]>()
+  );
+  const pRotRefs = enAvance(getRotationRefsC());
+  const pTypesAgence = enAvance(getTypesAgenceC());
+  const pTpPeriodes = enAvance(
+    supabase
+      .from("tp_periode")
+      .select("personne_id, date_debut, date_fin, tp_config")
+      .lte("date_debut", jour)
+      .or(`date_fin.is.null,date_fin.gte.${jour}`)
+      .returns<{ personne_id: string; date_debut: string; date_fin: string | null; tp_config: TpConf }[]>()
+  );
+  const pTpFallback = enAvance(
+    supabase.from("personne").select("id, tp_config").eq("temps_partiel", true).returns<{ id: string; tp_config: TpConf }[]>()
+  );
+
   const [{ data: ateliersD }, { data: equipesD }, { data: quartsD, error: quartsErr }, { data: persD }, { data: motifsD }] = await Promise.all([
     supabase.from("atelier").select("id, nom").eq("actif", true).order("nom").returns<Atelier[]>(),
     supabase.from("equipe").select("id, nom, couleur, quart_fixe").eq("actif", true).order("nom").returns<Equipe[]>(),
@@ -73,12 +114,16 @@ export default async function PlacementPage({
   const idsPourContrat = personnesActives.map((p) => p.id);
   const contratsMap = new Map<string, { date_debut: string | null; date_fin: string | null }[]>();
   if (idsPourContrat.length) {
-    const { data: cpD } = await supabase
-      .from("contrat_periode")
-      .select("personne_id, date_debut, date_fin")
-      .in("personne_id", idsPourContrat)
-      .returns<{ personne_id: string; date_debut: string | null; date_fin: string | null }[]>();
-    for (const r of cpD ?? []) {
+    // fetchAll (L8) : plusieurs contrats par personne, le volume peut dépasser 1000.
+    const cpD = await fetchAll<{ personne_id: string; date_debut: string | null; date_fin: string | null }>(() =>
+      supabase
+        .from("contrat_periode")
+        .select("personne_id, date_debut, date_fin")
+        .in("personne_id", idsPourContrat)
+        .order("id")
+        .returns<{ personne_id: string; date_debut: string | null; date_fin: string | null }[]>()
+    );
+    for (const r of cpD) {
       const arr = contratsMap.get(r.personne_id) ?? [];
       arr.push({ date_debut: r.date_debut, date_fin: r.date_fin });
       contratsMap.set(r.personne_id, arr);
@@ -96,16 +141,7 @@ export default async function PlacementPage({
   // la recherche par nom passe outre). fetchAll : matrice > 1000 lignes (L8).
   const conducteurIds: string[] = [];
   {
-    const rows = await fetchAll<{ personne_id: string }>(() =>
-      supabase
-        .from("matrice")
-        .select("personne_id, poste!inner(categorie, actif)")
-        .eq("poste.categorie", "conducteur")
-        .eq("poste.actif", true)
-        .gte("niveau_actuel", 1)
-        .order("id")
-        .returns<{ personne_id: string }[]>()
-    );
+    const rows = await pConducteurs; // lancée d'entrée
     const uniq = new Set<string>();
     for (const r of rows) uniq.add(r.personne_id);
     conducteurIds.push(...uniq);
@@ -130,6 +166,34 @@ export default async function PlacementPage({
     ateliers[0]?.id ||
     "";
 
+  // Ouverture (jour + fenêtre du calendrier) : dépend du quart résolu, part avec
+  // la vague ci-dessous au lieu de l'attendre (cf. commentaires plus bas).
+  const winStart = isoDate(addDays(new Date(jour + "T00:00"), -90));
+  const winEnd = isoDate(addDays(new Date(jour + "T00:00"), 150));
+  const pOuverture = enAvance(
+    Promise.all([
+      supabase
+        .from("ouverture_quart")
+        .select("ligne_id, ouverte")
+        .eq("quart_code", quart)
+        .eq("jour", jour)
+        .returns<{ ligne_id: string; ouverte: boolean }[]>(),
+      supabase
+        .from("jour_quart")
+        .select("actif")
+        .eq("quart_code", quart)
+        .eq("jour", jour)
+        .maybeSingle<{ actif: boolean }>(),
+      supabase
+        .from("jour_quart")
+        .select("jour, actif")
+        .eq("quart_code", quart)
+        .gte("jour", winStart)
+        .lte("jour", winEnd)
+        .returns<{ jour: string; actif: boolean }[]>(),
+    ])
+  );
+
   // Postes de l'atelier + desactivations poste x quart + placements du jour + matrice.
   const [{ data: lignesD }, pq, { data: plD }, mat, ligneVal, posteVal] = await Promise.all([
     atelierId
@@ -147,7 +211,7 @@ export default async function PlacementPage({
         })()
       : Promise.resolve({ data: [] as LigneRow[] }),
     chargerPosteQuart(supabase),
-    supabase.from("placement").select("personne_id, poste_id, motif_absence_id, non_travaille, quart_code, numero_rotation").eq("jour", jour).returns<Placement[]>(),
+    pPlacementsJour,
     (async () => {
       const posteIds = ((await supabase
         .from("ligne")
@@ -175,20 +239,7 @@ export default async function PlacementPage({
   // lignes de production (une vingtaine). Il faudrait 1000 lignes pour atteindre
   // le plafond PostgREST. Si cette requete est un jour elargie a une semaine,
   // il faudra la passer par fetchAll (cf. L8).
-  const [{ data: ouvD }, { data: jqD }] = await Promise.all([
-    supabase
-      .from("ouverture_quart")
-      .select("ligne_id, ouverte")
-      .eq("quart_code", quart)
-      .eq("jour", jour)
-      .returns<{ ligne_id: string; ouverte: boolean }[]>(),
-    supabase
-      .from("jour_quart")
-      .select("actif")
-      .eq("quart_code", quart)
-      .eq("jour", jour)
-      .maybeSingle<{ actif: boolean }>(),
-  ]);
+  const [{ data: ouvD }, { data: jqD }, { data: jqWin }] = await pOuverture;
   const quartOuvert = jqD?.actif === true;
   const ouvMap = new Map((ouvD ?? []).map((r) => [r.ligne_id, r.ouverte]));
   const ligneOuverte = (id: string) => quartOuvert && (ouvMap.get(id) ?? true);
@@ -280,11 +331,7 @@ export default async function PlacementPage({
   // petite pendule) : affichés à côté du nom dans les PDF du Placement. Bornés
   // à UN jour → petite lecture, pas de fetchAll ; la table est site-scopée (RLS
   // via getServerClient).
-  const { data: hexD } = await supabase
-    .from("horaire_exception")
-    .select("personne_id, motif")
-    .eq("jour", jour)
-    .returns<{ personne_id: string; motif: string | null }[]>();
+  const { data: hexD } = await pCommentaires; // lancée d'entrée
   const commentaires: Record<string, string> = {};
   for (const r of hexD ?? []) {
     const m = (r.motif ?? "").trim();
@@ -298,10 +345,10 @@ export default async function PlacementPage({
   // Perimetre d'edition : ecriture complete (admin/ordo) -> tout ; chef -> son equipe.
   // Doit coller a ce qu'acceptent les API (cf. canWritePlacementData), sinon la
   // grille se croirait editable la ou l'enregistrement echouerait.
-  const fullWrite = await canWritePlacementData(profile.role);
+  const fullWrite = await pFullWrite;
   const chefTeams = new Set<string>();
   if (!fullWrite) {
-    const { data: ct } = await supabase.from("equipe_chef").select("equipe_id").eq("app_user_id", profile.authId).returns<{ equipe_id: string }[]>();
+    const { data: ct } = await pChefTeams; // lancée d'entrée (ignorée si écriture complète)
     for (const r of ct ?? []) chefTeams.add(r.equipe_id);
   }
   const persos = personnes.map((p) => ({
@@ -323,7 +370,7 @@ export default async function PlacementPage({
   // Le filtre du panneau des noms s'appuie dessus — choisir « Matin » doit
   // remonter « Fixe matin » ET l'équipe qui tourne au matin, pas une seule des
   // deux comme le faisait l'ancien pré-filtre.
-  const rotWeek = rotationForWeek(await getRotationRefsC(), isoDate(mondayOf(new Date(jour + "T00:00"))));
+  const rotWeek = rotationForWeek(await pRotRefs, isoDate(mondayOf(new Date(jour + "T00:00"))));
   const parQuart = equipesParQuart(equipes, rotWeek);
 
   // Jours OUVERTS (quart actif) sur une fenêtre autour du jour affiché. Sert à la
@@ -333,18 +380,10 @@ export default async function PlacementPage({
   // laisse le jour navigable, avec ses lignes affichées et besoin à 0.
   // Bornée au quart -> ≤ 240 lignes : pas de fetchAll. RLS (getServerClient) borne
   // déjà au site courant.
-  const winStart = isoDate(addDays(new Date(jour + "T00:00"), -90));
-  const winEnd = isoDate(addDays(new Date(jour + "T00:00"), 150));
+  // (Fenêtre winStart / winEnd et lecture jqWin : lancées avec l'ouverture.)
   const atelierLigneIds = (lignesD ?? []).map((l) => l.id);
   const openDays: string[] = [];
   if (atelierLigneIds.length) {
-    const { data: jqWin } = await supabase
-      .from("jour_quart")
-      .select("jour, actif")
-      .eq("quart_code", quart)
-      .gte("jour", winStart)
-      .lte("jour", winEnd)
-      .returns<{ jour: string; actif: boolean }[]>();
     for (const r of jqWin ?? []) if (r.actif) openDays.push(r.jour);
     openDays.sort();
   }
@@ -355,26 +394,16 @@ export default async function PlacementPage({
   // le créneau qu'elle NE fait PAS (mi-temps une semaine sur deux, piloté par la
   // rotation datée + quart.creneau). Sert à la colonne « Absents / TP » du PDF.
   const isoDow = (iso: string) => { const d = new Date(iso + "T00:00").getDay(); return d === 0 ? 7 : d; };
-  type TpConf = { off?: Record<string, string[]> } | null;
   const cfgTpByPers = new Map<string, TpConf>();
   {
-    const { data: tpP } = await supabase
-      .from("tp_periode")
-      .select("personne_id, date_debut, date_fin, tp_config")
-      .lte("date_debut", jour)
-      .or(`date_fin.is.null,date_fin.gte.${jour}`)
-      .returns<{ personne_id: string; date_debut: string; date_fin: string | null; tp_config: TpConf }[]>();
+    const { data: tpP } = await pTpPeriodes; // lancée d'entrée
     const avecPeriode = new Set<string>();
     for (const r of tpP ?? []) {
       avecPeriode.add(r.personne_id);
       if (r.date_debut <= jour && (!r.date_fin || r.date_fin >= jour)) cfgTpByPers.set(r.personne_id, r.tp_config);
     }
     // Repli personne.tp_config (temps_partiel=true sans période datée).
-    const { data: tpFb } = await supabase
-      .from("personne")
-      .select("id, tp_config")
-      .eq("temps_partiel", true)
-      .returns<{ id: string; tp_config: TpConf }[]>();
+    const { data: tpFb } = await pTpFallback; // lancée d'entrée
     for (const r of tpFb ?? []) if (!avecPeriode.has(r.id)) cfgTpByPers.set(r.id, r.tp_config);
   }
   const quartFixe = new Map(equipes.map((e) => [e.id, e.quart_fixe ?? null]));
@@ -432,7 +461,7 @@ export default async function PlacementPage({
         winStart={winStart}
         winEnd={winEnd}
         conducteurIds={conducteurIds}
-        agenceCodes={await getTypesAgenceC()}
+        agenceCodes={await pTypesAgence}
         quartBandeau={<QuartBandeau quart={quart} quarts={quarts} />}
       />
     </div>

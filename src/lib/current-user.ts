@@ -8,7 +8,12 @@ export type CurrentProfile = {
   role: string;
   siteId: string;
   estSuperAdmin: boolean;
+  // Ligne `site` du site de RATTACHEMENT, lue dans la meme requete que le profil
+  // (perf P2, 2026-09-28) : getCurrentSite la reutilise au lieu de relire la
+  // table. Absente en impersonation (le site courant est alors un autre site).
+  siteRow?: SiteRow;
 };
+type SiteRow = { id: string; slug: string; nom: string; statut: "actif" | "suspendu" | "archive"; fuseau: string };
 
 // Profil applicatif de l'utilisateur connecte (ou null).
 // - `getClaims()` verifie le JWT LOCALEMENT (cles asymetriques) sans appel reseau
@@ -46,13 +51,21 @@ export const getCurrentProfile = cache(async function getCurrentProfile(): Promi
     is_active: boolean;
     site_id: string | null;
     est_super_admin: boolean | null;
+    site?: SiteRow | null;
   };
 
-  const { data, error } = await admin
+  // Profil + site de rattachement en UN aller-retour (embed PostgREST via la FK
+  // app_user.site_id → site.id). Repli sur la lecture simple si l'embed échoue
+  // (ex. relation ambiguë) : le statut du site est alors relu à part, comme avant.
+  const COLS = "email, name, role, is_active, site_id, est_super_admin";
+  let { data, error } = await admin
     .from("app_user")
-    .select("email, name, role, is_active, site_id, est_super_admin")
+    .select(`${COLS}, site:site_id(id, slug, nom, statut, fuseau)`)
     .eq("user_id", userId)
     .single<Row>();
+  if (error && error.code !== "PGRST116") {
+    ({ data, error } = await admin.from("app_user").select(COLS).eq("user_id", userId).single<Row>());
+  }
   if (error) {
     console.error(`app_user introuvable pour user_id=${userId}: ${error.message}`);
     return null;
@@ -98,16 +111,21 @@ export const getCurrentProfile = cache(async function getCurrentProfile(): Promi
   // pour contourner la RLS de `site` (qui n'expose qu'un site à la fois
   // depuis la session utilisateur). Erreur silencieuse (statut inconnu) →
   // on laisse passer pour ne pas casser en fenêtre pré-0043.
+  const siteRow = row.site && row.site.id === siteId ? row.site : undefined;
   if (!estSuperAdmin) {
-    try {
-      const { data: siteRow } = await admin
-        .from("site")
-        .select("statut")
-        .eq("id", siteId)
-        .single<{ statut: string }>();
-      if (siteRow && siteRow.statut !== "actif") return null;
-    } catch {
-      // Table `site` absente (pré-0043) : on ne bloque pas.
+    if (siteRow) {
+      if (siteRow.statut !== "actif") return null;
+    } else {
+      try {
+        const { data: s } = await admin
+          .from("site")
+          .select("statut")
+          .eq("id", siteId)
+          .single<{ statut: string }>();
+        if (s && s.statut !== "actif") return null;
+      } catch {
+        // Table `site` absente (pré-0043) : on ne bloque pas.
+      }
     }
   }
 
@@ -118,6 +136,7 @@ export const getCurrentProfile = cache(async function getCurrentProfile(): Promi
     role: row.role,
     siteId,
     estSuperAdmin,
+    siteRow,
   };
 });
 

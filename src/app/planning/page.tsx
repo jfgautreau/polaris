@@ -30,6 +30,7 @@ import { quartParDefaut, quartOuDefaut, memeQuart } from "@/lib/quarts";
 import { chargerPosteQuart, tourneSurQuart, effectifSurQuart } from "@/lib/poste-quart";
 import { chargerValidites, actifLe } from "@/lib/referentiel-validite";
 import { estAuTravailLe, deriverArriveeDepart } from "@/lib/personne-statut";
+import { enAvance } from "@/lib/en-avance";
 
 type PosteRow = {
   id: string;
@@ -118,6 +119,9 @@ export default async function PlanningPage({
     pq,
     ligneVal,
     posteVal,
+    rotRefs,
+    typesAgence,
+    { data: tcD, error: tcErr },
   ] = await Promise.all([
     supabase.from("equipe").select("id, nom, couleur, quart_fixe").eq("actif", true).order("nom").returns<Equipe[]>(),
     supabase
@@ -142,6 +146,15 @@ export default async function PlanningPage({
     chargerPosteQuart(supabase),
     chargerValidites(supabase, "ligne"),
     chargerValidites(supabase, "poste"),
+    // Perf P5 : trois lectures indépendantes, jusqu'ici attendues en série plus bas.
+    getRotationRefsC(),
+    getTypesAgenceC(),
+    // Semaines dont les TP ont été « chargés » (migration 0064), cf. plus bas.
+    supabase
+      .from("tp_charge")
+      .select("semaine_lundi")
+      .in("semaine_lundi", weekMondays.map((wm) => isoDate(wm)))
+      .returns<{ semaine_lundi: string }[]>(),
   ]);
   // Validité datée (0071) évaluée à AUJOURD'HUI : une ligne / un poste dont la
   // fermeture est atteinte (ou l'ouverture pas encore) disparaît des écrans.
@@ -160,7 +173,6 @@ export default async function PlanningPage({
   // Rotation calculee (reference datee) : { equipe -> quart }. `rotWeek` pour la
   // semaine centrale (auto-selection du quart) ; `rotByWeek` pour CHACUNE des 3
   // semaines affichees (sert au marquage TP « une semaine sur deux »).
-  const rotRefs = await getRotationRefsC();
   const rotWeek = rotationForWeek(rotRefs, centerIso);
   const rotByWeek = weekMondays.map((wm) => rotationForWeek(rotRefs, isoDate(wm)));
 
@@ -242,6 +254,89 @@ export default async function PlanningPage({
   for (const g of groups)
     lineEffectif[g.ligneId] = g.postes.reduce((s, p) => s + effectifSurQuart(pq, p.id, quart, p.effectif_requis), 0);
 
+  // Perf P5 (2026-09-28) — VAGUE 2. Ces lectures ne dépendent que de l'effectif
+  // (vague 1), des postes affichés ou des 3 semaines : elles partent ICI, en même
+  // temps que l'ouverture, et chaque bloc plus bas attend la sienne au lieu de les
+  // enchaîner. Les blocs de traitement sont inchangés.
+  const idsEffectif = (allActiveD ?? []).map((p) => p.id);
+  const postesAffichesIds = groups.flatMap((g) => g.postes.map((p) => p.id));
+  type TpRow = { id: string; personne_id: string; date_debut: string; date_fin: string | null; tp_config: { off?: Record<string, string[]> } | null };
+  const pPersAtelier = enAvance<{ data: { id: string; atelier_id: string | null }[] | null; error: { message: string } | null }>(
+    atelier && idsEffectif.length
+      ? supabase.from("personne").select("id, atelier_id").in("id", idsEffectif).returns<{ id: string; atelier_id: string | null }[]>()
+      : Promise.resolve({ data: [] as { id: string; atelier_id: string | null }[], error: null })
+  );
+  const pConducteurs = enAvance(
+    filtreConducteurs
+      ? fetchAll<{ personne_id: string }>(() =>
+          supabase
+            .from("matrice")
+            .select("personne_id, poste!inner(categorie, actif)")
+            .eq("poste.categorie", "conducteur")
+            .eq("poste.actif", true)
+            .gte("niveau_actuel", 1)
+            .order("id")
+            .returns<{ personne_id: string }[]>()
+        )
+      : Promise.resolve([] as { personne_id: string }[])
+  );
+  // Périodes TP : bornées sur les 3 semaines complètes (sur-ensemble des jours
+  // visibles ; `configPourJour` ne retient que la période couvrant chaque jour).
+  const pTpPeriodes = enAvance(
+    supabase
+      .from("tp_periode")
+      .select("id, personne_id, date_debut, date_fin, tp_config")
+      .lte("date_debut", allIsos[allIsos.length - 1])
+      .or(`date_fin.is.null,date_fin.gte.${allIsos[0]}`)
+      .order("date_debut")
+      .returns<TpRow[]>()
+  );
+  const pTpFallback = enAvance(
+    supabase
+      .from("personne")
+      .select("id, tp_config")
+      .eq("temps_partiel", true)
+      .in("id", idsEffectif)
+      .returns<{ id: string; tp_config: { off?: Record<string, string[]> } | null }[]>()
+  );
+  const pContrats = enAvance(
+    fetchAll<{ personne_id: string; date_debut: string | null; date_fin: string | null }>(() =>
+      supabase
+        .from("contrat_periode")
+        .select("personne_id, date_debut, date_fin")
+        .in("personne_id", idsEffectif)
+        .order("id")
+        .returns<{ personne_id: string; date_debut: string | null; date_fin: string | null }[]>()
+    )
+  );
+  // Habilitations exigées par les postes affichés, puis — dès qu'on les connaît —
+  // celles que les gens détiennent (chaîné, sans attendre le reste de la page).
+  const pPcr = enAvance<{ data: PcrRow[] | null; error: { message: string } | null }>(
+    postesAffichesIds.length
+      ? supabase
+          .from("poste_competence_requise")
+          .select("poste_id, competence_id, competence:competence_id(nom, duree_validite_mois)")
+          .in("poste_id", postesAffichesIds)
+          .returns<PcrRow[]>()
+      : Promise.resolve({ data: [] as PcrRow[], error: null })
+  );
+  const pHabDet = enAvance(
+    pPcr.then(({ data }) => {
+      const compIds = [...new Set((data ?? []).map((r) => r.competence_id))];
+      if (!compIds.length || !idsEffectif.length) return [] as PcDetRow[];
+      // personne_competence depasse 1000 lignes -> fetchAll obligatoire.
+      return fetchAll<PcDetRow>(() =>
+        supabase
+          .from("personne_competence")
+          .select("personne_id, competence_id, date_obtention, date_expiration")
+          .in("competence_id", compIds)
+          .in("personne_id", idsEffectif)
+          .order("id")
+          .returns<PcDetRow[]>()
+      );
+    })
+  );
+
   // Ouverture par quart selectionne.
   // `ouverture_quart` passe par fetchAll : 3 semaines x 1 quart x N lignes, soit
   // ~420 lignes aujourd'hui mais 1000 des ~48 lignes de production (cf. L8 —
@@ -313,6 +408,74 @@ export default async function PlanningPage({
   const besoin = visible.map((d) => d.besoin);
   const visIsos = visible.map((d) => d.iso);
 
+  // Perf P5 — VAGUE 3 : lectures bornées aux jours visibles, lancées ensemble.
+  const avecCases = idsEffectif.length > 0 && visIsos.length > 0;
+  const quartDefautSite = quartParDefaut(quarts);
+  const pAutoPlaced = enAvance(
+    equipeMode === "auto" && visIsos.length
+      ? fetchAll<{ personne_id: string }>(() =>
+          supabase
+            .from("placement")
+            .select("personne_id")
+            .not("poste_id", "is", null)
+            .in("jour", visIsos)
+            .or(quart === quartDefautSite ? `quart_code.eq.${quart},quart_code.is.null` : `quart_code.eq.${quart}`)
+            .order("id")
+            .returns<{ personne_id: string }[]>()
+        )
+      : Promise.resolve([] as { personne_id: string }[])
+  );
+  const pCases = enAvance(
+    Promise.all([
+      avecCases
+        ? fetchAll<Placement>(() =>
+            supabase
+              .from("placement")
+              .select("personne_id, jour, poste_id, motif_absence_id, non_travaille, quart_code")
+              .in("jour", visIsos)
+              .in("personne_id", idsEffectif)
+              .order("id")
+              .returns<Placement[]>()
+          )
+        : Promise.resolve([] as Placement[]),
+      avecCases
+        ? fetchAll<MatRow>(() =>
+            supabase
+              .from("matrice")
+              .select("personne_id, poste_id, niveau_actuel")
+              .in("personne_id", idsEffectif)
+              .order("id")
+              .returns<MatRow[]>()
+          )
+        : Promise.resolve([] as MatRow[]),
+      avecCases
+        ? supabase
+            .from("horaire_exception")
+            .select("personne_id, jour, debut, fin, motif")
+            .in("jour", visIsos)
+            .in("personne_id", idsEffectif)
+            .returns<{ personne_id: string; jour: string; debut: string | null; fin: string | null; motif: string | null }[]>()
+        : Promise.resolve({ data: [] as { personne_id: string; jour: string; debut: string | null; fin: string | null; motif: string | null }[], error: null }),
+      avecCases
+        ? supabase
+            .from("horaire_poste")
+            .select("poste_id, jour, debut, fin")
+            .eq("quart_code", quart)
+            .returns<{ poste_id: string; jour: number; debut: string | null; fin: string | null }[]>()
+        : Promise.resolve({ data: [] as { poste_id: string; jour: number; debut: string | null; fin: string | null }[], error: null }),
+      // TP MATÉRIALISÉS (0064) — best-effort, cf. plus bas.
+      avecCases
+        ? supabase
+            .from("placement")
+            .select("personne_id, jour")
+            .eq("tp", true)
+            .in("jour", visIsos)
+            .in("personne_id", idsEffectif)
+            .returns<{ personne_id: string; jour: string }[]>()
+        : Promise.resolve({ data: [] as { personne_id: string; jour: string }[], error: null }),
+    ] as const)
+  );
+
   const weekBlocks: { num: number; span: number; year: number; isCurrent: boolean; monday: string }[] = [];
   for (let wi = 0; wi < 3; wi++) {
     const span = visible.filter((d) => d.wi === wi).length;
@@ -341,11 +504,7 @@ export default async function PlanningPage({
   // Non bloquant : une personne reste placable sur n'importe quel poste.
   const persAtelier = new Map<string, string | null>();
   if (atelier && allIds.length) {
-    const { data: paData, error: paErr } = await supabase
-      .from("personne")
-      .select("id, atelier_id")
-      .in("id", allIds)
-      .returns<{ id: string; atelier_id: string | null }[]>();
+    const { data: paData, error: paErr } = await pPersAtelier; // lancée en vague 2
     if (!paErr) for (const r of paData ?? []) persAtelier.set(r.id, r.atelier_id);
   }
 
@@ -355,16 +514,7 @@ export default async function PlanningPage({
   // l'usine). fetchAll : `matrice` dépasse 1000 lignes (L8).
   const conducteurIds = new Set<string>();
   if (filtreConducteurs) {
-    const rows = await fetchAll<{ personne_id: string }>(() =>
-      supabase
-        .from("matrice")
-        .select("personne_id, poste!inner(categorie, actif)")
-        .eq("poste.categorie", "conducteur")
-        .eq("poste.actif", true)
-        .gte("niveau_actuel", 1)
-        .order("id")
-        .returns<{ personne_id: string }[]>()
-    );
+    const rows = await pConducteurs; // lancée en vague 2
     for (const r of rows) conducteurIds.add(r.personne_id);
   }
 
@@ -378,19 +528,7 @@ export default async function PlanningPage({
   // fetchAll obligatoire (L8) : les placements sur 3 semaines depassent 1000.
   const autoPlacedIds = new Set<string>();
   if (equipeMode === "auto" && visIsos.length) {
-    const defaultQ = quartParDefaut(quarts);
-    const orExpr =
-      quart === defaultQ ? `quart_code.eq.${quart},quart_code.is.null` : `quart_code.eq.${quart}`;
-    const rows = await fetchAll<{ personne_id: string }>(() =>
-      supabase
-        .from("placement")
-        .select("personne_id")
-        .not("poste_id", "is", null)
-        .in("jour", visIsos)
-        .or(orExpr)
-        .order("id")
-        .returns<{ personne_id: string }[]>()
-    );
+    const rows = await pAutoPlaced; // lancée en vague 3
     for (const r of rows) autoPlacedIds.add(r.personne_id);
   }
 
@@ -427,36 +565,8 @@ export default async function PlanningPage({
   // sert a afficher l'horaire par defaut dans l'infobulle de la pendule.
   const horaireStd: Record<string, { debut: string; fin: string }> = {};
   if (allIds.length && visIsos.length) {
-    const [pl, mat, { data: exc }, { data: horStd }] = await Promise.all([
-      fetchAll<Placement>(() =>
-        supabase
-          .from("placement")
-          .select("personne_id, jour, poste_id, motif_absence_id, non_travaille, quart_code")
-          .in("jour", visIsos)
-          .in("personne_id", allIds)
-          .order("id")
-          .returns<Placement[]>()
-      ),
-      fetchAll<MatRow>(() =>
-        supabase
-          .from("matrice")
-          .select("personne_id, poste_id, niveau_actuel")
-          .in("personne_id", allIds)
-          .order("id")
-          .returns<MatRow[]>()
-      ),
-      supabase
-        .from("horaire_exception")
-        .select("personne_id, jour, debut, fin, motif")
-        .in("jour", visIsos)
-        .in("personne_id", allIds)
-        .returns<{ personne_id: string; jour: string; debut: string | null; fin: string | null; motif: string | null }[]>(),
-      supabase
-        .from("horaire_poste")
-        .select("poste_id, jour, debut, fin")
-        .eq("quart_code", quart)
-        .returns<{ poste_id: string; jour: number; debut: string | null; fin: string | null }[]>(),
-    ]);
+    // Lancées en vague 3 (placements, matrice, exceptions, horaires, TP réels).
+    const [pl, mat, { data: exc }, { data: horStd }, { data: tpReal, error: tpRealErr }] = await pCases;
     for (const h of horStd ?? []) horaireStd[`${h.poste_id}:${h.jour}`] = { debut: h.debut ?? "", fin: h.fin ?? "" };
     for (const r of pl) {
       const k = `${r.personne_id}:${r.jour}`;
@@ -480,13 +590,6 @@ export default async function PlanningPage({
     // Best-effort — si la colonne n'existe pas encore, on retombe sur le calcul
     // virtuel plus bas. Le jeton "TP" est rendu comme le TP calculé (fond violet),
     // mais draggable et effaçable.
-    const { data: tpReal, error: tpRealErr } = await supabase
-      .from("placement")
-      .select("personne_id, jour")
-      .eq("tp", true)
-      .in("jour", visIsos)
-      .in("personne_id", allIds)
-      .returns<{ personne_id: string; jour: string }[]>();
     if (!tpRealErr) for (const r of tpReal ?? []) initial[`${r.personne_id}:${r.jour}`] = "TP";
   }
 
@@ -495,15 +598,9 @@ export default async function PlanningPage({
   // virtuel ne s'applique qu'aux semaines NON chargées (« repli tant que non
   // chargé »), sans quoi un TP déplacé serait aussitôt recréé à sa place. Best-
   // effort : table absente -> aucune semaine chargée, comportement d'avant 0064.
+  // (Lecture faite en vague 1.)
   const chargedWeeks = new Set<string>();
-  {
-    const { data: tcD, error: tcErr } = await supabase
-      .from("tp_charge")
-      .select("semaine_lundi")
-      .in("semaine_lundi", weekMondays.map((wm) => isoDate(wm)))
-      .returns<{ semaine_lundi: string }[]>();
-    if (!tcErr) for (const r of tcD ?? []) chargedWeeks.add(r.semaine_lundi);
-  }
+  if (!tcErr) for (const r of tcD ?? []) chargedWeeks.add(r.semaine_lundi);
   const weekChargedByWi = weekMondays.map((wm) => chargedWeeks.has(isoDate(wm)));
 
   // Temps partiel (best-effort, colonnes 0025). Calcul serveur.
@@ -523,16 +620,8 @@ export default async function PlanningPage({
     // Périodes TP couvrant la plage visible (anticipation incluse).
     // Repli sur personne.tp_config si tp_periode est vide (migration pas encore jouée,
     // ou personne dont la période n'a pas encore été migrée).
-    type TpRow = { id: string; personne_id: string; date_debut: string; date_fin: string | null; tp_config: { off?: Record<string, string[]> } | null };
-    const minIso = visIsos[0];
-    const maxIso = visIsos[visIsos.length - 1];
-    const { data: tpPeriodes } = await supabase
-      .from("tp_periode")
-      .select("id, personne_id, date_debut, date_fin, tp_config")
-      .lte("date_debut", maxIso)
-      .or(`date_fin.is.null,date_fin.gte.${minIso}`)
-      .order("date_debut")
-      .returns<TpRow[]>();
+    // Lancée en vague 2 (bornes : les 3 semaines complètes).
+    const { data: tpPeriodes } = await pTpPeriodes;
     // Index par personne.
     const periodesByPers = new Map<string, TpRow[]>();
     for (const p of tpPeriodes ?? []) {
@@ -540,12 +629,7 @@ export default async function PlanningPage({
     }
     // Repli : personnes avec temps_partiel=true mais sans ligne dans tp_periode
     // (cas de transition, avant que l'utilisateur ait ouvert la modale).
-    const { data: tpFallback } = await supabase
-      .from("personne")
-      .select("id, tp_config")
-      .eq("temps_partiel", true)
-      .in("id", allIds)
-      .returns<{ id: string; tp_config: { off?: Record<string, string[]> } | null }[]>();
+    const { data: tpFallback } = await pTpFallback; // lancée en vague 2
     const fallbackMap = new Map<string, { off?: Record<string, string[]> } | null>();
     for (const r of tpFallback ?? []) {
       if (!periodesByPers.has(r.id)) fallbackMap.set(r.id, r.tp_config);
@@ -619,14 +703,7 @@ export default async function PlanningPage({
   // Canal separe `horsEffectif` : meme desactivation, rendu vide (pas de « TP »).
   const horsEffectif: Record<string, boolean> = {};
   if (allIds.length && visIsos.length) {
-    const contratsData = await fetchAll<{ personne_id: string; date_debut: string | null; date_fin: string | null }>(() =>
-      supabase
-        .from("contrat_periode")
-        .select("personne_id, date_debut, date_fin")
-        .in("personne_id", allIds)
-        .order("id")
-        .returns<{ personne_id: string; date_debut: string | null; date_fin: string | null }[]>()
-    );
+    const contratsData = await pContrats; // lancée en vague 2
     const contratsParPersonne = new Map<string, { date_debut: string | null; date_fin: string | null }[]>();
     for (const r of contratsData) {
       const arr = contratsParPersonne.get(r.personne_id) ?? [];
@@ -656,7 +733,7 @@ export default async function PlanningPage({
   // hors atelier/equipe courants.
   // Contrats pilotés par agence (drapeau avec_agence, 0072) : surlignés en jaune
   // comme l'intérim (intérim + CDI intérimaire…).
-  const agenceCodesSet = new Set(await getTypesAgenceC());
+  const agenceCodesSet = new Set(typesAgence);
   const gridPersonnes = allActive.map((p) => ({
     id: p.id,
     label: `${p.nom} ${p.prenom}`,
@@ -698,11 +775,7 @@ export default async function PlanningPage({
   const habPers: Record<string, string> = {};
   if (posteIdsAffiches.length) {
     const dureeComp: Record<string, number | null> = {};
-    const { data: pcrD } = await supabase
-      .from("poste_competence_requise")
-      .select("poste_id, competence_id, competence:competence_id(nom, duree_validite_mois)")
-      .in("poste_id", posteIdsAffiches)
-      .returns<PcrRow[]>();
+    const { data: pcrD } = await pPcr; // lancée en vague 2
     for (const r of pcrD ?? []) {
       (habPoste[r.poste_id] ??= []).push(r.competence_id);
       habComp[r.competence_id] = r.competence?.nom ?? "habilitation";
@@ -710,16 +783,7 @@ export default async function PlanningPage({
     }
     const compRequisesIds = Object.keys(habComp);
     if (compRequisesIds.length && allIds.length) {
-      // personne_competence depasse 1000 lignes -> fetchAll obligatoire.
-      const det = await fetchAll<PcDetRow>(() =>
-        supabase
-          .from("personne_competence")
-          .select("personne_id, competence_id, date_obtention, date_expiration")
-          .in("competence_id", compRequisesIds)
-          .in("personne_id", allIds)
-          .order("id")
-          .returns<PcDetRow[]>()
-      );
+      const det = await pHabDet; // chaînée sur pPcr en vague 2
       for (const d of det)
         habPers[`${d.personne_id}:${d.competence_id}`] =
           d.date_expiration ?? addMonthsIso(d.date_obtention, dureeComp[d.competence_id]) ?? "";

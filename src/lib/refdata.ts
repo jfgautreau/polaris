@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import { getAdminClient } from "@/lib/supabase-server";
 import { getCurrentSite } from "@/lib/current-site";
@@ -295,3 +296,32 @@ const getTypesAgenceBySite = unstable_cache(
 export async function getTypesAgenceC(): Promise<string[]> {
   return getTypesAgenceBySite(await siteId());
 }
+
+// -------- Compteur d'alertes habilitations (cloche de l'en-tête) ----
+// Nombre d'habilitations dont l'échéance tombe dans les 90 jours (ou est
+// dépassée). Recalculé à CHAQUE page par AppHeader avant 2026-09-28 (comptage
+// exact, RLS évaluée ligne à ligne) : désormais mis en cache 60 s par site
+// (perf P7). Même périmètre qu'avant : la RLS de lecture de
+// `personne_competence` ne filtrait que par site, d'où le `.eq("site_id")`.
+// `cache()` de React par-dessus : requireModule lance le calcul en avance,
+// AppHeader récupère la même promesse (perf P4).
+export const ALERTES_HAB_TAG = "refdata-alertes-hab";
+
+const getAlertesHabilitationsBySite = unstable_cache(
+  async (site: string): Promise<number> => {
+    const limit = new Date();
+    limit.setDate(limit.getDate() + 90);
+    const { count } = await getAdminClient()
+      .from("personne_competence")
+      .select("*", { count: "exact", head: true })
+      .eq("site_id", site)
+      .not("date_expiration", "is", null)
+      .lte("date_expiration", limit.toISOString().slice(0, 10));
+    return count ?? 0;
+  },
+  ["refdata-alertes-hab"],
+  { revalidate: 60, tags: [ALERTES_HAB_TAG] }
+);
+export const getAlertesHabilitationsC = cache(async function getAlertesHabilitationsC(): Promise<number> {
+  return getAlertesHabilitationsBySite(await siteId());
+});

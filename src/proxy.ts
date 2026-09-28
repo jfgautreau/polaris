@@ -62,9 +62,15 @@ export async function proxy(req: NextRequest) {
     pathname.startsWith("/auth/") ||
     pathname.startsWith("/affichage");
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Perf (P3, 2026-09-28) : getClaims() vérifie la SIGNATURE du jeton localement
+  // (clés asymétriques Supabase, JWKS mis en cache) au lieu d'un aller-retour au
+  // serveur Auth à chaque page ; il rafraîchit la session comme getUser() et
+  // retombe automatiquement sur getUser() tant que le projet signe en HS256.
+  // Sécurité inchangée : un compte désactivé est refusé par getCurrentProfile()
+  // (relecture de app_user.is_active à chaque requête), pas par ce proxy.
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const userId = (claimsData?.claims?.sub as string | undefined) ?? null;
+  const user = userId ? { id: userId } : null;
 
   if (!user && !isPublic) {
     return NextResponse.redirect(new URL("/login", req.url));

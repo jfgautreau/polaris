@@ -117,62 +117,64 @@ export default async function MatricePage({
 
   const posteIds = groups.flatMap((g) => g.postes.map((p) => p.id));
 
-  // Niveaux existants (vague 2 : depend des postes affiches et des personnes)
-  const initial: Record<string, { a: number; c: number }> = {};
-  if (posteIds.length && personnes.length) {
-    const m = await fetchAll<MatriceRow>(() =>
-      supabase
-        .from("matrice")
-        .select("personne_id, poste_id, niveau_actuel, niveau_cible")
-        .in("personne_id", personnes.map((p) => p.id))
-        .in("poste_id", posteIds)
-        .order("id")
-        .returns<MatriceRow[]>()
-    );
-    for (const r of m) {
-      initial[`${r.personne_id}:${r.poste_id}`] = { a: r.niveau_actuel, c: r.niveau_cible };
-    }
-  }
-
-  // Drapeau « sans compétence » — calculé sur TOUS les postes actifs du site,
-  // indépendamment du filtre atelier : une personne peut être toute blanche dans
-  // l'atelier affiché mais compétente ailleurs. On n'alerte que celles qui n'ont
-  // aucun niveau actuel ≥ 1 nulle part. `.gte("niveau_actuel", 1)` exclut d'office
-  // le blanc (0) ET la restriction (−1) : une restriction n'est pas une compétence.
-  const avecCompetence = new Set<string>();
-  if (personnes.length) {
-    const rows = await fetchAll<{ personne_id: string }>(() =>
-      supabase
-        .from("matrice")
-        .select("personne_id, poste!inner(actif)")
-        .eq("poste.actif", true)
-        .gte("niveau_actuel", 1)
-        .in("personne_id", personnes.map((p) => p.id))
-        .order("id")
-        .returns<{ personne_id: string }[]>()
-    );
-    for (const r of rows) avecCompetence.add(r.personne_id);
-  }
-
-  // Filtre Conducteurs (?cond=1) : personnes ayant au moins une compétence
-  // (niveau_actuel ≥ 1) sur au moins un poste `categorie = 'conducteur'` actif.
-  // Critère orthogonal au filtre atelier (« sait conduire », partout dans l'usine).
-  // fetchAll : `matrice` dépasse 1000 lignes (L8).
+  // Vague 2 (perf P5, 2026-09-28) : les trois lectures de `matrice` et les types
+  // d'agence partent ENSEMBLE (elles étaient enchaînées). fetchAll : `matrice`
+  // dépasse 1000 lignes (L8).
+  //  - niveaux existants : dépend des postes affichés et des personnes ;
+  //  - drapeau « sans compétence » — calculé sur TOUS les postes actifs du site,
+  //    indépendamment du filtre atelier : une personne peut être toute blanche
+  //    dans l'atelier affiché mais compétente ailleurs. On n'alerte que celles qui
+  //    n'ont aucun niveau actuel ≥ 1 nulle part. `.gte("niveau_actuel", 1)` exclut
+  //    d'office le blanc (0) ET la restriction (−1) ;
+  //  - filtre Conducteurs (?cond=1) : au moins une compétence (≥ 1) sur au moins
+  //    un poste `categorie = 'conducteur'` actif — critère orthogonal au filtre
+  //    atelier (« sait conduire », partout dans l'usine).
   const filtreConducteurs = sp.cond === "1";
-  const conducteurIds = new Set<string>();
-  if (filtreConducteurs) {
-    const rows = await fetchAll<{ personne_id: string }>(() =>
-      supabase
-        .from("matrice")
-        .select("personne_id, poste!inner(categorie, actif)")
-        .eq("poste.categorie", "conducteur")
-        .eq("poste.actif", true)
-        .gte("niveau_actuel", 1)
-        .order("id")
-        .returns<{ personne_id: string }[]>(),
-    );
-    for (const r of rows) conducteurIds.add(r.personne_id);
+  const persIds = personnes.map((p) => p.id);
+  const [m, avecRows, condRows, typesAgence] = await Promise.all([
+    posteIds.length && personnes.length
+      ? fetchAll<MatriceRow>(() =>
+          supabase
+            .from("matrice")
+            .select("personne_id, poste_id, niveau_actuel, niveau_cible")
+            .in("personne_id", persIds)
+            .in("poste_id", posteIds)
+            .order("id")
+            .returns<MatriceRow[]>()
+        )
+      : Promise.resolve([] as MatriceRow[]),
+    personnes.length
+      ? fetchAll<{ personne_id: string }>(() =>
+          supabase
+            .from("matrice")
+            .select("personne_id, poste!inner(actif)")
+            .eq("poste.actif", true)
+            .gte("niveau_actuel", 1)
+            .in("personne_id", persIds)
+            .order("id")
+            .returns<{ personne_id: string }[]>()
+        )
+      : Promise.resolve([] as { personne_id: string }[]),
+    filtreConducteurs
+      ? fetchAll<{ personne_id: string }>(() =>
+          supabase
+            .from("matrice")
+            .select("personne_id, poste!inner(categorie, actif)")
+            .eq("poste.categorie", "conducteur")
+            .eq("poste.actif", true)
+            .gte("niveau_actuel", 1)
+            .order("id")
+            .returns<{ personne_id: string }[]>(),
+        )
+      : Promise.resolve([] as { personne_id: string }[]),
+    getTypesAgenceC(),
+  ]);
+  const initial: Record<string, { a: number; c: number }> = {};
+  for (const r of m) {
+    initial[`${r.personne_id}:${r.poste_id}`] = { a: r.niveau_actuel, c: r.niveau_cible };
   }
+  const avecCompetence = new Set(avecRows.map((r) => r.personne_id));
+  const conducteurIds = new Set(condRows.map((r) => r.personne_id));
 
   // Sous-ensemble affiché par défaut : les personnes passant les filtres
   // équipe + atelier (+ Conducteurs). La recherche par nom (client) passe outre
@@ -188,7 +190,7 @@ export default async function MatricePage({
 
   // Contrats pilotés par agence (drapeau avec_agence, 0072) : surlignés en jaune
   // comme l'intérim (intérim + CDI intérimaire…).
-  const agenceCodesSet = new Set(await getTypesAgenceC());
+  const agenceCodesSet = new Set(typesAgence);
 
   // Perimetre d'edition (chefEquipes recupere en vague 1)
   const gridPersonnes = personnes.map((p) => ({

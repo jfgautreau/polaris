@@ -559,6 +559,30 @@ Acquis à préserver : région `cdg1` + Fluid Compute · options de `<select>` c
 référence (`src/lib/refdata.ts`, `unstable_cache` 30 s) · `loading.tsx` sur les gros écrans ·
 compteurs du bilan matrice agrégés **en une passe** (`useMemo`, pas un balayage par cellule).
 
+**Lot perf 2026-09-28 (P1–P8) — à préserver :**
+- **P1 RLS en InitPlan** (migration `0075`, à appliquer) : `current_site_id()`,
+  `is_admin()`, `is_super_admin()`, `has_role('x')`, `auth.uid()` enveloppés en
+  `(select …)` dans toutes les policies → calculés une fois par requête, plus par ligne.
+  ⚠️ Toute NOUVELLE policy doit s'écrire directement `site_id = (select public.current_site_id())`.
+- **P2 socle** : `getCurrentProfile` lit `app_user` + `site` en UNE requête (embed, repli
+  deux requêtes) ; `getCurrentSite` réutilise `profile.siteRow` hors impersonation ;
+  `requireModule` lance modules masqués + droits en parallèle.
+- **P3 proxy** : `getClaims()` (vérif. locale du JWT si clés asymétriques activées côté
+  Supabase, sinon repli automatique `getUser()`). `is_active` reste vérifié par `getCurrentProfile`.
+- **P4/P7 en-tête** : `AppHeader` charge tout en `Promise.all` ; compteur d'alertes
+  habilitations en cache 60 s par site (`getAlertesHabilitationsC`, préchargé par `requireModule`).
+- **P5 cascades** : Planning (3 vagues), Placement, Matrice lancent leurs lectures
+  indépendantes d'emblée via `enAvance()` (`src/lib/en-avance.ts`) — ne pas réintroduire
+  d'`await` en série sur des lectures indépendantes.
+- **P6 `fetchAll`** : 1ʳᵉ tranche seule, puis vagues de 8 tranches en parallèle (testé).
+- **P8 cache navigateur** : `experimental.staleTimes.dynamic = 30` + garde-fou
+  `GardeCacheNavigation` (monté dans `AppHeader`) : après toute écriture (requête non-GET),
+  une page mise en cache AVANT l'écriture est rechargée complètement au lieu d'être
+  resservie. Les changements faits par d'autres postes peuvent mettre ≤ 30 s à apparaître.
+- ⚠️ P4 « en-tête dans un layout partagé » **non retenu** : les écrans grille (`.pagecol`
+  100dvh) portent l'en-tête dans leur colonne ; le déplacer casserait leur mise en page.
+  Le préchargement + cache donne l'essentiel du gain.
+
 ⚠️ **Invalidation immédiate du cache refdata** : toutes les entrées portent un tag
 exporté (`ATELIERS_TAG`, `EQUIPES_TAG`, `QUARTS_TAG`, `MOTIFS_TAG`, `NIVEAUX_TAG`,
 `NB_NIVEAUX_TAG`, `SEUIL_COMPETENT_TAG`, `ROTATION_TAG`). **Toute server action ou

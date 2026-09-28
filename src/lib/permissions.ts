@@ -311,9 +311,15 @@ export async function requireModule(module: string, level: "read" | "write") {
   // inaccessible pour TOUT LE MONDE, au-dessus de la matrice de droits.
   // Blocage réel : on redirige vers l'accueil (jamais vers /planning, qui
   // peut lui-même être masqué → boucle).
+  // Perf (P2/P4, 2026-09-28) : modules masqués, droits et compteur d'alertes de
+  // l'en-tête lancés EN PARALLÈLE. Les trois sont dédupliqués par requête
+  // (cache()) : quand AppHeader les redemande, ils sont déjà résolus — l'en-tête
+  // n'ajoute plus d'aller-retour en série après les données de la page.
   const { getModulesMasquesC } = await import("@/lib/site-modules");
-  if ((await getModulesMasquesC()).has(module)) redirect("/");
-  const perms = await getPermissions(profile.role);
+  const { getAlertesHabilitationsC } = await import("@/lib/refdata");
+  void getAlertesHabilitationsC().catch(() => 0);
+  const [masques, perms] = await Promise.all([getModulesMasquesC(), getPermissions(profile.role)]);
+  if (masques.has(module)) redirect("/");
   const ok = level === "write" ? canWrite(perms, module) : canRead(perms, module);
   if (!ok) redirect("/planning");
   return { profile, perms };

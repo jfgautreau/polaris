@@ -50,6 +50,9 @@ export const getCurrentSite = cache(async function getCurrentSite(): Promise<Cur
   const { getCurrentProfile } = await import("@/lib/current-user");
   const profile = await getCurrentProfile();
   const id = profile?.siteId ?? SITE_LEBIGNON_ID;
+  // Perf P2 : la ligne du site de rattachement a été lue avec le profil (même
+  // requête). En impersonation, `siteRow` est absent → lecture ci-dessous.
+  if (profile?.siteRow && profile.siteRow.id === id) return profile.siteRow;
 
   const supabase = getAdminClient();
   const { data, error } = await supabase
