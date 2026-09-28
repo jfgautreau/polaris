@@ -340,10 +340,11 @@ export default async function PlacementPage({
     if (idsPostes.length) {
       const { data: postesD } = await supabase
         .from("poste")
-        .select("id, nom, actif, ligne_id, ligne:ligne_id(actif)")
+        .select("id, nom, actif, ligne_id, ligne:ligne_id(actif, atelier_id)")
         .in("id", idsPostes)
-        .returns<{ id: string; nom: string; actif: boolean; ligne_id: string; ligne: { actif: boolean } | null }[]>();
+        .returns<{ id: string; nom: string; actif: boolean; ligne_id: string; ligne: { actif: boolean; atelier_id: string | null } | null }[]>();
       const posteInfo = new Map((postesD ?? []).map((p) => [p.id, p]));
+      const ateliersActifs = new Set(ateliers.map((a) => a.id));
       for (const r of placesQuart) {
         const p = posteInfo.get(r.poste_id as string);
         if (!p) continue;
@@ -353,8 +354,34 @@ export default async function PlacementPage({
             ? "poste désactivé"
             : !actifLe(posteVal.get(p.id), todayIsoRef) || !actifLe(ligneVal.get(p.ligne_id), todayIsoRef)
               ? "poste fermé à cette date"
-              : null;
+              // Aucun plan ne dessine le poste d'un service désactivé / d'une ligne sans service.
+              : !p.ligne?.atelier_id || !ateliersActifs.has(p.ligne.atelier_id)
+                ? "service désactivé ou absent"
+                : null;
         if (raison) horsPlan[r.personne_id] = { posteId: p.id, libelle: `${p.nom} — ${raison}` };
+      }
+    }
+
+    // Placés mais ABSENTS de la liste chargée : partis, ou hors effectif ce jour
+    // d'après leurs contrats. Ni la case du poste ni la liste ne les montraient.
+    // On les ajoute (ils occupent réellement le poste) et on les signale.
+    const connus = new Set(personnes.map((p) => p.id));
+    const idsInconnus = [...new Set(placesQuart.map((r) => r.personne_id).filter((id) => !connus.has(id)))];
+    if (idsInconnus.length) {
+      const { data: extraD } = await supabase
+        .from("personne")
+        .select("id, nom, prenom, equipe_id, atelier_id, type_contrat, statut")
+        .in("id", idsInconnus)
+        .returns<(Personne & { statut: string })[]>();
+      for (const e of extraD ?? []) {
+        personnes.push({ id: e.id, nom: e.nom, prenom: e.prenom, equipe_id: e.equipe_id, atelier_id: e.atelier_id, type_contrat: e.type_contrat });
+        const posteId = placesQuart.find((r) => r.personne_id === e.id)?.poste_id as string;
+        if (!horsPlan[e.id]) {
+          horsPlan[e.id] = {
+            posteId,
+            libelle: e.statut === "PARTI" ? "personne partie (statut Parti)" : "hors effectif ce jour (contrat)",
+          };
+        }
       }
     }
   }

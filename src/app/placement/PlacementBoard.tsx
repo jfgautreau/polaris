@@ -670,7 +670,9 @@ export default function PlacementBoard({
         // Un TP DÉJÀ placé reste visible pour permettre le retrait (rank=2).
         if (tpSetPourListe.has(p.id) && !place[p.id] && !autreQuart[p.id]) return false;
       }
-      if (hidePlaced && (place[p.id] || autreQuart[p.id]) && !hp) return false;
+      // « Masquer les placés » ne s'applique PAS pendant une recherche : chercher un
+      // nom doit le trouver, qu'il soit placé ou non (son statut dit où il est).
+      if (hidePlaced && !q && (place[p.id] || autreQuart[p.id]) && !hp) return false;
       return true;
     });
     const rank = (p: Personne) => {

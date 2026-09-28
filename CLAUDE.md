@@ -773,8 +773,11 @@ présent dans `.next/static/chunks/app/<écran>/page-*.js`.
   `placement-helpers.ts`) ; `/copy` ne recopie pas ces affectations (`horsCycle`).
   **Placement — « placés hors plan »** (`horsPlan`, calculé par `placement/page.tsx`) : une
   personne placée sur ce quart sur un poste qu'aucun plan ne dessine (ne tourne pas sur
-  ce quart, désactivé, fermé) n'est **jamais masquée** : en tête de liste, statut orange
-  « ⚠ poste — raison », bandeau de décompte. ⚠️ **Affectation automatique : ne demande
+  ce quart, désactivé, fermé, service désactivé ou absent) — ou elle-même absente de la
+  liste chargée (**partie**, ou **hors effectif** ce jour d'après ses contrats : elle est
+  alors ajoutée et dessinée sur son poste) — n'est **jamais masquée** : en tête de liste,
+  statut orange « ⚠ poste — raison », bandeau de décompte. Pendant une **recherche par
+  nom**, « Masquer les placés » ne s'applique pas. ⚠️ **Affectation automatique : ne demande
   pas, ne force pas** — une personne **non habilitée** pour son poste fixe **n'est pas
   placée** (contrôle groupé). `upsert ignoreDuplicates` sur `(personne, jour)` → **n'écrase
   jamais** une case remplie (absence/affectation) ; saute les jours **hors effectif** (contrat
