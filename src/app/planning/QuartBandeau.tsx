@@ -12,6 +12,12 @@
 
 type Q = { code: string; libelle: string; couleur?: string | null };
 
+// Texte lisible sur une couleur de quart : blanc si la teinte est foncée
+// (partagé avec les bandes de quart de la grille du Planning).
+export function texteSurCouleur(hex: string): string {
+  return luminance(hex) < 0.55 ? "#fff" : "#111827";
+}
+
 function luminance(hex: string): number {
   const h = hex.replace("#", "");
   if (h.length !== 6) return 1;
@@ -22,10 +28,10 @@ function luminance(hex: string): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
-// « Suivre l'équipe » (`suivi`) : chaque semaine a son quart. Bandeau neutre qui
-// nomme l'équipe suivie et égrène le quart de chaque semaine, chacun dans sa
-// couleur (les mêmes pastilles coiffent les semaines de la grille).
-type Suivi = { equipe: string; semaines: { num: number; quart: string }[] };
+// « Suivre l'équipe » (`suivi`) : chaque semaine a son quart, affiché en bande
+// colorée au-dessus des colonnes de la semaine dans la grille. Le bandeau, neutre,
+// se contente de nommer l'équipe suivie.
+type Suivi = { equipe: string };
 
 export default function QuartBandeau({ quart, quarts, suivi = null }: { quart: string; quarts: Q[]; suivi?: Suivi | null }) {
   if (suivi) {
@@ -51,28 +57,6 @@ export default function QuartBandeau({ quart, quarts, suivi = null }: { quart: s
       >
         <span style={{ opacity: 0.75, fontWeight: 500, fontSize: 13 }}>Vous suivez l&apos;équipe</span>
         <span style={{ textTransform: "uppercase", letterSpacing: 0.3 }}>{suivi.equipe}</span>
-        <span style={{ opacity: 0.4 }}>·</span>
-        {suivi.semaines.map((s, i) => {
-          const qs = quarts.find((x) => x.code === s.quart);
-          const c = qs?.couleur || "#e5e7eb";
-          return (
-            <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              {i > 0 && <span style={{ opacity: 0.4, fontWeight: 400 }}>→</span>}
-              <span
-                style={{
-                  background: c,
-                  color: luminance(c) < 0.55 ? "#fff" : "#111827",
-                  borderRadius: 6,
-                  padding: "2px 10px",
-                  textTransform: "uppercase",
-                  letterSpacing: 0.3,
-                }}
-              >
-                S{s.num} · {qs?.libelle ?? s.quart}
-              </span>
-            </span>
-          );
-        })}
       </div>
     );
   }

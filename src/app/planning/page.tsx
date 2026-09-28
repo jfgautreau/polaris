@@ -976,11 +976,7 @@ export default async function PlanningPage({
             <QuartBandeau
               quart={quart}
               quarts={quarts}
-              suivi={
-                suivreEquipe && eqSel
-                  ? { equipe: eqSel.nom, semaines: weekMondays.map((wm, wi) => ({ num: isoWeekNumber(wm), quart: quartsSemaine[wi] })) }
-                  : null
-              }
+              suivi={suivreEquipe && eqSel ? { equipe: eqSel.nom } : null}
             />
           }
         />

@@ -7,6 +7,7 @@ import { habValable } from "@/lib/habilitations";
 import { INTERIM_BG } from "@/lib/interim";
 import ModaleDeplacable from "@/components/ModaleDeplacable";
 import { FillIcon } from "@/components/icons";
+import { texteSurCouleur } from "./QuartBandeau";
 
 // `wi` : index de la semaine affichée (0..2) ; `quart` : quart affiché ce jour-là —
 // le même partout en « Suivre le quart », celui de l'équipe en « Suivre l'équipe ».
@@ -1086,7 +1087,11 @@ export default function PlanningGrid({
   const isToday = (d: Jour) => d.iso === todayIso;
   // En-tetes figes : les lignes d'indicateurs (Besoin..Alertes) restent collees sous
   // les en-tetes de jours quand on descend. Offsets cumulables (a recalibrer si besoin).
-  const HEAD_H = 60; // hauteur des 2 lignes d'en-tete (semaine + jours)
+  // « Suivre l'équipe » : une bande de quart par semaine coiffe l'en-tête (alignée
+  // sur les colonnes de la semaine) ; les lignes figées en dessous descendent d'autant.
+  const avecBandeQuart = weekBlocks.some((w) => !!w.quart);
+  const BANDE_H = avecBandeQuart ? 34 : 0;
+  const HEAD_H = 60 + BANDE_H; // hauteur des lignes d'en-tete (bande de quart + semaine + jours)
   const IND_H = 21; // hauteur d'une ligne d'indicateur
   const STICK_TOP = (rowIdx: number) => HEAD_H + rowIdx * IND_H;
   const indCellStyle = (rowIdx: number, bg: string): React.CSSProperties => ({
@@ -1226,8 +1231,40 @@ export default function PlanningGrid({
       <table ref={headTableRef} className="matrix" style={tStyle} onMouseOver={onCellOver} onMouseLeave={onCellLeave}>
         <Cols />
         <thead>
+          {avecBandeQuart && (
+            <tr>
+              <th style={{ position: "sticky", left: 0, top: 0, zIndex: 25, background: "#fff", height: BANDE_H, padding: 0 }} />
+              {weekBlocks.map((w, i) => {
+                const c = w.quart?.couleur || "#e5e7eb";
+                return (
+                  <th
+                    key={i}
+                    colSpan={w.span}
+                    title={`Quart de l'équipe en semaine ${w.num}`}
+                    style={{
+                      position: "sticky",
+                      top: 0,
+                      zIndex: 20,
+                      height: BANDE_H,
+                      padding: "0 8px",
+                      borderLeft: "3px solid #94a3b8",
+                      background: c,
+                      color: texteSurCouleur(c),
+                      textAlign: "center",
+                      fontSize: 17,
+                      fontWeight: 800,
+                      letterSpacing: 0.6,
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {w.quart?.libelle ?? ""}
+                  </th>
+                );
+              })}
+            </tr>
+          )}
           <tr>
-            <th rowSpan={2} style={{ position: "sticky", left: 0, top: 0, zIndex: 25, background: "#fff", textAlign: "center", padding: "2px 6px" }}>
+            <th style={{ position: "sticky", left: 0, top: BANDE_H, zIndex: 25, background: "#fff", textAlign: "center", padding: "2px 6px" }} rowSpan={2}>
               {weekNav}
               <button
                 type="button"
@@ -1246,7 +1283,7 @@ export default function PlanningGrid({
                   textAlign: "center",
                   padding: "2px 8px",
                   position: "sticky",
-                  top: 0,
+                  top: BANDE_H,
                   zIndex: 20,
                   borderLeft: "3px solid #94a3b8",
                   background: w.isCurrent ? "#dbeafe" : "#f8fafc",
@@ -1255,15 +1292,6 @@ export default function PlanningGrid({
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontWeight: w.isCurrent ? 700 : undefined }}>
                   {w.year} · Semaine {w.num}
                   {w.isCurrent && <span className="muted" style={{ fontWeight: 400 }}>(en cours)</span>}
-                  {w.quart && (
-                    <span
-                      title="Quart de l'équipe cette semaine"
-                      style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "#fff", color: "#111827", border: "1px solid var(--border)", borderRadius: 6, padding: "0 8px", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.3 }}
-                    >
-                      <span style={{ width: 10, height: 10, borderRadius: 2, background: w.quart.couleur || "#cbd5e1", boxShadow: "0 0 0 1px rgba(0,0,0,.2)" }} />
-                      {w.quart.libelle}
-                    </span>
-                  )}
                   {canPrefill && (
                     <button
                       type="button"
@@ -1281,7 +1309,7 @@ export default function PlanningGrid({
           </tr>
           <tr>
             {days.map((d) => (
-              <th key={d.iso} style={{ textAlign: "center", padding: "2px 2px", position: "sticky", top: 26, zIndex: 20, ...sep(d), borderBottom: "2px solid #94a3b8", background: d.closed ? "#f1f5f9" : isToday(d) ? "#dbeafe" : "#fff", color: d.closed ? "#94a3b8" : undefined }}>
+              <th key={d.iso} style={{ textAlign: "center", padding: "2px 2px", position: "sticky", top: BANDE_H + 26, zIndex: 20, ...sep(d), borderBottom: "2px solid #94a3b8", background: d.closed ? "#f1f5f9" : isToday(d) ? "#dbeafe" : "#fff", color: d.closed ? "#94a3b8" : undefined }}>
                 {d.nom.slice(0, 2)}
                 <br />
                 <span className="muted" style={{ fontWeight: 400 }}>{d.num}</span>
