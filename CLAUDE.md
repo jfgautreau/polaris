@@ -611,9 +611,19 @@ audit P2 (2026-09-10).
 
 **Grandes grilles** : Matrice et Habilitations sont **virtualisées** (lignes, via
 `usePersonGrid` / `virt`) — l'ancien plafond des ~22 000 cellules est levé. Restent NON
-virtualisés et sans mémoïsation : `PersonnelEditor` (un seul état `rows` → chaque frappe
-redessine ~270 lignes), `PlanningGrid`, `PlacementBoard`. Piste : React Compiler ou
-mémoïsation des lignes (audit perf 2026-09-28, point 3).
+virtualisés et sans mémoïsation : `PlanningGrid`, `PlacementBoard` (prochains candidats
+au React Compiler).
+
+**React Compiler (2026-09-28)** — `reactCompiler: { compilationMode: "annotation" }`
+(`next.config.ts`, devDep `babel-plugin-react-compiler`) : seul le code marqué `"use memo"`
+est compilé. **Actif sur Personnel** : `PersonnelEditor` + `LignePersonne` (ligne extraite,
+`memo`, actions d'identité stable via `useState` à initialiseur + ref « dernière version »)
+→ une frappe ne redessine plus que SA ligne. ⚠️ Le compilateur **renonce en silence** à un
+composant si : un `eslint-disable` des règles hooks traîne dans le fichier ; un `try … finally`,
+un `throw` ou un opérateur conditionnel (`??`, `?.`, `||`) est DANS un `try/catch` (sortir les
+appels réseau dans des fonctions de module qui ne lèvent pas, cf. `appelApiPersonnel`) ; un
+`useMemo(…, [])` ne peut être « préservé ». **Vérifier** après build : `react.memo_cache_sentinel`
+présent dans `.next/static/chunks/app/<écran>/page-*.js`.
 
 ## Carte des fichiers
 - Socle : `src/lib/{permissions,roles,roles-server,current-user,current-site,site-modules,week,refdata,parametres,habilitations,horaires,supabase-server,fetch-all,numeros-rotation,password-link,placement-helpers,rotation,password,erreurs,absence,absences-periodes,calendrier,quarts,poste-quart,referentiel-validite,semaine-type,interim,noms,bilans-rapports,synthese-data,verifier-site}.ts`, `src/proxy.ts`.

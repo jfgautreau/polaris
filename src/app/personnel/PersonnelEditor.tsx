@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import PageTitle from "@/components/PageTitle";
 import CompteurResultats from "@/components/CompteurResultats";
@@ -163,11 +163,355 @@ function BoutonAbsences({ row, onOpen }: { row: Row; onOpen: () => void }) {
   );
 }
 
+// ─── Appels réseau (niveau module) ────────────────────────────────────────────
+// Sortis du composant : le React Compiler ne sait pas encore traiter un
+// `try/catch` contenant des opérateurs conditionnels (`??`, `?.`, `||`…) et
+// renonçait alors à tout PersonnelEditor. Ces fonctions ne lèvent JAMAIS : elles
+// rendent un résultat que le composant interprète.
+type ReponsePersonnel = { ok?: boolean; row?: Row };
+async function appelApiPersonnel(
+  op: string,
+  payload: Record<string, unknown>,
+): Promise<{ ok: true; data: ReponsePersonnel } | { ok: false; message: string }> {
+  try {
+    const res = await fetch("/api/personnel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ op, ...payload }),
+    });
+    const j = await res.json().catch(() => ({} as Record<string, unknown>));
+    if (!res.ok) return { ok: false, message: (j as { error?: string }).error ?? `HTTP ${res.status}` };
+    return { ok: true, data: j as ReponsePersonnel };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Échec." };
+  }
+}
+// Fusion de deux fiches : `null` si réussie, sinon le message à afficher.
+async function appelFusion(keep_id: string, dup_id: string): Promise<string | null> {
+  try {
+    const res = await fetch("/api/personnel/merge", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ keep_id, dup_id }) });
+    if (res.ok) return null;
+    const j = (await res.json().catch(() => ({}))) as { error?: string };
+    return j.error || "Échec de la fusion.";
+  } catch {
+    return "Échec de la fusion.";
+  }
+}
+
+// ─── Ligne du tableau (perf, React Compiler — 2026-09-28) ─────────────────────
+// Composant SÉPARÉ et mémoïsé : quand une seule fiche change (frappe dans un
+// champ), seules SES cellules sont redessinées, pas les ~270 lignes. Condition :
+// props stables — `actions` est un objet d'identité constante (cf. parent),
+// `today` une chaîne, les listes viennent du serveur.
+type ActionsLigne = {
+  field: (id: string, key: keyof Row, value: string, instant?: boolean) => void;
+  setService: (id: string, raw: string) => void;
+  ouvrirCycle: (r: Row) => void;
+  ouvrirAbsences: (r: Row) => void;
+  ouvrirTp: (r: Row) => void;
+  ouvrirFiche: (r: Row) => void;
+  basculerSel: (id: string) => void;
+};
+
+const AUCUN_REGROUPEMENT: Record<string, string[]> = {};
+const inp: React.CSSProperties = { width: "100%", fontSize: 13, padding: "3px 4px" };
+const C = (k: ColKey): React.CSSProperties => (CENTER.has(k) ? { textAlign: "center", textAlignLast: "center" } : {});
+const champId = (id: string, key: string) => `pers-${id}-${key}`;
+// Fiche incomplète = aucune période de contrat OU contrat courant piloté par
+// agence sans agence renseignée (agenceManquante, dérivé serveur — 0072).
+const ficheIncomplete = (r: Row): boolean => !r.hasContrat || r.agenceManquante;
+// Colonne « Service » (0069) : le service seul OU « Service — Regroupement ».
+// Séparateur de contrôle (U+0001, jamais dans un UUID ni saisi) pour encoder le choix.
+const SVC_SEP = "\u0001";
+const encSvc = (aid: string | null, reg: string | null) => (reg ? `${aid ?? ""}${SVC_SEP}${reg}` : aid ?? "");
+const styleEquipe = (equipes: Equipe[], id: string | null): React.CSSProperties => {
+  const c = id ? equipes.find((e) => e.id === id)?.couleur : null;
+  return c ? { background: c, color: "#1e293b", fontWeight: 600 } : {};
+};
+
+// Colonne « 18 mois » : borne legale de l'interim. On affiche la date de fin
+// (livret + 18 mois) pour tous les INTERIMAIRES ACTIFS, teintee selon l'echeance :
+//   - 3-4 mois d'anciennete du livret : jaune (pre-alerte)
+//   - 17-18 mois : orange (imminent)
+//   - > 18 mois  : rouge (deja depasse)
+//   - reste      : date affichee sans code couleur.
+// Sans livret renseigne, la date ne peut pas etre calculee -> rien.
+type Alerte18 = { dateFin: string; anciennete: number; bg: string; fg: string; titre: string } | null;
+function alerte18(r: Row, today: string): Alerte18 {
+  if (r.type_contrat !== "INTERIM") return null;
+  if (statutALaDate(r, today) !== "ACTIF") return null;
+  if (!r.date_livret_accueil) return null;
+  const anciennete = monthsBetween(r.date_livret_accueil, today);
+  // Date de fin des 18 mois = livret + 18 mois (annee/mois, garde le jour).
+  const [y, mo, d] = r.date_livret_accueil.split("-").map(Number);
+  const dt = new Date(y, mo - 1 + 18, d);
+  const dateFin = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+
+  let bg = "transparent";
+  let fg = "inherit";
+  if (anciennete > 18) { bg = "#fecaca"; fg = "#7f1d1d"; } // rouge
+  else if (anciennete >= 17) { bg = "#fed7aa"; fg = "#7c2d12"; } // orange
+  else if (anciennete >= 3 && anciennete < 5) { bg = "#fef08a"; fg = "#854d0e"; } // jaune
+
+  const titre =
+    anciennete > 18 ? `Dépassé de ${anciennete - 18} mois`
+    : anciennete >= 17 ? `Échéance dans ${18 - anciennete} mois`
+    : anciennete >= 3 && anciennete < 5 ? `Pré-alerte (${anciennete} mois d'ancienneté)`
+    : `${anciennete} mois d'ancienneté depuis le livret`;
+  return { dateFin, anciennete, bg, fg, titre };
+}
+
+const LignePersonne = memo(function LignePersonne({
+  r,
+  today,
+  canEdit,
+  canRgpd,
+  selected,
+  selPlein,
+  equipes,
+  ateliers,
+  regroupementsParAtelier,
+  agenceSet,
+  types,
+  actions,
+}: {
+  r: Row;
+  today: string;
+  canEdit: boolean;
+  canRgpd: boolean;
+  selected: boolean;
+  selPlein: boolean;
+  equipes: Equipe[];
+  ateliers: Atelier[];
+  regroupementsParAtelier: Record<string, string[]>;
+  agenceSet: Set<string>;
+  types: TypeContrat[];
+  actions: ActionsLigne;
+}) {
+  "use memo"; // React Compiler (mode opt-in, cf. next.config.ts)
+  const a18 = alerte18(r, today);
+  const eqStyle = (id: string | null) => styleEquipe(equipes, id);
+  const equipeNom = (id: string | null) => (id ? equipes.find((e) => e.id === id)?.nom ?? "" : "");
+  const atelierNom = (id: string | null) => (id ? ateliers.find((a) => a.id === id)?.nom ?? "" : "");
+  // Libellé affiché en lecture : « Atelier — Regroupement » si regroupement posé.
+  const serviceLabel = (x: Row) => {
+    const a = atelierNom(x.atelier_id);
+    if (!a) return "";
+    return x.regroupement ? `${a} — ${x.regroupement}` : a;
+  };
+  // Libelle FR d'un code de contrat (respecte le parametrage Param. RH).
+  const typeLabel = (code: string): string =>
+    types.find((t) => t.code === code)?.libelle ?? (code === "INTERIM" ? "Intérim" : code);
+  // Colonnes Contrat + Statut : chips cliquables qui ouvrent la modale Cycle
+  // de vie. Plus de select / toggle direct — les valeurs sont des resultantes.
+  const chipBase: React.CSSProperties = {
+    display: "inline-block",
+    width: "auto",
+    margin: 0,
+    padding: "3px 10px",
+    border: "1px solid transparent",
+    borderRadius: 999,
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: canEdit ? "pointer" : "default",
+    lineHeight: 1.5,
+    whiteSpace: "nowrap",
+  };
+  const contratChip = (x: Row) => {
+    const bg = agenceSet.has(x.type_contrat) ? "#fde68a" : "#e0e7ff";
+    const fg = agenceSet.has(x.type_contrat) ? "#92400e" : "#3730a3";
+    return (
+      <button
+        type="button"
+        onClick={() => canEdit && actions.ouvrirCycle(x)}
+        style={{ ...chipBase, background: bg, color: fg, borderColor: bg }}
+        title={canEdit ? "Ouvrir le cycle de vie (contrats, arrivée, départ)" : typeLabel(x.type_contrat)}
+      >
+        {typeLabel(x.type_contrat)}
+      </button>
+    );
+  };
+  const statutChip = (x: Row) => {
+    const st = statutALaDate(x, today) as StatutPersonne;
+    const c = couleurStatut(st);
+    return (
+      <button
+        type="button"
+        onClick={() => canEdit && actions.ouvrirCycle(x)}
+        style={{ ...chipBase, background: c.bg, color: c.fg, borderColor: c.bg }}
+        title={canEdit ? "Ouvrir le cycle de vie (contrats, arrivée, départ)" : libelleStatut(st)}
+      >
+        {libelleStatut(st)}
+      </button>
+    );
+  };
+  // Pastille « fiche incomplete » : petit rond orange devant le nom quand
+  // aucun contrat n'existe. Clic ouvre la modale Cycle de vie pour en saisir un.
+  const pastilleIncomplet = (x: Row) => {
+    if (!ficheIncomplete(x)) return null;
+    const motif = !x.hasContrat
+      ? "Pas de contrat dans Cycle de vie"
+      : "Contrat intérim sans agence renseignée";
+    return (
+      <button
+        type="button"
+        onClick={canEdit ? () => actions.ouvrirCycle(x) : undefined}
+        title={`${motif}${canEdit ? " — cliquer pour compléter" : ""}`}
+        aria-label={motif}
+        style={{
+          width: 16,
+          height: 16,
+          margin: "0 6px 0 0",
+          padding: 0,
+          borderRadius: 999,
+          background: "#f59e0b",
+          color: "#fff",
+          border: "none",
+          fontSize: 11,
+          fontWeight: 700,
+          lineHeight: 1,
+          cursor: canEdit ? "pointer" : "help",
+          verticalAlign: "middle",
+        }}
+      >
+        !
+      </button>
+    );
+  };
+
+  return (
+    <tr style={{ opacity: statutALaDate(r, today) === "ACTIF" ? 1 : 0.55 }}>
+      {canEdit ? (
+        <>
+          <td style={{ textAlign: "center" }}>{contratChip(r)}</td>
+          <td><input value={r.matricule ?? ""} onChange={(e) => actions.field(r.id, "matricule", e.target.value)} style={{ ...inp, ...C("matricule") }} /></td>
+          <td><input value={r.numero_badge ?? ""} onChange={(e) => actions.field(r.id, "numero_badge", e.target.value)} style={{ ...inp, ...C("numero_badge") }} /></td>
+          <td style={{ position: "relative" }}>
+            {pastilleIncomplet(r)}
+            <input value={r.nom} onChange={(e) => actions.field(r.id, "nom", e.target.value)} onBlur={(e) => actions.field(r.id, "nom", normaliseNom(e.target.value), true)} style={{ ...inp, width: `calc(100% - ${ficheIncomplete(r) ? 22 : 0}px)` }} />
+          </td>
+          <td><input value={r.prenom} onChange={(e) => actions.field(r.id, "prenom", e.target.value)} onBlur={(e) => actions.field(r.id, "prenom", normalisePrenom(e.target.value), true)} style={inp} /></td>
+          <td><select id={champId(r.id, "sexe")} value={r.sexe ?? ""} onChange={(e) => actions.field(r.id, "sexe", e.target.value, true)} style={{ ...inp, ...C("sexe"), background: sexeBg(r.sexe), color: sexeFg(r.sexe), fontWeight: 600 }}><option value="">-</option><option value="H">H</option><option value="F">F</option></select></td>
+          <td><select id={champId(r.id, "equipe_id")} value={r.equipe_id ?? ""} onChange={(e) => actions.field(r.id, "equipe_id", e.target.value, true)} style={{ ...inp, ...C("equipe"), ...eqStyle(r.equipe_id) }}><option value="">-</option>{equipes.map((x) => (<option key={x.id} value={x.id}>{x.nom}</option>))}</select></td>
+          <td><select id={champId(r.id, "atelier_id")} value={encSvc(r.atelier_id, r.regroupement)} onChange={(e) => actions.setService(r.id, e.target.value)} style={{ ...inp, ...C("atelier") }} title={serviceLabel(r) || undefined}>
+            <option value="">-</option>
+            {ateliers.map((x) => {
+              const regs = regroupementsParAtelier[x.id] ?? [];
+              return (
+                <Fragment key={x.id}>
+                  <option value={x.id}>{x.nom}</option>
+                  {regs.map((rg) => (
+                    <option key={`${x.id}:${rg}`} value={encSvc(x.id, rg)}>{x.nom} — {rg}</option>
+                  ))}
+                </Fragment>
+              );
+            })}
+            {/* Regroupement « orphelin » (posé puis renommé/supprimé au
+                Référentiel) : on garde l'option pour ne pas vider le select. */}
+            {r.regroupement && r.atelier_id && !(regroupementsParAtelier[r.atelier_id] ?? []).includes(r.regroupement) && (
+              <option value={encSvc(r.atelier_id, r.regroupement)}>{atelierNom(r.atelier_id)} — {r.regroupement}</option>
+            )}
+          </select></td>
+          <td><input id={champId(r.id, "date_livret_accueil")} type="date" value={r.date_livret_accueil ?? ""} onChange={(e) => actions.field(r.id, "date_livret_accueil", e.target.value, true)} style={inp} /></td>
+          <td style={{ textAlign: "center", ...tightPad }}><BoutonAbsences row={r} onOpen={() => actions.ouvrirAbsences(r)} /></td>
+          <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
+            {a18 && (
+              <span
+                title={a18.titre}
+                style={{
+                  display: "inline-block",
+                  padding: "1px 6px",
+                  borderRadius: 4,
+                  background: a18.bg,
+                  color: a18.fg,
+                  fontWeight: 600,
+                  fontSize: 12,
+                }}
+              >
+                {fmtDate(a18.dateFin)}
+              </span>
+            )}
+          </td>
+          <td><input value={r.pointure ?? ""} maxLength={5} onChange={(e) => actions.field(r.id, "pointure", e.target.value)} style={{ ...inp, ...C("pointure") }} /></td>
+          <td style={{ textAlign: "center" }}>
+            {r.temps_partiel ? (
+              <span className="sexe-pill" style={{ background: "#e0e7ff", color: "#3730a3", cursor: "pointer" }} onClick={() => actions.ouvrirTp(r)} title="Configurer le temps partiel">TP</span>
+            ) : (
+              <button type="button" className="btn-sm btn-ghost" onClick={() => actions.ouvrirTp(r)} style={{ padding: "2px 6px" }} title="Activer le temps partiel">TP</button>
+            )}
+          </td>
+          <td style={{ textAlign: "center", ...tightPad }}>{statutChip(r)}</td>
+          <td>
+            <input
+              value={r.commentaire ?? ""}
+              onChange={(e) => actions.field(r.id, "commentaire", e.target.value)}
+              title={r.commentaire || "Commentaire"}
+              placeholder="—"
+              style={{ ...inp, textOverflow: "ellipsis" }}
+            />
+          </td>
+          <td style={{ whiteSpace: "nowrap", textAlign: "center" }}>
+            <button type="button" className="iconbtn" title={`Fiche : informations, poste fixe${canRgpd ? ", RGPD" : ""}${r.poste_fixe_id ? " · poste fixe défini 📌" : ""}`} onClick={() => actions.ouvrirFiche(r)} style={r.poste_fixe_id ? { boxShadow: "inset 0 0 0 2px #6366f1" } : undefined}><GearIcon /></button>
+            <input type="checkbox" checked={selected} onChange={() => actions.basculerSel(r.id)} disabled={!selected && selPlein} title="Sélectionner pour fusionner (2 max)" style={{ width: "auto", marginLeft: 6, verticalAlign: "middle" }} />
+          </td>
+        </>
+      ) : (
+        <>
+          <td style={{ textAlign: "center" }}>{contratChip(r)}</td>
+          <td style={{ textAlign: "center" }}>{r.matricule || "-"}</td>
+          <td style={{ textAlign: "center" }}>{r.numero_badge || "-"}</td>
+          <td>{pastilleIncomplet(r)}{r.nom}</td>
+          <td>{r.prenom}</td>
+          <td style={{ textAlign: "center" }}><SexePill sexe={r.sexe} /></td>
+          <td style={{ textAlign: "center" }}>
+            {r.equipe_id
+              ? <span className="sexe-pill" style={eqStyle(r.equipe_id)}>{equipeNom(r.equipe_id)}</span>
+              : "-"}
+          </td>
+          <td style={{ textAlign: "center" }}>{serviceLabel(r) || "-"}</td>
+          <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>{fmtDate(r.date_livret_accueil)}</td>
+          <td style={{ textAlign: "center", ...tightPad }}><BoutonAbsences row={r} onOpen={() => actions.ouvrirAbsences(r)} /></td>
+          <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
+            {a18 && (
+              <span
+                title={a18.titre}
+                style={{
+                  display: "inline-block",
+                  padding: "1px 6px",
+                  borderRadius: 4,
+                  background: a18.bg,
+                  color: a18.fg,
+                  fontWeight: 600,
+                  fontSize: 12,
+                }}
+              >
+                {fmtDate(a18.dateFin)}
+              </span>
+            )}
+          </td>
+          <td style={{ textAlign: "center" }}>{r.pointure || "-"}</td>
+          <td style={{ textAlign: "center" }}>{r.temps_partiel ? <span className="sexe-pill" style={{ background: "#e0e7ff", color: "#3730a3" }}>TP</span> : <span className="muted">—</span>}</td>
+          <td style={{ textAlign: "center", ...tightPad }}>{statutChip(r)}</td>
+          <td title={r.commentaire || ""} style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 0 }}>
+            {r.commentaire ? r.commentaire : <span className="muted">—</span>}
+          </td>
+          {/* Vue lecture seule mais droit RGPD : la roue crantée ouvre la fiche. */}
+          {canRgpd && (
+            <td style={{ textAlign: "center" }}>
+              <button type="button" className="iconbtn" title="Fiche : informations, poste fixe, RGPD" onClick={() => actions.ouvrirFiche(r)}><GearIcon /></button>
+            </td>
+          )}
+        </>
+      )}
+    </tr>
+  );
+});
+
 export default function PersonnelEditor({
   initial,
   equipes,
   ateliers,
-  regroupementsParAtelier = {},
+  regroupementsParAtelier = AUCUN_REGROUPEMENT,
   postes = [],
   canEdit,
   canRgpd,
@@ -208,6 +552,7 @@ export default function PersonnelEditor({
   // Message des server actions RGPD, repasse par l URL (cf. BandeauErreur).
   erreur?: string;
 }) {
+  "use memo"; // React Compiler (mode opt-in, cf. next.config.ts)
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -321,86 +666,30 @@ export default function PersonnelEditor({
 
   const equipeNom = (id: string | null) => (id ? equipes.find((e) => e.id === id)?.nom ?? "" : "");
   const atelierNom = (id: string | null) => (id ? ateliers.find((a) => a.id === id)?.nom ?? "" : "");
-  // Colonne « Service » (0069) : le service seul OU « Service — Regroupement ».
-  // Séparateur de contrôle (jamais dans un UUID ni saisi) pour encoder le choix.
-  const SVC_SEP = "";
-  const encSvc = (aid: string | null, reg: string | null) => (reg ? `${aid ?? ""}${SVC_SEP}${reg}` : aid ?? "");
-  // Libellé affiché en lecture : « Atelier — Regroupement » si regroupement posé.
-  const serviceLabel = (r: Row) => {
-    const a = atelierNom(r.atelier_id);
-    if (!a) return "";
-    return r.regroupement ? `${a} — ${r.regroupement}` : a;
-  };
   function setService(id: string, raw: string) {
     if (!raw) { fields(id, { atelier_id: null, regroupement: null }, true); return; }
     const [aid, reg] = raw.split(SVC_SEP);
     fields(id, { atelier_id: aid || null, regroupement: reg ?? null }, true);
   }
-  const eqStyle = (id: string | null): React.CSSProperties => {
-    const c = id ? equipes.find((e) => e.id === id)?.couleur : null;
-    return c ? { background: c, color: "#1e293b", fontWeight: 600 } : {};
-  };
+  const eqStyle = (id: string | null): React.CSSProperties => styleEquipe(equipes, id);
 
-  // Colonne « 18 mois » : borne legale de l'interim. On affiche la date de fin
-  // (livret + 18 mois) pour tous les INTERIMAIRES ACTIFS, teintee selon l'echeance :
-  //   - 3-4 mois d'anciennete du livret : jaune (pre-alerte)
-  //   - 17-18 mois : orange (imminent)
-  //   - > 18 mois  : rouge (deja depasse)
-  //   - reste      : date affichee sans code couleur.
-  // Sans livret renseigne, la date ne peut pas etre calculee -> rien.
-  const jauneBg = "#fef08a"; // yellow-200
-  const jauneFg = "#854d0e"; // yellow-900
-  const orangeBg = "#fed7aa"; // orange-200
-  const orangeFg = "#7c2d12"; // orange-900
-  const rougeBg = "#fecaca"; // red-200
-  const rougeFg = "#7f1d1d"; // red-900
 
-  type Alerte18 = { dateFin: string; anciennete: number; bg: string; fg: string; titre: string } | null;
-  const alerte18 = (r: Row): Alerte18 => {
-    if (r.type_contrat !== "INTERIM") return null;
-    if (statutALaDate(r, today) !== "ACTIF") return null;
-    if (!r.date_livret_accueil) return null;
-    const anciennete = monthsBetween(r.date_livret_accueil, today);
-    // Date de fin des 18 mois = livret + 18 mois (annee/mois, garde le jour).
-    const [y, mo, d] = r.date_livret_accueil.split("-").map(Number);
-    const dt = new Date(y, mo - 1 + 18, d);
-    const dateFin = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
-
-    let bg = "transparent";
-    let fg = "inherit";
-    if (anciennete > 18) { bg = rougeBg; fg = rougeFg; }
-    else if (anciennete >= 17) { bg = orangeBg; fg = orangeFg; }
-    else if (anciennete >= 3 && anciennete < 5) { bg = jauneBg; fg = jauneFg; }
-
-    const titre =
-      anciennete > 18 ? `Dépassé de ${anciennete - 18} mois`
-      : anciennete >= 17 ? `Échéance dans ${18 - anciennete} mois`
-      : anciennete >= 3 && anciennete < 5 ? `Pré-alerte (${anciennete} mois d'ancienneté)`
-      : `${anciennete} mois d'ancienneté depuis le livret`;
-    return { dateFin, anciennete, bg, fg, titre };
-  };
-
+  // L'appel réseau vit dans `appelApiPersonnel` (niveau module) : le React
+  // Compiler ne sait pas encore traiter un `try/catch` contenant des opérateurs
+  // conditionnels, et renonçait alors à tout le composant. Comportement identique.
   async function post(op: string, payload: Record<string, unknown>) {
     setSave("saving");
     setSaveMsg(null);
-    try {
-      const res = await fetch("/api/personnel", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ op, ...payload }),
-      });
-      const j = await res.json().catch(() => ({} as Record<string, unknown>));
-      if (!res.ok) throw new Error((j as { error?: string }).error ?? `HTTP ${res.status}`);
+    const r = await appelApiPersonnel(op, payload);
+    if (r.ok) {
       setSave("saved");
-      return j as { ok?: boolean; row?: Row };
-    } catch (e) {
+    } else {
       setSave("error");
-      setSaveMsg(e instanceof Error ? e.message : "Échec.");
-      return null;
-    } finally {
-      if (savedTimer.current) clearTimeout(savedTimer.current);
-      savedTimer.current = setTimeout(() => { setSave("idle"); setSaveMsg(null); }, 4000);
+      setSaveMsg(r.message);
     }
+    if (savedTimer.current) clearTimeout(savedTimer.current);
+    savedTimer.current = setTimeout(() => { setSave("idle"); setSaveMsg(null); }, 4000);
+    return r.ok ? r.data : null;
   }
   function schedule(key: string, fn: () => void, delay: number) {
     if (timers.current[key]) clearTimeout(timers.current[key]);
@@ -432,8 +721,10 @@ export default function PersonnelEditor({
         if ((j as { changes?: number })?.changes) router.refresh();
       })
       .catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    // `router` : identité stable (useRouter) → l'effet ne tourne qu'une fois, comme
+    // avant. Dépendance déclarée plutôt qu'un eslint-disable, qui empêchait le
+    // React Compiler de traiter tout le composant.
+  }, [router]);
 
   // Fusion de doublons : selection de 2 lignes max.
   function toggleSel(id: string) {
@@ -450,12 +741,10 @@ export default function PersonnelEditor({
     const keep_id = keepId;
     const dup_id = keepId === merge.a.id ? merge.b.id : merge.a.id;
     setMerging(true);
-    try {
-      const res = await fetch("/api/personnel/merge", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ keep_id, dup_id }) });
-      if (res.ok) { window.location.reload(); return; }
-      const j = (await res.json().catch(() => ({}))) as { error?: string };
-      window.alert(j.error || "Échec de la fusion.");
-    } catch { window.alert("Échec de la fusion."); }
+    // Appel réseau au niveau module (cf. `post` : contrainte du React Compiler).
+    const erreurFusion = await appelFusion(keep_id, dup_id);
+    if (erreurFusion === null) { window.location.reload(); return; }
+    window.alert(erreurFusion);
     setMerging(false);
   }
 
@@ -523,14 +812,8 @@ export default function PersonnelEditor({
   };
   const searchCols = COLS.filter((c) => c.search);
   const gTerms = gq.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  // Fiche incomplete : aucune periode de contrat dans Cycle de vie (derive serveur).
-  // ⚠️ DOIT etre declare AVANT `filtered` : le callback de `rows.filter` ci-dessous
-  // l'appelle (branche `incompletFilter`). Une fonction flechee `const` n'est pas
-  // hoistee — la definir plus bas jetait un ReferenceError (TDZ) des qu'on activait
-  // le filtre « Incompletes », plantant tout l'ecran.
-  // Incomplète = aucune période de contrat OU contrat courant piloté par agence
-  // sans agence renseignée (agenceManquante, dérivé serveur — 0072).
-  const ficheIncomplete = (r: Row): boolean => !r.hasContrat || r.agenceManquante;
+  // `ficheIncomplete` est définie au niveau du module (partagée avec LignePersonne) :
+  // plus de piège d'ordre de déclaration (TDZ) pour le filtre « Incomplètes ».
   const filtered = rows.filter((r) => {
     // On compare au statut CALCULE (source de verite), pas au cache : evite
     // toute divergence quand la bascule quotidienne n'a pas encore ete faite.
@@ -555,8 +838,6 @@ export default function PersonnelEditor({
   const saveLabel =
     save === "saving" ? "Enregistrement…" : save === "saved" ? "Enregistré ✓" : save === "error" ? (saveMsg ?? "Échec d'enregistrement") : "";
   const saveColor = save === "error" ? "var(--danger)" : save === "saved" ? "var(--ok)" : "var(--muted)";
-  const inp: React.CSSProperties = { width: "100%", fontSize: 13, padding: "3px 4px" };
-  const C = (k: ColKey): React.CSSProperties => (CENTER.has(k) ? { textAlign: "center", textAlignLast: "center" } : {});
   const interimStyle = (t: string) => (agenceSet.has(t) ? { background: "#fde68a", color: "#92400e", fontWeight: 600 } : {});
 
   const Cols = () => (
@@ -567,87 +848,35 @@ export default function PersonnelEditor({
   );
   const tableStyle: React.CSSProperties = { width: "100%", tableLayout: "fixed", margin: 0, borderCollapse: "collapse" };
 
-  // Libelle FR d'un code de contrat (respecte le parametrage Param. RH).
-  const typeLabel = (code: string): string =>
-    types.find((t) => t.code === code)?.libelle ?? (code === "INTERIM" ? "Intérim" : code);
+  // Actions passées à chaque ligne. Perf (React Compiler, 2026-09-28) : leur
+  // IDENTITÉ doit rester la même d'un rendu à l'autre, sans quoi toutes les lignes
+  // se redessinent à chaque frappe. Motif « dernière version » : l'objet est créé
+  // une fois ; chaque action appelle l'implémentation courante (mise à jour après
+  // chaque rendu), jamais une version périmée.
+  const implRef = useRef<ActionsLigne | null>(null);
+  useLayoutEffect(() => {
+    implRef.current = {
+      field,
+      setService,
+      ouvrirCycle: (r) => setCycleFor(r),
+      ouvrirAbsences: (r) => setAbsFor(r),
+      ouvrirTp: (r) => setTpFor(r),
+      ouvrirFiche: (r) => setDetailFor(r),
+      basculerSel: toggleSel,
+    };
+  });
+  // `useState` à initialiseur (et non `useMemo(…, [])`) : identité garantie
+  // pour toute la vie du composant, et le React Compiler l'accepte tel quel.
+  const [actions] = useState<ActionsLigne>(() => ({
+    field: (id, key, value, instant) => implRef.current?.field(id, key, value, instant),
+    setService: (id, raw) => implRef.current?.setService(id, raw),
+    ouvrirCycle: (r) => implRef.current?.ouvrirCycle(r),
+    ouvrirAbsences: (r) => implRef.current?.ouvrirAbsences(r),
+    ouvrirTp: (r) => implRef.current?.ouvrirTp(r),
+    ouvrirFiche: (r) => implRef.current?.ouvrirFiche(r),
+    basculerSel: (id) => implRef.current?.basculerSel(id),
+  }));
 
-  const champId = (id: string, key: string) => `pers-${id}-${key}`;
-  // Colonnes Contrat + Statut : chips cliquables qui ouvrent la modale Cycle
-  // de vie. Plus de select / toggle direct — les valeurs sont des resultantes.
-  const chipBase: React.CSSProperties = {
-    display: "inline-block",
-    width: "auto",
-    margin: 0,
-    padding: "3px 10px",
-    border: "1px solid transparent",
-    borderRadius: 999,
-    fontSize: 12,
-    fontWeight: 600,
-    cursor: canEdit ? "pointer" : "default",
-    lineHeight: 1.5,
-    whiteSpace: "nowrap",
-  };
-  const contratChip = (r: Row) => {
-    const bg = agenceSet.has(r.type_contrat) ? "#fde68a" : "#e0e7ff";
-    const fg = agenceSet.has(r.type_contrat) ? "#92400e" : "#3730a3";
-    return (
-      <button
-        type="button"
-        onClick={() => canEdit && setCycleFor(r)}
-        style={{ ...chipBase, background: bg, color: fg, borderColor: bg }}
-        title={canEdit ? "Ouvrir le cycle de vie (contrats, arrivée, départ)" : typeLabel(r.type_contrat)}
-      >
-        {typeLabel(r.type_contrat)}
-      </button>
-    );
-  };
-  const statutChip = (r: Row) => {
-    const s = statutALaDate(r, today) as StatutPersonne;
-    const c = couleurStatut(s);
-    return (
-      <button
-        type="button"
-        onClick={() => canEdit && setCycleFor(r)}
-        style={{ ...chipBase, background: c.bg, color: c.fg, borderColor: c.bg }}
-        title={canEdit ? "Ouvrir le cycle de vie (contrats, arrivée, départ)" : libelleStatut(s)}
-      >
-        {libelleStatut(s)}
-      </button>
-    );
-  };
-  // Pastille « fiche incomplete » : petit rond orange devant le nom quand
-  // aucun contrat n'existe. Clic ouvre la modale Cycle de vie pour en saisir un.
-  const pastilleIncomplet = (r: Row) => {
-    if (!ficheIncomplete(r)) return null;
-    const motif = !r.hasContrat
-      ? "Pas de contrat dans Cycle de vie"
-      : "Contrat intérim sans agence renseignée";
-    return (
-      <button
-        type="button"
-        onClick={canEdit ? () => setCycleFor(r) : undefined}
-        title={`${motif}${canEdit ? " — cliquer pour compléter" : ""}`}
-        aria-label={motif}
-        style={{
-          width: 16,
-          height: 16,
-          margin: "0 6px 0 0",
-          padding: 0,
-          borderRadius: 999,
-          background: "#f59e0b",
-          color: "#fff",
-          border: "none",
-          fontSize: 11,
-          fontWeight: 700,
-          lineHeight: 1,
-          cursor: canEdit ? "pointer" : "help",
-          verticalAlign: "middle",
-        }}
-      >
-        !
-      </button>
-    );
-  };
   // Nombre de fiches incompletes parmi les ACTIVES (les A_VENIR peuvent
   // legitimement etre incompletes, on ne les compte pas ici).
   const nbIncompletActifs = rows.filter(
@@ -802,135 +1031,23 @@ export default function PersonnelEditor({
         <table className="pers-table" style={tableStyle}>
           <Cols />
           <tbody>
-            {filtered.map((r) => {
-              const a18 = alerte18(r);
-              return (
-                <tr key={r.id} style={{ opacity: statutALaDate(r, today) === "ACTIF" ? 1 : 0.55 }}>
-                  {canEdit ? (
-                    <>
-                      <td style={{ textAlign: "center" }}>{contratChip(r)}</td>
-                      <td><input value={r.matricule ?? ""} onChange={(e) => field(r.id, "matricule", e.target.value)} style={{ ...inp, ...C("matricule") }} /></td>
-                      <td><input value={r.numero_badge ?? ""} onChange={(e) => field(r.id, "numero_badge", e.target.value)} style={{ ...inp, ...C("numero_badge") }} /></td>
-                      <td style={{ position: "relative" }}>
-                        {pastilleIncomplet(r)}
-                        <input value={r.nom} onChange={(e) => field(r.id, "nom", e.target.value)} onBlur={(e) => field(r.id, "nom", normaliseNom(e.target.value), true)} style={{ ...inp, width: `calc(100% - ${ficheIncomplete(r) ? 22 : 0}px)` }} />
-                      </td>
-                      <td><input value={r.prenom} onChange={(e) => field(r.id, "prenom", e.target.value)} onBlur={(e) => field(r.id, "prenom", normalisePrenom(e.target.value), true)} style={inp} /></td>
-                      <td><select id={champId(r.id, "sexe")} value={r.sexe ?? ""} onChange={(e) => field(r.id, "sexe", e.target.value, true)} style={{ ...inp, ...C("sexe"), background: sexeBg(r.sexe), color: sexeFg(r.sexe), fontWeight: 600 }}><option value="">-</option><option value="H">H</option><option value="F">F</option></select></td>
-                      <td><select id={champId(r.id, "equipe_id")} value={r.equipe_id ?? ""} onChange={(e) => field(r.id, "equipe_id", e.target.value, true)} style={{ ...inp, ...C("equipe"), ...eqStyle(r.equipe_id) }}><option value="">-</option>{equipes.map((x) => (<option key={x.id} value={x.id}>{x.nom}</option>))}</select></td>
-                      <td><select id={champId(r.id, "atelier_id")} value={encSvc(r.atelier_id, r.regroupement)} onChange={(e) => setService(r.id, e.target.value)} style={{ ...inp, ...C("atelier") }} title={serviceLabel(r) || undefined}>
-                        <option value="">-</option>
-                        {ateliers.map((x) => {
-                          const regs = regroupementsParAtelier[x.id] ?? [];
-                          return (
-                            <Fragment key={x.id}>
-                              <option value={x.id}>{x.nom}</option>
-                              {regs.map((rg) => (
-                                <option key={`${x.id}:${rg}`} value={encSvc(x.id, rg)}>{x.nom} — {rg}</option>
-                              ))}
-                            </Fragment>
-                          );
-                        })}
-                        {/* Regroupement « orphelin » (posé puis renommé/supprimé au
-                            Référentiel) : on garde l'option pour ne pas vider le select. */}
-                        {r.regroupement && r.atelier_id && !(regroupementsParAtelier[r.atelier_id] ?? []).includes(r.regroupement) && (
-                          <option value={encSvc(r.atelier_id, r.regroupement)}>{atelierNom(r.atelier_id)} — {r.regroupement}</option>
-                        )}
-                      </select></td>
-                      <td><input id={champId(r.id, "date_livret_accueil")} type="date" value={r.date_livret_accueil ?? ""} onChange={(e) => field(r.id, "date_livret_accueil", e.target.value, true)} style={inp} /></td>
-                      <td style={{ textAlign: "center", ...tightPad }}><BoutonAbsences row={r} onOpen={() => setAbsFor(r)} /></td>
-                      <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
-                        {a18 && (
-                          <span
-                            title={a18.titre}
-                            style={{
-                              display: "inline-block",
-                              padding: "1px 6px",
-                              borderRadius: 4,
-                              background: a18.bg,
-                              color: a18.fg,
-                              fontWeight: 600,
-                              fontSize: 12,
-                            }}
-                          >
-                            {fmtDate(a18.dateFin)}
-                          </span>
-                        )}
-                      </td>
-                      <td><input value={r.pointure ?? ""} maxLength={5} onChange={(e) => field(r.id, "pointure", e.target.value)} style={{ ...inp, ...C("pointure") }} /></td>
-                      <td style={{ textAlign: "center" }}>
-                        {r.temps_partiel ? (
-                          <span className="sexe-pill" style={{ background: "#e0e7ff", color: "#3730a3", cursor: "pointer" }} onClick={() => setTpFor(r)} title="Configurer le temps partiel">TP</span>
-                        ) : (
-                          <button type="button" className="btn-sm btn-ghost" onClick={() => setTpFor(r)} style={{ padding: "2px 6px" }} title="Activer le temps partiel">TP</button>
-                        )}
-                      </td>
-                      <td style={{ textAlign: "center", ...tightPad }}>{statutChip(r)}</td>
-                      <td>
-                        <input
-                          value={r.commentaire ?? ""}
-                          onChange={(e) => field(r.id, "commentaire", e.target.value)}
-                          title={r.commentaire || "Commentaire"}
-                          placeholder="—"
-                          style={{ ...inp, textOverflow: "ellipsis" }}
-                        />
-                      </td>
-                      <td style={{ whiteSpace: "nowrap", textAlign: "center" }}>
-                        <button type="button" className="iconbtn" title={`Fiche : informations, poste fixe${canRgpd ? ", RGPD" : ""}${r.poste_fixe_id ? " · poste fixe défini 📌" : ""}`} onClick={() => setDetailFor(r)} style={r.poste_fixe_id ? { boxShadow: "inset 0 0 0 2px #6366f1" } : undefined}><GearIcon /></button>
-                        <input type="checkbox" checked={sel.has(r.id)} onChange={() => toggleSel(r.id)} disabled={!sel.has(r.id) && sel.size >= 2} title="Sélectionner pour fusionner (2 max)" style={{ width: "auto", marginLeft: 6, verticalAlign: "middle" }} />
-                      </td>
-                    </>
-                  ) : (
-                    <>
-                      <td style={{ textAlign: "center" }}>{contratChip(r)}</td>
-                      <td style={{ textAlign: "center" }}>{r.matricule || "-"}</td>
-                      <td style={{ textAlign: "center" }}>{r.numero_badge || "-"}</td>
-                      <td>{pastilleIncomplet(r)}{r.nom}</td>
-                      <td>{r.prenom}</td>
-                      <td style={{ textAlign: "center" }}><SexePill sexe={r.sexe} /></td>
-                      <td style={{ textAlign: "center" }}>
-                        {r.equipe_id
-                          ? <span className="sexe-pill" style={eqStyle(r.equipe_id)}>{equipeNom(r.equipe_id)}</span>
-                          : "-"}
-                      </td>
-                      <td style={{ textAlign: "center" }}>{serviceLabel(r) || "-"}</td>
-                      <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>{fmtDate(r.date_livret_accueil)}</td>
-                      <td style={{ textAlign: "center", ...tightPad }}><BoutonAbsences row={r} onOpen={() => setAbsFor(r)} /></td>
-                      <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
-                        {a18 && (
-                          <span
-                            title={a18.titre}
-                            style={{
-                              display: "inline-block",
-                              padding: "1px 6px",
-                              borderRadius: 4,
-                              background: a18.bg,
-                              color: a18.fg,
-                              fontWeight: 600,
-                              fontSize: 12,
-                            }}
-                          >
-                            {fmtDate(a18.dateFin)}
-                          </span>
-                        )}
-                      </td>
-                      <td style={{ textAlign: "center" }}>{r.pointure || "-"}</td>
-                      <td style={{ textAlign: "center" }}>{r.temps_partiel ? <span className="sexe-pill" style={{ background: "#e0e7ff", color: "#3730a3" }}>TP</span> : <span className="muted">—</span>}</td>
-                      <td style={{ textAlign: "center", ...tightPad }}>{statutChip(r)}</td>
-                      <td title={r.commentaire || ""} style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 0 }}>
-                        {r.commentaire ? r.commentaire : <span className="muted">—</span>}
-                      </td>
-                      {/* Vue lecture seule mais droit RGPD : la roue crantée ouvre la fiche. */}
-                      {canRgpd && (
-                        <td style={{ textAlign: "center" }}>
-                          <button type="button" className="iconbtn" title="Fiche : informations, poste fixe, RGPD" onClick={() => setDetailFor(r)}><GearIcon /></button>
-                        </td>
-                      )}
-                    </>
-                  )}
-                </tr>
-              );
-            })}
+            {filtered.map((r) => (
+              <LignePersonne
+                key={r.id}
+                r={r}
+                today={today}
+                canEdit={canEdit}
+                canRgpd={canRgpd}
+                selected={sel.has(r.id)}
+                selPlein={sel.size >= 2}
+                equipes={equipes}
+                ateliers={ateliers}
+                regroupementsParAtelier={regroupementsParAtelier}
+                agenceSet={agenceSet}
+                types={types}
+                actions={actions}
+              />
+            ))}
             {filtered.length === 0 && (
               <tr><td colSpan={(canEdit || canRgpd) ? COLS.length + 1 : COLS.length} className="muted" style={{ padding: 10 }}>Aucun résultat.</td></tr>
             )}

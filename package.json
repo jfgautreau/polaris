@@ -21,6 +21,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "babel-plugin-react-compiler": "^1.0.0",
     "pg": "^8.21.0",
     "typescript": "^5",
     "vitest": "^4.1.8"
