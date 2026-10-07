@@ -92,7 +92,7 @@ export default function PlacementBoard({
   vueAbsences?: boolean; // pseudo-atelier « Absences » : photo transverse, pas de plan
   numeroInit?: Record<string, string>; // personne -> numero de rotation occupe
   // Commentaire du jour par personne (horaire_exception.motif) : affiché à côté
-  // du nom dans les deux PDF (« PDF » et « PDF CE »).
+  // du nom dans les deux PDF (« PDF » et « PDF Manager »).
   commentaires?: Record<string, string>;
   quartOuvert?: boolean; // le quart est-il ouvert ce jour-la (Ordonnancement) ?
   siteNom?: string; // multi-tenant : nom d'usine dans le pied de page du PDF
@@ -219,7 +219,7 @@ export default function PlacementBoard({
   // La feuille n'est montee QU'AU moment d'imprimer : la garder en permanence
   // doublerait le cout de rendu du plan, deja l'ecran le plus lourd.
   // Deux modes d'impression :
-  //  - "ce"    : version « chef d'équipe » (colonne Absents / TP à droite) ;
+  //  - "ce"    : « PDF Manager » (couleurs + colonne Absents / TP à droite) ;
   //  - "simple": version courte (plan seul, pas de colonne à droite) — utilisée
   //              pour un affichage passé de main en main où la liste des
   //              absents n'a pas d'intérêt et volerait de la place au plan.
@@ -497,7 +497,7 @@ export default function PlacementBoard({
   // La feuille doit etre montee (donc mesurable) avant d'ouvrir la boite d'impression.
   // Le bouton « PDF » (mode "simple") imprime en A3 : on pose `print-a3` sur <body>
   // (bascule la page nommée `plcA3` de globals.css) le temps de l'impression, puis
-  // on retire la classe. Le « PDF CE » (mode "ce") reste en A4.
+  // on retire la classe. Le « PDF Manager » (mode "ce") reste en A4.
   useEffect(() => {
     if (!prepImpression) return;
     const a3 = prepImpression === "simple";
@@ -778,7 +778,7 @@ export default function PlacementBoard({
   // Feuille imprimée : on ne garde que les postes marqués « imprimables » au
   // Référentiel (les postes de construction du planning en sont exclus), et on
   // retire les lignes qui n'ont plus aucun poste imprimable. L'écran, lui, montre
-  // TOUS les postes (`groups`) — ce filtre ne concerne que le PDF / PDF CE.
+  // TOUS les postes (`groups`) — ce filtre ne concerne que le PDF / PDF Manager.
   const groupsImpr = groups
     .map((g) => ({ ...g, postes: g.postes.filter((po) => po.imprimable) }))
     .filter((g) => g.postes.length > 0);
@@ -848,16 +848,16 @@ export default function PlacementBoard({
             type="button"
             className={s.navbtn}
             onClick={() => imprimer("ce")}
-            title="PDF chef d'équipe : plan + colonne « Absents / TP » à droite (1 page A4 paysage)"
+            title="PDF Manager : plan en couleurs + colonne « Absents / TP » à droite (1 page A4 paysage)"
             style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
           >
-            <PrintIcon size={15} /> PDF CE
+            <PrintIcon size={15} /> PDF Manager
           </button>
           <button
             type="button"
             className={s.navbtn}
             onClick={() => imprimer("simple")}
-            title="PDF simple : plan seul, sans la colonne des absents (1 page A4 paysage)"
+            title="PDF opérateurs : plan seul, sans couleur ni colonne des absents (1 page A3 paysage)"
             style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
           >
             <PrintIcon size={15} /> PDF

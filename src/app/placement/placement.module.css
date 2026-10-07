@@ -525,7 +525,7 @@
    proportions A3 (zone imprimable ~1527 × 1062 px @ 96dpi, marge de sécurité
    → 1480 × 980) ; `ajusterFeuille(true)` met le contenu à l'échelle sur une
    cible plus courte (PAGE_H_A3 = 920). La page nommée `plcA3` (globals.css,
-   activée via `body.print-a3`) porte le format papier réel. Le « PDF CE »
+   activée via `body.print-a3`) porte le format papier réel. Le « PDF Manager »
    (data-mode="ce") garde l'A4 par défaut ci-dessus. */
 .printSheet[data-mode="simple"] {
   width: 1480px;
@@ -623,6 +623,25 @@
 .printComment {
   color: #475569;
   font-style: italic;
+}
+
+/* Feuille OPÉRATEURS (« PDF », data-mode="simple") : sans couleur. Les codes
+   couleur (couverture X/Y, surnombre, compétence manquante) sont des outils de
+   pilotage : ils restent sur le « PDF Manager » (data-mode="ce"). */
+.printSheet[data-mode="simple"] .printOk,
+.printSheet[data-mode="simple"] .printTrou,
+.printSheet[data-mode="simple"] .printSurNb {
+  color: #000;
+  font-weight: 400;
+}
+.printSheet[data-mode="simple"] .printSur {
+  background: none;
+  border-color: #94a3b8;
+}
+.printSheet[data-mode="simple"] .printAlerte {
+  background: none;
+  color: inherit;
+  font-weight: inherit;
 }
 
 .printAbs {

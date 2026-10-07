@@ -1174,7 +1174,7 @@ select.flat {
   }
   /* Placement, bouton « PDF » (plan seul) : sortie A3 paysage pour laisser
      respirer les plans denses. Activé en posant `print-a3` sur <body> juste
-     avant window.print() (cf. PlacementBoard). Le « PDF CE » reste en A4. */
+     avant window.print() (cf. PlacementBoard). Le « PDF Manager » reste en A4. */
   @page plcA3 {
     size: A3 landscape;
     margin: 8mm;

@@ -55,7 +55,7 @@ menu suit l'écriture, pas la lecture.
   que `ligneOuverte` : `jour_quart.actif` + `ouverture_quart`, défaut ouvert), à laquelle
   la navigation du calendrier est bornée.
 - **Deux boutons PDF**, mise à l'échelle **mesurée** (cf. `lessons.md` L16, L42) :
-  - **PDF CE** (`mode="ce"`, **A4 paysage**) = plan + colonne de droite « **Absents / TP du
+  - **PDF Manager** (`mode="ce"`, **A4 paysage**) = plan + colonne de droite « **Absents / TP du
     jour** » (motifs d'absence **et** bloc « **Temps partiel** » — personnes indisponibles ce
     jour au sens TP, non déjà placées ni absentes ; TP calculé **serveur** `page.tsx`/`tpIds`,
     mêmes règles que Planning / TV).

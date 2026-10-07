@@ -529,7 +529,7 @@ export default function ReferentielEditor({
                     <th>Code</th>
                     <th>Catégorie</th>
                     <th title="PTR = remplaçable. PTNR = Position de Travail Non Remplaçable (un seul titulaire par conception). Un PTNR est exclu des rapports de fragilité/relève et isolé dans les compétences critiques.">Rempl.</th>
-                    <th title="Le poste figure-t-il sur les feuilles de placement imprimées (PDF / PDF CE) ? « Non » masque à l'impression les postes qui ne servent qu'à construire le planning ; ils restent utilisables à l'écran.">Impr.</th>
+                    <th title="Le poste figure-t-il sur les feuilles de placement imprimées (PDF / PDF Manager) ? « Non » masque à l'impression les postes qui ne servent qu'à construire le planning ; ils restent utilisables à l'écran.">Impr.</th>
                     <th>Diff.</th>
                     <th>Niv. min</th>
                     <th title="N° d'affichage du poste sur les TV / PDF (croissant)">N° aff.</th>
@@ -585,7 +585,7 @@ export default function ReferentielEditor({
                         <select
                           value={p.imprimable ? "1" : "0"}
                           onChange={(e) => posteField(a.id, l.id, p.id, "imprimable", e.target.value === "1")}
-                          title={p.imprimable ? "S'imprime sur les feuilles de placement (PDF / PDF CE)" : "Masqué à l'impression : ne sert qu'à construire le planning (reste visible à l'écran)"}
+                          title={p.imprimable ? "S'imprime sur les feuilles de placement (PDF / PDF Manager)" : "Masqué à l'impression : ne sert qu'à construire le planning (reste visible à l'écran)"}
                           style={{ color: p.imprimable ? undefined : "#b45309", fontWeight: p.imprimable ? 400 : 600 }}
                         >
                           <option value="1">Oui</option>

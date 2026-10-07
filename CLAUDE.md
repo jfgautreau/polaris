@@ -286,8 +286,8 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
 - **Placement** (`src/app/placement/`, droit `placement`) : plan par ligne → postes → cases
   numérotées, rangs en 1 à 3 colonnes (au-delà de 10 par colonne). Bascule Plan /
   Absences. `JourNav` (calendrier grisant les jours sans quart actif). Filtres de la liste
-  (recherche, équipe) dans l'URL. Deux PDF : **PDF CE** (A4, plan + absents / TP du jour) et
-  **PDF** (A3, plan seul) ; numéros vides et commentaires du jour imprimés ; filtre
+  (recherche, équipe) dans l'URL. Deux PDF : **PDF Manager** (A4, plan en couleurs + absents / TP du jour,
+  ex-« PDF CE ») et **PDF** opérateurs (A3, plan seul, **sans couleur**) ; numéros vides et commentaires du jour imprimés ; filtre
   `imprimable`. TP du jour sans placement = carte « Temps partiel », pas « à placer ».
 - **Ordonnancement** (`src/app/ordonnancement/`) : quinzaine (`?debut=`), sous-colonnes par
   quart tournant, ligne « Activation », lignes par service, Journée à part (activation
