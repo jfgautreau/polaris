@@ -1,12 +1,12 @@
 # Reste à faire — Polaris
 
-> État au 2026-10-07. Migrations appliquées jusqu'à **0076**. **407** tests Vitest.
+> État au 2026-10-07. Migrations appliquées jusqu'à **0077**. **407** tests Vitest.
 > Historique détaillé : `git log`.
 
 ## Planning « Par poste » (cahier des charges validé le 2026-10-07)
 Spécification complète : `tasks/planning-par-poste.md`.
-- [ ] **Migration `0077_poste_zone_attente.sql` à exécuter** dans le SQL Editor, puis cocher
-      « Attente » sur CDT (Le Bignon) au Référentiel. Le code tolère son absence.
+- [x] **Migration `0077_poste_zone_attente.sql` appliquée** (2026-10-07).
+- [ ] Cocher « Attente » sur CDT (Le Bignon) au Référentiel.
 - [x] Colonne « Attente » au Référentiel (`poste.zone_attente`).
 - [x] Bascule Par nom / Par poste dans le Planning (`?par=poste`), une rangée par place.
 - [x] Saisie : panneau des candidats, `»` jusqu'à la fin de semaine, menu Remplacer / Retirer,
