@@ -1278,13 +1278,10 @@ export default function PlacementBoard({
           ------------------------------------------------------------------ */}
       {prepImpression && (
       <div className={s.printSheet} data-mode={prepImpression} aria-hidden="true">
-      {/* En-tête à taille fixe : service en titre, quart en pastille pleine et
-          date à droite — lisibles d'un coup d'œil, en couleur comme en noir. */}
+      {/* En-tête à taille fixe : service à gauche, quart en pastille pleine au
+          centre, date à droite — lisibles d'un coup d'œil, en couleur comme en noir. */}
       <div className={s.printHead} ref={printHeadRef}>
-        <div className={s.printTitreBloc}>
-          <span className={s.printSurTitre}>Plan de placement</span>
-          <strong className={s.printTitre}>{ateliers.find((a) => a.id === atelierId)?.nom ?? "Service"}</strong>
-        </div>
+        <strong className={s.printTitre}>{ateliers.find((a) => a.id === atelierId)?.nom ?? "Service"}</strong>
         <span className={s.printQuart}>{quartLib[quart] ?? quart}</span>
         <span className={s.printDate}>
           <strong>{jourLong(jour)[0]}</strong> {jourLong(jour)[1]}

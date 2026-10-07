@@ -572,32 +572,22 @@
 }
 
 /* En-tête HORS de .printInner : jamais mis à l'échelle, sa hauteur est déduite
-   de la cible de `ajusterFeuille()`. Service en titre (sur-titre discret), quart
-   en pastille noire pleine, date à droite. Noir et gris seulement : identique
-   sur le PDF Manager et sur la feuille opérateurs sans couleur. Le fond de la
-   pastille s'imprime grâce à `print-color-adjust: exact` (globals.css). */
+   de la cible de `ajusterFeuille()`. Trois colonnes : service à gauche, quart
+   en pastille noire pleine au CENTRE de la page (colonnes latérales égales),
+   date à droite. Noir et gris seulement : identique sur le PDF Manager et sur
+   la feuille opérateurs sans couleur. Le fond de la pastille s'imprime grâce à
+   `print-color-adjust: exact` (globals.css). */
 .printHead {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 16px;
   padding-bottom: 8px;
   margin-bottom: 10px;
   border-bottom: 2px solid #000;
 }
-.printTitreBloc {
-  display: flex;
-  flex-direction: column;
-  margin-right: auto;
-  min-width: 0;
-}
-.printSurTitre {
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: #64748b;
-}
 .printTitre {
+  min-width: 0;
   font-size: 22px;
   font-weight: 800;
   line-height: 1.1;
@@ -615,13 +605,13 @@
   white-space: nowrap;
 }
 .printDate {
+  justify-self: end;
   font-size: 17px;
   color: #111827;
   white-space: nowrap;
 }
 .printDate strong { font-weight: 800; }
 /* A3 opérateurs (souvent affiché) : un cran plus grand. */
-.printSheet[data-mode="simple"] .printSurTitre { font-size: 12px; }
 .printSheet[data-mode="simple"] .printTitre { font-size: 32px; }
 .printSheet[data-mode="simple"] .printQuart { font-size: 22px; padding: 4px 20px; }
 .printSheet[data-mode="simple"] .printDate { font-size: 24px; }
