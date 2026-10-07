@@ -151,7 +151,10 @@ const key = (pid: string, iso: string) => `${pid}:${iso}`;
 const excKey = key;
 // "TP" = temps partiel matérialisé (jeton, comme "X"/"m:") : ni poste ni absence.
 const isPoste = (v: string) => v !== "" && v !== "X" && v !== "TP" && !v.startsWith("m:");
-const excLabel = (e: { debut: string; fin: string }) => `${e.debut || "?"}-${e.fin || "?"}`;
+// Horaire spécifique affiché : une borne non saisie reprend celle de l'horaire
+// standard du poste (module Horaires) — même règle que src/lib/horaires.ts.
+const excLabel = (e: { debut: string; fin: string }, std?: { debut: string; fin: string }) =>
+  `${e.debut || std?.debut || "?"}-${e.fin || std?.fin || "?"}`;
 const sep = (d: Jour): React.CSSProperties => (d.firstOfWeek ? { borderLeft: "3px solid #94a3b8" } : {});
 // Partie « jour » d'une clé « pid:iso » si elle concerne cette personne, sinon null.
 const isoDeLaLigne = (k: string | null, pid: string) => (k && k.startsWith(`${pid}:`) ? k.slice(pid.length + 1) : null);
@@ -290,9 +293,10 @@ const LignePlanning = memo(function LignePlanning({
         // remontés dans le title de TOUTE la case — pas seulement de la
         // pendule — pour qu'ils s'affichent au survol de la cellule entière.
         const exCell = exc[excKey(pers.id, d.iso)];
+        const stdCell = isPoste(v) ? ctx.horaireStd[`${d.quart}:${v}:${dowMon(d.iso)}`] : undefined;
         const excInfo = exCell
           ? [
-              exCell.debut || exCell.fin ? `Horaire : ${excLabel(exCell)}` : "",
+              exCell.debut || exCell.fin ? `Horaire : ${excLabel(exCell, stdCell)}` : "",
               exCell.motif ? `Commentaire : ${exCell.motif}` : "",
             ].filter(Boolean)
           : [];
@@ -418,7 +422,7 @@ const LignePlanning = memo(function LignePlanning({
               // Info-bulle de la pendule, hors JSX (même contrainte du React Compiler
               // que `titreCase` ci-dessus : pas de « [ternaires…].join() || … »).
               const detailExc = e
-                ? [(e.debut || e.fin) ? `Horaire : ${excLabel(e)}` : "", e.motif ? `Commentaire : ${e.motif}` : ""].filter(Boolean).join(" · ")
+                ? [(e.debut || e.fin) ? `Horaire : ${excLabel(e, std)}` : "", e.motif ? `Commentaire : ${e.motif}` : ""].filter(Boolean).join(" · ")
                 : "";
               const titrePendule = e
                 ? (detailExc !== "" ? detailExc : "Horaire spécifique")
@@ -437,7 +441,7 @@ const LignePlanning = memo(function LignePlanning({
                       🕐
                     </button>
                   ) : (
-                    e && <span className="horx has" title={`Horaire spécifique : ${excLabel(e)}`}>🕐</span>
+                    e && <span className="horx has" title={`Horaire spécifique : ${excLabel(e, std)}`}>🕐</span>
                   )}
                   {excAtIso === d.iso && (
                     <div className="exc-pop" onClick={(ev) => ev.stopPropagation()}>

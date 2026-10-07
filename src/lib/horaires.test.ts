@@ -51,12 +51,28 @@ describe("resoudreHoraire — priorite des sources", () => {
     expect(r).toEqual({ debut: "08:00", fin: "12:00" });
   });
 
-  it("prend LES DEUX bornes de la source retenue, pas borne par borne", () => {
-    // Exception cote debut seul : on ne doit PAS recomposer « 09:00 - 14:00 ».
+  it("un debut specifique sans fin reprend la fin de l'horaire standard du poste", () => {
     const excMap = new Map([["X:" + LUNDI, { debut: "09:00", fin: null }]]);
     const r = resoudreHoraire(maps({ horMap, excMap }), quarts, "X", "P1", "matin", LUNDI);
-    expect(r).toEqual({ debut: "09:00", fin: null });
-    expect(horaireTxt(maps({ horMap, excMap }), quarts, "X", "P1", "matin", LUNDI)).toBe("09:00-?");
+    expect(r).toEqual({ debut: "09:00", fin: "14:00" });
+    expect(horaireTxt(maps({ horMap, excMap }), quarts, "X", "P1", "matin", LUNDI)).toBe("09:00-14:00");
+  });
+
+  it("une fin specifique sans debut reprend le debut de l'horaire standard", () => {
+    const excMap = new Map([["X:" + LUNDI, { debut: null, fin: "12:00" }]]);
+    expect(resoudreHoraire(maps({ horMap, excMap }), quarts, "X", "P1", "matin", LUNDI)).toEqual({ debut: "06:00", fin: "12:00" });
+  });
+
+  it("la borne manquante vient du temps partiel s'il est renseigne", () => {
+    const horV = new Map([[`P1:matin:${dowLundi(VENDREDI)}`, { debut: "06:00", fin: "14:00" }]]);
+    const tpCfgMap = new Map([["X", { horaires: { "5": { debut: "07:00", fin: "11:00" } } }]]);
+    const excMap = new Map([["X:" + VENDREDI, { debut: "08:00", fin: null }]]);
+    expect(resoudreHoraire(maps({ horMap: horV, tpCfgMap, excMap }), quarts, "X", "P1", "matin", VENDREDI)).toEqual({ debut: "08:00", fin: "11:00" });
+  });
+
+  it("sans horaire standard, la borne manquante reste inconnue (« ? »)", () => {
+    const excMap = new Map([["X:" + LUNDI, { debut: "09:00", fin: null }]]);
+    expect(horaireTxt(maps({ excMap }), quarts, "X", "P1", "matin", LUNDI)).toBe("09:00-?");
   });
 
   it("le temps partiel (journee entiere) prime sur le standard, sous l'exception", () => {

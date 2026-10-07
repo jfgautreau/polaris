@@ -9,11 +9,12 @@
 // specifique saisi au planning) > horaires de temps partiel > horaire standard
 // du poste pour ce quart et ce jour de semaine.
 //
-// ⚠️ La priorite porte sur la SOURCE, pas sur chaque borne prise a part :
-// resoudre `debut` et `fin` independamment recomposait un horaire jamais saisi
-// (une exception cote debut seul donnait « debut exception – fin du poste »). On
-// choisit la premiere source qui dit quelque chose, puis on lui prend ses deux
-// bornes.
+// La priorite porte sur la SOURCE : la premiere qui dit quelque chose fournit
+// l'horaire. Seule exception, demandee le 2026-10-07 : un horaire specifique
+// saisi d'un seul cote (debut sans fin, ou fin sans debut) COMPLETE la borne
+// manquante par la source suivante — temps partiel s'il est renseigne, sinon
+// horaire standard du poste (module Horaires). « Arrive a 9 h » s'affiche donc
+// « 09:00-14:00 » et non plus « 09:00-? ».
 
 import { quartOuDefaut, type QuartRef } from "@/lib/quarts";
 
@@ -78,8 +79,9 @@ export function resoudreHoraire(
   const std = maps.horMap.get(`${posteId}:${q}:${dowLundi(iso)}`);
   const ex = maps.excMap.get(`${personId}:${iso}`);
   const tp = horaireTp(maps.tpCfgMap.get(personId), creneau, iso);
-  const source = renseigne(ex) ? ex : renseigne(tp) ? tp : std;
-  return { debut: source?.debut || null, fin: source?.fin || null };
+  const generique = renseigne(tp) ? tp : std;
+  if (renseigne(ex)) return { debut: ex?.debut || generique?.debut || null, fin: ex?.fin || generique?.fin || null };
+  return { debut: generique?.debut || null, fin: generique?.fin || null };
 }
 
 // Libelle court « 06:00-14:00 », ou "" si aucun horaire. Un cote manquant est
