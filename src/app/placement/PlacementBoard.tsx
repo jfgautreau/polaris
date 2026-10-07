@@ -37,11 +37,12 @@ const jourLabel = (iso: string) => {
   return `${JOURS[(dt.getDay() + 6) % 7]} ${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}`;
 };
 const MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
-// Date en toutes lettres pour l'en-tête des PDF : « Lundi 7 octobre 2026 ».
+// Date en toutes lettres pour l'en-tête des PDF : ["Lundi", "7 octobre 2026"]
+// (le jour de la semaine est mis en gras à part).
 const jourLong = (iso: string) => {
   const [y, m, d] = iso.split("-").map(Number);
   const dt = new Date(y, m - 1, d);
-  return `${JOURS[(dt.getDay() + 6) % 7]} ${d} ${MOIS[m - 1]} ${y}`;
+  return [JOURS[(dt.getDay() + 6) % 7], `${d} ${MOIS[m - 1]} ${y}`];
 };
 
 export default function PlacementBoard({
@@ -801,13 +802,6 @@ export default function PlacementBoard({
   const groupsImpr = groups
     .map((g) => ({ ...g, postes: g.postes.filter((po) => po.imprimable) }))
     .filter((g) => g.postes.length > 0);
-  // Équipe(s) de la feuille = celles qui travaillent ce quart ce jour-là (quart
-  // fixe + rotation datée), pas le filtre de la liste : le plan imprimé montre
-  // tous les placés, quelle que soit leur équipe.
-  const equipesImpr = (equipesParQuart[quart] ?? [])
-    .map((id) => equipes.find((e) => e.id === id)?.nom)
-    .filter(Boolean)
-    .join(" / ");
 
   return (
     <div className={s.board}>
@@ -1284,24 +1278,17 @@ export default function PlacementBoard({
           ------------------------------------------------------------------ */}
       {prepImpression && (
       <div className={s.printSheet} data-mode={prepImpression} aria-hidden="true">
-      {/* En-tête à taille fixe : équipe, quart et date en cartouches encadrés,
-          lisibles d'un coup d'œil, et identiques en couleur comme en noir. */}
+      {/* En-tête à taille fixe : service en titre, quart en pastille pleine et
+          date à droite — lisibles d'un coup d'œil, en couleur comme en noir. */}
       <div className={s.printHead} ref={printHeadRef}>
-        <strong className={s.printTitre}>{ateliers.find((a) => a.id === atelierId)?.nom ?? "Service"}</strong>
-        {equipesImpr && (
-          <div className={s.printCartouche}>
-            <span className={s.printCartoucheLib}>Équipe</span>
-            <span className={s.printCartoucheVal}>{equipesImpr}</span>
-          </div>
-        )}
-        <div className={s.printCartouche}>
-          <span className={s.printCartoucheLib}>Quart</span>
-          <span className={s.printCartoucheVal}>{quartLib[quart] ?? quart}</span>
+        <div className={s.printTitreBloc}>
+          <span className={s.printSurTitre}>Plan de placement</span>
+          <strong className={s.printTitre}>{ateliers.find((a) => a.id === atelierId)?.nom ?? "Service"}</strong>
         </div>
-        <div className={s.printCartouche}>
-          <span className={s.printCartoucheLib}>Date</span>
-          <span className={s.printCartoucheVal}>{jourLong(jour)}</span>
-        </div>
+        <span className={s.printQuart}>{quartLib[quart] ?? quart}</span>
+        <span className={s.printDate}>
+          <strong>{jourLong(jour)[0]}</strong> {jourLong(jour)[1]}
+        </span>
         {/* Mention « Couverture X/Y » retirée du PDF le 2026-09-10 : la
             couverture globale sature à un chiffre agrégé peu utile sur la
             feuille imprimée, et les compteurs par poste (X/Y en tête de

@@ -572,46 +572,59 @@
 }
 
 /* En-tête HORS de .printInner : jamais mis à l'échelle, sa hauteur est déduite
-   de la cible de `ajusterFeuille()`. Équipe, quart et date en cartouches à
-   bord noir épais : lisibles de loin, en couleur comme en noir et blanc. */
+   de la cible de `ajusterFeuille()`. Service en titre (sur-titre discret), quart
+   en pastille noire pleine, date à droite. Noir et gris seulement : identique
+   sur le PDF Manager et sur la feuille opérateurs sans couleur. Le fond de la
+   pastille s'imprime grâce à `print-color-adjust: exact` (globals.css). */
 .printHead {
   display: flex;
-  align-items: stretch;
-  gap: 8px;
-  border-bottom: 3px solid #000;
-  padding-bottom: 6px;
-  margin-bottom: 8px;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+  border-bottom: 2px solid #000;
 }
-.printTitre {
-  align-self: center;
-  margin-right: auto;
-  font-size: 20px;
-}
-.printCartouche {
+.printTitreBloc {
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  border: 2px solid #000;
-  border-radius: 4px;
-  padding: 2px 12px;
+  margin-right: auto;
+  min-width: 0;
 }
-.printCartoucheLib {
+.printSurTitre {
   font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  font-weight: 600;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #475569;
+  color: #64748b;
 }
-.printCartoucheVal {
+.printTitre {
   font-size: 22px;
   font-weight: 800;
   line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+.printQuart {
+  padding: 3px 14px;
+  border-radius: 999px;
+  background: #111827;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   white-space: nowrap;
 }
+.printDate {
+  font-size: 17px;
+  color: #111827;
+  white-space: nowrap;
+}
+.printDate strong { font-weight: 800; }
 /* A3 opérateurs (souvent affiché) : un cran plus grand. */
-.printSheet[data-mode="simple"] .printTitre { font-size: 26px; }
-.printSheet[data-mode="simple"] .printCartoucheLib { font-size: 11px; }
-.printSheet[data-mode="simple"] .printCartoucheVal { font-size: 30px; }
+.printSheet[data-mode="simple"] .printSurTitre { font-size: 12px; }
+.printSheet[data-mode="simple"] .printTitre { font-size: 32px; }
+.printSheet[data-mode="simple"] .printQuart { font-size: 22px; padding: 4px 20px; }
+.printSheet[data-mode="simple"] .printDate { font-size: 24px; }
 .printBody {
   display: flex;
   align-items: flex-start;
