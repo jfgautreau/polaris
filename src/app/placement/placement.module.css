@@ -536,21 +536,47 @@
   transform-origin: top left;
 }
 
+/* En-tête HORS de .printInner : jamais mis à l'échelle, sa hauteur est déduite
+   de la cible de `ajusterFeuille()`. Équipe, quart et date en cartouches à
+   bord noir épais : lisibles de loin, en couleur comme en noir et blanc. */
 .printHead {
   display: flex;
-  align-items: baseline;
-  gap: 14px;
-  border-bottom: 2px solid #000;
-  padding-bottom: 4px;
+  align-items: stretch;
+  gap: 8px;
+  border-bottom: 3px solid #000;
+  padding-bottom: 6px;
   margin-bottom: 8px;
 }
 .printTitre {
-  font-size: 16px;
+  align-self: center;
+  margin-right: auto;
+  font-size: 20px;
 }
-.printCouv {
-  margin-left: auto;
+.printCartouche {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border: 2px solid #000;
+  border-radius: 4px;
+  padding: 2px 12px;
+}
+.printCartoucheLib {
+  font-size: 9px;
   font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #475569;
 }
+.printCartoucheVal {
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+/* A3 opérateurs (souvent affiché) : un cran plus grand. */
+.printSheet[data-mode="simple"] .printTitre { font-size: 26px; }
+.printSheet[data-mode="simple"] .printCartoucheLib { font-size: 11px; }
+.printSheet[data-mode="simple"] .printCartoucheVal { font-size: 30px; }
 .printBody {
   display: flex;
   align-items: flex-start;

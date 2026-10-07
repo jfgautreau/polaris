@@ -36,6 +36,13 @@ const jourLabel = (iso: string) => {
   const dt = new Date(y, m - 1, d);
   return `${JOURS[(dt.getDay() + 6) % 7]} ${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}`;
 };
+const MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+// Date en toutes lettres pour l'en-tête des PDF : « Lundi 7 octobre 2026 ».
+const jourLong = (iso: string) => {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  return `${JOURS[(dt.getDay() + 6) % 7]} ${d} ${MOIS[m - 1]} ${y}`;
+};
 
 export default function PlacementBoard({
   title,
@@ -216,6 +223,9 @@ export default function PlacementBoard({
   const [askRh, setAskRh] = useState<{ persId: string; value: string; num: string | null; alertes: string[] } | null>(null);
 
   const printRef = useRef<HTMLDivElement>(null);
+  // En-tête de la feuille (service, équipe, quart, date) : HORS de printInner,
+  // donc jamais réduit par `ajusterFeuille()` — un plan dense ne le rapetisse pas.
+  const printHeadRef = useRef<HTMLDivElement>(null);
   // La feuille n'est montee QU'AU moment d'imprimer : la garder en permanence
   // doublerait le cout de rendu du plan, deja l'ecran le plus lourd.
   // Deux modes d'impression :
@@ -482,7 +492,8 @@ export default function PlacementBoard({
     if (!el) return;
     el.style.transform = "none";
     const pageL = a3 ? PAGE_L_A3 : PAGE_L;
-    const pageH = a3 ? PAGE_H_A3 : PAGE_H;
+    // L'en-tête, à taille fixe au-dessus du plan, prend sa part de la hauteur.
+    const pageH = (a3 ? PAGE_H_A3 : PAGE_H) - (printHeadRef.current?.offsetHeight ?? 0);
     const largeurs = a3 ? LARGEURS_ESSAI_A3 : LARGEURS_ESSAI;
     let meilleur = { f: 0, w: pageL };
     for (const w of largeurs) {
@@ -782,6 +793,13 @@ export default function PlacementBoard({
   const groupsImpr = groups
     .map((g) => ({ ...g, postes: g.postes.filter((po) => po.imprimable) }))
     .filter((g) => g.postes.length > 0);
+  // Équipe(s) de la feuille = celles qui travaillent ce quart ce jour-là (quart
+  // fixe + rotation datée), pas le filtre de la liste : le plan imprimé montre
+  // tous les placés, quelle que soit leur équipe.
+  const equipesImpr = (equipesParQuart[quart] ?? [])
+    .map((id) => equipes.find((e) => e.id === id)?.nom)
+    .filter(Boolean)
+    .join(" / ");
 
   return (
     <div className={s.board}>
@@ -1231,19 +1249,32 @@ export default function PlacementBoard({
           ------------------------------------------------------------------ */}
       {prepImpression && (
       <div className={s.printSheet} data-mode={prepImpression} aria-hidden="true">
+      {/* En-tête à taille fixe : équipe, quart et date en cartouches encadrés,
+          lisibles d'un coup d'œil, et identiques en couleur comme en noir. */}
+      <div className={s.printHead} ref={printHeadRef}>
+        <strong className={s.printTitre}>{ateliers.find((a) => a.id === atelierId)?.nom ?? "Service"}</strong>
+        {equipesImpr && (
+          <div className={s.printCartouche}>
+            <span className={s.printCartoucheLib}>Équipe</span>
+            <span className={s.printCartoucheVal}>{equipesImpr}</span>
+          </div>
+        )}
+        <div className={s.printCartouche}>
+          <span className={s.printCartoucheLib}>Quart</span>
+          <span className={s.printCartoucheVal}>{quartLib[quart] ?? quart}</span>
+        </div>
+        <div className={s.printCartouche}>
+          <span className={s.printCartoucheLib}>Date</span>
+          <span className={s.printCartoucheVal}>{jourLong(jour)}</span>
+        </div>
+        {/* Mention « Couverture X/Y » retirée du PDF le 2026-09-10 : la
+            couverture globale sature à un chiffre agrégé peu utile sur la
+            feuille imprimée, et les compteurs par poste (X/Y en tête de
+            chaque tuile) portent déjà l'information au bon niveau de détail. */}
+      </div>
       {/* Cadre exterieur = une page exactement ; ce bloc interieur porte le
           contenu et la mise a l'echelle (cf. placement.module.css). */}
       <div className={s.printInner} ref={printRef}>
-        <div className={s.printHead}>
-          <strong className={s.printTitre}>{ateliers.find((a) => a.id === atelierId)?.nom ?? "Service"}</strong>
-          <span>{quartLib[quart] ?? quart}</span>
-          <span>{jourLabel(jour)}</span>
-          {/* Mention « Couverture X/Y » retirée du PDF le 2026-09-10 : la
-              couverture globale sature à un chiffre agrégé peu utile sur la
-              feuille imprimée, et les compteurs par poste (X/Y en tête de
-              chaque tuile) portent déjà l'information au bon niveau de détail. */}
-        </div>
-
         <div className={s.printBody}>
           <div className={s.printPlan}>
             {groupsImpr.map((g) => (
