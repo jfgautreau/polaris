@@ -64,6 +64,12 @@ menu suit l'écriture, pas la lecture.
   - Sur les deux : **numéros de rotation imprimés même vides** (« n° · libre ») et
     **commentaire du jour** (`horaire_exception.motif`) à côté du nom. Le plan imprimé exclut
     les postes `imprimable = false` (`groupsImpr`).
+  - **En-tête** (2026-10-07) : grille 3 colonnes `1fr auto 1fr` — service à gauche, quart
+    en **pastille noire** au **centre** de la page, date en toutes lettres à droite (jour de
+    la semaine en gras, `jourLong`). Pas d'équipe. Noir et gris seulement (identique sur
+    les deux PDF ; un cran plus grand en A3). L'en-tête est **hors de `printInner`** : il
+    n'est jamais réduit par `ajusterFeuille()`, qui retranche sa hauteur (`printHeadRef`)
+    de la cible `PAGE_H` / `PAGE_H_A3`.
 - **Écran** : les rangs d'un poste (numéros + occupants) se répartissent en **2-3 colonnes**
   (10 lignes max par colonne, variable CSS `--cols`) — chaque occupant est une rangée.
 
