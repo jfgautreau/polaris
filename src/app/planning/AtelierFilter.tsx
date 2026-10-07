@@ -14,6 +14,7 @@ export default function AtelierFilter({
   search = "",
   cond = false,
   vue = "",
+  par = "",
 }: {
   ateliers?: Opt[];
   atelier?: string;
@@ -23,6 +24,8 @@ export default function AtelierFilter({
   search?: string;
   cond?: boolean;
   vue?: string;
+  /** "poste" = vue Par poste (conservée d'un filtre à l'autre). */
+  par?: string;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -36,6 +39,7 @@ export default function AtelierFilter({
     if (search) p.set("search", search);
     if (cond) p.set("cond", "1");
     if (vue) p.set("vue", vue);
+    if (par) p.set("par", par);
     const qs = p.toString();
     start(() => router.push(qs ? `/planning?${qs}` : "/planning"));
   }

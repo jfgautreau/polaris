@@ -16,6 +16,8 @@ type Poste = {
   numero_rotation: string | null;
   remplacable: boolean;
   imprimable: boolean;
+  // Zone d'attente (0077) : pré-affectation à répartir (vue Par poste du Planning).
+  zone_attente?: boolean;
   actif: boolean;
 };
 type Ligne = { id: string; nom: string; actif: boolean; ordre_affichage: number; regroupement: string | null; poste: Poste[] };
@@ -511,6 +513,7 @@ export default function ReferentielEditor({
                   <col style={{ width: 118 }} />{/* Categorie */}
                   <col style={{ width: 80 }} />{/* Rempl. (PTR/PTNR) */}
                   <col style={{ width: 74 }} />{/* Impr. (feuille de placement) */}
+                  <col style={{ width: 74 }} />{/* Attente (zone d'attente, 0077) */}
                   <col style={{ width: 62 }} />{/* Diff. */}
                   <col style={{ width: 74 }} />{/* Niv. min */}
                   <col style={{ width: 72 }} />{/* N° aff. */}
@@ -530,6 +533,7 @@ export default function ReferentielEditor({
                     <th>Catégorie</th>
                     <th title="PTR = remplaçable. PTNR = Position de Travail Non Remplaçable (un seul titulaire par conception). Un PTNR est exclu des rapports de fragilité/relève et isolé dans les compétences critiques.">Rempl.</th>
                     <th title="Le poste figure-t-il sur les feuilles de placement imprimées (PDF / PDF Manager) ? « Non » masque à l'impression les postes qui ne servent qu'à construire le planning ; ils restent utilisables à l'écran.">Impr.</th>
+                    <th title="Zone d'attente : poste de pré-affectation (ex. CDT) où le pré-remplissage range les opérateurs d'un service avant que les chefs d'équipe les répartissent. Dans la vue « Par poste » du Planning, il s'affiche replié « N à répartir » et ses occupants sont proposés en tête.">Attente</th>
                     <th>Diff.</th>
                     <th>Niv. min</th>
                     <th title="N° d'affichage du poste sur les TV / PDF (croissant)">N° aff.</th>
@@ -590,6 +594,17 @@ export default function ReferentielEditor({
                         >
                           <option value="1">Oui</option>
                           <option value="0">Non</option>
+                        </select>
+                      </td>
+                      <td>
+                        <select
+                          value={p.zone_attente ? "1" : "0"}
+                          onChange={(e) => posteField(a.id, l.id, p.id, "zone_attente", e.target.value === "1")}
+                          title={p.zone_attente ? "Zone d'attente : replié « N à répartir » dans la vue Par poste du Planning" : "Poste ordinaire"}
+                          style={{ color: p.zone_attente ? "#6d28d9" : undefined, fontWeight: p.zone_attente ? 600 : 400 }}
+                        >
+                          <option value="0">Non</option>
+                          <option value="1">Oui</option>
                         </select>
                       </td>
                       <td>

@@ -26,6 +26,7 @@ export default function QuartSelector({
   cond = false,
   suivreEquipe = false,
   suivreEquipeRaison = "",
+  par = "",
 }: {
   quarts: Quart[];
   current: string;
@@ -36,6 +37,8 @@ export default function QuartSelector({
   cond?: boolean;
   suivreEquipe?: boolean;
   suivreEquipeRaison?: string;
+  /** "poste" = vue Par poste : un quart à la fois, pas de « Suivre l'équipe ». */
+  par?: string;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -46,6 +49,7 @@ export default function QuartSelector({
     if (semaine) p.set("semaine", semaine);
     if (search) p.set("search", search);
     if (cond) p.set("cond", "1");
+    if (par) p.set("par", par);
     // En « Suivre l'équipe », le serveur déduit le quart de chaque semaine.
     if (vueEquipe) p.set("vue", "equipe");
     else p.set("quart", code);
@@ -68,6 +72,7 @@ export default function QuartSelector({
           </button>
         ))}
       </div>
+      {!par && (
       <span style={{ marginLeft: 10, opacity: indispo ? 0.45 : 1 }}>
         <SlideSwitch
           on={suivreEquipe}
@@ -86,6 +91,7 @@ export default function QuartSelector({
           }
         />
       </span>
+      )}
     </div>
   );
 }

@@ -1,0 +1,337 @@
+/* Vue « Par poste » du Planning (PlanningParPoste.tsx). Une rangée par place de
+   poste, hauteur commune des grilles (--grid-row-h). */
+
+.barreHaut {
+  margin: 2px 0 6px;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 34px;
+}
+.recherche {
+  width: 100%;
+  max-width: 320px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 13px;
+}
+.gauche {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.actions {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.carte {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 !important;
+  position: relative;
+}
+.grille {
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  width: 100%;
+  min-width: 1100px;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+.grille th,
+.grille td {
+  height: var(--grid-row-h, 32px);
+  box-sizing: border-box;
+  padding: 0 2px;
+  border-bottom: 1px solid #eef0f3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.grille thead th {
+  position: sticky;
+  z-index: 3;
+  background: #fff;
+  text-align: center;
+  font-weight: 600;
+  border-bottom: 1px solid #cbd5e1;
+}
+.hSemaine { top: 0; }
+.hJour { top: 26px; border-bottom: 2px solid #94a3b8 !important; }
+.hSemaine.courante { background: #dbeafe !important; }
+.jourAuj { background: #dbeafe !important; }
+.jourFerme { background: #f1f5f9 !important; color: #94a3b8; }
+.coin {
+  left: 0;
+  z-index: 5 !important;
+  text-align: center;
+}
+.sep { border-left: 3px solid #94a3b8 !important; }
+
+.poste {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: #fff;
+  border-right: 1px solid #cbd5e1;
+  text-align: left;
+  white-space: normal !important;
+  line-height: 1.2;
+  padding: 2px 8px !important;
+  vertical-align: middle;
+}
+.posteNom { font-weight: 650; }
+.posteMeta { color: var(--muted); font-size: 11px; display: flex; gap: 6px; flex-wrap: wrap; }
+.puce { font-size: 10.5px; border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
+.puceHab { border-color: #c2410c; color: #c2410c; }
+.puceAttente { border-color: #6d28d9; color: #6d28d9; }
+
+.service td {
+  background: #f4f5f7;
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  height: 26px;
+}
+.service td:first-child { position: sticky; left: 0; z-index: 2; }
+.ligne td {
+  font-weight: 650;
+  height: 26px;
+  border-bottom: 1px solid #cbd5e1;
+  background: #fafbfc;
+}
+.ligne td:first-child { position: sticky; left: 0; z-index: 2; background: #fafbfc; }
+.ligne .besoin { color: var(--muted); font-weight: 500; font-size: 11px; }
+.finPoste td:not(.poste) { border-bottom: 1px solid #cbd5e1; }
+
+.case { padding: 2px !important; }
+.barre {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  border-radius: 5px;
+  padding: 0 6px;
+  background: #e8eefc;
+  color: #1e3a8a;
+  overflow: hidden;
+  cursor: pointer;
+  border: 0;
+  width: 100%;
+  margin: 0;
+  font: inherit;
+  text-align: left;
+}
+.barre .nom { overflow: hidden; text-overflow: ellipsis; }
+.titulaire { font-weight: 700; }
+.surnombre { outline: 1px dashed #94a3b8; outline-offset: -1px; }
+.attente { background: #f3e8ff; color: #6d28d9; }
+.habManque { box-shadow: inset 3px 0 0 #c2410c; }
+.drapeau { margin-left: auto; font-size: 10px; font-weight: 600; color: #c2410c; }
+.vide {
+  justify-content: center;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-weight: 600;
+  border: 1px dashed #b91c1c;
+}
+.vide small { font-weight: 500; margin-left: 3px; }
+.figee { cursor: default; }
+.reperee { outline: 2px solid #7c3aed; outline-offset: -2px; }
+.estompee { opacity: 0.28; }
+.prolonger {
+  margin: 0 0 0 auto;
+  flex: none;
+  border: 0;
+  background: #fff;
+  color: #1d4ed8;
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1;
+  width: 20px;
+  height: 18px;
+  border-radius: 4px;
+  padding: 0;
+  cursor: pointer;
+  opacity: 0;
+}
+.barre:hover .prolonger,
+.prolonger:focus-visible { opacity: 1; }
+
+.fermeeOrdo {
+  background: repeating-linear-gradient(135deg, #eef0f3 0 6px, #e1e4e9 6px 12px);
+  color: var(--muted);
+  text-align: center;
+  font-size: 11px;
+  cursor: pointer;
+}
+.jourFermeCase { background: #f1f5f9; }
+
+.ajout td { height: 18px; border-bottom: 1px solid #cbd5e1; }
+.ajouter {
+  width: 100%;
+  height: 14px;
+  margin: 0;
+  padding: 0;
+  border: 1px dashed #cbd5e1;
+  border-radius: 4px;
+  background: none;
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+}
+.ajout:hover .ajouter,
+.ajouter:focus-visible { opacity: 1; }
+
+.compteAttente {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  border-radius: 5px;
+  background: #f3e8ff;
+  color: #6d28d9;
+  font-weight: 650;
+  font-size: 12px;
+  width: 100%;
+  border: 0;
+  margin: 0;
+  cursor: pointer;
+}
+.lienPlier {
+  border: 0;
+  background: none;
+  color: #6d28d9;
+  font-size: 11px;
+  padding: 0;
+  margin: 0;
+  width: auto;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.pied td {
+  position: sticky;
+  bottom: 0;
+  background: #fff;
+  font-weight: 600;
+  text-align: center;
+  border-top: 1px solid #cbd5e1;
+  z-index: 2;
+}
+.pied td.poste { z-index: 4; }
+.couv { display: inline-block; min-width: 44px; padding: 1px 6px; border-radius: 5px; }
+.couvOk { background: #dcfce7; color: #15803d; }
+.couvKo { background: #fef2f2; color: #b91c1c; }
+.couvAttente { background: #f3e8ff; color: #6d28d9; }
+
+/* Menu sur une personne placée (popover en position fixe). */
+.menu {
+  position: fixed;
+  z-index: 60;
+  min-width: 220px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+  padding: 4px 0;
+  font-size: 13px;
+}
+.menuTitre { padding: 6px 12px 4px; border-bottom: 1px solid #eef0f3; }
+.menuTitre span { display: block; color: var(--muted); font-size: 12px; }
+.menu button,
+.menu a {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 7px 12px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.menu button:hover,
+.menu a:hover { background: #eef2ff; }
+.menu button:disabled { color: #94a3b8; cursor: default; background: none; }
+
+/* Panneau des candidats (dans une ModaleDeplacable). */
+.panneauTete { padding: 10px 14px 8px; border-bottom: 1px solid #eef0f3; cursor: move; }
+.panneauTete strong { display: block; font-size: 15px; }
+.panneauTete span { color: var(--muted); font-size: 12px; }
+.filtre { margin: 8px 14px 4px; width: calc(100% - 28px); box-sizing: border-box; }
+.groupe {
+  padding: 8px 14px 3px;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 650;
+}
+.candidat {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 5px 14px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.candidat:hover:not(:disabled) { background: #eef2ff; }
+.candidat:disabled { cursor: not-allowed; color: #94a3b8; }
+.raison { margin-left: auto; font-size: 11.5px; color: var(--muted); text-align: right; }
+.raisonAlerte { color: #c2410c; }
+.raisonAttente { color: #6d28d9; }
+.pastille { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+
+.confirmer { padding: 14px; display: grid; gap: 10px; line-height: 1.45; font-size: 14px; }
+.confirmerActions { display: flex; gap: 8px; justify-content: flex-end; }
+.confirmerActions button { width: auto; margin: 0; }
+.bouton2 { background: #fff !important; color: var(--text) !important; border: 1px solid var(--border) !important; }
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 200;
+  max-width: min(720px, calc(100vw - 32px));
+  background: #1c1f23;
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+.occupe { opacity: 0.6; pointer-events: none; }
+
+.horsPlan { margin-top: 8px; padding: 8px 12px !important; border-color: #fdba74 !important; background: #fff7ed; }
+.horsPlan strong { color: #9a3412; }
+.horsPlan ul { margin: 4px 0 0; padding-left: 18px; font-size: 13px; }

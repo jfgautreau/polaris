@@ -44,6 +44,10 @@ function posteValue(key: string, value: unknown) {
     // Imprimable sur les feuilles de placement (migration 0073). Accepte booleen ou "true"/"false".
     case "imprimable":
       return value === true || value === "true";
+    // Zone d'attente (migration 0077). Pas de repli silencieux si la colonne
+    // manque : l'erreur remonte, sinon le choix semblerait enregistré.
+    case "zone_attente":
+      return value === true || value === "true";
     case "difficulte_formation": {
       const v = s(value);
       return v === "" ? null : Math.max(1, Math.min(3, Number(v)));

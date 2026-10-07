@@ -23,6 +23,9 @@ import ConducteurToggle from "./ConducteurToggle";
 import { TvIcon } from "@/components/icons";
 import QuartBandeau from "./QuartBandeau";
 import PlanningGrid from "./PlanningGrid";
+import PlanningParPoste from "./PlanningParPoste";
+import VueBascule from "./VueBascule";
+import { parseNumeros } from "@/lib/numeros-rotation";
 import { getRotationRefsC, getTypesAgenceC } from "@/lib/refdata";
 import { rotationForWeek } from "@/lib/rotation";
 import { addMonthsIso } from "@/lib/habilitations";
@@ -51,6 +54,7 @@ type Personne = {
   prenom: string;
   equipe_id: string | null;
   type_contrat: string;
+  poste_fixe_id: string | null;
 };
 type Placement = {
   personne_id: string;
@@ -59,6 +63,7 @@ type Placement = {
   motif_absence_id: string | null;
   non_travaille: boolean;
   quart_code: string | null;
+  numero_rotation: string | null;
 };
 type MatRow = { personne_id: string; poste_id: string; niveau_actuel: number };
 type PcrRow = { poste_id: string; competence_id: string; competence: { nom: string; duree_validite_mois: number | null } | null };
@@ -68,7 +73,7 @@ type Motif = { id: string; code_court: string; libelle: string; couleur: string 
 export default async function PlanningPage({
   searchParams,
 }: {
-  searchParams: Promise<{ equipe?: string; semaine?: string; quart?: string; atelier?: string; search?: string; cond?: string; vue?: string }>;
+  searchParams: Promise<{ equipe?: string; semaine?: string; quart?: string; atelier?: string; search?: string; cond?: string; vue?: string; par?: string }>;
 }) {
   const { profile, perms } = await requireModule("planning", "read");
   // Droit "planning: write" (hors chef) : édition complète ; le chef garde son périmètre.
@@ -94,6 +99,10 @@ export default async function PlanningPage({
   // aux autres filtres (intersection) ; la recherche par nom passe outre (comme
   // pour atelier/équipe).
   const filtreConducteurs = sp.cond === "1";
+  // Vue « Par poste » (?par=poste, tasks/planning-par-poste.md) : une ligne par
+  // place de poste au lieu d'une ligne par personne. Mêmes données, un seul quart
+  // (pas de « Suivre l'équipe »), filtres Équipe et Conducteurs sans objet.
+  const vuePoste = sp.par === "poste";
 
   // La semaine choisie (par défaut la semaine EN COURS) est affichée À GAUCHE,
   // suivie des deux semaines à venir (S, S+1, S+2) : on regarde ce qui vient,
@@ -139,7 +148,7 @@ export default async function PlanningPage({
     // Migration 0068 : la colonne `couleur` peut ne pas encore exister — repli
     // silencieux plus bas (relecture sans `couleur`) pour ne pas planter la page.
     supabase.from("quart").select("code, libelle, ordre, creneau, couleur").order("ordre").returns<Quart[]>(),
-    supabase.from("personne").select("id, nom, prenom, equipe_id, type_contrat").in("statut", ["ACTIF", "A_VENIR"]).order("nom").returns<Personne[]>(),
+    supabase.from("personne").select("id, nom, prenom, equipe_id, type_contrat, poste_fixe_id").in("statut", ["ACTIF", "A_VENIR"]).order("nom").returns<Personne[]>(),
     canEditPlanningFull
       ? Promise.resolve({ data: [] as { equipe_id: string }[] })
       : supabase.from("equipe_chef").select("equipe_id").eq("app_user_id", profile.authId).returns<{ equipe_id: string }[]>(),
@@ -199,7 +208,7 @@ export default async function PlanningPage({
   // sans rotation connue : repli sur le quart de la première semaine.
   const eqSel = equipeIdSel ? (equipesD ?? []).find((e) => e.id === equipeIdSel) : undefined;
   const suivreEquipePossible = !!eqSel && !eqSel.quart_fixe;
-  const suivreEquipe = suivreEquipePossible && sp.vue === "equipe";
+  const suivreEquipe = suivreEquipePossible && sp.vue === "equipe" && !vuePoste;
   const quartDeSemaine = (wi: number): string => {
     const q = suivreEquipe ? rotByWeek[wi]?.[equipeIdSel] : undefined;
     return q && quartCodes.includes(q) ? q : "";
@@ -362,6 +371,21 @@ export default async function PlanningPage({
     })
   );
 
+  // Vue Par poste : numéros de rotation et zone d'attente (0077) des postes. Lecture
+  // à part, tolérante à l'absence de `zone_attente` (migration non passée) : la
+  // mettre dans la requête imbriquée des lignes ferait échouer tout l'écran (L19).
+  type PosteExtra = { id: string; numero_rotation: string | null; zone_attente?: boolean };
+  const pPosteExtra = enAvance<PosteExtra[]>(
+    vuePoste
+      ? (async () => {
+          const avec = await supabase.from("poste").select("id, numero_rotation, zone_attente").returns<PosteExtra[]>();
+          if (!avec.error) return avec.data ?? [];
+          const sans = await supabase.from("poste").select("id, numero_rotation").returns<PosteExtra[]>();
+          return sans.data ?? [];
+        })()
+      : Promise.resolve([] as PosteExtra[])
+  );
+
   // Ouverture par quart selectionne.
   // `ouverture_quart` passe par fetchAll : 3 semaines x 1 quart x N lignes, soit
   // ~420 lignes aujourd'hui mais 1000 des ~48 lignes de production (cf. L8 —
@@ -459,7 +483,7 @@ export default async function PlanningPage({
         ? fetchAll<Placement>(() =>
             supabase
               .from("placement")
-              .select("personne_id, jour, poste_id, motif_absence_id, non_travaille, quart_code")
+              .select("personne_id, jour, poste_id, motif_absence_id, non_travaille, quart_code, numero_rotation")
               .in("jour", visIsos)
               .in("personne_id", idsEffectif)
               .order("id")
@@ -589,6 +613,7 @@ export default async function PlanningPage({
   const matchQuart = (qc: string | null, iso: string) => memeQuart(qc, quartDuJour(iso), quarts);
 
   const initial: Record<string, string> = {};
+  const numeroParCase: Record<string, string> = {}; // vue Par poste : place (n° de rotation) occupée
   const otherByCell: Record<string, string> = {}; // place sur un autre quart -> code du quart
   const otherPosteByCell: Record<string, string> = {}; // ... et nom complet du poste occupe
   const matrice: Record<string, number> = {};
@@ -605,7 +630,10 @@ export default async function PlanningPage({
       const k = `${r.personne_id}:${r.jour}`;
       if (r.non_travaille) initial[k] = "X";
       else if (r.motif_absence_id) initial[k] = `m:${r.motif_absence_id}`;
-      else if (r.poste_id && matchQuart(r.quart_code, r.jour)) initial[k] = r.poste_id;
+      else if (r.poste_id && matchQuart(r.quart_code, r.jour)) {
+        initial[k] = r.poste_id;
+        if (r.numero_rotation) numeroParCase[k] = r.numero_rotation;
+      }
       else if (r.poste_id) {
         // Toutes les personnes actives, pas seulement l'ensemble affiche par
         // defaut : une recherche par nom peut faire apparaitre quelqu'un hors
@@ -827,6 +855,95 @@ export default async function PlanningPage({
   for (const q of quarts) quartLabel[q.code] = q.libelle.slice(0, 3);
 
   const searchParam = sp.search ?? "";
+
+  // ─── Vue « Par poste » : mêmes données, pivotées par poste côté client ───
+  // (src/app/planning/PlanningParPoste.tsx). Un seul quart : `quart`.
+  let parPoste: Omit<React.ComponentProps<typeof PlanningParPoste>, "weekNav" | "actions" | "gauche" | "quartBandeau"> | null = null;
+  if (vuePoste) {
+    const extraPoste = new Map((await pPosteExtra).map((p) => [p.id, p]));
+    const titulaires = new Map<string, string[]>();
+    for (const p of allActive) {
+      if (!p.poste_fixe_id) continue;
+      const t = titulaires.get(p.poste_fixe_id) ?? [];
+      t.push(p.id);
+      titulaires.set(p.poste_fixe_id, t);
+    }
+    // Équipes de service sur ce quart, semaine par semaine (rotation + quart fixe) :
+    // ordre des candidats et décompte des « non placés ».
+    const equipesQuart = weekMondays.map((_, wi) => {
+      const eqs = new Set<string>();
+      for (const [eid, qc] of Object.entries(rotByWeek[wi] ?? {})) if (qc === quart) eqs.add(eid);
+      for (const e of equipesD ?? []) if (e.quart_fixe === quart) eqs.add(e.id);
+      return [...eqs];
+    });
+    // Placés hors plan : sur un poste qu'aucun plan du site ne dessine sur ce quart
+    // (ne tourne pas, désactivé, fermé). Toujours montrés, jamais perdus de vue.
+    const dessines = new Set(postesDuQuart(groupsAll, quart).flatMap((g) => g.postes.map((p) => p.id)));
+    const nomPosteTous = new Map<string, string>();
+    for (const l of lignesD ?? []) for (const p of l.poste ?? []) nomPosteTous.set(p.id, p.nom);
+    const horsPlanMap = new Map<string, { pid: string; poste: string; jours: string[] }>();
+    for (const [k, v] of Object.entries(initial)) {
+      if (v === "X" || v === "TP" || v.startsWith("m:") || dessines.has(v)) continue;
+      const [pid, iso] = k.split(":");
+      const hk = `${pid}:${v}`;
+      const h = horsPlanMap.get(hk) ?? { pid, poste: nomPosteTous.get(v) ?? "poste désactivé", jours: [] };
+      h.jours.push(iso);
+      horsPlanMap.set(hk, h);
+    }
+    const quartLibelle: Record<string, string> = {};
+    for (const q of quarts) quartLibelle[q.code] = q.libelle;
+    parPoste = {
+      days,
+      weekBlocks,
+      todayIso: isoDate(new Date()),
+      quart,
+      quartLibelle,
+      semaine: centerIso,
+      atelier,
+      initialSearch: searchParam,
+      lignes: groupsDe(quart).map((g) => ({
+        ligneId: g.ligneId,
+        ligneNom: g.ligneNom,
+        atelierId: g.atelierId ?? "",
+        atelierNom: g.atelierNom,
+        postes: g.postes.map((p) => ({
+          id: p.id,
+          nom: p.nom,
+          court: p.nom_court || p.nom,
+          categorie: p.categorie,
+          effectif: effectifSurQuart(pq, p.id, quart, p.effectif_requis),
+          niveauMin: p.niveau_min_requis,
+          numeros: parseNumeros(extraPoste.get(p.id)?.numero_rotation),
+          attente: extraPoste.get(p.id)?.zone_attente === true,
+          titulaires: titulaires.get(p.id) ?? [],
+        })),
+      })),
+      personnes: allActive.map((p) => ({
+        id: p.id,
+        label: `${p.nom} ${p.prenom}`,
+        court: p.prenom ? `${p.nom} ${p.prenom.charAt(0).toUpperCase()}.` : p.nom,
+        equipe_id: p.equipe_id,
+        interim: agenceCodesSet.has(p.type_contrat),
+        editable: canEditPlanningFull || (p.equipe_id != null && chefEquipes.has(p.equipe_id)),
+      })),
+      equipesQuart,
+      vals: initial,
+      numeros: numeroParCase,
+      otherByCell,
+      tpBlocked,
+      horsEffectif,
+      motifs: motifs.map((m) => ({ id: m.id, code: m.code_court })),
+      matrice,
+      habPoste,
+      habComp,
+      habPers,
+      openByIso,
+      horsPlan: [...horsPlanMap.values()],
+      nomsPostes: Object.fromEntries(nomPosteTous),
+      postesAttente: [...extraPoste.values()].filter((p) => p.zone_attente === true).map((p) => p.id),
+    };
+  }
+
   // `vue` reste dans l'URL même quand elle ne s'applique pas (Auto, Toutes, équipe à
   // quart fixe) : revenir sur une équipe tournante retrouve « Suivre l'équipe ».
   const vue = sp.vue === "equipe" ? "equipe" : "";
@@ -836,6 +953,47 @@ export default async function PlanningPage({
   if (atelier) extra.atelier = atelier;
   if (searchParam) extra.search = searchParam;
   if (filtreConducteurs) extra.cond = "1";
+  if (vuePoste) extra.par = "poste";
+
+  // Raccourcis à droite de la recherche (TV, horaires, absences), communs aux
+  // deux vues ; le filtre Conducteurs ne sert qu'à la vue Par nom.
+  const raccourcis = (
+    <>
+      {atelier && (
+        <Link
+          href={`/affichage/atelier/${atelier}`}
+          target="_blank"
+          title={`Affichage TV — ${ateliersMap.get(atelier) ?? "service"}`}
+          aria-label="Affichage TV du service"
+          style={{ width: 30, height: 30, boxSizing: "border-box", flex: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", padding: 0, lineHeight: 1, color: "#1d4ed8", border: "1px solid var(--border)", borderRadius: 8, background: "#fff", textDecoration: "none" }}
+        >
+          <TvIcon size={18} />
+        </Link>
+      )}
+      <Link
+        href="/horaires-specifiques"
+        title="Horaires spécifiques"
+        aria-label="Horaires spécifiques"
+        style={{ width: 30, height: 30, boxSizing: "border-box", flex: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", padding: 0, lineHeight: 1, fontSize: 15, border: "1px solid var(--border)", borderRadius: 8, background: "#fff", textDecoration: "none" }}
+      >
+        🕐
+      </Link>
+      <Link
+        href={(() => {
+          const p = new URLSearchParams();
+          if (atelier) p.set("atelier", atelier);
+          if (searchParam) p.set("search", searchParam);
+          const qs = p.toString();
+          return qs ? `/absences-specifiques?${qs}` : "/absences-specifiques";
+        })()}
+        title="Absences spécifiques"
+        aria-label="Absences spécifiques"
+        style={{ width: 30, height: 30, boxSizing: "border-box", flex: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", padding: 0, lineHeight: 1, fontSize: 15, border: "1px solid var(--border)", borderRadius: 8, background: "#fff", textDecoration: "none" }}
+      >
+        🤒
+      </Link>
+    </>
+  );
 
   return (
     <>
@@ -860,6 +1018,7 @@ export default async function PlanningPage({
               search={searchParam}
               cond={filtreConducteurs}
               suivreEquipe={suivreEquipe}
+              par={vuePoste ? "poste" : ""}
               suivreEquipeRaison={
                 suivreEquipePossible
                   ? ""
@@ -868,8 +1027,8 @@ export default async function PlanningPage({
                     : "Choisissez une équipe pour suivre sa rotation d'une semaine sur l'autre"
               }
             />
-            <AtelierFilter ateliers={ateliers} atelier={atelier} equipe={spEquipe} quart={quart} semaine={centerIso} search={searchParam} cond={filtreConducteurs} vue={vue} />
-            <PlanningFilters
+            <AtelierFilter ateliers={ateliers} atelier={atelier} equipe={spEquipe} quart={quart} semaine={centerIso} search={searchParam} cond={filtreConducteurs} vue={vue} par={vuePoste ? "poste" : ""} />
+            {!vuePoste && <PlanningFilters
               equipes={(equipesD ?? []).map((e) => ({ id: e.id, label: e.nom, couleur: e.couleur }))}
               equipe={spEquipe}
               semaine={centerIso}
@@ -878,7 +1037,7 @@ export default async function PlanningPage({
               search={searchParam}
               cond={filtreConducteurs}
               vue={vue}
-            />
+            />}
           </div>
           {/* La colonne d'icônes à droite du bandeau a été retirée le 2026-09-10 :
               ces 4 boutons (TV, Horaires, Absences, Conducteurs) sont désormais
@@ -889,6 +1048,16 @@ export default async function PlanningPage({
 
         {/* La grille prend toute la largeur de la fenetre. */}
         <div className="gridband" style={{ paddingBottom: 12 }}>
+        {parPoste ? (
+          <PlanningParPoste
+            key={`poste|${atelier}|${quart}|${centerIso}`}
+            {...parPoste}
+            weekNav={<WeekNav base="/planning" semaine={centerIso} extra={extra} />}
+            actions={raccourcis}
+            gauche={<VueBascule parPoste />}
+            quartBandeau={<QuartBandeau quart={quart} quarts={quarts} suivi={null} />}
+          />
+        ) : (
         <PlanningGrid
           key={`${spEquipe}|${atelier}|${quartsSemaine.join(",")}|${centerIso}`}
           days={days}
@@ -920,6 +1089,7 @@ export default async function PlanningPage({
           horaireStd={horaireStd}
           weekNav={<WeekNav base="/planning" semaine={centerIso} extra={extra} />}
           initialSearch={searchParam}
+          gauche={<VueBascule parPoste={false} />}
           actions={
             /* 4 boutons uniformes 30×30 (2026-09-10) : ne PAS utiliser
                `.navlink` (padding CSS écrasait la taille et cassait
@@ -928,39 +1098,7 @@ export default async function PlanningPage({
                border-box` pour compter la bordure dans les 30 px, `line-height: 1`
                pour neutraliser l'ascender des emoji. */
             <>
-              {atelier && (
-                <Link
-                  href={`/affichage/atelier/${atelier}`}
-                  target="_blank"
-                  title={`Affichage TV — ${ateliersMap.get(atelier) ?? "service"}`}
-                  aria-label="Affichage TV du service"
-                  style={{ width: 30, height: 30, boxSizing: "border-box", flex: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", padding: 0, lineHeight: 1, color: "#1d4ed8", border: "1px solid var(--border)", borderRadius: 8, background: "#fff", textDecoration: "none" }}
-                >
-                  <TvIcon size={18} />
-                </Link>
-              )}
-              <Link
-                href="/horaires-specifiques"
-                title="Horaires spécifiques"
-                aria-label="Horaires spécifiques"
-                style={{ width: 30, height: 30, boxSizing: "border-box", flex: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", padding: 0, lineHeight: 1, fontSize: 15, border: "1px solid var(--border)", borderRadius: 8, background: "#fff", textDecoration: "none" }}
-              >
-                🕐
-              </Link>
-              <Link
-                href={(() => {
-                  const p = new URLSearchParams();
-                  if (atelier) p.set("atelier", atelier);
-                  if (searchParam) p.set("search", searchParam);
-                  const qs = p.toString();
-                  return qs ? `/absences-specifiques?${qs}` : "/absences-specifiques";
-                })()}
-                title="Absences spécifiques"
-                aria-label="Absences spécifiques"
-                style={{ width: 30, height: 30, boxSizing: "border-box", flex: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", padding: 0, lineHeight: 1, fontSize: 15, border: "1px solid var(--border)", borderRadius: 8, background: "#fff", textDecoration: "none" }}
-              >
-                🤒
-              </Link>
+              {raccourcis}
               <ConducteurToggle
                 actif={filtreConducteurs}
                 semaine={centerIso}
@@ -980,6 +1118,7 @@ export default async function PlanningPage({
             />
           }
         />
+        )}
         </div>
       </div>
     </>

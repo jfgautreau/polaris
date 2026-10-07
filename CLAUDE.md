@@ -167,6 +167,10 @@ L'historique des décisions est dans git et dans l'en-tête de chaque migration.
 ## Écritures de placement (Planning, Placement, pré-remplissage)
 Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés dans
 `src/lib/placement-helpers.ts` pour que saisie et déplacement ne divergent pas.
+- **Unicité `(personne_id, jour)`** : `/cell` fait un upsert qui remplace poste, absence, NT ou TP.
+  Un écran qui ne montre pas la case de la personne (vue Par poste) envoie **`proteger: true`** :
+  refus 422 si la ligne existante est une absence / NT / TP, et un retrait ne supprime que le
+  placement sur `poste_attendu`.
 - **Le cycle du poste décide du quart.** Aucun poste sur un quart où il ne tourne pas :
   `/cell` et `/move` refusent en **422** (`posteNeTournePas`) ; `/copy` ne recopie pas
   (`horsCycle`). ⚠️ Au Placement, **409 = « déjà placé sur un autre quart »** (modale
@@ -269,7 +273,7 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   qui ne lèvent pas) ; `useMemo(…, [])` non préservable ; `x++` capturé dans une lambda ;
   `[ternaires…].join() || …` en JSX ; fonction utilisée avant sa déclaration. **Vérifier**
   après build : `react.memo_cache_sentinel` dans `.next/static/chunks/app/<écran>/page-*.js`.
-  Prochain candidat : `PlacementBoard`.
+  Aussi `PlanningParPoste`. Prochain candidat : `PlacementBoard`.
 - Acquis : `loading.tsx` sur tous les gros écrans ; options de `<select>` du Planning
   construites à l'ouverture ; bilan Matrice agrégé en une passe.
 
@@ -284,6 +288,11 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   saute un poste hors cycle. Jours de semaine toujours affichés (jour fermé = message fusionné). Bascule
   Conducteurs (`?cond=1`). Pendule 🕐 (horaire + commentaire, `horaire_exception`),
   recopie `»`, glisser-déposer, croix de survol. Le bouton de pré-remplissage recharge la vue.
+  Bascule **Par nom / Par poste** (`?par=poste`, `PlanningParPoste.tsx`, règles pures
+  `src/lib/planning-par-poste.ts`, spec `tasks/planning-par-poste.md`) : une rangée par place
+  (attribution stable : n° de rotation > continuité > 1re place libre > surnombre), un seul quart,
+  saisie au clic (candidats triés, `»` jusqu'à la fin de semaine, Remplacer / Retirer), postes
+  `zone_attente` (0077) repliés « N à répartir ».
 - **Placement** (`src/app/placement/`, droit `placement`) : plan par ligne → postes → cases
   numérotées, rangs en 1 à 3 colonnes (au-delà de 10 par colonne). Bascule Plan /
   Absences. `JourNav` (calendrier grisant les jours sans quart actif). Filtres de la liste
@@ -307,7 +316,7 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   bilan sur le sous-ensemble affiché ; saisie au clic sur une pastille ; filtre au clic sur
   un en-tête.
 - **Référentiel** (`src/app/admin/referentiel/`, `/api/referentiel`) : colonnes N° rot,
-  Habil. requises, Rempl. (PTR/PTNR), Impr., Titulaire, effectif par quart (vide « – » / 0 /
+  Habil. requises, Rempl. (PTR/PTNR), Impr., Attente (`zone_attente`, 0077), Titulaire, effectif par quart (vide « – » / 0 /
   N), Ouvre / Ferme le, Regroup. Noms de poste / nom court / ligne **uniques par site**
   parmi les actifs (409) ; erreurs en toast fixe bas-centre.
 - **Absences** (module `absences`, `src/app/absences-specifiques/`) : périodes reconstruites

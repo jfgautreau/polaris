@@ -5,10 +5,13 @@
 
 ## Planning « Par poste » (cahier des charges validé le 2026-10-07)
 Spécification complète : `tasks/planning-par-poste.md`.
-- [ ] Migration **0077** `poste.zone_attente` + colonne « Attente » au Référentiel.
-- [ ] Bascule Par nom / Par poste dans le Planning, grille une rangée par place.
-- [ ] Saisie : panneau des candidats, `»` jusqu'au vendredi, menu Remplacer / Retirer,
+- [ ] **Migration `0077_poste_zone_attente.sql` à exécuter** dans le SQL Editor, puis cocher
+      « Attente » sur CDT (Le Bignon) au Référentiel. Le code tolère son absence.
+- [x] Colonne « Attente » au Référentiel (`poste.zone_attente`).
+- [x] Bascule Par nom / Par poste dans le Planning (`?par=poste`), une rangée par place.
+- [x] Saisie : panneau des candidats, `»` jusqu'à la fin de semaine, menu Remplacer / Retirer,
       « + ajouter » ; drapeau `proteger` dans `/api/placement/cell`.
+- [ ] Mesurer la fluidité au Bignon (99 postes) ; virtualiser les rangées si besoin.
 - [ ] **Plus tard** : impression A3 paysage de la vue par poste.
 - [ ] **Plus tard** : glisser-déposer d'une barre.
 

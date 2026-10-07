@@ -2,7 +2,8 @@
 
 > Validé le 2026-10-07. Maquette interactive (données fictives) :
 > https://claude.ai/artifact/THUVHFdcaGbC4viHqK9UUb
-> Rien n'est développé à cette date.
+> Développé le 2026-10-07 (V1). Paramètre d'URL retenu : `?par=poste` (et non `?vue=poste`, déjà
+> pris par « Suivre l'équipe »).
 
 ## 1. Besoin
 
@@ -18,7 +19,7 @@ affectées dans les cases, **et pouvoir y saisir**. Usages visés :
 ## 2. Emplacement
 
 - **Pas de nouveau menu** : une bascule **Par nom / Par poste** (`SlideSwitch`) dans le
-  bandeau du Planning, portée par l'URL (`?vue=poste`). Même droit (`planning`), même page
+  bandeau du Planning, portée par l'URL (`?par=poste`). Même droit (`planning`), même page
   serveur, mêmes données.
 - Filtres conservés : **semaine**, **quart** (un seul à la fois), **service**. Le filtre
   **Équipe** et la bascule « Suivre l'équipe » ne s'appliquent pas à cette vue (masqués).

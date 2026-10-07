@@ -13,6 +13,11 @@ import { alertesVisite } from "@/lib/visites-placement";
 //   value = "X" -> jour non travaille
 //   value = <poste_id> -> affecte au poste
 //   forcer = true -> accepte le poste malgre une habilitation manquante/expiree
+//   proteger = true (vue « Par poste » du Planning) -> ne remplace JAMAIS une
+//     absence, un NT ou un TP (422) ; un retrait (value = "") ne supprime que le
+//     placement sur `poste_attendu`. Cette vue ne montre pas la case de la
+//     personne : sans ce garde, l'upsert sur (personne, jour) ecraserait en
+//     silence une absence saisie entre-temps.
 export async function POST(req: NextRequest) {
   const profile = await getCurrentProfile();
   if (!profile) return NextResponse.json({ error: "Non authentifie" }, { status: 401 });
@@ -25,6 +30,8 @@ export async function POST(req: NextRequest) {
     value?: string;
     forcer?: boolean;
     numero?: string | null;
+    proteger?: boolean;
+    poste_attendu?: string | null;
   } | null;
 
   const personne_id = body?.personne_id;
@@ -40,13 +47,19 @@ export async function POST(req: NextRequest) {
   // Repli des placements historiques sans `quart_code` (cf. src/lib/quarts.ts).
   const quarts = await getQuartsC();
 
+  const proteger = body?.proteger === true;
   if (value === "") {
-    const { error } = await supabase
+    if (proteger && !body?.poste_attendu) {
+      return NextResponse.json({ error: "Poste attendu manquant" }, { status: 400 });
+    }
+    let del = supabase
       .from("placement")
       .delete()
       .eq("site_id", profile.siteId)
       .eq("personne_id", personne_id)
       .eq("jour", jour);
+    if (proteger) del = del.eq("poste_id", String(body?.poste_attendu));
+    const { error } = await del;
     if (error) return NextResponse.json({ error: error.message }, { status: 403 });
     return NextResponse.json({ ok: true });
   }
@@ -97,11 +110,11 @@ export async function POST(req: NextRequest) {
     poste_id
       ? supabase
           .from("placement")
-          .select("poste_id, quart_code")
+          .select("poste_id, quart_code, motif_absence_id, non_travaille, tp")
           .eq("personne_id", personne_id)
           .eq("jour", jour)
           .eq("site_id", siteId)
-          .maybeSingle<{ poste_id: string | null; quart_code: string | null }>()
+          .maybeSingle<{ poste_id: string | null; quart_code: string | null; motif_absence_id: string | null; non_travaille: boolean; tp: boolean | null }>()
       : null,
     poste_id ? habManquantes(supabase, personne_id, poste_id, siteId) : ([] as string[]),
     poste_id && quartVise ? posteNeTournePas(supabase, poste_id, quartVise, siteId) : false,
@@ -124,6 +137,18 @@ export async function POST(req: NextRequest) {
   // 422 et non 409 : au Placement, 409 signifie « déjà placé sur un autre quart ».
   if (cycleRes) return NextResponse.json({ error: MSG_HORS_CYCLE }, { status: 422 });
   const numero_rotation = numeroAuto ? numeroLibre : numeroSaisi;
+
+  // Vue « Par poste » : une absence / un NT / un TP du jour n'est jamais
+  // remplace par un poste (cf. `proteger` en tete).
+  if (poste_id && proteger) {
+    const ex = existingRes?.data;
+    if (ex && (ex.motif_absence_id || ex.non_travaille || ex.tp)) {
+      return NextResponse.json(
+        { error: "Cette personne est absente, en temps partiel ou non travaillée ce jour-là : à modifier dans la vue Par nom." },
+        { status: 422 }
+      );
+    }
+  }
 
   // Une personne placee sur un poste un quart ne peut pas etre placee sur un
   // poste d'un autre quart le meme jour (legacy quart null = matin).

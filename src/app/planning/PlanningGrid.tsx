@@ -528,6 +528,7 @@ export default function PlanningGrid({
   weekNav = null,
   initialSearch,
   actions = null,
+  gauche = null,
   quartBandeau = null,
 }: {
   days: Jour[];
@@ -576,6 +577,8 @@ export default function PlanningGrid({
   /** Boutons d'action rendus à droite de la barre de recherche (2026-09-10) :
    *  raccourci TV, Horaires spécifiques, Absences spécifiques, Conducteurs. */
   actions?: React.ReactNode;
+  /** Rendu à GAUCHE de la recherche : bascule Par nom / Par poste. */
+  gauche?: React.ReactNode;
   /** Bandeau plein-largeur du quart courant, glissé sous la ligne de recherche
    *  pour rappeler visuellement au manager quel quart il édite. */
   quartBandeau?: React.ReactNode;
@@ -1211,6 +1214,7 @@ export default function PlanningGrid({
           actions en position absolue à droite pour que la recherche reste
           centrée quel que soit le nombre de boutons. */}
       <div style={{ margin: "2px 0 6px", position: "relative", display: "flex", justifyContent: "center", alignItems: "center", minHeight: 34 }}>
+        {gauche && <div style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)" }}>{gauche}</div>}
         <span style={{ position: "relative", display: "inline-block", width: "100%", maxWidth: 320 }}>
           <input
             value={search}

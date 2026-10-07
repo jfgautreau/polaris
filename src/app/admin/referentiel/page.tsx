@@ -21,6 +21,7 @@ type Poste = {
   numero_rotation: string | null;
   remplacable: boolean;
   imprimable: boolean;
+  zone_attente?: boolean;
   actif: boolean;
 };
 type Ligne = { id: string; nom: string; actif: boolean; ordre_affichage: number; regroupement: string | null; poste: Poste[] };
@@ -32,17 +33,19 @@ export default async function ReferentielPage() {
   const { profile, perms } = await requireModule("referentiel", "read");
 
   const supabase = await getServerClient();
-  // Lecture tolérante à l'absence de `poste.imprimable` (migration 0073 non encore
-  // passée) : sélectionner une colonne absente ferait échouer TOUTE la requête
-  // imbriquée (L19) et viderait l'écran. On réessaie sans la colonne, défaut true.
+  // Lecture tolérante à l'absence de `poste.zone_attente` (0077) puis de
+  // `poste.imprimable` (0073) : sélectionner une colonne absente ferait échouer
+  // TOUTE la requête imbriquée (L19) et viderait l'écran. On réessaie sans la
+  // colonne la plus récente, puis sans les deux (défauts : false, true).
   const posteEmbed = (extra: string) =>
     `id, nom, actif, ligne(id, nom, actif, ordre_affichage, regroupement, poste(id, nom, nom_court, categorie, effectif_requis, difficulte_formation, niveau_min_requis, ordre_affichage, numero_rotation, remplacable${extra}, actif))`;
   const lireAteliers = async () => {
-    const avec = await supabase.from("atelier").select(posteEmbed(", imprimable")).order("nom").returns<Atelier[]>();
-    if (avec.error && (avec.error.code === "42703" || avec.error.code === "PGRST204")) {
-      return supabase.from("atelier").select(posteEmbed("")).order("nom").returns<Atelier[]>();
-    }
-    return avec;
+    const colonneAbsente = (e: { code?: string } | null) => !!e && (e.code === "42703" || e.code === "PGRST204");
+    const avec = await supabase.from("atelier").select(posteEmbed(", imprimable, zone_attente")).order("nom").returns<Atelier[]>();
+    if (!colonneAbsente(avec.error)) return avec;
+    const sans0077 = await supabase.from("atelier").select(posteEmbed(", imprimable")).order("nom").returns<Atelier[]>();
+    if (!colonneAbsente(sans0077.error)) return sans0077;
+    return supabase.from("atelier").select(posteEmbed("")).order("nom").returns<Atelier[]>();
   };
   const [{ data }, { data: quartsD }, pqMap, { data: compsD }, pcrD, { data: persD }, nbNiveaux, ligneValMap, posteValMap] = await Promise.all([
     lireAteliers(),
@@ -73,7 +76,7 @@ export default async function ReferentielPage() {
         ...l,
         poste: [...(l.poste ?? [])]
           // Défaut si la migration 0073 n'est pas encore passée (colonne absente).
-          .map((p) => ({ ...p, imprimable: p.imprimable ?? true }))
+          .map((p) => ({ ...p, imprimable: p.imprimable ?? true, zone_attente: p.zone_attente ?? false }))
           .sort((x, y) => (x.ordre_affichage ?? 0) - (y.ordre_affichage ?? 0) || x.nom.localeCompare(y.nom)),
       })),
   }));
