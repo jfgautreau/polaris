@@ -3,6 +3,15 @@
 > État au 2026-10-07. Migrations appliquées jusqu'à **0076**. **407** tests Vitest.
 > Historique détaillé : `git log`.
 
+## Planning « Par poste » (cahier des charges validé le 2026-10-07)
+Spécification complète : `tasks/planning-par-poste.md`.
+- [ ] Migration **0077** `poste.zone_attente` + colonne « Attente » au Référentiel.
+- [ ] Bascule Par nom / Par poste dans le Planning, grille une rangée par place.
+- [ ] Saisie : panneau des candidats, `»` jusqu'au vendredi, menu Remplacer / Retirer,
+      « + ajouter » ; drapeau `proteger` dans `/api/placement/cell`.
+- [ ] **Plus tard** : impression A3 paysage de la vue par poste.
+- [ ] **Plus tard** : glisser-déposer d'une barre.
+
 ## Visites médicales (module RH, 2026-09-28)
 - [x] **Migration `0076_visites_medicales.sql` appliquée** dans le SQL Editor.
 - [x] Écrans **Suivi** (`/visites`) et **Paramètres** (`/admin/visites-param`), droits
