@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { grilleMois, moisSuivant, moisPrecedent, libelleMois, JOURS_COURTS } from "@/lib/calendrier";
+import { grilleMois, moisSuivant, moisPrecedent, libelleMois, JOURS_COURTS, isoAujourdhui, STYLE_AUJOURDHUI, ANNEAU_AUJOURDHUI_SELECTION } from "@/lib/calendrier";
 import s from "./placement.module.css";
 
 // Navigation par jour du Placement :
@@ -54,10 +54,7 @@ export default function JourNav({
   // Aujourd'hui : ISO local. Un simple raccourci ; s'il n'est pas dans
   // `openDays`, on l'ouvre quand même (l'écran s'adaptera avec son message
   // « Jour sans production » côté grille).
-  const aujourdhuiIso = (() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  })();
+  const aujourdhuiIso = isoAujourdhui();
 
   const reculerMois = () => {
     if (curKey <= minKey) return;
@@ -136,7 +133,7 @@ export default function JourNav({
                             type="button"
                             disabled={horsMois || ferme}
                             onClick={() => choisir(c.iso)}
-                            title={!horsMois && ferme ? "Aucune ligne ouverte ce jour-là" : c.iso.split("-").reverse().join("/")}
+                            title={!horsMois && ferme ? "Aucune ligne ouverte ce jour-là" : estAuj ? `Aujourd’hui — ${c.iso.split("-").reverse().join("/")}` : c.iso.split("-").reverse().join("/")}
                             style={caseStyle(horsMois, ferme, estJour, estAuj)}
                           >
                             {c.jour}
@@ -198,10 +195,11 @@ const caseStyle = (horsMois: boolean, ferme: boolean, estJour: boolean, estAuj: 
     borderRadius: 8,
   };
   if (horsMois) return { ...base, color: "#e2e8f0", cursor: "default" };
-  if (estJour) return { ...base, background: "#0d9488", color: "#fff", fontWeight: 700 };
-  // Aujourd'hui (non sélectionné) : contour teal + libellé teal, distinct du fond plein du jour choisi.
-  if (estAuj && !ferme) return { ...base, boxShadow: "inset 0 0 0 2px #0d9488", color: "#0d9488", fontWeight: 700 };
-  if (estAuj && ferme) return { ...base, boxShadow: "inset 0 0 0 2px #0d9488", color: "#cbd5e1", cursor: "not-allowed", background: "#f8fafc" };
+  // Aujourd'hui : marquage commun à tous les calendriers (src/lib/calendrier.ts).
+  // Choisi : fond plein du jour choisi + anneau vert extérieur. Fermé : anneau seul.
+  if (estJour) return { ...base, background: "#0d9488", color: "#fff", fontWeight: 700, ...(estAuj ? { boxShadow: ANNEAU_AUJOURDHUI_SELECTION } : {}) };
+  if (estAuj && !ferme) return { ...base, ...STYLE_AUJOURDHUI };
+  if (estAuj && ferme) return { ...base, boxShadow: STYLE_AUJOURDHUI.boxShadow, color: "#cbd5e1", cursor: "not-allowed", background: "#f8fafc" };
   if (ferme) return { ...base, color: "#cbd5e1", cursor: "not-allowed", background: "#f8fafc" };
   return base;
 };

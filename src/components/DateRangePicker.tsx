@@ -3,7 +3,7 @@
 import { useState } from "react";
 import {
   grilleMois, moisSuivant, moisPrecedent, clicPlage, etatCase, libelleMois,
-  JOURS_COURTS, type Plage,
+  JOURS_COURTS, isoAujourdhui, STYLE_AUJOURDHUI, ANNEAU_AUJOURDHUI_SELECTION, type Plage,
 } from "@/lib/calendrier";
 
 // Calendrier de plage type « Booking » : deux clics (début puis fin), deux mois
@@ -34,7 +34,7 @@ export default function DateRangePicker({
     return { a, m };
   });
 
-  const styleCase = (etat: ReturnType<typeof etatCase>): React.CSSProperties => {
+  const styleEtat = (etat: ReturnType<typeof etatCase>): React.CSSProperties => {
     const base: React.CSSProperties = {
       height: 34,
       border: "none",
@@ -52,6 +52,13 @@ export default function DateRangePicker({
       return { ...base, background: "#2563eb", color: "#fff", fontWeight: 700, borderRadius: 8 };
     if (etat === "dans") return { ...base, background: "#eff2f7", fontWeight: 600 };
     return base;
+  };
+  const aujourdhui = isoAujourdhui();
+  const styleCase = (etat: ReturnType<typeof etatCase>, estAuj: boolean): React.CSSProperties => {
+    const s = styleEtat(etat);
+    if (!estAuj || etat === "hors") return s;
+    if (etat === "debut" || etat === "fin") return { ...s, boxShadow: ANNEAU_AUJOURDHUI_SELECTION };
+    return { ...s, ...STYLE_AUJOURDHUI };
   };
 
   return (
@@ -90,8 +97,8 @@ export default function DateRangePicker({
                             type="button"
                             disabled={etat === "hors"}
                             onClick={() => onChange(clicPlage(value, c.iso))}
-                            style={styleCase(etat)}
-                            title={c.iso.split("-").reverse().join("/")}
+                            style={styleCase(etat, c.iso === aujourdhui)}
+                            title={c.iso === aujourdhui ? `Aujourd’hui — ${c.iso.split("-").reverse().join("/")}` : c.iso.split("-").reverse().join("/")}
                           >
                             {c.jour}
                           </button>

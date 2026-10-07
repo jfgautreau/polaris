@@ -22,6 +22,26 @@ export function libelleMois(annee: number, mois0: number): string {
 const iso = (a: number, m0: number, j: number) =>
   `${a}-${String(m0 + 1).padStart(2, "0")}-${String(j).padStart(2, "0")}`;
 
+// Date du jour en ISO LOCAL (et non `toISOString()`, qui passe en UTC et décale
+// d'un jour entre minuit et 2 h l'été). Sert à marquer « aujourd'hui » dans les
+// calendriers.
+export function isoAujourdhui(maintenant: Date = new Date()): string {
+  return iso(maintenant.getFullYear(), maintenant.getMonth(), maintenant.getDate());
+}
+
+// Marquage commun d'« aujourd'hui » dans tous les calendriers (DateRangePicker,
+// JourNav) : vert, comme sur l'affichage TV. Fond pâle + anneau quand la case
+// n'est pas sélectionnée ; anneau seul, à l'extérieur, quand elle l'est (le fond
+// plein de la sélection reste lisible).
+export const STYLE_AUJOURDHUI = {
+  background: "#dcfce7",
+  color: "#166534",
+  fontWeight: 700,
+  borderRadius: 8,
+  boxShadow: "inset 0 0 0 2px #16a34a",
+} as const;
+export const ANNEAU_AUJOURDHUI_SELECTION = "0 0 0 2px #fff, 0 0 0 4px #16a34a";
+
 // Grille de 6 semaines (42 cases) couvrant le mois, complétée par les jours des
 // mois voisins pour que chaque ligne soit pleine. Semaine commençant le LUNDI.
 export function grilleMois(annee: number, mois0: number): CaseJour[] {

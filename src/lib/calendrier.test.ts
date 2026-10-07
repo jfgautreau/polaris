@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  grilleMois, moisSuivant, moisPrecedent, clicPlage, etatCase, libelleMois,
+  grilleMois, moisSuivant, moisPrecedent, clicPlage, etatCase, libelleMois, isoAujourdhui,
 } from "./calendrier";
 
 describe("grilleMois", () => {
@@ -106,5 +106,12 @@ describe("libelleMois", () => {
   it("nomme le mois en français", () => {
     expect(libelleMois(2026, 6)).toBe("juillet 2026");
     expect(libelleMois(2026, 7)).toBe("août 2026");
+  });
+});
+
+describe("isoAujourdhui", () => {
+  it("rend la date LOCALE, pas UTC (00 h 30 le 1er juillet reste le 1er)", () => {
+    expect(isoAujourdhui(new Date(2026, 6, 1, 0, 30))).toBe("2026-07-01");
+    expect(isoAujourdhui(new Date(2026, 0, 9, 23, 59))).toBe("2026-01-09");
   });
 });
