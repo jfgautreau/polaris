@@ -14,7 +14,7 @@ import s from "./placement.module.css";
 type Atelier = { id: string; nom: string };
 type Equipe = { id: string; nom: string; couleur: string | null };
 type Quart = { code: string; libelle: string };
-type Poste = { id: string; nom: string; nomCourt: string | null; effectifRequis: number; niveauMin: number; numeroRotation: string | null; imprimable: boolean };
+type Poste = { id: string; nom: string; nomCourt: string | null; effectifRequis: number; niveauMin: number; numeroRotation: string | null; imprimable: boolean; attente?: boolean };
 // `fermee` = ligne fermée dans Ordonnancement (`ouverture_quart.ouverte = false`).
 // Depuis 2026-09-09, la ligne reste affichée et plaçable, mais son BESOIN vaut 0 :
 // le compteur des tuiles devient « X/0 » et la couverture globale n'en tient plus
@@ -784,7 +784,15 @@ export default function PlacementBoard({
           }))
           .filter((g) => g.postes.length > 0)
       : groups;
-  const filtreVide = active && hideIncomp && groups.length > 0 && groupsAffiches.length === 0;
+  // Postes « zone d'attente » (0077, ex. CDT) : hors du plan, dans la colonne
+  // « À répartir » entre le plan et les noms — un réservoir de gens pré-affectés que
+  // l'on répartit par glisser-déposer. Les feuilles imprimées n'en tiennent pas
+  // compte (`groupsImpr` part de `groups` : la colonne « Impr. » seule décide).
+  const groupsPlan = groupsAffiches
+    .map((g) => ({ ...g, postes: g.postes.filter((po) => !po.attente) }))
+    .filter((g) => g.postes.length > 0);
+  const postesAttente = groups.flatMap((g) => g.postes.filter((po) => po.attente));
+  const filtreVide = active && hideIncomp && groups.length > 0 && groupsPlan.length === 0;
 
   // Feuille imprimée : on ne garde que les postes marqués « imprimables » au
   // Référentiel (les postes de construction du planning en sont exclus), et on
@@ -990,7 +998,7 @@ export default function PlacementBoard({
               </p>
             </div>
           ) : (
-            groupsAffiches.map((g) => (
+            groupsPlan.map((g) => (
               <div key={g.ligneId} className={s.ligne}>
                 <div className={s.ligneNom}>
                   {g.ligneNom}
@@ -1103,6 +1111,33 @@ export default function PlacementBoard({
             ))
           )}
         </div>
+
+        {/* Colonne « À répartir » : postes zone d'attente (déposer = y remettre). */}
+        {postesAttente.length > 0 && (
+          <div className={s.attenteCol}>
+            {postesAttente.map((po) => {
+              const occ = occupants(po.id);
+              return (
+                <div
+                  key={po.id}
+                  className={`${s.attenteBloc} ${over === `po:${po.id}` ? s.over : ""}`}
+                  {...overProps(`po:${po.id}`, po.id, null)}
+                  onClick={() => clickTarget(po.id, null)}
+                  title={`${po.nom} — zone d'attente : déposer ici pour pré-affecter, glisser vers un poste du plan pour répartir`}
+                >
+                  <div className={s.attenteHead}>
+                    <span>À répartir · {po.nomCourt || po.nom}</span>
+                    <span className={s.attenteNb}>{occ.length}</span>
+                  </div>
+                  <div className={s.attenteListe}>
+                    {occ.map((p) => chip(p, po))}
+                    {occ.length === 0 && <span className={s.emptyHint}>Tout le monde est réparti</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* Colonne des noms (drop = retirer du poste) */}
         <div className={s.names} {...overProps("names", "")}>

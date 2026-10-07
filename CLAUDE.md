@@ -299,6 +299,8 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   (recherche, équipe) dans l'URL. Deux PDF : **PDF Manager** (A4, plan en couleurs + absents / TP du jour,
   ex-« PDF CE ») et **PDF** opérateurs (A3, plan seul, **sans couleur**) ; numéros vides et commentaires du jour imprimés ; filtre
   `imprimable`. TP du jour sans placement = carte « Temps partiel », pas « à placer ».
+  Postes `zone_attente` (CDT) : hors du plan, colonne « À répartir » entre le plan et les noms
+  (dépôt et glisser-déposer comme une tuile) ; les PDF suivent seulement « Impr. ».
 - **Ordonnancement** (`src/app/ordonnancement/`) : quinzaine (`?debut=`), sous-colonnes par
   quart tournant, ligne « Activation », lignes par service, Journée à part (activation
   dérivée) ; une ligne ne tournant sur aucun quart posté n'apparaît qu'en Journée.
