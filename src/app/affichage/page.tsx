@@ -1,9 +1,11 @@
-import Link from "next/link";
 import { getAdminClient } from "@/lib/supabase-server";
 import { requireModule } from "@/lib/permissions";
 import { getCurrentSite } from "@/lib/current-site";
+import SelectionServices from "./SelectionServices";
 
-// Index des affichages couloir (un par atelier). Reserve aux droits "affichage".
+// Index des affichages couloir. Reserve aux droits "affichage". Deux usages :
+//   - cocher plusieurs services et les imprimer d'un coup (/affichage/impression) ;
+//   - ouvrir l'ecran TV d'UN service (lien par service), pour les ecrans de couloir.
 export const dynamic = "force-dynamic";
 
 type Atelier = { id: string; nom: string };
@@ -25,18 +27,9 @@ export default async function AffichageIndex() {
   return (
     <div className="container">
       <h1>Affichage couloir</h1>
-      <p className="muted">Choisissez un service pour afficher son placement du jour.</p>
+      <p className="muted">Cochez les services à imprimer ensemble, ou ouvrez l&apos;écran TV d&apos;un service.</p>
       <div className="card">
-        <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-          {ateliers.map((a) => (
-            <li key={a.id} style={{ marginBottom: 8 }}>
-              <Link href={`/affichage/atelier/${a.id}`} prefetch={false} style={{ fontSize: 18 }}>
-                {a.nom} &rarr;
-              </Link>
-            </li>
-          ))}
-          {ateliers.length === 0 && <li className="muted">Aucun service.</li>}
-        </ul>
+        <SelectionServices ateliers={ateliers} />
       </div>
     </div>
   );

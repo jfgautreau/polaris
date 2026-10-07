@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect } from "react";
 import { PrintIcon } from "@/components/icons";
 
-// Impression « tous les plannings » : chaque atelier occupe UNE page A3
+// Impression des services cochés : chaque atelier occupe UNE page A3
 // verticale. Comme sur l'écran TV (AffichageBarre) et au Placement, aucune règle
 // CSS ne sait « faire rentrer » un contenu — on mesure puis on met à l'échelle.
 // A3 portrait à 96 dpi, marges 8 mm : 1060 x 1525 px utiles.
@@ -61,10 +61,10 @@ export default function ImpressionAuto() {
           fontWeight: 600,
         }}
       >
-        <PrintIcon /> Imprimer tous les plannings
+        <PrintIcon /> Imprimer
       </button>
-      <Link href="/planning" style={{ color: "#6b7280", textDecoration: "none" }}>
-        ← Retour au planning
+      <Link href="/affichage" style={{ color: "#6b7280", textDecoration: "none" }}>
+        ← Choix des services
       </Link>
     </div>
   );

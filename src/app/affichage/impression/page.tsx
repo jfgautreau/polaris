@@ -8,14 +8,15 @@ import ImpressionAuto from "./ImpressionAuto";
 
 export const dynamic = "force-dynamic";
 
-// Impression « tous les plannings » (version affichage TV) : une page A3 par
-// atelier. Ouverte depuis le bouton imprimante du Planning ; l'impression se
-// lance automatiquement (ImpressionAuto). Route publique comme le reste de
-// /affichage, mais résolue au site courant (impersonation-aware).
+// Impression des plannings (version affichage TV) : une page A3 par atelier.
+// Ouverte depuis /affichage, où l'on coche les services (`?atelier=…` répété) ;
+// sans `atelier`, tous les services ayant du contenu. L'impression se lance
+// automatiquement (ImpressionAuto). Route publique comme le reste de /affichage,
+// mais résolue au site courant (impersonation-aware).
 export default async function ImpressionTousLesPlannings({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string }>;
+  searchParams: Promise<{ date?: string; atelier?: string | string[] }>;
 }) {
   const sp = await searchParams;
   const fen = await getFenetreAffichage();
@@ -43,7 +44,12 @@ export default async function ImpressionTousLesPlannings({
   for (const l of lignesD ?? []) {
     if ((l.poste ?? []).some((p) => p.actif)) atelierAvecContenu.add(l.atelier_id);
   }
-  const ateliers = (ateliersD ?? []).filter((a) => atelierAvecContenu.has(a.id));
+  // Services cochés : les identifiants venus de l'URL ne servent qu'à FILTRER la
+  // liste du site (jamais lus tels quels) — un id d'un autre site est ignoré.
+  const choisis = new Set([sp.atelier ?? []].flat().filter(Boolean));
+  const ateliers = (ateliersD ?? []).filter(
+    (a) => atelierAvecContenu.has(a.id) && (choisis.size === 0 || choisis.has(a.id)),
+  );
 
   return (
     <div>
