@@ -788,3 +788,31 @@ actif, la route de placement s'arrête sur la lecture des réglages, zéro requ�
 se demander si le déclencheur peut être **postérieur** à la dernière visite (habilitation à
 risque obtenue après la VIP). Sans `renforceDepuis`, un cariste fraîchement formé ressortait
 « à jour » pour quatre ans — alors que l'examen d'aptitude est dû avant l'affectation.
+
+## L47 — React Compiler : même un compteur de boucle `d++` dans une fonction imbriquée le fait renoncer
+
+**Contexte** (vue « Par poste » du Planning, 2026-10-07) : le composant était marqué
+`"use memo"`, le build passait, mais aucune `memo_cache_sentinel` n'apparaissait dans le code
+de la vue : le compilateur avait renoncé **en silence**. Cause : des boucles
+`for (let d = …; d++)` dans des fonctions **déclarées dans le composant** (handler async,
+calcul en IIFE). Le compilateur refuse tout `UpdateExpression` (`++` / `--`) dans une lambda —
+pas seulement sur une variable capturée de l'extérieur, aussi sur le compteur local.
+
+**Règle** : dans un composant compilé, écrire `d += 1` (affectation, acceptée). Pour savoir
+POURQUOI il renonce, ne pas deviner : passer le fichier au plugin avec un `logger`
+(`babel-plugin-react-compiler` + `next/dist/compiled/babel/core.js` +
+`plugin-syntax-typescript`, `compilationMode: "annotation"`, `logEvent` → `CompileError`
+avec la ligne fautive, `CompileSuccess` sinon). Vérifier ensuite la sentinelle dans le chunk.
+
+## L48 — Réagir à un statut CALCULÉ : s'accrocher à la mise à jour du cache, pas à la saisie
+
+**Contexte** (titulaires des personnes parties, 0078) : `personne.statut` dépend de la date
+du jour. Une fin de contrat saisie à l'avance ne fait pas passer la personne `PARTI` ; c'est
+`rafraichir_statuts_personnes()`, appelée au chargement de `/personnel`, qui la bascule le
+lendemain. Un trigger sur `contrat_periode` aurait donc raté la plupart des départs.
+
+**Règle** : un effet de bord lié au statut (libérer le poste fixe) se branche **sur la mise à
+jour du statut lui-même** — `before update of statut on personne`, condition
+`new.statut = 'PARTI' and old.statut is distinct from 'PARTI'` — ce qui couvre tous les
+chemins (contrats, import, rafraîchissement). Le rattrapage de la migration rafraîchit
+d'abord les statuts, puis corrige les données existantes.

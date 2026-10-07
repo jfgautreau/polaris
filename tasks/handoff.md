@@ -53,14 +53,16 @@ menu suit l'écriture, pas la lecture.
   jours arbitraires. `openDays` calculé **serveur** (`page.tsx`) sur une fenêtre
   **[-90 ; +150] jours** autour du jour affiché, bornée **quart + atelier** (mêmes règles
   que `ligneOuverte` : `jour_quart.actif` + `ouverture_quart`, défaut ouvert), à laquelle
-  la navigation du calendrier est bornée.
+  la navigation du calendrier est bornée. **Aujourd'hui** est marqué en vert (même style que
+  le `DateRangePicker` des absences : `STYLE_AUJOURDHUI`, `src/lib/calendrier.ts`).
 - **Deux boutons PDF**, mise à l'échelle **mesurée** (cf. `lessons.md` L16, L42) :
   - **PDF Manager** (`mode="ce"`, **A4 paysage**) = plan + colonne de droite « **Absents / TP du
     jour** » (motifs d'absence **et** bloc « **Temps partiel** » — personnes indisponibles ce
     jour au sens TP, non déjà placées ni absentes ; TP calculé **serveur** `page.tsx`/`tpIds`,
     mêmes règles que Planning / TV).
   - **PDF** (`mode="simple"`, **A3 paysage**, plan seul) — A3 via `print-a3` posé sur `<body>`
-    (page nommée `plcA3`, globals.css).
+    (page nommée `plcA3`, globals.css). Feuille **opérateurs, sans couleur** : couverture,
+    surnombre et compétence manquante imprimés en noir (`.printSheet[data-mode="simple"]`).
   - Sur les deux : **numéros de rotation imprimés même vides** (« n° · libre ») et
     **commentaire du jour** (`horaire_exception.motif`) à côté du nom. Le plan imprimé exclut
     les postes `imprimable = false` (`groupsImpr`).
@@ -72,6 +74,11 @@ menu suit l'écriture, pas la lecture.
     de la cible `PAGE_H` / `PAGE_H_A3`.
 - **Écran** : les rangs d'un poste (numéros + occupants) se répartissent en **2-3 colonnes**
   (10 lignes max par colonne, variable CSS `--cols`) — chaque occupant est une rangée.
+- **Colonne « À répartir »** (2026-10-07) : les postes `zone_attente` (0077, ex. CDT) sortent
+  du plan (`groupsPlan`) et s'affichent entre le plan et les noms (`postesAttente`, 220 px,
+  violet) ; mêmes `chip` / `overProps` / `clickTarget` qu'une tuile. Ligne mixte : seuls les
+  postes en attente partent. Les PDF partent de `groups` (seule « Impr. » décide) ; leurs
+  occupants sont « placés », donc hors du compteur « à placer ».
 
 ## Temps partiel (`personne.tp_config`, jsonb, options cumulables)
 Modale `TempsPartielModal`, API `/api/personnel` op `tp`. Périodes datées dans
@@ -145,6 +152,21 @@ Priorité d'affichage de l'horaire (TV) : **exception ponctuelle > temps partiel
   défaut (`horaire_poste`).
 - Flèche `»` de recopie : lundi→jeudi = fin de semaine en cours ; à partir du vendredi =
   jours affichés de la semaine suivante.
+- Info-bulles de l'horaire spécifique : une borne non saisie est complétée par l'horaire
+  standard du poste (`excLabel(e, std)`), même règle que `src/lib/horaires.ts`.
+- **Vue « Par poste »** (`?par=poste`, 2026-10-07) — spec `tasks/planning-par-poste.md`.
+  Bascule `VueBascule` (SlideSwitch) à **gauche de la recherche** dans les deux vues (prop
+  `gauche`) ; `par` propagé par `QuartSelector`, `AtelierFilter` et l'`extra` des
+  navigations. Même page serveur : `page.tsx` prépare `parPoste` (postes du quart avec
+  `numeros`, `attente`, titulaires ; `equipesQuart` par semaine ; `numeroParCase` ;
+  placés hors plan) et rend `PlanningParPoste.tsx` au lieu de `PlanningGrid`. Filtres
+  Équipe / Conducteurs et « Suivre l'équipe » masqués. Rangées : `attribuerRangees`
+  (n° de rotation > continuité sur place requise > 1re place libre > surnombre) ;
+  candidats : `classerCandidat` (`src/lib/planning-par-poste.ts`, testé). Écritures via
+  `/cell` avec `proteger: true` (422 sur absence / NT / TP ; retrait borné à
+  `poste_attendu`) ; `numero` toujours envoyé (`null` en surnombre). Postes
+  `zone_attente` repliés « N à répartir » en tête de service. React Compiler actif
+  (`"use memo"`) — aucun `d++` dans une fonction imbriquée (cf. `lessons.md` L47).
 
 ## Ordonnancement (`/ordonnancement`)
 - **Fenêtre 15 jours** (2 semaines + le lundi suivant), à partir du lundi de la semaine
@@ -234,6 +256,13 @@ pas de troisième** : la fiche d'une personne est une modale du Suivi.
 - Écritures : `/api/visites` (visite, suivi, contraintes) et `/api/visites-param`
   (régimes, types, usages, drapeaux des référentiels, réglages). Une visite se
   réécrit avec sa liste d'ANCI (effacer puis poser `visite_anci`).
+
+## Affichage TV (`/affichage`)
+- Index : liste des services avec **cases à cocher** (« Tous les services », date de
+  référence facultative) → « Imprimer N services » ouvre `/affichage/impression?atelier=…`
+  (paramètre répété, une page A3 portrait par service, impression lancée au chargement).
+  Les ids reçus ne font que **filtrer** la liste des services du site. Chaque service garde
+  son lien **« Écran TV »** (`/affichage/atelier/[id]`, un service, rafraîchi 5 min).
 
 ## Navigation (`AppHeader`)
 - **Menu principal** (`MAIN_ORDER`, pastille + icône) : Référentiel → Personnel →

@@ -1,16 +1,17 @@
 # Reste à faire — Polaris
 
-> État au 2026-10-07. Migrations appliquées jusqu'à **0077**. **407** tests Vitest.
+> État au 2026-10-07. Migrations appliquées jusqu'à **0078**. **427** tests Vitest.
 > Historique détaillé : `git log`.
 
 ## Titulaires des personnes parties (2026-10-07)
-- [ ] **Migration `0078_depart_libere_poste_fixe.sql` à exécuter** : au passage à PARTI, le
-      poste fixe est retiré (trigger) ; rattrapage des 9 parties encore titulaires.
+- [x] **Migration `0078_depart_libere_poste_fixe.sql` appliquée** : au passage à PARTI, le
+      poste fixe est retiré (trigger `liberer_poste_fixe_au_depart`). Rattrapage vérifié en
+      base : plus aucune personne partie titulaire (Le Bignon 0, La Vraie Croix 0).
 
 ## Planning « Par poste » (cahier des charges validé le 2026-10-07)
 Spécification complète : `tasks/planning-par-poste.md`.
 - [x] **Migration `0077_poste_zone_attente.sql` appliquée** (2026-10-07).
-- [ ] Cocher « Attente » sur CDT (Le Bignon) au Référentiel.
+- [x] « Attente » coché sur CDT (Le Bignon) au Référentiel.
 - [x] Colonne « Attente » au Référentiel (`poste.zone_attente`).
 - [x] Bascule Par nom / Par poste dans le Planning (`?par=poste`), une rangée par place.
 - [x] Saisie : panneau des candidats, `»` jusqu'à la fin de semaine, menu Remplacer / Retirer,
@@ -18,6 +19,21 @@ Spécification complète : `tasks/planning-par-poste.md`.
 - [ ] Mesurer la fluidité au Bignon (99 postes) ; virtualiser les rangées si besoin.
 - [ ] **Plus tard** : impression A3 paysage de la vue par poste.
 - [ ] **Plus tard** : glisser-déposer d'une barre.
+
+## Revue — lot du 2026-10-07
+- [x] **Calendriers** : aujourd'hui en vert (fond pâle + anneau) dans `DateRangePicker`
+      (congés / absences) et `JourNav` (Placement) — `isoAujourdhui()` et
+      `STYLE_AUJOURDHUI` dans `src/lib/calendrier.ts`. Les `<input type="date">` natifs
+      restent ceux du navigateur.
+- [x] **PDF du Placement** : « PDF » = feuille opérateurs **sans couleur** ; « PDF CE »
+      renommé **« PDF Manager »** (garde les couleurs).
+- [x] **Affichage TV** : `/affichage` liste les services avec cases à cocher → impression
+      A3 d'une page par service coché (`/affichage/impression?atelier=…`) ; lien « Écran
+      TV » conservé par service.
+- [x] **Horaires** : une borne d'horaire spécifique manquante reprend l'horaire générique
+      (temps partiel, sinon standard du poste) — TV, Synthèses, info-bulles du Planning.
+- [x] **Placement** : postes « Attente » hors du plan, dans une colonne « À répartir »
+      entre le plan et les noms (PDF inchangés).
 
 ## Visites médicales (module RH, 2026-09-28)
 - [x] **Migration `0076_visites_medicales.sql` appliquée** dans le SQL Editor.

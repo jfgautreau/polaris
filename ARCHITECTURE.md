@@ -35,7 +35,8 @@ placement journalier, habilitations, visites médicales, affichage couloir, bila
 - **Référentiel** : `atelier` > `ligne` > `poste` (`effectif_requis` = abaque **déprécié**,
   repli de l'effectif par quart depuis 0070 ; `nom_court`,
   `categorie` manager/conducteur/operateur, `niveau_min_requis`, `objectif_polyvalence`,
-  `objectif_cible`, `ordre_affichage`), `equipe` (+ `quart_fixe`), `equipe_chef`.
+  `objectif_cible`, `ordre_affichage`, `zone_attente` — 0077 : poste de pré-affectation
+  à répartir, ex. CDT), `equipe` (+ `quart_fixe`), `equipe_chef`.
   `ligne` et `poste` portent aussi `date_ouverture`/`date_fermeture` (0071 :
   ouverture/fermeture datée, helper `src/lib/referentiel-validite.ts`).
 - **Quarts** : `quart` (`journee`/`matin`/`apres_midi`/`nuit` + horaires),
@@ -58,7 +59,8 @@ placement journalier, habilitations, visites médicales, affichage couloir, bila
   plus de saisie manuelle. Arrivée = `MIN(contrat_periode.date_debut)` ; départ prévu =
   `MAX(date_fin)` si aucun contrat ouvert ; motif de départ = `motif_fin` du dernier
   contrat. Les anciens champs `personne.date_arrivee` / `date_depart_prevu` /
-  `motif_depart` ont été **supprimés en 0050**.
+  `motif_depart` ont été **supprimés en 0050**. `personne.poste_fixe_id` (titulaire du
+  poste) est remis à null quand le statut passe à `PARTI` (trigger 0078).
 - **Matrice** : `matrice` (niveau actuel/cible par personne×poste, valeur spéciale
   « restriction »), `competence_niveau_libelle` (échelle paramétrable : `libelle` +
   `couleur` par niveau, migration 0063). L'échelle du carré magique se règle par site
@@ -184,7 +186,7 @@ intégrés + `role_custom`).
   (`getNbNiveauxC` / `getSeuilCompetentC` / `getCouleursNiveauxC`, replis 4 / 2 /
   échelle historique).
 
-**Après le multi-site (0064 → 0076)** :
+**Après le multi-site (0064 → 0078)** :
 - **0064** — temps partiel **matérialisé** dans le planning (`placement.tp`, semaine
   « chargée ») ; **0065** — couleur de niveau ouverte au nuancier (rattrapage 0063) ;
   **0066** — import des absences depuis le logiciel RH ; **0067** — affichage TV en mode
@@ -199,9 +201,12 @@ intégrés + `role_custom`).
 - **0076** — module **Visites médicales** (tables `visite_*`, `personne_suivi`,
   `contrainte_affectation`, drapeaux sur `quart` / `poste` / `competence` /
   `motif_absence`, seed des régimes, types et usages sur tous les sites).
+- **0077** — `poste.zone_attente` (vue « Par poste » du Planning, colonne « À répartir »
+  du Placement) ; **0078** — un départ libère le poste fixe (trigger
+  `liberer_poste_fixe_au_depart` sur la mise à jour du statut, + rattrapage).
 
 ## Sitemap (principales routes)
-- `/` accueil (logo + titre « planning »), `/planning`, `/placement` (saisie par
+- `/` accueil (logo + titre « planning »), `/planning` (+ vue `?par=poste`), `/placement` (saisie par
   glisser-déposer, cf. CLAUDE.md), `/ordonnancement`
   (+ `/ordonnancement/semaine-type`), `/matrice` (+ `/matrice/bilan`), `/habilitations`,
   `/personnel` (+ `/personnel/[id]`), `/bilans` (+ personnel, polyvalence, couverture,
@@ -212,7 +217,8 @@ intégrés + `role_custom`).
   `/admin/horaires`, `/admin/visites-param` (déclencheurs des visites, RH),
   `/admin/users` (comptes **+ matrice des droits**, admin), `/admin/rgpd`,
   `/journal`.
-- Public : `/affichage`, `/affichage/atelier/[atelier]` (écran TV, refresh 5 min,
+- Public : `/affichage` (choix des services), `/affichage/impression?atelier=…` (A3, une
+  page par service coché), `/affichage/atelier/[atelier]` (écran TV, refresh 5 min,
   fenêtre glissante paramétrable dans Param. RH — cf. `getFenetreAffichage()`).
 - Super_admin (multi-site) : `/platform` (back-office : lister / créer / suspendre un
   site, impersonation tracée).
