@@ -33,8 +33,7 @@ L'historique des décisions est dans git et dans l'en-tête de chaque migration.
    Pour de la *donnée* seulement, un script Node lisant `SUPABASE_SERVICE_ROLE_KEY` de
    `.env.local` est acceptable (simulation d'abord, écriture après accord).
    Projet Supabase : ref `stcxlsmmnplxpirrnefm`, eu-west-3.
-   **Dernière migration appliquée : `0075`** — `0076` (visites médicales) est
-   écrite et **attend d'être exécutée**. Toute nouvelle policy RLS s'écrit
+   **Dernière migration appliquée : `0076`** (visites médicales). Toute nouvelle policy RLS s'écrit
    `site_id = (select public.current_site_id())` (forme InitPlan, calculée une fois par
    requête) — idem pour `is_admin()`, `has_role('x')`, `auth.uid()`.
 6. **PowerShell 5.1** : message de commit multi-lignes via here-string `@'…'@` (le `'@`
@@ -350,7 +349,9 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   `verifier-site`, `quarts`, `poste-quart`, `referentiel-validite`, `rotation`,
   `personne-statut`, `placement-helpers`, `habilitations`, `horaires`, `interim`, `week`,
   `calendrier`, `numeros-rotation`, `absences-periodes`, `erreurs`, `noms`, `parametres`,
-  `filtres-session`, `bilans-rapports`, `*-data` (données des bilans).
+  `filtres-session`, `bilans-rapports`, `*-data` (données des bilans), `visites`
+  (règles pures), `visites-data` (lectures de l'écran Suivi), `visites-placement`
+  (avertissement sans motif).
 - `src/components/` : `AppHeader`, `MainNav`, `GardeCacheNavigation`, `icons`,
   `ModaleDeplacable`, `InfoBulle`, `usePersonGrid`, `persongrid.module.css`, composants
   partagés listés plus haut.

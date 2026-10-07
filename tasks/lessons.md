@@ -768,3 +768,23 @@ La sémantique vit dans `creneau` (demi-journée), `ordre` (défaut/journée) et
 renomme ses quarts ; sur une **valeur de `creneau`** (`c === "matin" || c === "aprem"`), c'est
 correct. Même piège de fond que « est_conducteur déprécié » : ne pas se fier à une colonne dont
 la source de vérité a bougé.
+
+## L46 — Un module neuf démarre vide : aucune alerte transverse allumée par défaut
+
+**Contexte** (Visites médicales, 2026-09-28) : le module calcule pour chacun une échéance de
+visite. Tant que l'historique n'est pas repris, **tout le monde** est « en retard » ou « sans
+attestation ». Le premier jet allumait par défaut l'avertissement du Placement sur les
+contraintes d'affectation : inoffensif tant qu'aucune contrainte n'existe, mais le réglage
+suivant (ANCI, aptitude) aurait fait clignoter chaque placement le jour même — et un
+avertissement qui sonne partout est un avertissement que plus personne ne lit.
+
+**Règle** : une alerte qui **sort** d'un module (vers un autre écran, un autre rôle) part
+**éteinte**, et l'utilisateur l'allume quand les données sont là. Écrire le défaut dans le
+code (`PARAMETRES_DEFAUT`), le **tester** (« aucun avertissement actif par défaut »), et le
+dire à l'écran (bandeau expliquant pourquoi c'est éteint). Effet de bord utile : sans cas
+actif, la route de placement s'arrête sur la lecture des réglages, zéro requête en plus.
+
+**Corollaire** : quand une règle compare une date de visite à une date de déclenchement,
+se demander si le déclencheur peut être **postérieur** à la dernière visite (habilitation à
+risque obtenue après la VIP). Sans `renforceDepuis`, un cariste fraîchement formé ressortait
+« à jour » pour quatre ans — alors que l'examen d'aptitude est dû avant l'affectation.

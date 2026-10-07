@@ -2,7 +2,8 @@
 
 Application web de gestion des plannings d'une **usine agroalimentaire** :
 référentiel (ateliers / lignes / postes), matrice de polyvalence, planning et
-placement journalier, habilitations à recycler, affichage couloir (TV), bilans.
+placement journalier, habilitations à recycler, visites médicales (RH), affichage
+couloir (TV), bilans.
 Plateforme **multi-site** (SaaS multi-tenant : plusieurs usines isolées sur une
 seule base). Interface en français.
 
@@ -26,6 +27,7 @@ Détails : **[INSTALL.md](INSTALL.md)**.
 - **Personnel** — fiche, cycle de vie (contrats = source de vérité), absences, RGPD.
 - **Matrice de polyvalence** — niveaux actuel / cible par personne × poste, objectifs, bilan. Échelle du carré magique paramétrable par site (nombre de niveaux, seuil « compétent », couleur par niveau) dans l'écran Compétences.
 - **Habilitations** — échéances de recyclage, alertes couleur, cloche d'alerte.
+- **Visites médicales** (RH) — dates et types de visites de médecine du travail, sans aucune donnée de santé. Le régime de suivi (simple / adapté / renforcé) est calculé à partir des quarts de nuit, des postes tenus et des habilitations ; les déclencheurs se règlent dans Param. Visites.
 - **Ordonnancement** — ouverture des lignes par quart, semaines types, rotation des équipes.
 - **Planning** — placement (poste / absence / non travaillé) sur plusieurs semaines, indicateurs.
 - **Placement** — saisie glisser-déposer par jour et par quart, copie, export PDF.

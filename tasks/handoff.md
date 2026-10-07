@@ -39,6 +39,13 @@ menu suit l'écriture, pas la lecture.
   pastille rouge ; habilitation manquante/périmée → rouge **encadré** (distinct du niveau).
 - **Vue Absences** : `SlideSwitch` Plan / Absences (`?vue=absences`), une carte par motif,
   filtrée par l'atelier affiché.
+- **Avertissement « À vérifier avec les RH »** (module Visites médicales) : `/cell` et
+  `/move` peuvent répondre **428** avec `alertesRh` (messages génériques, jamais de
+  motif), dans le même 428 que les habilitations manquantes. Le board ouvre la modale
+  `askRh` → « Placer quand même » renvoie `forcer: true`. Au Planning, la modale de
+  forçage existante affiche les deux (`Refus = { manquantes, alertes }`). Les quatre cas
+  sont **désactivés par défaut** (`Param. Visites → Alertes`) : sans cas actif, la route
+  ne lit que les réglages.
 - **Navigation par jour** (`JourNav.tsx`, remplace le `<input type="date">` natif) : les
   flèches **◀ / ▶ sautent** au jour **ouvert** précédent / suivant (≥ 1 ligne de l'atelier
   ouverte sur le quart courant ; repli ±1 j si aucun connu). Le **calendrier déroulant
@@ -191,12 +198,46 @@ Priorité d'affichage de l'horaire (TV) : **exception ponctuelle > temps partiel
   `addMonthsIso(date_obtention, duree)` à l'affichage (cf. `lessons.md` L6).
 - Paramétrage : `/admin/habilitations-param`.
 
+## Visites médicales (`/visites`, `/admin/visites-param`)
+Module RH (droits `visites` et `visites_param`, rôle `rh` seul par défaut). **Deux écrans,
+pas de troisième** : la fiche d'une personne est une modale du Suivi.
+- **Calcul** : tout est dans `src/lib/visites.ts` (pur, testé) — `regimeDe`,
+  `echeancePeriodique`, `echeanceIntermediaire`, `echeanceReprise`, `anciManquants`,
+  `evaluerPersonne`. `src/lib/visites-data.ts` lit la base en deux vagues parallèles et
+  nourrit le calcul ; rien n'est stocké du résultat.
+- **Régime** : le plus exigeant l'emporte entre poste à risque tenu / habilitation à
+  risque détenue (`renforce`), quart de nuit ou « suivi adapté » coché (`adapte`). Toutes
+  les raisons restent affichées. Un « régime imposé » court-circuite le calcul.
+- **Travail de nuit** : équipe à quart fixe → ce quart ; équipe tournante → de nuit dès
+  qu'un quart **tournant** est coché `nuit`. La colonne « heures de nuit » du paramétrage
+  (`heuresDeNuit`, plage 21 h – 6 h) n'est qu'une **indication** : la coche fait foi.
+- **Poste tenu** : titulaire (`poste_fixe_id`) **ou** au moins N placements sur les M
+  dernières semaines (réglages, défaut 3 / 12).
+- **Échéances** : dernière visite initiale/périodique + plafond du régime, ou
+  `prochaine_date` si plus proche ; sans visite → arrivée + 3 mois (simple) ou arrivée
+  (avant affectation, adapté/renforcé). **Entrée récente en suivi renforcé**
+  (`renforceDepuis` = obtention la plus ancienne d'une habilitation à risque) : si la
+  dernière visite est antérieure, l'examen d'aptitude est dû à cette date (R4624-24).
+- **ANCI** : usage exigé par un poste ou une habilitation, délivré par une visite, valable
+  jusqu'au plafond du régime compté depuis cette visite.
+- **Reprise** : périodes reconstruites depuis les jours d'absence (`grouperAbsences`, 18
+  mois), durée en jours **calendaires** sur les motifs cochés, échéance = fin + 8 j.
+- **Statut** : reprise > retard > RDV pris > à planifier (fenêtre d'alerte) > à jour ;
+  un RDV à venir apaise un retard (affiché « RDV pris »).
+- **Exclus** : statut `PARTI`, types de contrat avec agence (intérim).
+- Écritures : `/api/visites` (visite, suivi, contraintes) et `/api/visites-param`
+  (régimes, types, usages, drapeaux des référentiels, réglages). Une visite se
+  réécrit avec sa liste d'ANCI (effacer puis poser `visite_anci`).
+
 ## Navigation (`AppHeader`)
-- **Menu principal** (`MAIN_ORDER`, pastille + icône) : Référentiel (vert) → Personnel
-  (bleu) → Matrice (violet) → Ordonnancement (orange) → Planning (teal) → Bilans (rose).
+- **Menu principal** (`MAIN_ORDER`, pastille + icône) : Référentiel → Personnel →
+  Absences → Matrice → Habilitations → Visites méd. (cyan) → Ordonnancement → Planning →
+  Placement → Bilans. Une entrée n'apparaît que si le module est lisible (Placement :
+  inscriptible) et non masqué pour le site.
 - Logo « Polaris » (+ pastille `site.nom` en multi-site) → `/` (accueil).
-- **Engrenage** (`SettingsMenu`) : Équipes, Compétences, Param. Habilitation, Motifs,
-  Horaires, Affichage, Journal, RGPD, Rotation des équipes, Droits.
+- **Engrenage** (`SettingsMenu`) : tout module de `MODULES` hors `MAIN_ORDER` — Équipes,
+  Compétences, Param. Habilitation, Param. RH, Param. Visites, Horaires, Utilisateurs,
+  RGPD…
 - 🔔 cloche = habilitations à recycler (compteur ≤ 90 j).
 
 ## Bilans CODIR (`/bilans`)

@@ -1,7 +1,7 @@
 # Architecture — Polaris
 
 Application web de gestion des plannings d'usine (matrice de polyvalence,
-placement journalier, habilitations, affichage couloir, bilans).
+placement journalier, habilitations, visites médicales, affichage couloir, bilans).
 
 > Vue d'ensemble et règles de travail : **CLAUDE.md**.
 
@@ -22,8 +22,9 @@ placement journalier, habilitations, affichage couloir, bilans).
 - `src/lib/refdata.ts` — cache des données de référence (`unstable_cache`, 30 s).
 - `src/lib/fetch-all.ts` — `fetchAll()`. PostgREST plafonne **chaque réponse à 1000 lignes**
   (`db-max-rows`) sans lever d'erreur. Toute lecture d'une table qui peut dépasser ce
-  seuil (`matrice`, `personne_competence`, `placement`, `ouverture_quart`) doit passer
-  par cet utilitaire, avec un `.order()` déterministe.
+  seuil (`matrice`, `personne_competence`, `placement`, `ouverture_quart`,
+  `contrat_periode`, `visite`) doit passer par cet utilitaire, avec un `.order()`
+  déterministe.
 - `src/proxy.ts` — protège les routes (redirige vers /login). Public : `/login`, `/forgot`,
   `/reset`, `/auth/*`, `/affichage/*`.
 - `src/components/AppHeader.tsx` — navigation par rôle + cloche d'alerte habilitations.
@@ -73,7 +74,25 @@ placement journalier, habilitations, affichage couloir, bilans).
   ou motif d'absence, ou non travaillé), `horaire_exception` (personne × jour),
   `absence` (période longue → `placement.absence_id`, cascade),
   `semaine_type` (+ ouverture, profils).
-- **Absences** : `motif_absence` (paramétrable, couleur).
+- **Absences** : `motif_absence` (paramétrable, couleur ; `visite_reprise` depuis 0076).
+- **Visites médicales** (0076, module RH) — **aucune donnée de santé** : des dates, un
+  type de visite, et un `avis` borné par CHECK à quatre valeurs (attestation, apte, apte
+  avec aménagements, inapte).
+  - `visite_regime` (plafonds par régime `simple` / `adapte` / `renforce`, PK
+    `(code, site_id)`), `visite_type` (catalogue, `categorie` qui fixe le comportement :
+    initiale / periodique / intermediaire / reprise / ponctuelle), `visite_anci_usage`
+    (usages d'attestation de non contre-indication : conduite, électrique…),
+    `visite_parametre` (clé / valeur, défauts portés par `src/lib/visites.ts`).
+  - `visite` (personne × type : `date_rdv`, `date_visite`, `avis`, `prochaine_date` fixée
+    par le professionnel, commentaire logistique) et `visite_anci` (usages délivrés par
+    la visite).
+  - `personne_suivi` (`suivi_adapte` **sans motif**, `regime_force`) et
+    `contrainte_affectation` (quart ou poste exclu sur une période, **sans motif**).
+  - Drapeaux posés sur les référentiels existants, écrits **seulement** par
+    `/api/visites-param` : `quart.nuit`, `poste.suivi_renforce` / `suivi_motif` /
+    `anci_usage`, `competence.suivi_renforce` / `anci_usage`, `motif_absence.visite_reprise`.
+  - Le **régime n'est pas stocké** : il est recalculé à chaque affichage
+    (`evaluerPersonne`) depuis ces drapeaux, les placements récents et les habilitations.
 - **Transverse** : `audit_log` (alimenté par triggers).
 
 ## Rôles & périmètres
@@ -99,6 +118,10 @@ chantier : `tasks/multi-site.md`.
 - Matrice / placement / habilitations : **admin ou chef de l'équipe** (`can_edit_personne()`).
 - Ouverture de lignes, rotation des équipes : **admin ou ordo** (`has_role('ordo')`).
 - Journal d'audit : lecture **admin + codir** (`can_read_audit()`).
+- Visites médicales : modules `visites` et `visites_param`, accordés au seul rôle `rh`
+  par défaut. Lecture RLS bornée au site ; écriture par les routes API gardées par
+  `moduleWriteGuard` (service_role). Le Placement n'en voit qu'un avertissement **sans
+  motif** (`src/lib/visites-placement.ts`), désactivé par défaut.
 
 Rôles : `admin`, `chef_equipe`, `ordo`, `rh`, `codir`, `planning`.
 
@@ -115,8 +138,8 @@ Le journal (`/journal`) affiche qui / valeur avant / valeur après / date-heure,
 les champs techniques et en résolvant les clés étrangères en libellés.
 
 ## Migrations
-Fichiers SQL ordonnés dans `supabase/migrations/` (**0001 → 0054**, dernière appliquée :
-**0054**), **exécutés manuellement** par l'utilisateur dans le SQL Editor Supabase
+Fichiers SQL ordonnés dans `supabase/migrations/` (**0001 → 0076**, dernière appliquée :
+**0076**), **exécutés manuellement** par l'utilisateur dans le SQL Editor Supabase
 (`SUPABASE_DB_URL` est vide ; `npm run db:migrate` ne fonctionne que s'il est défini).
 
 Depuis la **0037**, trois séquences délicates passent par des **fonctions SQL** appelées
@@ -161,15 +184,33 @@ intégrés + `role_custom`).
   (`getNbNiveauxC` / `getSeuilCompetentC` / `getCouleursNiveauxC`, replis 4 / 2 /
   échelle historique).
 
+**Après le multi-site (0064 → 0076)** :
+- **0064** — temps partiel **matérialisé** dans le planning (`placement.tp`, semaine
+  « chargée ») ; **0065** — couleur de niveau ouverte au nuancier (rattrapage 0063) ;
+  **0066** — import des absences depuis le logiciel RH ; **0067** — affichage TV en mode
+  relatif ou absolu ; **0068** — `quart.couleur` (bandeau de rappel du Planning).
+- **0069** (deux fichiers) — cible de la matrice alignée sur le niveau actuel ;
+  `regroupement` de lignes (étiquette de reporting).
+- **0070** — **effectif par quart** (`poste_quart.effectif_requis`, trois états) ;
+  **0071** — ouverture / fermeture datée des lignes et postes ; **0072** —
+  `type_contrat.avec_agence` (généralise l'intérim) ; **0073** — `poste.imprimable`.
+- **0074** — suppression de policies RLS permissives orphelines ; **0075** — RLS en
+  forme InitPlan (`(select public.current_site_id())`, une évaluation par requête).
+- **0076** — module **Visites médicales** (tables `visite_*`, `personne_suivi`,
+  `contrainte_affectation`, drapeaux sur `quart` / `poste` / `competence` /
+  `motif_absence`, seed des régimes, types et usages sur tous les sites).
+
 ## Sitemap (principales routes)
 - `/` accueil (logo + titre « planning »), `/planning`, `/placement` (saisie par
   glisser-déposer, cf. CLAUDE.md), `/ordonnancement`
   (+ `/ordonnancement/semaine-type`), `/matrice` (+ `/matrice/bilan`), `/habilitations`,
   `/personnel` (+ `/personnel/[id]`), `/bilans` (+ personnel, polyvalence, couverture,
-  anticipation, competences), `/horaires-specifiques`, `/absences-specifiques`.
+  anticipation, competences), `/horaires-specifiques`, `/absences-specifiques`,
+  `/visites` (suivi des visites médicales, RH).
 - Admin : `/admin/referentiel`, `/admin/equipes` (gestion des équipes **+ rotation des
   quarts**), `/admin/competences`, `/admin/habilitations-param`, `/admin/motifs`,
-  `/admin/horaires`, `/admin/users` (comptes **+ matrice des droits**, admin), `/admin/rgpd`,
+  `/admin/horaires`, `/admin/visites-param` (déclencheurs des visites, RH),
+  `/admin/users` (comptes **+ matrice des droits**, admin), `/admin/rgpd`,
   `/journal`.
 - Public : `/affichage`, `/affichage/atelier/[atelier]` (écran TV, refresh 5 min,
   fenêtre glissante paramétrable dans Param. RH — cf. `getFenetreAffichage()`).

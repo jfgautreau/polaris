@@ -1,7 +1,32 @@
 # Reste à faire — Polaris
 
-> État au 2026-08-26. Migrations appliquées jusqu'à **0060**. **252** tests Vitest.
+> État au 2026-10-07. Migrations appliquées jusqu'à **0076**. **407** tests Vitest.
 > Historique détaillé : `git log`.
+
+## Visites médicales (module RH, 2026-09-28)
+- [x] **Migration `0076_visites_medicales.sql` appliquée** dans le SQL Editor.
+- [x] Écrans **Suivi** (`/visites`) et **Paramètres** (`/admin/visites-param`), droits
+      `visites` / `visites_param` donnés au rôle `rh`. Calcul pur et testé
+      (`src/lib/visites.ts`, 50 cas).
+- [x] Avertissement du Placement / Planning **sans motif**, quatre cas activables —
+      **tous éteints** tant que le module est vide.
+- [ ] **Import initial de l'historique** des visites (matricule, date, type, éventuelles
+      ANCI). Sans lui, tout le personnel apparaît « En retard ». Format à obtenir des RH
+      (Excel interne ou export du portail du service de santé au travail) ; s'inspirer
+      de l'import des absences RH (`src/lib/import-absences-rh.ts`).
+- [ ] **Relire les déclencheurs posés par la migration** avec les RH : quarts de nuit
+      (déduits de l'heure de début), habilitations à autorisation de conduite (suivi
+      renforcé + ANCI conduite), motifs d'arrêt cochés pour la reprise.
+- [ ] **Postes à risques particuliers** : à cocher depuis la liste annuelle transmise au
+      service de santé au travail (à demander aux RH, sans noms).
+- [ ] **Motifs d'arrêt** : vérifier qu'AT, maladie professionnelle et maternité sont
+      distincts de « AM » ; sinon la règle de reprise ne les distingue pas (seuil unique).
+- [ ] **Visite de mi-carrière** (L4624-2-2) : pas de date de naissance dans Polaris, type
+      créé mais désactivé. Décision RH : « pas pratiqué dans cette industrie » — à
+      confronter à la convention collective applicable.
+- [ ] Rappel « rendez-vous de liaison » à 30 jours d'arrêt (L1226-1-3) : proposé dans la
+      maquette, non codé.
+- [ ] Guide utilisateur (`public/guide.html`) : section Visites médicales à écrire.
 
 ## Revue — Poste imprimable + colonnes de noms Placement (2026-09-16)
 - [x] **Migration `0073_poste_imprimable.sql` appliquée** (2026-09-17) dans le SQL Editor

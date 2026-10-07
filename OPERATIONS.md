@@ -39,6 +39,27 @@
 - L'utilisateur peut changer son propre mot de passe depuis son menu (`/compte`), ou
   passer par `/forgot` s'il n'arrive plus à se connecter.
 
+## Visites médicales (RH)
+- **Droits** : modules `visites` (écran `/visites`) et `visites_param`
+  (`/admin/visites-param`), accordés au seul rôle `rh` par défaut. À ouvrir à d'autres
+  rôles dans la matrice si besoin — sans oublier qu'il s'agit d'un suivi nominatif.
+- **Mise en route d'un site** (migration `0076` appliquée) :
+  1. Relire les **déclencheurs** posés par la migration (quarts de nuit déduits de
+     l'horaire, habilitations à autorisation de conduite en suivi renforcé, motifs
+     d'arrêt cochés pour la reprise) dans `/admin/visites-param → Déclencheurs`.
+  2. Cocher les **postes à risques particuliers** (la liste annuelle transmise au service
+     de santé au travail est la bonne source).
+  3. **Reprendre l'historique** des dernières visites : sans lui, tout le monde
+     apparaît « En retard ». Saisie par la fiche de chaque personne (un import est à
+     écrire, cf. `tasks/todo.md`).
+  4. Seulement ensuite, allumer un à un les **avertissements du Placement**
+     (`Param. Visites → Alertes`) — tous éteints au départ.
+- **Ce qui n'entre jamais en base** : motif médical, contenu de l'avis, raison d'un
+  « suivi adapté » ou d'une contrainte d'affectation. Le commentaire d'une visite est
+  logistique (« convoqué, absent au rendez-vous »).
+- Les intérimaires (types de contrat « avec agence ») sont **exclus** : leur suivi
+  relève de l'agence (R4625-8).
+
 ## Documentation utilisateur
 - **Guide utilisateur** : accessible depuis la bulle du profil (avatar en haut à droite),
   sous « Changer le mot de passe ». Document autonome `public/guide.html`, ouvert dans un
@@ -67,7 +88,8 @@
   rouge permanent, journal `audit_impersonation`).
 - Un nouveau site démarre en **dupliquant les référentiels** d'un site source choisi
   au formulaire (motifs, contrats, agences, compétences, échelle, quarts, rôles,
-  matrice des droits). Chaque site est ensuite totalement indépendant.
+  matrice des droits, réglages des visites médicales). Chaque site est ensuite
+  totalement indépendant.
 - Détail complet : `tasks/multi-site.md`.
 
 ## Dépannage
