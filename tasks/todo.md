@@ -3,6 +3,10 @@
 > État au 2026-10-07. Migrations appliquées jusqu'à **0077**. **407** tests Vitest.
 > Historique détaillé : `git log`.
 
+## Titulaires des personnes parties (2026-10-07)
+- [ ] **Migration `0078_depart_libere_poste_fixe.sql` à exécuter** : au passage à PARTI, le
+      poste fixe est retiré (trigger) ; rattrapage des 9 parties encore titulaires.
+
 ## Planning « Par poste » (cahier des charges validé le 2026-10-07)
 Spécification complète : `tasks/planning-par-poste.md`.
 - [x] **Migration `0077_poste_zone_attente.sql` appliquée** (2026-10-07).

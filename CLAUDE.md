@@ -151,6 +151,7 @@ L'historique des décisions est dans git et dans l'en-tête de chaque migration.
   `placement.numero_rotation`.
 - **Poste fixe** (`personne.poste_fixe_id`) : même donnée que la colonne « Titulaire » du
   Référentiel (plusieurs titulaires par poste, un seul poste fixe par personne).
+  **Libéré automatiquement au départ** (trigger 0078 : statut → PARTI ⇒ `poste_fixe_id = null`).
 - **Intérim** : piloté par `type_contrat.avec_agence` (intérim, CDI intérimaire…) → champ
   Agence, surlignage jaune (`styleInterim` / `estAvecAgence`, `getTypesAgenceC()`),
   Synthèses. `estInterim()` (code INTERIM littéral) sert seulement à l'alerte légale 18 mois
