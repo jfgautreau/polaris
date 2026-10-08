@@ -304,7 +304,7 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   numérotées, rangs en 1 à 3 colonnes (au-delà de 10 par colonne). Bascule Plan /
   Absences. `JourNav` (calendrier grisant les jours sans quart actif). Filtres de la liste
   (recherche, équipe) dans l'URL. Deux PDF : **PDF Manager** (A4, plan en couleurs + absents / TP du jour,
-  ex-« PDF CE ») et **PDF** opérateurs (A3, plan seul, codes d'alerte en noir) ; sur les deux, les lignes qui tournent (≥ 1 personne placée) prennent une couleur automatique (`LIGNE_COULEURS`, rang dans le plan), celles à l'arrêt restent grisées ; en-tête service ·
+  ex-« PDF CE ») et **PDF** opérateurs (A3, plan seul, codes d'alerte en noir) ; sur les deux, les lignes qui tournent (≥ 1 personne placée) prennent la couleur fixe de leur ligne (`ligne.couleur`, 0082, choisie au Référentiel dans la palette fermée `src/lib/ligne-couleurs.ts`), celles à l'arrêt restent grisées ; en-tête service ·
   quart (pastille centrée) · date, hors zone mise à l'échelle ; numéros vides et commentaires du jour imprimés ; filtre
   `imprimable`. TP du jour sans placement = carte « Temps partiel », pas « à placer ».
   Postes `zone_attente` (CDT) : hors du plan, colonne « À répartir » entre le plan et les noms
@@ -327,7 +327,7 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   un en-tête.
 - **Référentiel** (`src/app/admin/referentiel/`, `/api/referentiel`) : colonnes N° rot,
   Habil. requises, Rempl. (PTR/PTNR), Impr., Attente (`zone_attente`, 0077), Titulaire, effectif par quart (vide « – » / 0 /
-  N), Ouvre / Ferme le, Regroup. Noms de poste / nom court / ligne **uniques par site**
+  N), Ouvre / Ferme le, Regroup., Couleur de ligne (PDF du Placement) Noms de poste / nom court / ligne **uniques par site**
   parmi les actifs (409) ; erreurs en toast fixe bas-centre.
 - **Absences** (module `absences`, `src/app/absences-specifiques/`) : périodes reconstruites
   depuis les jours ; édition inline ; filtres synchronisés à l'URL.

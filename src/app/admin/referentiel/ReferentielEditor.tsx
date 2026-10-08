@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import ModaleDeplacable from "@/components/ModaleDeplacable";
 import ToggleSwitch from "@/components/ToggleSwitch";
+import CouleurLigne from "./CouleurLigne";
 
 type Poste = {
   id: string;
@@ -20,7 +21,7 @@ type Poste = {
   zone_attente?: boolean;
   actif: boolean;
 };
-type Ligne = { id: string; nom: string; actif: boolean; ordre_affichage: number; regroupement: string | null; poste: Poste[] };
+type Ligne = { id: string; nom: string; actif: boolean; ordre_affichage: number; regroupement: string | null; couleur: string | null; poste: Poste[] };
 type Atelier = { id: string; nom: string; actif: boolean; ligne: Ligne[] };
 type Quart = { code: string; libelle: string };
 type Comp = { id: string; nom: string; a_recycler: boolean };
@@ -266,6 +267,13 @@ export default function ReferentielEditor({
     setLigne(aid, lid, (l) => ({ ...l, regroupement }));
     schedule(`l:${lid}:reg`, () => post("update-ligne", { id: lid, regroupement }), 500);
   }
+  // Couleur des PDF du Placement (0082) : enregistrée aussitôt ; refus -> retour
+  // à la valeur précédente (le message s'affiche dans le bandeau).
+  async function couleurLigne(aid: string, lid: string, couleur: string, avant: string | null) {
+    setLigne(aid, lid, (l) => ({ ...l, couleur }));
+    const j = await post("update-ligne", { id: lid, couleur });
+    if (!j) setLigne(aid, lid, (l) => ({ ...l, couleur: avant }));
+  }
   function toggleLigne(aid: string, lid: string, actif: boolean) {
     setLigne(aid, lid, (l) => ({ ...l, actif }));
     post("toggle", { entity: "ligne", id: lid, actif });
@@ -453,7 +461,7 @@ export default function ReferentielEditor({
           </div>
 
           {/* Lignes */}
-          {a.ligne.map((l) => (
+          {a.ligne.map((l, iLigne) => (
             <div key={l.id} className="section" style={{ marginLeft: 16, borderLeft: "2px solid #eee", paddingLeft: 16, opacity: l.actif ? 1 : 0.6 }}>
               <div className="toolbar refhead" style={{ alignItems: "center" }}>
                 <input
@@ -493,6 +501,7 @@ export default function ReferentielEditor({
                 {valDe(ligneValSt, l.id).date_fermeture && (
                   <span style={PLAN_BADGE} title="Cette ligne fermera à cette date (elle reste visible jusque-là).">⏳ Ferme le {fmtFr(valDe(ligneValSt, l.id).date_fermeture)}</span>
                 )}
+                <CouleurLigne couleur={l.couleur} rang={iLigne} onChange={(c) => void couleurLigne(a.id, l.id, c, l.couleur)} />
                 <ToggleSwitch on={l.actif} onChange={(v) => toggleLigne(a.id, l.id, v)} title="Activer / désactiver la ligne" />
                 <button type="button" style={ADD_BTN} onClick={() => addPoste(a.id, l.id, "")} title="Ajouter un poste (à compléter ensuite)">
                   ＋ Ajouter un poste

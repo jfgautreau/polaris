@@ -8,6 +8,7 @@ import { parseNumeros } from "@/lib/numeros-rotation";
 import { styleInterim, estAvecAgence } from "@/lib/interim";
 import SlideSwitch from "@/components/SlideSwitch";
 import { PrintIcon, OperateurIcon } from "@/components/icons";
+import { couleurDeLigne } from "@/lib/ligne-couleurs";
 import JourNav from "./JourNav";
 import s from "./placement.module.css";
 
@@ -20,7 +21,7 @@ type Poste = { id: string; nom: string; nomCourt: string | null; effectifRequis:
 // le compteur des tuiles devient « X/0 » et la couverture globale n'en tient plus
 // compte. La fermeture ne bloque plus la saisie (l'ordo pilote un besoin, pas une
 // visibilité). Optionnel : `undefined` = ligne ouverte (rétro-compatibilité).
-type Group = { ligneId: string; ligneNom: string; postes: Poste[]; fermee?: boolean };
+type Group = { ligneId: string; ligneNom: string; postes: Poste[]; fermee?: boolean; couleur?: string | null };
 type Personne = { id: string; nom: string; prenom: string; equipe_id: string | null; atelier_id: string | null; type_contrat: string; couleur: string | null; editable: boolean };
 type Motif = { id: string; code: string; libelle: string; couleur: string };
 
@@ -37,20 +38,6 @@ const jourLabel = (iso: string) => {
   return `${JOURS[(dt.getDay() + 6) % 7]} ${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}`;
 };
 const MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
-// Couleurs des lignes qui tournent sur les deux PDF (bandeau pâle, liseré, nom
-// foncé), attribuées dans l'ordre des lignes du plan. Ni rouge, ni orange, ni
-// vert : ces teintes disent déjà « manque », « surnombre », « complet ».
-const LIGNE_COULEURS: { lc: string; pale: string; dark: string }[] = [
-  { lc: "#2557c7", pale: "#dfe8fb", dark: "#183c8c" }, // bleu
-  { lc: "#7a3fc4", pale: "#ece2f9", dark: "#552a8c" }, // violet
-  { lc: "#0f7a8a", pale: "#d9f0f2", dark: "#0b5560" }, // bleu canard
-  { lc: "#b3307a", pale: "#f8e1ee", dark: "#7f1f56" }, // framboise
-  { lc: "#4338ca", pale: "#e3e1fb", dark: "#2f2791" }, // indigo
-  { lc: "#8a5a2b", pale: "#f2e7da", dark: "#5f3d1c" }, // brun
-  { lc: "#0369a1", pale: "#dbeefa", dark: "#024a72" }, // azur
-  { lc: "#86198f", pale: "#f5e0f7", dark: "#5e1164" }, // prune
-];
-
 // Date en toutes lettres pour l'en-tête des PDF : ["Lundi", "7 octobre 2026"]
 // (le jour de la semaine est mis en gras à part).
 const jourLong = (iso: string) => {
@@ -814,13 +801,13 @@ export default function PlacementBoard({
   // retire les lignes qui n'ont plus aucun poste imprimable. L'écran, lui, montre
   // TOUS les postes (`groups`) — ce filtre ne concerne que le PDF / PDF Manager.
   // Une ligne « tourne » dès qu'une personne est placée sur l'un de ses postes
-  // (imprimable ou non) ; sa couleur suit son rang parmi les lignes du plan.
+  // (imprimable ou non). Couleur : celle du Référentiel (0082), à défaut son rang.
   const groupsImpr = groups
     .map((g, i) => ({
       ...g,
       postes: g.postes.filter((po) => po.imprimable),
       tourne: g.postes.some((po) => occupants(po.id).length > 0),
-      couleur: LIGNE_COULEURS[i % LIGNE_COULEURS.length],
+      couleur: couleurDeLigne(g.couleur, i),
     }))
     .filter((g) => g.postes.length > 0);
 

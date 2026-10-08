@@ -4,6 +4,7 @@ import { getAdminClient } from "@/lib/supabase-server";
 import { getCurrentProfile } from "@/lib/current-user";
 import { canWriteModule } from "@/lib/permissions";
 import { ATELIERS_TAG } from "@/lib/refdata";
+import { couleurLibre, estCouleurLigne } from "@/lib/ligne-couleurs";
 
 // POST /api/referentiel  { op, ... }
 // Saisie inline du referentiel (ateliers / lignes / postes). Ecriture admin (RLS).
@@ -166,10 +167,19 @@ export async function POST(req: NextRequest) {
         // Bloque une ligne créée directement avec un nom en doublon.
         const uErr = await verifierUniciteNom(supabase, "ligne", "nom", nom, site_id);
         if (uErr) return NextResponse.json({ error: uErr }, { status: 409 });
+        // Couleur des PDF (0082) : la teinte la moins utilisée dans le service.
+        const { data: soeurs, error: errSoeurs } = await supabase
+          .from("ligne")
+          .select("couleur")
+          .eq("atelier_id", atelier_id)
+          .eq("site_id", site_id)
+          .returns<{ couleur: string | null }[]>();
+        if (errSoeurs) throw errSoeurs;
+        const couleur = couleurLibre((soeurs ?? []).map((l) => l.couleur));
         const { data, error } = await supabase
           .from("ligne")
-          .insert({ nom, atelier_id, site_id })
-          .select("id, nom, actif, ordre_affichage, regroupement")
+          .insert({ nom, atelier_id, site_id, couleur })
+          .select("id, nom, actif, ordre_affichage, regroupement, couleur")
           .single();
         if (error) throw error;
         return NextResponse.json({ ok: true, row: { ...data, poste: [] } });
@@ -205,6 +215,11 @@ export async function POST(req: NextRequest) {
         // Ouverture / fermeture datées (migration 0071).
         if (body.date_ouverture !== undefined) patch.date_ouverture = dateValue(body.date_ouverture);
         if (body.date_fermeture !== undefined) patch.date_fermeture = dateValue(body.date_fermeture);
+        // Couleur des PDF du Placement (0082) : palette fermée seulement.
+        if (body.couleur !== undefined) {
+          if (!estCouleurLigne(body.couleur)) return NextResponse.json({ error: "Couleur hors palette." }, { status: 400 });
+          patch.couleur = (body.couleur as string).toLowerCase();
+        }
         if (Object.keys(patch).length === 0) return NextResponse.json({ error: "Rien à modifier" }, { status: 400 });
         // Unicité du nom : bloque un renommage qui produirait un doublon parmi
         // les autres lignes actives du site (l'id courant est exclu).
