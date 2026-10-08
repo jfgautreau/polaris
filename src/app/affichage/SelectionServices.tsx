@@ -4,9 +4,10 @@ import Link from "next/link";
 import { useState } from "react";
 import { PrintIcon, TvIcon } from "@/components/icons";
 
-// Choix des services à afficher / imprimer ensemble (une page A3 par service,
-// cf. /affichage/impression). Chaque service garde son lien « Écran TV » : un
-// écran de couloir affiche UN service, rafraîchi automatiquement.
+// Choix des services à afficher / imprimer ensemble (A3 portrait, chaque service
+// sur une nouvelle page, cf. /affichage/impression). Chaque service garde son
+// lien « Écran TV » : un écran de couloir affiche UN service, rafraîchi
+// automatiquement.
 export default function SelectionServices({ ateliers }: { ateliers: { id: string; nom: string }[] }) {
   const [coches, setCoches] = useState<string[]>([]);
   const [date, setDate] = useState("");
@@ -70,7 +71,7 @@ export default function SelectionServices({ ateliers }: { ateliers: { id: string
             <PrintIcon /> Imprimer {coches.length} service{coches.length > 1 ? "s" : ""}
           </Link>
         ) : (
-          <span className="muted" style={{ fontSize: 14 }}>Cochez les services à imprimer (une page A3 par service).</span>
+          <span className="muted" style={{ fontSize: 14 }}>Cochez les services à imprimer (A3 portrait, chaque service sur une nouvelle page).</span>
         )}
       </div>
     </div>

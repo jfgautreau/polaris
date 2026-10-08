@@ -8,7 +8,8 @@ import ImpressionAuto from "./ImpressionAuto";
 
 export const dynamic = "force-dynamic";
 
-// Impression des plannings (version affichage TV) : une page A3 par atelier.
+// Impression des plannings (version affichage TV) : chaque atelier commence sur
+// une nouvelle feuille A3 portrait.
 // Ouverte depuis /affichage, où l'on coche les services (`?atelier=…` répété) ;
 // sans `atelier`, tous les services ayant du contenu. L'impression se lance
 // automatiquement (ImpressionAuto). Route publique comme le reste de /affichage,
@@ -55,17 +56,22 @@ export default async function ImpressionTousLesPlannings({
     <div>
       <ImpressionAuto />
 
-      {/* Une page A3 verticale par atelier. `break-after: page` sépare les
-          feuilles ; la mise à l'échelle de chaque contenu est mesurée côté
-          client par ImpressionAuto (comme l'écran TV). */}
+      {/* Mêmes règles que l'écran TV (AffichageBarre, 2026-09-15) : colonnes à la
+          LARGEUR de la feuille (`table width:100%`), contenu qui COULE sur
+          plusieurs pages si besoin, rangées jamais coupées, en-tête des jours
+          répété. Chaque atelier commence sur une nouvelle feuille. Jusqu'au
+          2026-10-08 : une échelle commune mesurée, imposée par l'atelier le plus
+          dense, rétrécissait toutes les pages bien en deçà de la largeur. */}
       <style>{`
-        @media print {
-          @page { size: A3 portrait; margin: 8mm; }
-        }
         .atelier-page { padding: 18px 24px; }
         @media print {
-          .atelier-page { width: 1060px; height: 1525px; overflow: hidden; padding: 0; break-after: page; }
+          @page { size: A3 portrait; margin: 10mm; }
+          .atelier-page { padding: 0; break-after: page; }
           .atelier-page:last-child { break-after: auto; }
+          .atelier-page table { page-break-inside: auto; }
+          .atelier-page thead { display: table-header-group; }
+          .atelier-page tr { break-inside: avoid; page-break-inside: avoid; }
+          .atelier-page section { break-inside: auto; }
         }
       `}</style>
 
@@ -76,9 +82,7 @@ export default async function ImpressionTousLesPlannings({
       ) : (
         ateliers.map((a) => (
           <section key={a.id} className="atelier-page">
-            <div className="atelier-contenu" style={{ transformOrigin: "top left" }}>
-              <AtelierPlanning atelierRef={a.id} site={site} quarts={quarts} days={days} />
-            </div>
+            <AtelierPlanning atelierRef={a.id} site={site} quarts={quarts} days={days} />
           </section>
         ))
       )}

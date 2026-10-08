@@ -4,38 +4,17 @@ import Link from "next/link";
 import { useEffect } from "react";
 import { PrintIcon } from "@/components/icons";
 
-// Impression des services cochés : chaque atelier occupe UNE page A3
-// verticale. Comme sur l'écran TV (AffichageBarre) et au Placement, aucune règle
-// CSS ne sait « faire rentrer » un contenu — on mesure puis on met à l'échelle.
-// A3 portrait à 96 dpi, marges 8 mm : 1060 x 1525 px utiles.
-const PAGE_L = 1060;
-const PAGE_H = 1525;
-
-// ⚠️ Échelle UNIFORME entre les pages : à l'inverse de l'écran TV (une seule
-// feuille, mise à l'échelle au mieux), on veut ici la MÊME taille de police d'un
-// atelier à l'autre. Chaque bloc est rendu à la largeur exacte de la page
-// (PAGE_L), puis on applique à TOUS le même facteur = le plus petit qui fasse
-// tenir la page la plus haute. Plafonné à 1.0 : on ne grossit jamais au-delà de
-// la taille naturelle (police plus compacte, jamais gonflée).
-function ajusterEtImprimer() {
-  const blocs = Array.from(document.querySelectorAll<HTMLElement>(".atelier-contenu"));
-  for (const el of blocs) {
-    el.style.transformOrigin = "top left";
-    el.style.transform = "none";
-    el.style.width = `${PAGE_L}px`;
-  }
-  // Facteur commun : la page la plus dense impose l'échelle de toutes les autres.
-  let f = 1;
-  for (const el of blocs) f = Math.min(f, PAGE_H / el.scrollHeight);
-  for (const el of blocs) el.style.transform = `scale(${f})`;
-  window.print();
-}
+// Impression des services cochés : chaque atelier commence sur une nouvelle
+// feuille A3 portrait, à la largeur de la page, et coule sur plusieurs feuilles
+// si besoin (règles @media print de la page, comme l'écran TV). Plus de mise à
+// l'échelle mesurée : le navigateur pagine tout seul.
+const imprimer = () => window.print();
 
 export default function ImpressionAuto() {
-  // Lancement automatique de l'impression au chargement. On laisse un court délai
-  // pour que la mise en page (polices, tableaux) soit stabilisée avant de mesurer.
+  // Lancement automatique de l'impression au chargement, après un court délai
+  // pour laisser la mise en page (polices, tableaux) se stabiliser.
   useEffect(() => {
-    const t = setTimeout(ajusterEtImprimer, 400);
+    const t = setTimeout(imprimer, 400);
     return () => clearTimeout(t);
   }, []);
 
@@ -46,8 +25,8 @@ export default function ImpressionAuto() {
     >
       <button
         type="button"
-        onClick={ajusterEtImprimer}
-        title="Imprimer / enregistrer en PDF (une page A3 par service)"
+        onClick={imprimer}
+        title="Imprimer / enregistrer en PDF (A3 portrait, chaque service sur une nouvelle page)"
         style={{
           display: "inline-flex",
           alignItems: "center",
