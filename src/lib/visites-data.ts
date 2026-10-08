@@ -42,8 +42,8 @@ export type VisiteRow = {
   date_visite: string | null;
   avis: string | null;
   prochaine_date: string | null;
-  professionnel: string | null;
-  prochain_professionnel: string | null;
+  professionnels: string[];
+  prochains_professionnels: string[];
   commentaire: string | null;
   anci: string[];
 };
@@ -72,8 +72,8 @@ export type LigneVisite = Evaluation & {
   visites: VisiteRow[];
   contraintes: ContrainteRow[];
   ancisRequis: string[];
-  /** Qui la personne doit voir à la prochaine visite (code de `PROFESSIONNELS`). */
-  prochainPro: string | null;
+  /** Avec qui se passera la prochaine visite (codes de `PROFESSIONNELS`, vide = non précisé). */
+  prochainsPros: string[];
 };
 
 export type DonneesEcran = {
@@ -187,7 +187,7 @@ export async function chargerVisites(
     fetchAll<VisiteBrute>(() =>
       supabase
         .from("visite")
-        .select("id, personne_id, type_id, date_rdv, date_visite, avis, prochaine_date, professionnel, prochain_professionnel, commentaire")
+        .select("id, personne_id, type_id, date_rdv, date_visite, avis, prochaine_date, professionnels, prochains_professionnels, commentaire")
         .eq("site_id", siteId)
         .order("id")
         .returns<VisiteBrute[]>(),
@@ -367,12 +367,12 @@ export async function chargerVisites(
     // Qui voir la prochaine fois : le rendez-vous en attente le dit s'il est
     // renseigné, sinon la dernière visite réalisée (« à revoir par… »).
     const rdvEnAttente = visites
-      .filter((v) => !v.date_visite && v.date_rdv && v.professionnel)
+      .filter((v) => !v.date_visite && v.date_rdv && v.professionnels.length > 0)
       .sort((a, b) => (a.date_rdv ?? "").localeCompare(b.date_rdv ?? ""))[0];
     const derniereRealisee = visites
       .filter((v) => v.date_visite)
       .sort((a, b) => (b.date_visite ?? "").localeCompare(a.date_visite ?? ""))[0];
-    const prochainPro = rdvEnAttente?.professionnel ?? derniereRealisee?.prochain_professionnel ?? null;
+    const prochainsPros = rdvEnAttente?.professionnels ?? derniereRealisee?.prochains_professionnels ?? [];
 
     const periodes = grouperAbsences(
       (absencesPar.get(p.id) ?? []).map((a) => ({ jour: a.jour, motif_absence_id: a.motif_absence_id })),
@@ -414,7 +414,7 @@ export async function chargerVisites(
       visites,
       contraintes: contraintesPar.get(p.id) ?? [],
       ancisRequis: [...ancisRequis],
-      prochainPro,
+      prochainsPros,
     };
   });
 
@@ -450,7 +450,7 @@ type VisiteBrute = {
   date_visite: string | null;
   avis: string | null;
   prochaine_date: string | null;
-  professionnel: string | null;
-  prochain_professionnel: string | null;
+  professionnels: string[];
+  prochains_professionnels: string[];
   commentaire: string | null;
 };

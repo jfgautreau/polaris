@@ -78,7 +78,8 @@ Spécification complète : `tasks/planning-par-poste.md`.
 - [x] 0079 : professionnel vu / attendu (médecin, infirmier) sur chaque visite.
 - [x] 0080 : poste à risque → plusieurs motifs réglementaires et attestations
       (`poste.suivi_motifs`, `anci_usages`).
-- [ ] **Supprimer `poste.suivi_motif` et `poste.anci_usage`** (dépréciés par 0080, plus
+- [ ] **Supprimer `poste.suivi_motif`, `poste.anci_usage` (0080), `visite.professionnel`,
+      `visite.prochain_professionnel` (0081)** (dépréciés, plus
       lus nulle part) dans une prochaine migration.
 
 ## Revue — Poste imprimable + colonnes de noms Placement (2026-09-16)

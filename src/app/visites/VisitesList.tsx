@@ -1,18 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import AtelierEquipeFiltres from "@/components/AtelierEquipeFiltres";
 import CompteurResultats from "@/components/CompteurResultats";
 import FicheVisite from "./FicheVisite";
 import type { LigneVisite, TypeVisite, UsageAnci } from "@/lib/visites-data";
 import {
   COULEUR_STATUT,
+  GROUPES_PRO,
   LIBELLE_STATUT,
   delaiTexte,
   fmtFr,
-  libelleProfessionnel,
+  groupePro,
+  libelleProfessionnels,
   libelleRegime,
+  type GroupePro,
   type Parametres,
   type RegimeCode,
   type StatutVisite,
@@ -25,6 +28,9 @@ const COULEUR_REGIME: Record<RegimeCode, { bg: string; fg: string; bord: string 
 };
 
 const ORDRE_STATUTS: StatutVisite[] = ["retard", "reprise", "planifier", "rdv", "ok"];
+const REGIMES: RegimeCode[] = ["renforce", "adapte", "simple"];
+const SANS_ECHEANCE = "Aucune échéance calculable";
+const dueDe = (l: LigneVisite) => l.prochaine?.libelle ?? SANS_ECHEANCE;
 
 export default function VisitesList(props: {
   lignes: LigneVisite[];
@@ -46,6 +52,9 @@ export default function VisitesList(props: {
   const [q, setQ] = useState(props.recherche);
   const [statut, setStatut] = useState<StatutVisite | null>(null);
   const [regime, setRegime] = useState<RegimeCode | null>(null);
+  const [due, setDue] = useState<string | null>(null);
+  const [pro, setPro] = useState<GroupePro | null>(null);
+  const [rapport, setRapport] = useState(false);
   const [ouverte, setOuverte] = useState<string | null>(null);
 
   const affichables = useMemo(() => new Set(props.displayedIds), [props.displayedIds]);
@@ -61,9 +70,11 @@ export default function VisitesList(props: {
       } else if (!affichables.has(l.id)) return false;
       if (statut && l.statut !== statut) return false;
       if (regime && l.regime !== regime) return false;
+      if (due && dueDe(l) !== due) return false;
+      if (pro && groupePro(l.prochainsPros) !== pro) return false;
       return true;
     });
-  }, [props.lignes, affichables, terme, statut, regime]);
+  }, [props.lignes, affichables, terme, statut, regime, due, pro]);
 
   // Compteurs : calculés sur le sous-ensemble filtré par service / équipe, pas
   // sur le résultat de la recherche — sinon ils bougeraient à chaque frappe.
@@ -76,6 +87,45 @@ export default function VisitesList(props: {
     for (const l of base) c[l.statut] = (c[l.statut] ?? 0) + 1;
     return c;
   }, [base]);
+  // Libellés de visite due présents dans l'effectif (filtre « Visite due »).
+  const libellesDue = useMemo(() => [...new Set(base.map(dueDe))].sort((a, b) => a.localeCompare(b)), [base]);
+
+  // Rapport : effectifs par régime × visite due × professionnel prévu, sur le
+  // statut choisi. Service / équipe s'appliquent ; ni la recherche ni les
+  // autres filtres — le tableau sert justement à les choisir.
+  const tableau = useMemo((): Tableau => {
+    const pop = base.filter((l) => !statut || l.statut === statut);
+    const parRegime = REGIMES.map((r) => {
+      const duRegime = pop.filter((l) => l.regime === r);
+      const dues = [...new Set(duRegime.map(dueDe))].sort((a, b) => a.localeCompare(b));
+      return {
+        regime: r,
+        total: duRegime.length,
+        parPro: compterPro(duRegime),
+        dues: dues.map((d) => {
+          const sous = duRegime.filter((l) => dueDe(l) === d);
+          return { due: d, total: sous.length, parPro: compterPro(sous) };
+        }),
+      };
+    }).filter((x) => x.total > 0);
+    return { lignes: parRegime, total: pop.length, parPro: compterPro(pop) };
+  }, [base, statut]);
+
+  const choisir = (r: RegimeCode | null, d: string | null, p: GroupePro | null) => {
+    setRegime(r);
+    setDue(d);
+    setPro(p);
+  };
+  const libellePro = pro ? GROUPES_PRO.find((g) => g.code === pro)?.libelle.toLowerCase() : null;
+  const filtresTexte = [
+    statut ? LIBELLE_STATUT[statut] : "Tous statuts",
+    regime ? `Suivi ${libelleRegime(regime).toLowerCase()}` : null,
+    due,
+    libellePro ? `avec : ${libellePro}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   const anciEnRetard = useMemo(() => base.filter((l) => l.anciManquants.length > 0).length, [base]);
 
   const ligneOuverte = ouverte ? props.lignes.find((l) => l.id === ouverte) ?? null : null;
@@ -83,7 +133,13 @@ export default function VisitesList(props: {
 
   return (
     <>
-      <div className="headband headband-top">
+      <div className="printonly" style={{ marginBottom: 8 }}>
+        <h1 style={{ margin: 0, fontSize: 16 }}>Visites médicales — {filtresTexte}</h1>
+        <p style={{ margin: "2px 0 0", fontSize: 11 }}>
+          {lignes.length} personne(s) · édité le {fmtFr(props.aujourdhui)}
+        </p>
+      </div>
+      <div className="headband headband-top noprint">
         <div className="hb-l1">
           <h1 style={{ margin: 0, fontSize: 22 }}>Visites médicales</h1>
           <input
@@ -96,6 +152,26 @@ export default function VisitesList(props: {
           />
           <CompteurResultats affiches={lignes.length} total={base.length} />
           <span style={{ flex: 1 }} />
+          <button
+            type="button"
+            className={rapport ? "btn-sm" : "btn-sm btn-ghost"}
+            style={{ margin: 0, width: "auto", color: rapport ? undefined : "var(--text)" }}
+            aria-pressed={rapport}
+            onClick={() => {
+              if (!rapport && !statut) setStatut("retard");
+              setRapport(!rapport);
+            }}
+          >
+            Rapport
+          </button>
+          <button
+            type="button"
+            className="btn-sm btn-ghost"
+            style={{ margin: 0, width: "auto", color: "var(--text)" }}
+            onClick={() => window.print()}
+          >
+            PDF
+          </button>
           {props.lienParam && (
             <Link href="/admin/visites-param" className="navlink" prefetch={false}>
               Paramètres &rarr;
@@ -165,6 +241,30 @@ export default function VisitesList(props: {
               ))}
             </div>
           </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <span className="muted">Visite due :</span>
+            <select value={due ?? ""} onChange={(e) => setDue(e.target.value || null)} style={{ fontSize: 13, width: "auto" }}>
+              <option value="">Toutes</option>
+              {libellesDue.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
+            <span className="muted">Avec :</span>
+            <select
+              value={pro ?? ""}
+              onChange={(e) => setPro((e.target.value || null) as GroupePro | null)}
+              style={{ fontSize: 13, width: "auto" }}
+            >
+              <option value="">Tous</option>
+              {GROUPES_PRO.map((g) => (
+                <option key={g.code} value={g.code}>
+                  {g.libelle}
+                </option>
+              ))}
+            </select>
+          </div>
           <AtelierEquipeFiltres
             base="/visites"
             ateliers={props.ateliers}
@@ -175,7 +275,17 @@ export default function VisitesList(props: {
         </div>
       </div>
 
-      <div className="gridband scroll">
+      <div className="gridband scroll print-flow">
+        {rapport && (
+          <RapportVisites
+            tableau={tableau}
+            titre={statut ? LIBELLE_STATUT[statut] : "Tous statuts"}
+            regime={regime}
+            due={due}
+            pro={pro}
+            choisir={choisir}
+          />
+        )}
         <table className="pers-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr>
@@ -271,9 +381,9 @@ export default function VisitesList(props: {
                         ? `${fmtFr(l.prochaine.due)} · ${delaiTexte(l.prochaine.due, props.aujourdhui)} · ${l.prochaine.motif}`
                         : (l.prochaine?.motif ?? "—")}
                     </span>
-                    {l.prochainPro && (
+                    {l.prochainsPros.length > 0 && (
                       <span className="muted" style={{ display: "block", fontSize: 11.5 }}>
-                        avec {libelleProfessionnel(l.prochainPro).toLowerCase()}
+                        avec {libelleProfessionnels(l.prochainsPros).toLowerCase()}
                       </span>
                     )}
                   </td>
@@ -344,5 +454,133 @@ function Th({ children, w }: { children: React.ReactNode; w: number }) {
     >
       {children}
     </th>
+  );
+}
+
+function compterPro(lignes: LigneVisite[]): Record<GroupePro, number> {
+  const c: Record<GroupePro, number> = { medecin: 0, infirmier: 0, les_deux: 0, aucun: 0 };
+  for (const l of lignes) c[groupePro(l.prochainsPros)]++;
+  return c;
+}
+
+type Tableau = {
+  lignes: {
+    regime: RegimeCode;
+    total: number;
+    parPro: Record<GroupePro, number>;
+    dues: { due: string; total: number; parPro: Record<GroupePro, number> }[];
+  }[];
+  total: number;
+  parPro: Record<GroupePro, number>;
+};
+
+// Tableau croisé du rapport : régime puis visite due en lignes, professionnel
+// prévu en colonnes. Chaque nombre filtre la liste en dessous (un second clic
+// retire le filtre) ; la case du filtre courant est surlignée.
+function RapportVisites({
+  tableau,
+  titre,
+  regime,
+  due,
+  pro,
+  choisir,
+}: {
+  tableau: Tableau;
+  titre: string;
+  regime: RegimeCode | null;
+  due: string | null;
+  pro: GroupePro | null;
+  choisir: (r: RegimeCode | null, d: string | null, p: GroupePro | null) => void;
+}) {
+  const td: React.CSSProperties = {
+    padding: "4px 10px",
+    borderBottom: "1px solid #eceef1",
+    textAlign: "right",
+    fontVariantNumeric: "tabular-nums",
+  };
+  const cellule = (n: number, r: RegimeCode | null, d: string | null, p: GroupePro | null, fort = false) => {
+    const actif = regime === r && due === d && pro === p;
+    return (
+      <td style={{ ...td, background: actif ? "#dbeafe" : undefined }}>
+        {n === 0 ? (
+          <span className="muted">·</span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => (actif ? choisir(null, null, null) : choisir(r, d, p))}
+            title="Filtrer la liste"
+            style={{
+              margin: 0,
+              padding: "0 4px",
+              width: "auto",
+              background: "none",
+              border: 0,
+              color: "var(--primary)",
+              fontWeight: fort ? 700 : 600,
+              fontSize: 13,
+              cursor: "pointer",
+            }}
+          >
+            {n}
+          </button>
+        )}
+      </td>
+    );
+  };
+  return (
+    <div className="card" style={{ margin: "0 0 12px", padding: "10px 14px", breakInside: "avoid" }}>
+      <h2 style={{ margin: "0 0 6px", fontSize: 15 }}>
+        Rapport — {titre}
+        <span className="muted noprint" style={{ fontSize: 12, fontWeight: 400, marginLeft: 8 }}>
+          par régime, visite due et professionnel prévu · un clic sur un nombre filtre la liste
+        </span>
+      </h2>
+      {tableau.total === 0 ? (
+        <p className="muted" style={{ margin: 0, fontSize: 13 }}>Personne pour ce statut.</p>
+      ) : (
+        <table style={{ borderCollapse: "collapse", fontSize: 13, minWidth: 760 }}>
+          <thead>
+            <tr>
+              <th style={{ textAlign: "left", padding: "4px 10px", fontSize: 12 }}>Régime · visite due</th>
+              {GROUPES_PRO.map((g) => (
+                <th key={g.code} style={{ textAlign: "right", padding: "4px 10px", fontSize: 12, width: 140 }}>
+                  {g.libelle}
+                </th>
+              ))}
+              <th style={{ textAlign: "right", padding: "4px 10px", fontSize: 12, width: 80 }}>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {tableau.lignes.map((l) => (
+              <Fragment key={l.regime}>
+                <tr style={{ background: "#f8fafc" }}>
+                  <td style={{ ...td, textAlign: "left", fontWeight: 700 }}>Suivi {libelleRegime(l.regime).toLowerCase()}</td>
+                  {GROUPES_PRO.map((g) => (
+                    <Fragment key={g.code}>{cellule(l.parPro[g.code], l.regime, null, g.code, true)}</Fragment>
+                  ))}
+                  {cellule(l.total, l.regime, null, null, true)}
+                </tr>
+                {l.dues.map((d) => (
+                  <tr key={d.due}>
+                    <td style={{ ...td, textAlign: "left", paddingLeft: 26 }}>{d.due}</td>
+                    {GROUPES_PRO.map((g) => (
+                      <Fragment key={g.code}>{cellule(d.parPro[g.code], l.regime, d.due, g.code)}</Fragment>
+                    ))}
+                    {cellule(d.total, l.regime, d.due, null)}
+                  </tr>
+                ))}
+              </Fragment>
+            ))}
+            <tr>
+              <td style={{ ...td, textAlign: "left", fontWeight: 700, borderTop: "2px solid var(--border)" }}>Total</td>
+              {GROUPES_PRO.map((g) => (
+                <Fragment key={g.code}>{cellule(tableau.parPro[g.code], null, null, g.code, true)}</Fragment>
+              ))}
+              {cellule(tableau.total, null, null, null, true)}
+            </tr>
+          </tbody>
+        </table>
+      )}
+    </div>
   );
 }

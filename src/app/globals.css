@@ -971,11 +971,15 @@ select.flat {
   font-weight: 600;
 }
 
+/* Bloc visible seulement sur papier (titre et filtres d'un rapport d'écran). */
+.printonly { display: none; }
+
 @media print {
   .noprint,
   .appheader {
     display: none !important;
   }
+  .printonly { display: block !important; }
   .card {
     border: none;
     padding: 0;

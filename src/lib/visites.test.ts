@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   REGIMES_DEFAUT,
+  groupePro,
+  libelleProfessionnels,
   MAX_LEGAL,
   PARAMETRES_DEFAUT,
   lireParametres,
@@ -458,5 +460,20 @@ describe("garde-fou réglementaire", () => {
       "periodique",
     ]);
     expect(v?.date_visite).toBe("2025-01-01");
+  });
+});
+
+describe("professionnels (médecin / infirmière)", () => {
+  it("libellé : un, les deux, ou vide", () => {
+    expect(libelleProfessionnels(["medecin"])).toBe("Médecin");
+    expect(libelleProfessionnels(["infirmier", "medecin"])).toBe("Médecin + infirmière");
+    expect(libelleProfessionnels([])).toBe("—");
+    expect(libelleProfessionnels([], "non précisé")).toBe("non précisé");
+  });
+  it("groupe exclusif du rapport", () => {
+    expect(groupePro(["medecin"])).toBe("medecin");
+    expect(groupePro(["infirmier"])).toBe("infirmier");
+    expect(groupePro(["infirmier", "medecin"])).toBe("les_deux");
+    expect(groupePro([])).toBe("aucun");
   });
 });

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { moduleWriteGuard } from "@/lib/permissions";
 import { verifierIdSite } from "@/lib/verifier-site";
-import { AVIS, PROFESSIONNELS, estRegime } from "@/lib/visites";
+import { AVIS, estProfessionnel, estRegime } from "@/lib/visites";
 
 // POST /api/visites { op, ... }
 //
@@ -22,8 +22,8 @@ const dateOuNull = (v: unknown): string | null => {
   return /^\d{4}-\d{2}-\d{2}$/.test(t) ? t : null;
 };
 const AVIS_CODES = AVIS.map((a) => a.code) as string[];
-const PRO_CODES = PROFESSIONNELS.map((p) => p.code) as string[];
-const proOuNull = (v: unknown): string | null => (PRO_CODES.includes(s(v)) ? s(v) : null);
+// Professionnels cochés : sous-ensemble de {medecin, infirmier}, sans doublon.
+const pros = (v: unknown): string[] => (Array.isArray(v) ? [...new Set(v.map(s).filter(estProfessionnel))] : []);
 
 export async function POST(req: NextRequest) {
   const garde = await moduleWriteGuard("visites");
@@ -58,8 +58,8 @@ export async function POST(req: NextRequest) {
       date_visite: dateOuNull(body.date_visite),
       avis: AVIS_CODES.includes(avisBrut) ? avisBrut : null,
       prochaine_date: dateOuNull(body.prochaine_date),
-      professionnel: proOuNull(body.professionnel),
-      prochain_professionnel: proOuNull(body.prochain_professionnel),
+      professionnels: pros(body.professionnels),
+      prochains_professionnels: pros(body.prochains_professionnels),
       commentaire: s(body.commentaire) || null,
       site_id,
     };

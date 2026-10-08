@@ -14,7 +14,7 @@ import {
   delaiTexte,
   fmtFr,
   libelleAvis,
-  libelleProfessionnel,
+  libelleProfessionnels,
   libelleRegime,
   type RegimeCode,
 } from "@/lib/visites";
@@ -60,8 +60,8 @@ export default function FicheVisite({
     date_visite: null,
     avis: null,
     prochaine_date: null,
-    professionnel: null,
-    prochain_professionnel: null,
+    professionnels: [],
+    prochains_professionnels: [],
     commentaire: null,
     anci: [],
   });
@@ -191,9 +191,9 @@ export default function FicheVisite({
                     ? `${fmtFr(ligne.prochaine.due)} · ${delaiTexte(ligne.prochaine.due, aujourdhui)} · ${ligne.prochaine.motif}`
                     : ligne.prochaine.motif}
                 </span>
-                {ligne.prochainPro && (
+                {ligne.prochainsPros.length > 0 && (
                   <span style={{ display: "block", fontSize: 12.5, marginTop: 3 }}>
-                    À voir : <strong>{libelleProfessionnel(ligne.prochainPro)}</strong>
+                    Avec : <strong>{libelleProfessionnels(ligne.prochainsPros)}</strong>
                   </span>
                 )}
               </p>
@@ -303,22 +303,12 @@ export default function FicheVisite({
                   style={champ}
                 />
               </label>
-              <label style={{ fontSize: 12 }}>
-                Avec
-                <select
-                  value={saisie.professionnel ?? ""}
-                  disabled={!canEdit}
-                  onChange={(e) => setEdite({ ...saisie, professionnel: e.target.value || null })}
-                  style={champ}
-                >
-                  <option value="">—</option>
-                  {PROFESSIONNELS.map((p) => (
-                    <option key={p.code} value={p.code}>
-                      {p.libelle}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <CasesPro
+                libelle="Avec"
+                valeurs={saisie.professionnels}
+                disabled={!canEdit}
+                onChange={(v) => setEdite({ ...saisie, professionnels: v })}
+              />
               <label style={{ fontSize: 12 }}>
                 Avis rendu
                 <select
@@ -345,22 +335,12 @@ export default function FicheVisite({
                   style={champ}
                 />
               </label>
-              <label style={{ fontSize: 12 }}>
-                Prochaine visite avec
-                <select
-                  value={saisie.prochain_professionnel ?? ""}
-                  disabled={!canEdit}
-                  onChange={(e) => setEdite({ ...saisie, prochain_professionnel: e.target.value || null })}
-                  style={champ}
-                >
-                  <option value="">—</option>
-                  {PROFESSIONNELS.map((p) => (
-                    <option key={p.code} value={p.code}>
-                      {p.libelle}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <CasesPro
+                libelle="Prochaine visite avec"
+                valeurs={saisie.prochains_professionnels}
+                disabled={!canEdit}
+                onChange={(v) => setEdite({ ...saisie, prochains_professionnels: v })}
+              />
               <label style={{ fontSize: 12, gridColumn: "span 2" }}>
                 Commentaire (logistique seulement)
                 <input
@@ -448,10 +428,10 @@ export default function FicheVisite({
                       )}
                     </td>
                     <td style={{ padding: "3px 4px" }}>
-                      {libelleProfessionnel(v.professionnel)}
-                      {v.prochain_professionnel && (
+                      {libelleProfessionnels(v.professionnels)}
+                      {v.prochains_professionnels.length > 0 && (
                         <span className="muted" style={{ display: "block", fontSize: 11 }}>
-                          prochaine : {libelleProfessionnel(v.prochain_professionnel).toLowerCase()}
+                          prochaine : {libelleProfessionnels(v.prochains_professionnels).toLowerCase()}
                         </span>
                       )}
                     </td>
@@ -493,6 +473,41 @@ export default function FicheVisite({
         </div>
       </div>
     </ModaleDeplacable>
+  );
+}
+
+// Médecin / infirmière : cases à cocher, les deux possibles.
+function CasesPro({
+  libelle,
+  valeurs,
+  disabled,
+  onChange,
+}: {
+  libelle: string;
+  valeurs: string[];
+  disabled: boolean;
+  onChange: (v: string[]) => void;
+}) {
+  return (
+    <div style={{ fontSize: 12 }}>
+      {libelle}
+      <div style={{ display: "flex", gap: 14, alignItems: "center", minHeight: 28 }}>
+        {PROFESSIONNELS.map((p) => (
+          <label key={p.code} style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+            <input
+              type="checkbox"
+              checked={valeurs.includes(p.code)}
+              disabled={disabled}
+              onChange={(e) =>
+                onChange(e.target.checked ? [...valeurs, p.code] : valeurs.filter((x) => x !== p.code))
+              }
+              style={{ width: "auto", margin: 0 }}
+            />
+            {p.libelle}
+          </label>
+        ))}
+      </div>
+    </div>
   );
 }
 

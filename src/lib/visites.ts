@@ -91,14 +91,38 @@ export const AVIS: { code: Avis; libelle: string }[] = [
 ];
 export const libelleAvis = (a: string | null): string => AVIS.find((x) => x.code === a)?.libelle ?? "—";
 
-// Qui reçoit la personne : information d'organisation, bornée par un CHECK (0079).
+// Qui reçoit la personne : information d'organisation, bornée par un CHECK
+// (0081, sous-ensemble de {medecin, infirmier} — les deux à la fois possibles).
 export type Professionnel = "medecin" | "infirmier";
 export const PROFESSIONNELS: { code: Professionnel; libelle: string }[] = [
-  { code: "medecin", libelle: "Médecin du travail" },
-  { code: "infirmier", libelle: "Infirmier(ère)" },
+  { code: "medecin", libelle: "Médecin" },
+  { code: "infirmier", libelle: "Infirmière" },
 ];
-export const libelleProfessionnel = (p: string | null): string =>
-  PROFESSIONNELS.find((x) => x.code === p)?.libelle ?? "—";
+export const estProfessionnel = (v: string): v is Professionnel => PROFESSIONNELS.some((p) => p.code === v);
+
+/** « Médecin », « Infirmière », « Médecin + infirmière », ou `vide`. */
+export function libelleProfessionnels(codes: readonly string[], vide = "—"): string {
+  const libs = PROFESSIONNELS.filter((p) => codes.includes(p.code)).map((p) => p.libelle);
+  if (libs.length === 0) return vide;
+  return libs.map((l, i) => (i === 0 ? l : l.toLowerCase())).join(" + ");
+}
+
+/**
+ * Regroupement exclusif pour le rapport du Suivi : chaque personne tombe dans
+ * une seule colonne (les deux cochés = « Médecin + infirmière »).
+ */
+export type GroupePro = "medecin" | "infirmier" | "les_deux" | "aucun";
+export const GROUPES_PRO: { code: GroupePro; libelle: string }[] = [
+  { code: "medecin", libelle: "Médecin" },
+  { code: "infirmier", libelle: "Infirmière" },
+  { code: "les_deux", libelle: "Médecin + infirmière" },
+  { code: "aucun", libelle: "Non précisé" },
+];
+export function groupePro(codes: readonly string[]): GroupePro {
+  const m = codes.includes("medecin");
+  const i = codes.includes("infirmier");
+  return m && i ? "les_deux" : m ? "medecin" : i ? "infirmier" : "aucun";
+}
 
 // --- Réglages du module ------------------------------------------------------
 // Les DÉFAUTS vivent ici : une clé absente de `visite_parametre` n'est pas une
