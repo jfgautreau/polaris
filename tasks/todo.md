@@ -75,6 +75,11 @@ Spécification complète : `tasks/planning-par-poste.md`.
 - [ ] Rappel « rendez-vous de liaison » à 30 jours d'arrêt (L1226-1-3) : proposé dans la
       maquette, non codé.
 - [ ] Guide utilisateur (`public/guide.html`) : section Visites médicales à écrire.
+- [x] 0079 : professionnel vu / attendu (médecin, infirmier) sur chaque visite.
+- [x] 0080 : poste à risque → plusieurs motifs réglementaires et attestations
+      (`poste.suivi_motifs`, `anci_usages`).
+- [ ] **Supprimer `poste.suivi_motif` et `poste.anci_usage`** (dépréciés par 0080, plus
+      lus nulle part) dans une prochaine migration.
 
 ## Revue — Poste imprimable + colonnes de noms Placement (2026-09-16)
 - [x] **Migration `0073_poste_imprimable.sql` appliquée** (2026-09-17) dans le SQL Editor
