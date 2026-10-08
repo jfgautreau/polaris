@@ -32,7 +32,7 @@ export const H_DEPART = 365; // jours : horizon de vigilance sur les départs (v
 export const H_HAB = 90; // jours : horizon de vigilance sur les habilitations
 
 type Named = { id: string; nom: string; prenom: string; type_contrat: string; atelier_id: string | null; equipe_id: string | null };
-type LigneRow = { id: string; nom: string; atelier_id: string | null; poste: { id: string; nom: string; actif: boolean; categorie: string | null; remplacable: boolean; niveau_min_requis: number; objectif_polyvalence: number; objectif_cible: number }[] };
+type LigneRow = { id: string; nom: string; atelier_id: string | null; poste: { id: string; nom: string; actif: boolean; categorie: string | null; remplacable: boolean; niveau_min_requis: number; objectif_polyvalence: number; objectif_cible: number; zone_attente: boolean }[] };
 type Mat = { personne_id: string; poste_id: string; niveau_actuel: number; niveau_cible: number };
 type Pcr = { poste_id: string; competence_id: string; competence: { nom: string; duree_validite_mois: number | null } | null };
 type Pc = { personne_id: string; competence_id: string; date_obtention: string | null; date_expiration: string | null };
@@ -112,7 +112,7 @@ export async function chargerPolyvalenceCompetences(
 
   const [{ data: persD }, { data: lignesD }, matD, { data: pcrD }, { data: compD }, { data: atD }, contratD, ligneVal, posteVal, nbNiveaux] = await Promise.all([
     supabase.from("personne").select("id, nom, prenom, type_contrat, atelier_id, equipe_id").eq("statut", "ACTIF").order("nom").returns<Named[]>(),
-    supabase.from("ligne").select("id, nom, atelier_id, poste(id, nom, actif, categorie, remplacable, niveau_min_requis, objectif_polyvalence, objectif_cible)").eq("actif", true).order("nom").returns<LigneRow[]>(),
+    supabase.from("ligne").select("id, nom, atelier_id, poste(id, nom, actif, categorie, remplacable, niveau_min_requis, objectif_polyvalence, objectif_cible, zone_attente)").eq("actif", true).order("nom").returns<LigneRow[]>(),
     fetchAll<Mat>(() => supabase.from("matrice").select("personne_id, poste_id, niveau_actuel, niveau_cible").order("id").returns<Mat[]>()),
     supabase.from("poste_competence_requise").select("poste_id, competence_id, competence:competence_id(nom, duree_validite_mois)").returns<Pcr[]>(),
     supabase.from("competence").select("id, nom, a_recycler, duree_validite_mois").eq("actif", true).returns<Comp[]>(),
@@ -167,9 +167,10 @@ export async function chargerPolyvalenceCompetences(
   const matNiveau = new Map<string, number>();
   for (const r of matD) matNiveau.set(`${r.personne_id}:${r.poste_id}`, r.niveau_actuel);
 
-  // Postes du périmètre (filtre atelier via ligne.atelier_id).
+  // Postes du périmètre (filtre atelier via ligne.atelier_id). Les postes « en
+  // attente » (zone_attente, ex. CDT) sont hors matrice : exclus partout ici.
   const lignes = (lignesD ?? []).filter((l) => (!atelier || l.atelier_id === atelier) && actifLe(ligneVal.get(l.id), todayIsoRef));
-  const postes = lignes.flatMap((l) => (l.poste ?? []).filter((p) => p.actif && actifLe(posteVal.get(p.id), todayIsoRef)).map((p) => ({ id: p.id, nom: p.nom, ligne: l.nom, atelierId: l.atelier_id, atelierNom: l.atelier_id ? atelierNom.get(l.atelier_id) ?? "—" : "Sans service", categorie: p.categorie ?? "operateur", remplacable: p.remplacable !== false, min: p.niveau_min_requis ?? 0, besoinActuel: p.objectif_polyvalence ?? 0, besoinCible: p.objectif_cible ?? 0 })));
+  const postes = lignes.flatMap((l) => (l.poste ?? []).filter((p) => p.actif && !p.zone_attente && actifLe(posteVal.get(p.id), todayIsoRef)).map((p) => ({ id: p.id, nom: p.nom, ligne: l.nom, atelierId: l.atelier_id, atelierNom: l.atelier_id ? atelierNom.get(l.atelier_id) ?? "—" : "Sans service", categorie: p.categorie ?? "operateur", remplacable: p.remplacable !== false, min: p.niveau_min_requis ?? 0, besoinActuel: p.objectif_polyvalence ?? 0, besoinCible: p.objectif_cible ?? 0 })));
 
   // Répartition des niveaux ACTUELS des personnes actives, par poste (niv 1..N).
   const niveauxParPoste = new Map<string, number[]>();
@@ -271,7 +272,7 @@ export async function chargerPolyvalenceCompetences(
   for (const l of lignesD ?? []) {
     const sid = l.atelier_id;
     if (!sid) continue;
-    for (const p of l.poste ?? []) if (p.actif) (postesParService.get(sid) ?? postesParService.set(sid, []).get(sid)!).push({ id: p.id, min: p.niveau_min_requis ?? 0 });
+    for (const p of l.poste ?? []) if (p.actif && !p.zone_attente) (postesParService.get(sid) ?? postesParService.set(sid, []).get(sid)!).push({ id: p.id, min: p.niveau_min_requis ?? 0 });
   }
   // Polyvalence d'une personne = nb de postes de SON service tenables aujourd'hui.
   // Filtre équipe : la population EN COMPTE est bornée à l'équipe sélectionnée

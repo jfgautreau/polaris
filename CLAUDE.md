@@ -296,7 +296,10 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   `src/lib/planning-par-poste.ts`, spec `tasks/planning-par-poste.md`) : une rangée par place
   (attribution stable : n° de rotation > continuité > 1re place libre > surnombre), un seul quart,
   saisie au clic (candidats triés, `»` jusqu'à la fin de semaine, Remplacer / Retirer), postes
-  `zone_attente` (0077) repliés « N à répartir ».
+  `zone_attente` (0077) repliés « N à répartir ». Ces postes « en attente » sont **hors
+  matrice** : absents de la Matrice (colonnes, « sans compétence », Conducteurs), de son
+  bilan, du Cockpit, de Polyvalence & compétences et d'Assez de compétences ? (pas de la
+  Feuille de route).
 - **Placement** (`src/app/placement/`, droit `placement`) : plan par ligne → postes → cases
   numérotées, rangs en 1 à 3 colonnes (au-delà de 10 par colonne). Bascule Plan /
   Absences. `JourNav` (calendrier grisant les jours sans quart actif). Filtres de la liste

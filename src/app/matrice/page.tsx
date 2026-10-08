@@ -14,6 +14,7 @@ type PosteRow = {
   objectif_cible: number;
   ordre_affichage: number;
   niveau_min_requis: number;
+  zone_attente: boolean;
 };
 type LigneRow = { id: string; nom: string; atelier_id: string; ordre_affichage: number; poste: PosteRow[] };
 type Atelier = { id: string; nom: string };
@@ -44,7 +45,7 @@ export default async function MatricePage({
   // Lignes (+ postes) eventuellement filtrees par atelier
   let ligneQ = supabase
     .from("ligne")
-    .select("id, nom, atelier_id, ordre_affichage, poste(id, nom, actif, objectif_polyvalence, objectif_cible, ordre_affichage, niveau_min_requis)")
+    .select("id, nom, atelier_id, ordre_affichage, poste(id, nom, actif, objectif_polyvalence, objectif_cible, ordre_affichage, niveau_min_requis, zone_attente)")
     .eq("actif", true)
     .order("nom");
   if (sp.atelier) ligneQ = ligneQ.eq("atelier_id", sp.atelier);
@@ -101,8 +102,10 @@ export default async function MatricePage({
       ligneId: l.id,
       ligneNom: l.nom,
       ligneOrdre: l.ordre_affichage ?? 0,
+      // Postes « en attente » (zone_attente, ex. CDT) exclus : ce sont des zones de
+      // répartition du planning, pas des postes où l'on mesure une compétence.
       postes: [...(l.poste ?? [])]
-        .filter((p) => p.actif)
+        .filter((p) => p.actif && !p.zone_attente)
         .sort(byOrdre)
         .map((p) => ({
           id: p.id,
@@ -129,6 +132,8 @@ export default async function MatricePage({
   //  - filtre Conducteurs (?cond=1) : au moins une compétence (≥ 1) sur au moins
   //    un poste `categorie = 'conducteur'` actif — critère orthogonal au filtre
   //    atelier (« sait conduire », partout dans l'usine).
+  //  Les deux derniers ignorent les postes « en attente » (zone_attente), absents
+  //  de la matrice.
   const filtreConducteurs = sp.cond === "1";
   const persIds = personnes.map((p) => p.id);
   const [m, avecRows, condRows, typesAgence] = await Promise.all([
@@ -147,8 +152,9 @@ export default async function MatricePage({
       ? fetchAll<{ personne_id: string }>(() =>
           supabase
             .from("matrice")
-            .select("personne_id, poste!inner(actif)")
+            .select("personne_id, poste!inner(actif, zone_attente)")
             .eq("poste.actif", true)
+            .eq("poste.zone_attente", false)
             .gte("niveau_actuel", 1)
             .in("personne_id", persIds)
             .order("id")
@@ -159,9 +165,10 @@ export default async function MatricePage({
       ? fetchAll<{ personne_id: string }>(() =>
           supabase
             .from("matrice")
-            .select("personne_id, poste!inner(categorie, actif)")
+            .select("personne_id, poste!inner(categorie, actif, zone_attente)")
             .eq("poste.categorie", "conducteur")
             .eq("poste.actif", true)
+            .eq("poste.zone_attente", false)
             .gte("niveau_actuel", 1)
             .order("id")
             .returns<{ personne_id: string }[]>(),

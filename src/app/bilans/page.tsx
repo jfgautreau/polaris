@@ -21,7 +21,7 @@ type Personne = {
   equipe_id: string | null;
   sexe: string | null;
 };
-type LigneRow = { id: string; nom: string; poste: { id: string; nom: string; actif: boolean; remplacable: boolean }[] };
+type LigneRow = { id: string; nom: string; poste: { id: string; nom: string; actif: boolean; remplacable: boolean; zone_attente: boolean }[] };
 type Mat = { personne_id: string; poste_id: string };
 
 const fmtDate = (d: string | null) => (d ? d.split("-").reverse().join("/") : "—");
@@ -61,7 +61,7 @@ export default async function CockpitPage({
         .from("personne")
         .select("id, nom, prenom, statut, type_contrat, date_fin, equipe_id, sexe")
         .returns<Personne[]>(),
-      supabase.from("ligne").select("id, nom, poste(id, nom, actif, remplacable)").eq("actif", true).returns<LigneRow[]>(),
+      supabase.from("ligne").select("id, nom, poste(id, nom, actif, remplacable, zone_attente)").eq("actif", true).returns<LigneRow[]>(),
       chargerValidites(supabase, "ligne"),
       chargerValidites(supabase, "poste"),
       fetchAll<Mat>(() => supabase.from("matrice").select("personne_id, poste_id").gte("niveau_actuel", seuilCompetent).order("id").returns<Mat[]>()),
@@ -109,8 +109,9 @@ export default async function CockpitPage({
   // Postes fragiles : nb de personnes actives competentes (niveau >= seuil) par poste
   // PTNR (non remplaçable) exclus des postes fragiles / sans relève : un seul
   // titulaire par conception n'est pas une fragilité (cf. Compétences critiques).
+  // Postes « en attente » (zone_attente) exclus aussi : hors matrice.
   const postes = (lignesD ?? []).filter((l) => actifLe(ligneVal.get(l.id), todayIso)).flatMap((l) =>
-    (l.poste ?? []).filter((p) => p.actif && p.remplacable !== false && actifLe(posteVal.get(p.id), todayIso)).map((p) => ({ id: p.id, nom: p.nom, ligne: l.nom }))
+    (l.poste ?? []).filter((p) => p.actif && p.remplacable !== false && !p.zone_attente && actifLe(posteVal.get(p.id), todayIso)).map((p) => ({ id: p.id, nom: p.nom, ligne: l.nom }))
   );
   const compByPoste = new Map<string, Set<string>>();
   for (const r of matD) {

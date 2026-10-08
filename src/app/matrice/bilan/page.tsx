@@ -45,6 +45,8 @@ export default async function BilanPage({
     .from("poste")
     .select("id, nom, ligne_id, ligne:ligne_id(nom)")
     .eq("actif", true)
+    // Postes « en attente » (zone_attente) : hors matrice, donc hors bilan.
+    .eq("zone_attente", false)
     .order("nom");
   if (sp.ligne) {
     posteQ = posteQ.eq("ligne_id", sp.ligne);

@@ -93,6 +93,7 @@ type LigneRow = {
     niveau_min_requis: number;
     categorie: string | null;
     remplacable: boolean | null;
+    zone_attente: boolean;
     ordre_affichage: number | null;
   }[];
 };
@@ -160,7 +161,7 @@ export async function chargerCouvertureConges(
     { data: tpP },
     { data: tpF },
   ] = await Promise.all([
-    supabase.from("ligne").select("id, nom, atelier_id, ordre_affichage, poste(id, nom, actif, effectif_requis, niveau_min_requis, categorie, remplacable, ordre_affichage)").eq("actif", true).returns<LigneRow[]>(),
+    supabase.from("ligne").select("id, nom, atelier_id, ordre_affichage, poste(id, nom, actif, effectif_requis, niveau_min_requis, categorie, remplacable, zone_attente, ordre_affichage)").eq("actif", true).returns<LigneRow[]>(),
     supabase.from("atelier").select("id, nom").eq("actif", true).order("nom").returns<{ id: string; nom: string }[]>(),
     supabase.from("personne").select("id, equipe_id").returns<{ id: string; equipe_id: string | null }[]>(),
     fetchAll<{ personne_id: string; date_debut: string | null; date_fin: string | null }>(() =>
@@ -195,7 +196,8 @@ export async function chargerCouvertureConges(
   // besoin. Le gate `poste_quart` par quart empêche tout besoin de journée fantôme
   // sur un poste posté (journée y est « – ») : rien n'est doublonné.
 
-  // Postes du besoin : actifs, remplaçables (PTNR exclus), et qui tournent avec un
+  // Postes du besoin : actifs, remplaçables (PTNR exclus), hors postes « en
+  // attente » (zone_attente, ex. CDT : hors matrice), et qui tournent avec un
   // effectif > 0 sur AU MOINS UN quart (effectif par quart, cf. src/lib/poste-quart.ts).
   // `posteEff` = effectif par défaut du poste, repli du helper.
   type PosteBesoin = { id: string; nom: string; categorie: string; ligneId: string; atelierId: string; atelierNom: string; posteEff: number; ligneOrdre: number; posteOrdre: number };
@@ -207,7 +209,7 @@ export async function chargerCouvertureConges(
     for (const p of l.poste ?? []) {
       if (!p.actif) continue;
       posteMin.set(p.id, p.niveau_min_requis);
-      if (p.remplacable === false) continue;
+      if (p.remplacable === false || p.zone_attente) continue;
       const posteEff = p.effectif_requis ?? 0;
       const aBesoin = quarts.some((q) => { const e = etatQuart(pq, p.id, q, posteEff); return e.tourne && e.effectif > 0; });
       if (!aBesoin) continue;

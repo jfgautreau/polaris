@@ -533,7 +533,7 @@ export default function ReferentielEditor({
                     <th>Catégorie</th>
                     <th title="PTR = remplaçable. PTNR = Position de Travail Non Remplaçable (un seul titulaire par conception). Un PTNR est exclu des rapports de fragilité/relève et isolé dans les compétences critiques.">Rempl.</th>
                     <th title="Le poste figure-t-il sur les feuilles de placement imprimées (PDF / PDF Manager) ? « Non » masque à l'impression les postes qui ne servent qu'à construire le planning ; ils restent utilisables à l'écran.">Impr.</th>
-                    <th title="Zone d'attente : poste de pré-affectation (ex. CDT) où le pré-remplissage range les opérateurs d'un service avant que les chefs d'équipe les répartissent. Dans la vue « Par poste » du Planning, il s'affiche replié « N à répartir » et ses occupants sont proposés en tête.">Attente</th>
+                    <th title="Zone d'attente : poste de pré-affectation (ex. CDT) où le pré-remplissage range les opérateurs d'un service avant que les chefs d'équipe les répartissent. Dans la vue « Par poste » du Planning, il s'affiche replié « N à répartir » et ses occupants sont proposés en tête. Hors de la matrice de compétences et des bilans de compétence.">Attente</th>
                     <th>Diff.</th>
                     <th>Niv. min</th>
                     <th title="N° d'affichage du poste sur les TV / PDF (croissant)">N° aff.</th>
