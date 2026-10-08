@@ -2,14 +2,15 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAdminClient } from "@/lib/supabase-server";
 import { getCurrentProfile } from "@/lib/current-user";
-import { canWriteModule } from "@/lib/permissions";
+import { canWriteModule, canWritePlacementData } from "@/lib/permissions";
+import { motifInactivite } from "@/lib/personne-statut";
 import { normaliseNom, normalisePrenom } from "@/lib/noms";
 import { messageErreur } from "@/lib/erreurs";
 import { verifierFksSite, verifierIdSite } from "@/lib/verifier-site";
 
 // POST /api/personnel { op, ... }
 // Saisie inline du personnel. Ecriture admin (RLS personne).
-// Ops : create | update | refresh-statuts
+// Ops : create | update | refresh-statuts | hors-contrat-list | hors-contrat-retirer
 //       | periode-list | periode-create | periode-update | periode-delete
 //
 // NOTE cycle de vie (migrations 0049 + 0050) : `statut` n'est plus editable
@@ -510,6 +511,60 @@ export async function POST(req: NextRequest) {
       if (error) throw error;
       const reflet = await syncPersonneFromPeriodes(supabase, personne_id, site_id);
       return NextResponse.json({ ok: true, personne: reflet });
+    }
+
+    // ----- Affectations à venir hors contrat (2026-10-08) -----
+    // Le pré-remplissage et les saisies refusent déjà un jour qu'aucun contrat ne
+    // couvre ; mais une fin de contrat saisie (ou avancée) APRÈS coup laisse en
+    // place les affectations déjà posées au-delà. Cycle de vie les liste et
+    // propose de les retirer, sur confirmation. Absences conservées (donnée RH) :
+    // seules les lignes poste / NT / TP sont concernées.
+    if (op === "hors-contrat-list" || op === "hors-contrat-retirer") {
+      const personne_id = s(body.personne_id);
+      if (!personne_id) return NextResponse.json({ error: "personne_id manquant" }, { status: 400 });
+      const today = new Date().toISOString().slice(0, 10);
+      const [{ data: pers, error: pErr }, { data: contrats, error: cErr }, { data: pls, error: plErr }, peutRetirer] = await Promise.all([
+        supabase.from("personne").select("statut").eq("id", personne_id).eq("site_id", site_id).maybeSingle<{ statut: string }>(),
+        supabase
+          .from("contrat_periode")
+          .select("date_debut, date_fin")
+          .eq("personne_id", personne_id)
+          .eq("site_id", site_id)
+          .returns<{ date_debut: string | null; date_fin: string | null }[]>(),
+        supabase
+          .from("placement")
+          .select("jour, tp, non_travaille, poste:poste_id(nom)")
+          .eq("personne_id", personne_id)
+          .eq("site_id", site_id)
+          .gte("jour", today)
+          .is("motif_absence_id", null)
+          .is("absence_id", null)
+          .order("jour")
+          .returns<{ jour: string; tp: boolean; non_travaille: boolean; poste: { nom: string } | null }[]>(),
+        canWritePlacementData(profile.role),
+      ]);
+      if (pErr) throw pErr;
+      if (cErr) throw cErr;
+      if (plErr) throw plErr;
+      if (!pers) return NextResponse.json({ error: "Personne introuvable" }, { status: 404 });
+      const lignes = (pls ?? [])
+        .filter((p) => motifInactivite(pers.statut, contrats ?? [], p.jour) !== null)
+        .map((p) => ({ jour: p.jour, quoi: p.tp ? "TP" : p.non_travaille ? "NT" : p.poste?.nom ?? "poste" }));
+      if (op === "hors-contrat-list") return NextResponse.json({ ok: true, lignes, peutRetirer });
+
+      if (!peutRetirer) return NextResponse.json({ error: "Retrait réservé aux droits Planning ou Placement." }, { status: 403 });
+      if (!lignes.length) return NextResponse.json({ ok: true, retires: 0 });
+      const { data: suppr, error: dErr } = await supabase
+        .from("placement")
+        .delete()
+        .eq("personne_id", personne_id)
+        .eq("site_id", site_id)
+        .in("jour", lignes.map((l) => l.jour))
+        .is("motif_absence_id", null)
+        .is("absence_id", null)
+        .select("jour");
+      if (dErr) throw dErr;
+      return NextResponse.json({ ok: true, retires: suppr?.length ?? 0 });
     }
 
     if (op === "tp") {

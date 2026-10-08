@@ -179,6 +179,9 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
 - **Personne partie / hors effectif** (`motifInactivite`) : aucune affectation un jour
   qu'aucun contrat ne couvre (sans contrat : statut PARTI). 422 (`refusInactivite`) ;
   `/copy` compte `inactives`. **Retirer** une affectation reste toujours permis.
+  Fin de contrat saisie **après** coup : Cycle de vie liste les affectations à venir hors
+  contrat (poste / NT / TP, absences gardées) et propose de les retirer sur confirmation
+  (`/api/personnel` ops `hors-contrat-list` / `hors-contrat-retirer`, droit Planning ou Placement).
 - **Pré-remplissage « TP + pré-affectation »** (bouton par semaine du Planning,
   `/api/placement/prefill`) : TP matérialisés **puis** postes fixes, lundi→vendredi, sans
   jamais écraser (`ignoreDuplicates`). Quart d'un titulaire = `quartPourPosteFixe` :

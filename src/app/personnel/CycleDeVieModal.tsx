@@ -62,10 +62,37 @@ export default function CycleDeVieModal({
     { date_debut: string | null; date_fin: string | null; motif_fin: string | null }[]
   >([]);
 
+  // Affectations à venir qu'aucun contrat ne couvre plus (fin de contrat saisie
+  // ou avancée après le pré-remplissage) : signalées, retirées sur confirmation.
+  const [horsContrat, setHorsContrat] = useState<{ lignes: { jour: string; quoi: string }[]; peutRetirer: boolean }>({ lignes: [], peutRetirer: false });
+  const [confirmerRetrait, setConfirmerRetrait] = useState(false);
+  const [retraitMsg, setRetraitMsg] = useState<string | null>(null);
+  const chargerHorsContrat = () =>
+    fetch("/api/personnel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ op: "hors-contrat-list", personne_id: personne.id }),
+    })
+      .then((r) => r.json())
+      .then((j) => { if (j.ok) setHorsContrat({ lignes: j.lignes ?? [], peutRetirer: !!j.peutRetirer }); })
+      .catch(() => {});
+
+  async function retirerHorsContrat() {
+    setConfirmerRetrait(false);
+    const r = await fetch("/api/personnel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ op: "hors-contrat-retirer", personne_id: personne.id }),
+    }).catch(() => null);
+    const j = r ? await r.json().catch(() => ({})) : {};
+    setRetraitMsg(r?.ok ? `${j.retires ?? 0} affectation(s) retirée(s).` : j.error ?? "Retrait impossible (réseau).");
+    chargerHorsContrat();
+  }
+
   // Rafraichissement de la liste locale de contrats : sert a la synthese
   // (dates derivees) et a la detection des trous. Rechargee a chaque
   // modification (via onSyncPeriode ci-dessous).
-  const chargerPeriodes = () =>
+  const chargerPeriodes = () => {
     fetch("/api/personnel", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -74,6 +101,8 @@ export default function CycleDeVieModal({
       .then((r) => r.json())
       .then((j) => setPeriodes(j.rows ?? []))
       .catch(() => {});
+    chargerHorsContrat();
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -84,6 +113,14 @@ export default function CycleDeVieModal({
     })
       .then((r) => r.json())
       .then((j) => { if (!cancelled) setPeriodes(j.rows ?? []); })
+      .catch(() => {});
+    fetch("/api/personnel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ op: "hors-contrat-list", personne_id: personne.id }),
+    })
+      .then((r) => r.json())
+      .then((j) => { if (!cancelled && j.ok) setHorsContrat({ lignes: j.lignes ?? [], peutRetirer: !!j.peutRetirer }); })
       .catch(() => {});
     return () => { cancelled = true; };
   }, [personne.id]);
@@ -186,6 +223,30 @@ export default function CycleDeVieModal({
           ))}
           . La personne ne sera pas visible au planning ces jours-là.
         </div>
+      )}
+      {horsContrat.lignes.length > 0 && (
+        <div style={{ background: "#fee2e2", color: "#7f1d1d", border: "1px solid #fecaca", borderRadius: 6, padding: "6px 10px", fontSize: 13, marginBottom: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <span>
+            ⚠ <strong>{horsContrat.lignes.length} affectation{horsContrat.lignes.length > 1 ? "s" : ""} hors contrat</strong> déjà posée{horsContrat.lignes.length > 1 ? "s" : ""} :{" "}
+            {horsContrat.lignes.map((l) => `${fmt(l.jour)} (${l.quoi})`).join(", ")}.
+          </span>
+          {horsContrat.peutRetirer && !confirmerRetrait && (
+            <button type="button" className="btn-sm" style={{ width: "auto", margin: 0 }} onClick={() => { setRetraitMsg(null); setConfirmerRetrait(true); }}>
+              Retirer…
+            </button>
+          )}
+          {horsContrat.peutRetirer && confirmerRetrait && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              Retirer {horsContrat.lignes.length > 1 ? `ces ${horsContrat.lignes.length} affectations` : "cette affectation"} du planning ?
+              <button type="button" className="btn-sm" style={{ width: "auto", margin: 0, background: "#b91c1c" }} onClick={retirerHorsContrat}>Oui, retirer</button>
+              <button type="button" className="btn-sm btn-ghost" style={{ width: "auto", margin: 0, color: "#7f1d1d" }} onClick={() => setConfirmerRetrait(false)}>Annuler</button>
+            </span>
+          )}
+          {!horsContrat.peutRetirer && <span style={{ fontSize: 12 }}>À retirer au Planning (droit Planning ou Placement).</span>}
+        </div>
+      )}
+      {retraitMsg && (
+        <div style={{ fontSize: 13, marginBottom: 10, color: "var(--muted)" }}>{retraitMsg}</div>
       )}
       <PeriodesEditor personneId={personne.id} bare onSync={onSyncPeriode} />
     </ModaleDeplacable>
