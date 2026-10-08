@@ -192,21 +192,30 @@ export default function VisitesList(props: {
                   onClick={() => setStatut(actif ? null : s)}
                   aria-pressed={actif}
                   style={{
+                    // Tuile : `width: auto` annule le `width: 100%` global des boutons,
+                    // qui empilait les cinq compteurs les uns sous les autres.
+                    flex: "0 0 auto",
+                    width: "auto",
+                    minWidth: 118,
                     display: "flex",
-                    alignItems: "baseline",
-                    gap: 8,
-                    background: "#fff",
+                    flexDirection: "column",
+                    alignItems: "flex-start",
+                    gap: 2,
+                    background: actif ? c.bg : "#fff",
                     color: "var(--text)",
-                    border: `1px solid ${actif ? "var(--primary)" : "var(--border)"}`,
-                    boxShadow: actif ? "inset 0 0 0 1px var(--primary)" : "none",
+                    border: `1px solid ${actif ? c.fg : "var(--border)"}`,
+                    borderLeft: `4px solid ${c.fg}`,
+                    boxShadow: actif ? `inset 0 0 0 1px ${c.fg}` : "none",
                     borderRadius: 8,
                     padding: "6px 12px",
                     margin: 0,
-                    fontSize: 13,
+                    fontSize: 12.5,
+                    lineHeight: 1.2,
+                    textAlign: "left",
                     cursor: "pointer",
                   }}
                 >
-                  <b style={{ fontSize: 19, color: c.fg, fontVariantNumeric: "tabular-nums" }}>{n}</b>
+                  <b style={{ fontSize: 22, color: c.fg, fontVariantNumeric: "tabular-nums" }}>{n}</b>
                   {LIBELLE_STATUT[s]}
                 </button>
               );
