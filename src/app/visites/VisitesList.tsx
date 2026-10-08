@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useMemo, useRef, useState } from "react";
 import AtelierEquipeFiltres from "@/components/AtelierEquipeFiltres";
 import CompteurResultats from "@/components/CompteurResultats";
 import FicheVisite from "./FicheVisite";
@@ -32,6 +32,21 @@ const REGIMES: RegimeCode[] = ["renforce", "adapte", "simple"];
 const SANS_ECHEANCE = "Aucune échéance calculable";
 const dueDe = (l: LigneVisite) => l.prochaine?.libelle ?? SANS_ECHEANCE;
 
+// Paramètres d'URL des filtres client (statut, régime, visite due, avec, rapport).
+// Ceux de service / équipe passent par le serveur (AtelierEquipeFiltres), qui
+// recopie ceux-ci pour ne pas les perdre.
+const PARAMS_FILTRES_VISITES = ["search", "statut", "regime", "due", "avec", "rapport"];
+
+function ecrireUrl(patch: Record<string, string>) {
+  const p = new URLSearchParams(window.location.search);
+  for (const [k, v] of Object.entries(patch)) {
+    if (v) p.set(k, v);
+    else p.delete(k);
+  }
+  const qs = p.toString();
+  window.history.replaceState(null, "", qs ? `${window.location.pathname}?${qs}` : window.location.pathname);
+}
+
 export default function VisitesList(props: {
   lignes: LigneVisite[];
   displayedIds: string[];
@@ -46,15 +61,53 @@ export default function VisitesList(props: {
   atelier: string;
   equipe: string;
   recherche: string;
+  filtresUrl: { statut: string; regime: string; due: string; avec: string; rapport: string };
   canEdit: boolean;
   lienParam: boolean;
 }) {
-  const [q, setQ] = useState(props.recherche);
-  const [statut, setStatut] = useState<StatutVisite | null>(null);
-  const [regime, setRegime] = useState<RegimeCode | null>(null);
-  const [due, setDue] = useState<string | null>(null);
-  const [pro, setPro] = useState<GroupePro | null>(null);
-  const [rapport, setRapport] = useState(false);
+  // Filtres portés par l'URL (lien partageable, survivent au rechargement).
+  // Lecture validée au montage ; écriture sans aller-retour serveur par
+  // history.replaceState (même motif que le Placement).
+  const u = props.filtresUrl;
+  const [q, setQState] = useState(props.recherche);
+  const [statut, setStatutState] = useState<StatutVisite | null>(
+    ORDRE_STATUTS.includes(u.statut as StatutVisite) ? (u.statut as StatutVisite) : null,
+  );
+  const [regime, setRegimeState] = useState<RegimeCode | null>(
+    REGIMES.includes(u.regime as RegimeCode) ? (u.regime as RegimeCode) : null,
+  );
+  const [due, setDueState] = useState<string | null>(u.due || null);
+  const [pro, setProState] = useState<GroupePro | null>(
+    GROUPES_PRO.some((g) => g.code === u.avec) ? (u.avec as GroupePro) : null,
+  );
+  const [rapport, setRapportState] = useState(u.rapport === "1");
+
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const setQ = (v: string) => {
+    setQState(v);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => ecrireUrl({ search: v.trim() }), 400);
+  };
+  const setStatut = (v: StatutVisite | null) => {
+    setStatutState(v);
+    ecrireUrl({ statut: v ?? "" });
+  };
+  const setRegime = (v: RegimeCode | null) => {
+    setRegimeState(v);
+    ecrireUrl({ regime: v ?? "" });
+  };
+  const setDue = (v: string | null) => {
+    setDueState(v);
+    ecrireUrl({ due: v ?? "" });
+  };
+  const setPro = (v: GroupePro | null) => {
+    setProState(v);
+    ecrireUrl({ avec: v ?? "" });
+  };
+  const setRapport = (v: boolean) => {
+    setRapportState(v);
+    ecrireUrl({ rapport: v ? "1" : "" });
+  };
   const [ouverte, setOuverte] = useState<string | null>(null);
 
   const affichables = useMemo(() => new Set(props.displayedIds), [props.displayedIds]);
@@ -280,6 +333,7 @@ export default function VisitesList(props: {
             equipes={props.equipes}
             atelier={props.atelier}
             equipe={props.equipe}
+            conserver={PARAMS_FILTRES_VISITES}
           />
         </div>
       </div>

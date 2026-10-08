@@ -14,12 +14,15 @@ export default function AtelierEquipeFiltres({
   equipes = [],
   atelier = "",
   equipe = "",
+  conserver = [],
 }: {
   base: string;
   ateliers?: Opt[];
   equipes?: Opt[];
   atelier?: string;
   equipe?: string;
+  /** Paramètres d'URL de l'écran à recopier (filtres côté client), sinon perdus. */
+  conserver?: string[];
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -27,7 +30,12 @@ export default function AtelierEquipeFiltres({
   function go(next: { atelier?: string; equipe?: string }) {
     const a = next.atelier ?? atelier;
     const e = next.equipe ?? equipe;
+    const actuels = new URLSearchParams(window.location.search);
     const params = new URLSearchParams();
+    for (const k of conserver) {
+      const v = actuels.get(k);
+      if (v) params.set(k, v);
+    }
     if (a) params.set("atelier", a);
     if (e) params.set("equipe", e);
     const qs = params.toString();

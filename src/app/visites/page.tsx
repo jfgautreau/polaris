@@ -18,7 +18,16 @@ import VisitesList from "./VisitesList";
 export default async function VisitesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ atelier?: string; equipe?: string; search?: string }>;
+  searchParams: Promise<{
+    atelier?: string;
+    equipe?: string;
+    search?: string;
+    statut?: string;
+    regime?: string;
+    due?: string;
+    avec?: string;
+    rapport?: string;
+  }>;
 }) {
   const { profile, perms } = await requireModule("visites", "read");
   const sp = await searchParams;
@@ -57,6 +66,13 @@ export default async function VisitesPage({
         atelier={sp.atelier ?? ""}
         equipe={sp.equipe ?? ""}
         recherche={sp.search ?? ""}
+        filtresUrl={{
+          statut: sp.statut ?? "",
+          regime: sp.regime ?? "",
+          due: sp.due ?? "",
+          avec: sp.avec ?? "",
+          rapport: sp.rapport ?? "",
+        }}
         canEdit={canWrite(perms, "visites")}
         lienParam={canRead(perms, "visites_param")}
       />
