@@ -42,6 +42,8 @@ export type VisiteRow = {
   date_visite: string | null;
   avis: string | null;
   prochaine_date: string | null;
+  professionnel: string | null;
+  prochain_professionnel: string | null;
   commentaire: string | null;
   anci: string[];
 };
@@ -70,6 +72,8 @@ export type LigneVisite = Evaluation & {
   visites: VisiteRow[];
   contraintes: ContrainteRow[];
   ancisRequis: string[];
+  /** Qui la personne doit voir à la prochaine visite (code de `PROFESSIONNELS`). */
+  prochainPro: string | null;
 };
 
 export type DonneesEcran = {
@@ -183,7 +187,7 @@ export async function chargerVisites(
     fetchAll<VisiteBrute>(() =>
       supabase
         .from("visite")
-        .select("id, personne_id, type_id, date_rdv, date_visite, avis, prochaine_date, commentaire")
+        .select("id, personne_id, type_id, date_rdv, date_visite, avis, prochaine_date, professionnel, prochain_professionnel, commentaire")
         .eq("site_id", siteId)
         .order("id")
         .returns<VisiteBrute[]>(),
@@ -360,6 +364,16 @@ export async function chargerVisites(
       };
     });
 
+    // Qui voir la prochaine fois : le rendez-vous en attente le dit s'il est
+    // renseigné, sinon la dernière visite réalisée (« à revoir par… »).
+    const rdvEnAttente = visites
+      .filter((v) => !v.date_visite && v.date_rdv && v.professionnel)
+      .sort((a, b) => (a.date_rdv ?? "").localeCompare(b.date_rdv ?? ""))[0];
+    const derniereRealisee = visites
+      .filter((v) => v.date_visite)
+      .sort((a, b) => (b.date_visite ?? "").localeCompare(a.date_visite ?? ""))[0];
+    const prochainPro = rdvEnAttente?.professionnel ?? derniereRealisee?.prochain_professionnel ?? null;
+
     const periodes = grouperAbsences(
       (absencesPar.get(p.id) ?? []).map((a) => ({ jour: a.jour, motif_absence_id: a.motif_absence_id })),
     );
@@ -400,6 +414,7 @@ export async function chargerVisites(
       visites,
       contraintes: contraintesPar.get(p.id) ?? [],
       ancisRequis: [...ancisRequis],
+      prochainPro,
     };
   });
 
@@ -435,5 +450,7 @@ type VisiteBrute = {
   date_visite: string | null;
   avis: string | null;
   prochaine_date: string | null;
+  professionnel: string | null;
+  prochain_professionnel: string | null;
   commentaire: string | null;
 };

@@ -3,15 +3,18 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import ModaleDeplacable from "@/components/ModaleDeplacable";
+import { EditIcon, TrashIcon } from "@/components/icons";
 import type { LigneVisite, TypeVisite, UsageAnci, VisiteRow } from "@/lib/visites-data";
 import {
   AVIS,
   COULEUR_STATUT,
   LIBELLE_STATUT,
+  PROFESSIONNELS,
   REGIME_CODES,
   delaiTexte,
   fmtFr,
   libelleAvis,
+  libelleProfessionnel,
   libelleRegime,
   type RegimeCode,
 } from "@/lib/visites";
@@ -57,6 +60,8 @@ export default function FicheVisite({
     date_visite: null,
     avis: null,
     prochaine_date: null,
+    professionnel: null,
+    prochain_professionnel: null,
     commentaire: null,
     anci: [],
   });
@@ -186,6 +191,11 @@ export default function FicheVisite({
                     ? `${fmtFr(ligne.prochaine.due)} · ${delaiTexte(ligne.prochaine.due, aujourdhui)} · ${ligne.prochaine.motif}`
                     : ligne.prochaine.motif}
                 </span>
+                {ligne.prochainPro && (
+                  <span style={{ display: "block", fontSize: 12.5, marginTop: 3 }}>
+                    À voir : <strong>{libelleProfessionnel(ligne.prochainPro)}</strong>
+                  </span>
+                )}
               </p>
             ) : (
               <p className="muted" style={{ margin: 0, fontSize: 13 }}>Aucune échéance calculable.</p>
@@ -294,6 +304,22 @@ export default function FicheVisite({
                 />
               </label>
               <label style={{ fontSize: 12 }}>
+                Avec
+                <select
+                  value={saisie.professionnel ?? ""}
+                  disabled={!canEdit}
+                  onChange={(e) => setEdite({ ...saisie, professionnel: e.target.value || null })}
+                  style={champ}
+                >
+                  <option value="">—</option>
+                  {PROFESSIONNELS.map((p) => (
+                    <option key={p.code} value={p.code}>
+                      {p.libelle}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label style={{ fontSize: 12 }}>
                 Avis rendu
                 <select
                   value={saisie.avis ?? ""}
@@ -318,6 +344,22 @@ export default function FicheVisite({
                   onChange={(e) => setEdite({ ...saisie, prochaine_date: e.target.value || null })}
                   style={champ}
                 />
+              </label>
+              <label style={{ fontSize: 12 }}>
+                Prochaine visite avec
+                <select
+                  value={saisie.prochain_professionnel ?? ""}
+                  disabled={!canEdit}
+                  onChange={(e) => setEdite({ ...saisie, prochain_professionnel: e.target.value || null })}
+                  style={champ}
+                >
+                  <option value="">—</option>
+                  {PROFESSIONNELS.map((p) => (
+                    <option key={p.code} value={p.code}>
+                      {p.libelle}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label style={{ fontSize: 12, gridColumn: "span 2" }}>
                 Commentaire (logistique seulement)
@@ -383,8 +425,9 @@ export default function FicheVisite({
                 <tr>
                   <th style={{ textAlign: "left", padding: "3px 4px" }}>Date</th>
                   <th style={{ textAlign: "left", padding: "3px 4px" }}>Type</th>
+                  <th style={{ textAlign: "left", padding: "3px 4px" }}>Avec</th>
                   <th style={{ textAlign: "left", padding: "3px 4px" }}>Avis</th>
-                  <th style={{ width: 60 }}></th>
+                  <th style={{ width: 70 }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -404,23 +447,24 @@ export default function FicheVisite({
                         <span className="muted" style={{ display: "block", fontSize: 11 }}>{v.commentaire}</span>
                       )}
                     </td>
+                    <td style={{ padding: "3px 4px" }}>
+                      {libelleProfessionnel(v.professionnel)}
+                      {v.prochain_professionnel && (
+                        <span className="muted" style={{ display: "block", fontSize: 11 }}>
+                          prochaine : {libelleProfessionnel(v.prochain_professionnel).toLowerCase()}
+                        </span>
+                      )}
+                    </td>
                     <td style={{ padding: "3px 4px" }}>{libelleAvis(v.avis)}</td>
                     <td style={{ padding: "3px 4px", textAlign: "right", whiteSpace: "nowrap" }}>
                       {canEdit && (
                         <>
-                          <button
-                            type="button"
-                            className="btn-sm btn-ghost"
-                            style={{ margin: 0, padding: 0 }}
-                            onClick={() => setEdite(v)}
-                            title="Modifier"
-                          >
-                            ✎
+                          <button type="button" className="iconbtn edit" onClick={() => setEdite(v)} title="Modifier">
+                            <EditIcon />
                           </button>
                           <button
                             type="button"
-                            className="btn-sm btn-ghost"
-                            style={{ color: "var(--danger)", margin: "0 0 0 6px", padding: 0 }}
+                            className="iconbtn del"
                             disabled={enCours}
                             onClick={async () => {
                               if (!window.confirm("Supprimer cette visite de l'historique ?")) return;
@@ -429,7 +473,7 @@ export default function FicheVisite({
                             }}
                             title="Supprimer"
                           >
-                            🗑
+                            <TrashIcon />
                           </button>
                         </>
                       )}
@@ -438,7 +482,7 @@ export default function FicheVisite({
                 ))}
                 {visitesTriees.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="muted" style={{ padding: "6px 4px" }}>
+                    <td colSpan={5} className="muted" style={{ padding: "6px 4px" }}>
                       Aucune visite enregistrée.
                     </td>
                   </tr>

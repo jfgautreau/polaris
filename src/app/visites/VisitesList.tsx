@@ -11,6 +11,7 @@ import {
   LIBELLE_STATUT,
   delaiTexte,
   fmtFr,
+  libelleProfessionnel,
   libelleRegime,
   type Parametres,
   type RegimeCode,
@@ -270,6 +271,11 @@ export default function VisitesList(props: {
                         ? `${fmtFr(l.prochaine.due)} · ${delaiTexte(l.prochaine.due, props.aujourdhui)} · ${l.prochaine.motif}`
                         : (l.prochaine?.motif ?? "—")}
                     </span>
+                    {l.prochainPro && (
+                      <span className="muted" style={{ display: "block", fontSize: 11.5 }}>
+                        avec {libelleProfessionnel(l.prochainPro).toLowerCase()}
+                      </span>
+                    )}
                   </td>
                   <td style={{ padding: "4px 10px" }}>
                     <span

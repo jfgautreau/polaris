@@ -91,6 +91,15 @@ export const AVIS: { code: Avis; libelle: string }[] = [
 ];
 export const libelleAvis = (a: string | null): string => AVIS.find((x) => x.code === a)?.libelle ?? "—";
 
+// Qui reçoit la personne : information d'organisation, bornée par un CHECK (0079).
+export type Professionnel = "medecin" | "infirmier";
+export const PROFESSIONNELS: { code: Professionnel; libelle: string }[] = [
+  { code: "medecin", libelle: "Médecin du travail" },
+  { code: "infirmier", libelle: "Infirmier(ère)" },
+];
+export const libelleProfessionnel = (p: string | null): string =>
+  PROFESSIONNELS.find((x) => x.code === p)?.libelle ?? "—";
+
 // --- Réglages du module ------------------------------------------------------
 // Les DÉFAUTS vivent ici : une clé absente de `visite_parametre` n'est pas une
 // valeur nulle, c'est la valeur par défaut. Une base sans aucun réglage se

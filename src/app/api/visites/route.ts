@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { moduleWriteGuard } from "@/lib/permissions";
 import { verifierIdSite } from "@/lib/verifier-site";
-import { AVIS, estRegime } from "@/lib/visites";
+import { AVIS, PROFESSIONNELS, estRegime } from "@/lib/visites";
 
 // POST /api/visites { op, ... }
 //
@@ -11,7 +11,8 @@ import { AVIS, estRegime } from "@/lib/visites";
 //
 // RAPPEL PRODUIT : aucune donnée de santé ne transite ici. `avis` est borné à
 // quatre valeurs (attestation, apte, apte avec aménagements, inapte), le
-// commentaire est logistique, et une contrainte d'affectation n'a PAS de motif.
+// professionnel (vu / à voir) à deux (médecin, infirmier), le commentaire est
+// logistique, et une contrainte d'affectation n'a PAS de motif.
 //
 // Ops : visite.save | visite.delete | suivi.set | contrainte.add | contrainte.delete
 
@@ -21,6 +22,8 @@ const dateOuNull = (v: unknown): string | null => {
   return /^\d{4}-\d{2}-\d{2}$/.test(t) ? t : null;
 };
 const AVIS_CODES = AVIS.map((a) => a.code) as string[];
+const PRO_CODES = PROFESSIONNELS.map((p) => p.code) as string[];
+const proOuNull = (v: unknown): string | null => (PRO_CODES.includes(s(v)) ? s(v) : null);
 
 export async function POST(req: NextRequest) {
   const garde = await moduleWriteGuard("visites");
@@ -55,6 +58,8 @@ export async function POST(req: NextRequest) {
       date_visite: dateOuNull(body.date_visite),
       avis: AVIS_CODES.includes(avisBrut) ? avisBrut : null,
       prochaine_date: dateOuNull(body.prochaine_date),
+      professionnel: proOuNull(body.professionnel),
+      prochain_professionnel: proOuNull(body.prochain_professionnel),
       commentaire: s(body.commentaire) || null,
       site_id,
     };
