@@ -816,3 +816,28 @@ jour du statut lui-même** — `before update of statut on personne`, condition
 `new.statut = 'PARTI' and old.statut is distinct from 'PARTI'` — ce qui couvre tous les
 chemins (contrats, import, rafraîchissement). Le rattrapage de la migration rafraîchit
 d'abord les statuts, puis corrige les données existantes.
+
+## L49 — Une garde à l'écriture ne corrige pas ce qui a été écrit avant que le verdict change
+
+**Contexte** (pré-affectation et départ prévu, 2026-10-08) : le pré-remplissage refusait bien
+tout jour qu'aucun contrat ne couvre. Pourtant une personne avait encore deux affectations
+après sa fin de contrat : elles avaient été posées le 28/09, la date de fin saisie le 29/09.
+La règle était juste ; c'est la donnée qui avait changé **après** l'écriture.
+
+**Règle** : quand une donnée de référence change le verdict d'une garde (fin de contrat,
+fermeture de ligne, habilitation retirée), traiter **aussi** l'existant au moment où cette
+donnée est saisie : lister ce qui ne passerait plus la garde et proposer de le retirer, sur
+confirmation (même schéma que la fermeture d'un quart, 409 `{ conflit, affectes }`).
+Avant de « corriger » une règle signalée comme fausse, vérifier en base la chronologie
+(`created_at` des lignes contre `updated_at` de la donnée de référence).
+
+## L50 — Impression de plusieurs blocs : pas d'échelle commune dictée par le plus dense
+
+**Contexte** (Affichage, impression des services cochés) : chaque service était mesuré, puis
+TOUS recevaient le même `scale()` = celui qui faisait tenir le plus haut sur une page. Un
+seul service dense suffisait à rétrécir toutes les feuilles bien en deçà de leur largeur.
+
+**Règle** : pour des tableaux, préférer le flux du navigateur — `width: 100%`, pagination
+naturelle (`thead { display: table-header-group }`, `tr { break-inside: avoid }`) et un
+saut de page par bloc. La mise à l'échelle mesurée (`ajusterFeuille`) reste réservée à ce qui
+DOIT tenir sur une feuille (plan de Placement), et se calcule bloc par bloc.

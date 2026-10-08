@@ -80,6 +80,18 @@ menu suit l'écriture, pas la lecture.
   postes en attente partent. Les PDF partent de `groups` (seule « Impr. » décide) ; leurs
   occupants sont « placés », donc hors du compteur « à placer ».
 
+## Personnel — Cycle de vie (`CycleDeVieModal`)
+- Arrivée, départ prévu et statut sont **dérivés des contrats** (`contrat_periode`) ; le
+  statut bascule par `rafraichir_statuts_personnes()` (cf. L48).
+- **Affectations hors contrat** (2026-10-08) : le pré-remplissage et les saisies refusent
+  déjà un jour qu'aucun contrat ne couvre, mais une fin de contrat saisie ou avancée
+  **après** coup laissait les affectations déjà posées (cf. L49). La modale affiche un
+  bandeau rouge « N affectations hors contrat déjà posées : jj/mm (poste)… » et un bouton
+  **Retirer…** avec confirmation en deux temps. `/api/personnel` ops `hors-contrat-list` /
+  `hors-contrat-retirer` : lignes à venir (jour ≥ aujourd'hui) poste / NT / TP dont le jour
+  n'est couvert par aucun contrat (`motifInactivite`) ; absences conservées. Le retrait exige
+  `canWritePlacementData` ; sans lui, le bandeau dit « À retirer au Planning ».
+
 ## Temps partiel (`personne.tp_config`, jsonb, options cumulables)
 Modale `TempsPartielModal`, API `/api/personnel` op `tp`. Périodes datées dans
 `tp_periode` (migration 0052) avec repli sur `personne.tp_config`.
@@ -207,6 +219,13 @@ Priorité d'affichage de l'horaire (TV) : **exception ponctuelle > temps partiel
   0 (blanc) et la restriction sont toujours là. Le camembert est mis à l'échelle sur N
   (le plus haut niveau = disque plein) ; à N=4 le rendu est identique à l'historique.
 - La grille vient du module partagé `persongrid` (cf. CLAUDE.md), pas de code local.
+- **Postes « en attente » hors matrice** (2026-10-08) : un poste `zone_attente` (0077, ex.
+  CDT, Conducteur, Périphériques de « A placer » au Bignon) n'a pas de colonne ; une ligne
+  qui n'a que de tels postes disparaît. Ils ne comptent pas non plus pour la pastille « sans
+  compétence » ni pour le filtre Conducteurs (`poste.zone_attente = false` sur la jointure),
+  ni dans `/matrice/bilan`, les postes fragiles du Cockpit, Polyvalence & compétences et
+  Assez de compétences ?. La Feuille de route les garde (besoin et titulaires). Décocher
+  « Attente » au Référentiel les fait revenir (rien n'est supprimé).
 
 ## Habilitations (`/habilitations`)
 - **Même grille que la matrice** (`persongrid.module.css`, `usePersonGrid`). Deux pages
@@ -260,7 +279,12 @@ pas de troisième** : la fiche d'une personne est une modale du Suivi.
 ## Affichage TV (`/affichage`)
 - Index : liste des services avec **cases à cocher** (« Tous les services », date de
   référence facultative) → « Imprimer N services » ouvre `/affichage/impression?atelier=…`
-  (paramètre répété, une page A3 portrait par service, impression lancée au chargement).
+  (paramètre répété, impression lancée au chargement). Mêmes règles d'impression que
+  l'écran TV (2026-10-08) : A3 portrait, tableau à la **largeur de la feuille**, contenu qui
+  coule sur plusieurs pages (rangées entières, en-tête des jours répété), chaque service
+  sur une **nouvelle page** (`break-after: page`). Plus de mise à l'échelle mesurée :
+  l'ancienne échelle commune, imposée par le service le plus dense, rétrécissait toutes
+  les pages (cf. L50).
   Les ids reçus ne font que **filtrer** la liste des services du site. Chaque service garde
   son lien **« Écran TV »** (`/affichage/atelier/[id]`, un service, rafraîchi 5 min).
 

@@ -36,7 +36,7 @@ placement journalier, habilitations, visites médicales, affichage couloir, bila
   repli de l'effectif par quart depuis 0070 ; `nom_court`,
   `categorie` manager/conducteur/operateur, `niveau_min_requis`, `objectif_polyvalence`,
   `objectif_cible`, `ordre_affichage`, `zone_attente` — 0077 : poste de pré-affectation
-  à répartir, ex. CDT), `equipe` (+ `quart_fixe`), `equipe_chef`.
+  à répartir, ex. CDT ; hors matrice et hors bilans de compétence), `equipe` (+ `quart_fixe`), `equipe_chef`.
   `ligne` et `poste` portent aussi `date_ouverture`/`date_fermeture` (0071 :
   ouverture/fermeture datée, helper `src/lib/referentiel-validite.ts`).
 - **Quarts** : `quart` (`journee`/`matin`/`apres_midi`/`nuit` + horaires),

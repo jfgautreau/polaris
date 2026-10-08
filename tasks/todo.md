@@ -1,7 +1,23 @@
 # Reste à faire — Polaris
 
-> État au 2026-10-07. Migrations appliquées jusqu'à **0078**. **427** tests Vitest.
+> État au 2026-10-08. Migrations appliquées jusqu'à **0078**. **427** tests Vitest.
 > Historique détaillé : `git log`.
+
+## Revue — lot du 2026-10-08
+- [x] **Pré-affectation et départ prévu** : règle vérifiée (le pré-remplissage contrôle le
+      contrat jour par jour : une personne encore ACTIF n'est pas posée après sa fin de
+      contrat). Cas réel trouvé : fin de contrat saisie le lendemain du pré-remplissage →
+      **Cycle de vie** signale les affectations à venir hors contrat et propose de les
+      retirer sur confirmation.
+- [x] **Affichage — impression de plusieurs services** : à la largeur de l'A3, multi-pages,
+      un service par page (règles de l'écran TV).
+- [x] **Matrice** : postes « en attente » (CDT, Conducteur, Périphériques au Bignon) retirés
+      de la matrice et des bilans de compétence ; Feuille de route inchangée. Les 2 niveaux
+      saisis sur ces postes ont été effacés.
+- [x] `.gitignore` : dossier `capture écran/` (captures avec données réelles) exclu du repo.
+- [ ] Vérifier sur une vraie impression l'Affichage multi-services (2 ou 3 services cochés).
+- [ ] Retirer les 2 affectations hors contrat restantes (15 et 16/10, Le Bignon) depuis le
+      Cycle de vie de la personne concernée.
 
 ## Titulaires des personnes parties (2026-10-07)
 - [x] **Migration `0078_depart_libere_poste_fixe.sql` appliquée** : au passage à PARTI, le
