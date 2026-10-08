@@ -4,9 +4,9 @@ import { useEffect, useState } from "react";
 import { LIGNE_COULEURS, couleurDeLigne } from "@/lib/ligne-couleurs";
 
 // Couleur d'une ligne sur les PDF du Placement (0082). Palette fermée de
-// pastilles — jamais d'<input type="color">. Le volet s'ouvre en
-// `position: fixed` (la page du Référentiel défile) et se ferme au clic
-// ailleurs ou au défilement.
+// petites pastilles, nom en info-bulle — jamais d'<input type="color">. Le
+// volet s'ouvre en `position: fixed` (la page du Référentiel défile) et se
+// ferme au clic ailleurs ou au défilement.
 export default function CouleurLigne({
   couleur,
   rang,
@@ -44,13 +44,14 @@ export default function CouleurLigne({
         }}
         style={{
           boxSizing: "border-box",
-          width: 44,
+          width: 22,
           height: 22,
           padding: 0,
           margin: 0,
           borderRadius: 5,
-          background: actuelle.pale,
-          border: `2px solid ${actuelle.lc}`,
+          background: actuelle.lc,
+          border: "2px solid #fff",
+          boxShadow: "0 0 0 1px #94a3b8",
           cursor: "pointer",
         }}
       />
@@ -71,7 +72,7 @@ export default function CouleurLigne({
               boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
               padding: 8,
               display: "grid",
-              gridTemplateColumns: "repeat(5, auto)",
+              gridTemplateColumns: "repeat(7, 20px)",
               gap: 6,
             }}
           >
@@ -88,26 +89,21 @@ export default function CouleurLigne({
                     setPos(null);
                     if (!sel) onChange(c.lc);
                   }}
+                  aria-label={c.nom}
                   style={{
                     boxSizing: "border-box",
-                    width: 72,
-                    height: 26,
-                    padding: "0 4px",
+                    width: 20,
+                    height: 20,
+                    padding: 0,
                     margin: 0,
                     borderRadius: 5,
-                    background: c.pale,
-                    border: `2px solid ${c.lc}`,
+                    background: c.lc,
+                    border: "none",
                     outline: sel ? "2px solid #111" : "none",
-                    outlineOffset: 1,
-                    color: c.dark,
-                    fontSize: 11,
-                    fontWeight: 700,
-                    lineHeight: 1,
+                    outlineOffset: 2,
                     cursor: "pointer",
                   }}
-                >
-                  {c.nom}
-                </button>
+                />
               );
             })}
           </div>
