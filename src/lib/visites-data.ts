@@ -152,9 +152,9 @@ export async function chargerVisites(
       .returns<PersonneRow[]>(),
     supabase
       .from("poste")
-      .select("id, nom, suivi_renforce, anci_usage")
+      .select("id, nom, suivi_renforce, anci_usages")
       .eq("site_id", siteId)
-      .returns<{ id: string; nom: string; suivi_renforce: boolean; anci_usage: string | null }[]>(),
+      .returns<{ id: string; nom: string; suivi_renforce: boolean; anci_usages: string[] }[]>(),
     supabase
       .from("competence")
       .select("id, nom, duree_validite_mois, suivi_renforce, anci_usage")
@@ -342,11 +342,11 @@ export async function chargerVisites(
       if (!tenu) continue;
       const poste = posteById.get(posteId);
       postesSIRTenus.push(poste?.nom ?? "poste à risque");
-      if (poste?.anci_usage) ancisRequis.add(poste.anci_usage);
+      for (const u of poste?.anci_usages ?? []) ancisRequis.add(u);
     }
     // Le poste fixe peut exiger une attestation sans être à suivi renforcé.
     const posteFixe = p.poste_fixe_id ? posteById.get(p.poste_fixe_id) : undefined;
-    if (posteFixe?.anci_usage) ancisRequis.add(posteFixe.anci_usage);
+    for (const u of posteFixe?.anci_usages ?? []) ancisRequis.add(u);
 
     const visites: VisiteRow[] = (visitesPar.get(p.id) ?? []).map((v) => ({
       ...v,

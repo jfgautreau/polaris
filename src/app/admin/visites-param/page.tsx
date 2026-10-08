@@ -53,7 +53,7 @@ export default async function VisitesParamPage() {
       .returns<QuartRow[]>(),
     supabase
       .from("poste")
-      .select("id, nom, actif, suivi_renforce, suivi_motif, anci_usage, ligne:ligne_id(nom, atelier:atelier_id(nom))")
+      .select("id, nom, actif, suivi_renforce, suivi_motifs, anci_usages, ligne:ligne_id(nom, atelier:atelier_id(nom))")
       .eq("site_id", siteId)
       .eq("actif", true)
       .order("nom")

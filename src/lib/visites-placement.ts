@@ -71,10 +71,10 @@ export async function alertesVisite(
     besoinPoste
       ? supabase
           .from("poste")
-          .select("suivi_renforce, anci_usage")
+          .select("suivi_renforce, anci_usages")
           .eq("id", poste_id)
           .eq("site_id", siteId)
-          .maybeSingle<{ suivi_renforce: boolean; anci_usage: string | null }>()
+          .maybeSingle<{ suivi_renforce: boolean; anci_usages: string[] }>()
       : null,
     besoinVisites
       ? supabase
@@ -109,13 +109,16 @@ export async function alertesVisite(
   // La validité se mesure ici avec le plafond le PLUS LONG du site (suivi
   // simple) : au Placement on préfère se taire qu'alarmer à tort, et l'écran RH
   // reste la référence, lui qui connaît le régime réel de la personne.
-  if (params.alertePlacementAnci && poste?.anci_usage) {
+  if (params.alertePlacementAnci && poste?.anci_usages?.length) {
     const plafond = Math.max(...REGIMES_DEFAUT.map((r) => r.mois));
-    const valide = visites.some((v) => {
-      if (!v.date_visite || !(v.anci ?? []).some((a) => a.usage_code === poste.anci_usage)) return false;
-      const terme = plusTot(ajouterMoisIso(v.date_visite, plafond), v.prochaine_date);
-      return !!terme && terme >= jour;
-    });
+    // Le poste peut en exiger plusieurs : chacune doit être en cours de validité.
+    const valide = poste.anci_usages.every((usage) =>
+      visites.some((v) => {
+        if (!v.date_visite || !(v.anci ?? []).some((a) => a.usage_code === usage)) return false;
+        const terme = plusTot(ajouterMoisIso(v.date_visite, plafond), v.prochaine_date);
+        return !!terme && terme >= jour;
+      }),
+    );
     if (!valide) out.push(MSG_GENERIQUE);
   }
 

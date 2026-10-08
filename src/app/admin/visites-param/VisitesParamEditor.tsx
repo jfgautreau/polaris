@@ -22,8 +22,8 @@ export type PosteRow = {
   nom: string;
   actif: boolean;
   suivi_renforce: boolean;
-  suivi_motif: string | null;
-  anci_usage: string | null;
+  suivi_motifs: string[];
+  anci_usages: string[];
   ligne: { nom: string; atelier: { nom: string } | null } | null;
 };
 export type CompRow = { id: string; nom: string; groupe: string | null; suivi_renforce: boolean; anci_usage: string | null; a_autorisation_conduite: boolean };
@@ -330,13 +330,13 @@ export default function VisitesParamEditor(props: {
                   <th style={{ width: 200 }}>Service · Ligne</th>
                   <th>Poste</th>
                   <th style={{ width: 110, textAlign: "center" }}>Suivi renforcé</th>
-                  <th style={{ width: 330 }}>Motif réglementaire</th>
-                  <th style={{ width: 200 }}>Attestation exigée</th>
+                  <th style={{ width: 360 }}>Motifs réglementaires</th>
+                  <th style={{ width: 240 }}>Attestations exigées</th>
                 </tr>
               </thead>
               <tbody>
                 {postes.map((p) => (
-                  <tr key={p.id} style={{ opacity: p.suivi_renforce || p.anci_usage ? 1 : 0.75 }}>
+                  <tr key={p.id} style={{ opacity: p.suivi_renforce || p.anci_usages.length ? 1 : 0.75 }}>
                     <td className="muted" style={{ fontSize: 12.5 }}>
                       {p.ligne?.atelier?.nom ?? "—"} · {p.ligne?.nom ?? "—"}
                     </td>
@@ -355,41 +355,27 @@ export default function VisitesParamEditor(props: {
                       />
                     </td>
                     <td>
-                      <select
-                        value={p.suivi_motif ?? ""}
+                      <ChoixMultiple
+                        options={MOTIFS_SIR}
+                        valeurs={p.suivi_motifs}
                         disabled={!p.suivi_renforce}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setPostes((ps) => ps.map((x) => (x.id === p.id ? { ...x, suivi_motif: v || null } : x)));
-                          void post({ op: "poste.set", id: p.id, suivi_motif: v });
+                        vide="—"
+                        onChange={(v) => {
+                          setPostes((ps) => ps.map((x) => (x.id === p.id ? { ...x, suivi_motifs: v } : x)));
+                          void post({ op: "poste.set", id: p.id, suivi_motifs: v });
                         }}
-                        style={{ fontSize: 12.5, width: "100%" }}
-                      >
-                        <option value="">—</option>
-                        {MOTIFS_SIR.map((m) => (
-                          <option key={m.code} value={m.code}>
-                            {m.libelle}
-                          </option>
-                        ))}
-                      </select>
+                      />
                     </td>
                     <td>
-                      <select
-                        value={p.anci_usage ?? ""}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setPostes((ps) => ps.map((x) => (x.id === p.id ? { ...x, anci_usage: v || null } : x)));
-                          void post({ op: "poste.set", id: p.id, anci_usage: v });
+                      <ChoixMultiple
+                        options={usages.filter((u) => u.actif || p.anci_usages.includes(u.code))}
+                        valeurs={p.anci_usages}
+                        vide="aucune"
+                        onChange={(v) => {
+                          setPostes((ps) => ps.map((x) => (x.id === p.id ? { ...x, anci_usages: v } : x)));
+                          void post({ op: "poste.set", id: p.id, anci_usages: v });
                         }}
-                        style={{ fontSize: 12.5, width: "100%" }}
-                      >
-                        <option value="">aucune</option>
-                        {usagesActifs.map((u) => (
-                          <option key={u.code} value={u.code}>
-                            {u.libelle}
-                          </option>
-                        ))}
-                      </select>
+                      />
                     </td>
                   </tr>
                 ))}
@@ -657,7 +643,7 @@ export default function VisitesParamEditor(props: {
                 {[...usages]
                   .sort((a, b) => a.ordre - b.ordre || a.libelle.localeCompare(b.libelle))
                   .map((u) => {
-                    const n = postes.filter((p) => p.anci_usage === u.code).length + comps.filter((c) => c.anci_usage === u.code).length;
+                    const n = postes.filter((p) => p.anci_usages.includes(u.code)).length + comps.filter((c) => c.anci_usage === u.code).length;
                     return (
                       <tr key={u.id} style={{ opacity: u.actif ? 1 : 0.5 }}>
                         <td>
@@ -825,6 +811,74 @@ export default function VisitesParamEditor(props: {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+// Choix de plusieurs codes dans une cellule de tableau : les choisis en
+// pastilles (✕ pour retirer), la liste déroulante n'offre que les autres.
+function ChoixMultiple({
+  options,
+  valeurs,
+  onChange,
+  disabled = false,
+  vide,
+}: {
+  options: { code: string; libelle: string }[];
+  valeurs: string[];
+  onChange: (v: string[]) => void;
+  disabled?: boolean;
+  vide: string;
+}) {
+  const libelle = (code: string) => options.find((o) => o.code === code)?.libelle ?? code;
+  const restantes = options.filter((o) => !valeurs.includes(o.code));
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center", opacity: disabled ? 0.6 : 1 }}>
+      {valeurs.map((v) => (
+        <span
+          key={v}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+            fontSize: 12,
+            lineHeight: 1.3,
+            padding: "2px 4px 2px 8px",
+            borderRadius: 999,
+            background: "#eef2ff",
+            border: "1px solid #c7d2fe",
+            color: "#3730a3",
+          }}
+        >
+          {libelle(v)}
+          {!disabled && (
+            <button
+              type="button"
+              onClick={() => onChange(valeurs.filter((x) => x !== v))}
+              title="Retirer"
+              aria-label={`Retirer ${libelle(v)}`}
+              style={{ margin: 0, padding: "0 4px", width: "auto", background: "none", border: 0, color: "#64748b", fontSize: 12, lineHeight: 1, cursor: "pointer" }}
+            >
+              ✕
+            </button>
+          )}
+        </span>
+      ))}
+      {restantes.length > 0 && !disabled && (
+        <select
+          value=""
+          onChange={(e) => e.target.value && onChange([...valeurs, e.target.value])}
+          style={{ fontSize: 12.5, width: valeurs.length ? 110 : "100%", color: "var(--muted)" }}
+        >
+          <option value="">{valeurs.length ? "+ ajouter…" : vide}</option>
+          {restantes.map((o) => (
+            <option key={o.code} value={o.code}>
+              {o.libelle}
+            </option>
+          ))}
+        </select>
+      )}
+      {disabled && valeurs.length === 0 && <span className="muted" style={{ fontSize: 12.5 }}>{vide}</span>}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { moduleWriteGuard } from "@/lib/permissions";
 import { verifierIdSite } from "@/lib/verifier-site";
-import { CATEGORIES, DESC_PARAMS, MAX_LEGAL, estRegime, type CategorieVisite } from "@/lib/visites";
+import { CATEGORIES, DESC_PARAMS, MAX_LEGAL, MOTIFS_SIR, estRegime, type CategorieVisite } from "@/lib/visites";
 
 // POST /api/visites-param { op, ... }
 //
@@ -20,6 +20,9 @@ import { CATEGORIES, DESC_PARAMS, MAX_LEGAL, estRegime, type CategorieVisite } f
 const s = (v: unknown) => String(v ?? "").trim();
 const bool = (v: unknown) => v === true || v === "true" || v === "1";
 const orNull = (v: string) => (v === "" ? null : v);
+// Liste de codes sans doublon ni vide (cases cochées d'un poste).
+const codes = (v: unknown): string[] => (Array.isArray(v) ? [...new Set(v.map(s).filter(Boolean))] : []);
+const CODES_SIR = new Set(MOTIFS_SIR.map((m) => m.code));
 
 export async function POST(req: NextRequest) {
   const garde = await moduleWriteGuard("visites_param");
@@ -185,11 +188,17 @@ export async function POST(req: NextRequest) {
     if (errPoste) return NextResponse.json({ error: errPoste }, { status: 400 });
     const patch: Record<string, unknown> = {};
     if ("suivi_renforce" in body) patch.suivi_renforce = bool(body.suivi_renforce);
-    if ("suivi_motif" in body) patch.suivi_motif = orNull(s(body.suivi_motif));
-    if ("anci_usage" in body) {
-      const err = await usageConnu(supabase, site_id, s(body.anci_usage));
+    if ("suivi_motifs" in body) {
+      const motifs = codes(body.suivi_motifs);
+      if (motifs.some((m) => !CODES_SIR.has(m))) return NextResponse.json({ error: "Motif réglementaire inconnu." }, { status: 400 });
+      patch.suivi_motifs = motifs;
+    }
+    if ("anci_usages" in body) {
+      const usages = codes(body.anci_usages);
+      const errs = await Promise.all(usages.map((u) => usageConnu(supabase, site_id, u)));
+      const err = errs.find(Boolean);
       if (err) return NextResponse.json({ error: err }, { status: 400 });
-      patch.anci_usage = orNull(s(body.anci_usage));
+      patch.anci_usages = usages;
     }
     if (!Object.keys(patch).length) return NextResponse.json({ error: "Rien à modifier" }, { status: 400 });
     const { error } = await supabase.from("poste").update(patch).eq("id", id).eq("site_id", site_id);
