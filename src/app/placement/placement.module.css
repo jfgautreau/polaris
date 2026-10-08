@@ -664,6 +664,27 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Lignes qui tournent (au moins une personne placée) : une couleur par ligne,
+   attribuée automatiquement (LIGNE_COULEURS dans PlacementBoard), posée en
+   variables --lc / --lc-pale / --lc-dark sur .printLigne. Bandeau pâle sur le
+   nom des postes + liseré : peu d'encre, lisible en A4 comme en A3. Les lignes
+   à l'arrêt restent sur la feuille, éteintes (pointillés, gris). */
+.printLigneOn .printLigneNom { border-left: 6px solid var(--lc); color: var(--lc-dark); }
+.printLigneOn .printPoste { border-color: var(--lc); }
+.printLigneOn .printPosteHead {
+  background: var(--lc-pale);
+  border-bottom: 2px solid var(--lc);
+  border-radius: 3px 3px 0 0;
+  margin: -2px -4px 2px;
+  padding: 2px 4px;
+}
+.printLigneOn .printPosteNom { color: var(--lc-dark); }
+.printLigneOff .printLigneNom { border-left-color: #c4cad3; color: #9aa3af; }
+.printLigneOff .printPoste { border-style: dashed; border-color: #c4cad3; }
+.printLigneOff .printPosteNom,
+.printLigneOff .printNom { color: #9aa3af; }
+.printArret { display: block; font-size: 0.8em; font-weight: 600; }
+
 .printOk { color: #166534; font-weight: 700; }
 .printTrou { color: #b91c1c; font-weight: 700; }
 .printSurNb { color: #b45309; font-weight: 700; }
@@ -689,7 +710,8 @@
   font-style: italic;
 }
 
-/* Feuille OPÉRATEURS (« PDF », data-mode="simple") : sans couleur. Les codes
+/* Feuille OPÉRATEURS (« PDF », data-mode="simple") : seule la couleur des lignes
+   qui tournent y figure (décision du 2026-10-08). Les codes
    couleur (couverture X/Y, surnombre, compétence manquante) sont des outils de
    pilotage : ils restent sur le « PDF Manager » (data-mode="ce"). */
 .printSheet[data-mode="simple"] .printOk,

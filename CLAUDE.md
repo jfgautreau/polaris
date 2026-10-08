@@ -304,7 +304,7 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   numérotées, rangs en 1 à 3 colonnes (au-delà de 10 par colonne). Bascule Plan /
   Absences. `JourNav` (calendrier grisant les jours sans quart actif). Filtres de la liste
   (recherche, équipe) dans l'URL. Deux PDF : **PDF Manager** (A4, plan en couleurs + absents / TP du jour,
-  ex-« PDF CE ») et **PDF** opérateurs (A3, plan seul, **sans couleur**) ; en-tête service ·
+  ex-« PDF CE ») et **PDF** opérateurs (A3, plan seul, codes d'alerte en noir) ; sur les deux, les lignes qui tournent (≥ 1 personne placée) prennent une couleur automatique (`LIGNE_COULEURS`, rang dans le plan), celles à l'arrêt restent grisées ; en-tête service ·
   quart (pastille centrée) · date, hors zone mise à l'échelle ; numéros vides et commentaires du jour imprimés ; filtre
   `imprimable`. TP du jour sans placement = carte « Temps partiel », pas « à placer ».
   Postes `zone_attente` (CDT) : hors du plan, colonne « À répartir » entre le plan et les noms
