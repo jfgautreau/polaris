@@ -295,7 +295,11 @@ export default async function PlanningPage({
   // temps que l'ouverture, et chaque bloc plus bas attend la sienne au lieu de les
   // enchaîner. Les blocs de traitement sont inchangés.
   const idsEffectif = (allActiveD ?? []).map((p) => p.id);
-  const postesAffichesIds = [...new Set(quartsDistincts.flatMap((q) => groupsDe(q).flatMap((g) => g.postes.map((p) => p.id))))];
+  // Habilitations exigées : lues pour TOUS les postes du site, pas seulement ceux
+  // du service filtré. Une personne listée peut être placée sur un poste d'un autre
+  // service : sans son exigence, sa case perdait le rouge selon le filtre (bug du
+  // 2026-10-09, case rouge filtre service 1, neutre filtre service 2).
+  const postesHabIds = [...new Set(groupsAll.flatMap((g) => g.postes.map((p) => p.id)))];
   type TpRow = { id: string; personne_id: string; date_debut: string; date_fin: string | null; tp_config: { off?: Record<string, string[]> } | null };
   const pPersAtelier = enAvance<{ data: { id: string; atelier_id: string | null }[] | null; error: { message: string } | null }>(
     atelier && idsEffectif.length
@@ -345,15 +349,18 @@ export default async function PlanningPage({
         .returns<{ personne_id: string; date_debut: string | null; date_fin: string | null }[]>()
     )
   );
-  // Habilitations exigées par les postes affichés, puis — dès qu'on les connaît —
+  // Habilitations exigées par les postes du site, puis — dès qu'on les connaît —
   // celles que les gens détiennent (chaîné, sans attendre le reste de la page).
+  // Pas de `.in(poste_id, …)` : des centaines d'UUID allongeraient l'URL ; la
+  // table est petite et bornée au site par la RLS, on filtre ici.
+  const postesHabSet = new Set(postesHabIds);
   const pPcr = enAvance<{ data: PcrRow[] | null; error: { message: string } | null }>(
-    postesAffichesIds.length
+    postesHabIds.length
       ? supabase
           .from("poste_competence_requise")
           .select("poste_id, competence_id, competence:competence_id(nom, duree_validite_mois)")
-          .in("poste_id", postesAffichesIds)
           .returns<PcrRow[]>()
+          .then((r) => ({ data: (r.data ?? []).filter((x) => postesHabSet.has(x.poste_id)), error: r.error }))
       : Promise.resolve({ data: [] as PcrRow[], error: null })
   );
   const pHabDet = enAvance(
@@ -837,7 +844,7 @@ export default async function PlanningPage({
   const habPoste: Record<string, string[]> = {};
   const habComp: Record<string, string> = {};
   const habPers: Record<string, string> = {};
-  if (postesAffichesIds.length) {
+  if (postesHabIds.length) {
     const dureeComp: Record<string, number | null> = {};
     const { data: pcrD } = await pPcr; // lancée en vague 2
     for (const r of pcrD ?? []) {

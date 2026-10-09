@@ -787,6 +787,10 @@ export default function PlanningGrid({
   const { niveauMin, effectif } = useMemo(() => {
     const nm: Record<string, number> = {};
     const ef: Record<string, number> = {};
+    // Niveau minimum : sur tous les postes du site (allGroups), pas seulement ceux
+    // du service filtré — une personne affichée peut être placée ailleurs, et son
+    // « hors compétence » ne doit pas dépendre du filtre (bug du 2026-10-09).
+    for (const sem of allGroups) for (const g of sem) for (const p of g.postes) nm[p.id] = p.niveauMin;
     for (let wi = 0; wi < groups.length; wi++)
       for (const g of groups[wi])
         for (const p of g.postes) {
@@ -794,7 +798,7 @@ export default function PlanningGrid({
           ef[`${quartDeSemaine[wi]}:${p.id}`] = p.effectif;
         }
     return { niveauMin: nm, effectif: ef };
-  }, [groups, quartDeSemaine]);
+  }, [groups, allGroups, quartDeSemaine]);
 
   const { posteLigne, posteLabel, posteCat, allLigneIds } = useMemo(() => {
     const pl: Record<string, string> = {};
