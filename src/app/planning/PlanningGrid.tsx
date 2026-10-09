@@ -1256,7 +1256,7 @@ export default function PlanningGrid({
                   <th
                     key={i}
                     colSpan={w.span}
-                    title={`Quart de l'équipe en semaine ${w.num}`}
+                    title={`Quart affiché en semaine ${w.num}`}
                     style={{
                       position: "sticky",
                       top: 0,

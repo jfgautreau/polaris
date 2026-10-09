@@ -530,8 +530,9 @@ export default async function PlanningPage({
     ] as const)
   );
 
-  // `quart` (libellé + couleur) : posé seulement en « Suivre l'équipe », où chaque
-  // semaine a le sien ; sinon le bandeau unique suffit.
+  // `quart` (libellé + couleur) : bande colorée au-dessus de chaque semaine. En
+  // « Suivre l'équipe », chaque semaine a le sien ; en « Suivre le quart », c'est le
+  // même sur les trois (demande du 2026-10-09 : le rappeler au-dessus des semaines).
   const weekBlocks: { num: number; span: number; year: number; isCurrent: boolean; monday: string; quart?: { libelle: string; couleur: string | null } }[] = [];
   for (let wi = 0; wi < 3; wi++) {
     const span = visible.filter((d) => d.wi === wi).length;
@@ -543,7 +544,7 @@ export default async function PlanningPage({
         span,
         isCurrent: isoDate(weekMondays[wi]) === todayMondayIso,
         monday: isoDate(weekMondays[wi]),
-        ...(suivreEquipe && qw ? { quart: { libelle: qw.libelle, couleur: qw.couleur ?? null } } : {}),
+        ...(qw ? { quart: { libelle: qw.libelle, couleur: qw.couleur ?? null } } : {}),
       });
   }
   const seenWeek = new Set<number>();
