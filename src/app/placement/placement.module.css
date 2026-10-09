@@ -721,6 +721,11 @@
 .printLigneOff .printPosteNom,
 .printLigneOff .printNom { color: #9aa3af; }
 .printArret { display: block; font-size: 0.8em; font-weight: 600; }
+/* Poste manager dans une ligne à l'arrêt : jamais grisé (l'encadrement n'est
+   pas « à l'arrêt »). */
+.printLigneOff .printPoste.printManager { border-style: solid; border-color: #94a3b8; }
+.printLigneOff .printManager .printPosteNom,
+.printLigneOff .printManager .printNom { color: inherit; }
 
 .printOk { color: #166534; font-weight: 700; }
 .printTrou { color: #b91c1c; font-weight: 700; }

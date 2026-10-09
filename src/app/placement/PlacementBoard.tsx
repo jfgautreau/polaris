@@ -15,7 +15,7 @@ import s from "./placement.module.css";
 type Atelier = { id: string; nom: string };
 type Equipe = { id: string; nom: string; couleur: string | null };
 type Quart = { code: string; libelle: string };
-type Poste = { id: string; nom: string; nomCourt: string | null; effectifRequis: number; niveauMin: number; numeroRotation: string | null; imprimable: boolean; attente?: boolean };
+type Poste = { id: string; nom: string; nomCourt: string | null; effectifRequis: number; niveauMin: number; numeroRotation: string | null; imprimable: boolean; attente?: boolean; manager?: boolean };
 // `fermee` = ligne fermée dans Ordonnancement (`ouverture_quart.ouverte = false`).
 // Depuis 2026-09-09, la ligne reste affichée et plaçable, mais son BESOIN vaut 0 :
 // le compteur des tuiles devient « X/0 » et la couverture globale n'en tient plus
@@ -857,6 +857,8 @@ export default function PlacementBoard({
       ...g,
       postes: g.postes.filter((po) => po.imprimable),
       tourne: g.postes.some((po) => occupants(po.id).length > 0),
+      // Ligne d'encadrement (que des postes manager) : jamais « à l'arrêt ».
+      encadrement: g.postes.filter((po) => po.imprimable).every((po) => po.manager),
       couleur: couleurDeLigne(g.couleur, i),
     }))
     .filter((g) => g.postes.length > 0);
@@ -1373,12 +1375,12 @@ export default function PlacementBoard({
                 key={g.ligneId}
                 // PDF Manager : pas de couleur de ligne, pour que le surnombre (fond orangé)
                 // et le hors compétence (rouge) ressortent seuls. Ligne à l'arrêt : grisée partout.
-                className={`${s.printLigne} ${!g.tourne ? s.printLigneOff : prepImpression !== "ce" ? s.printLigneOn : ""}`}
+                className={`${s.printLigne} ${!g.tourne ? (g.encadrement ? "" : s.printLigneOff) : prepImpression !== "ce" ? s.printLigneOn : ""}`}
                 style={{ "--lc": g.couleur.lc, "--lc-pale": g.couleur.pale, "--lc-dark": g.couleur.dark } as CSSProperties}
               >
                 <div className={s.printLigneNom}>
                   {g.ligneNom}
-                  {!g.tourne && <span className={s.printArret}>à l'arrêt</span>}
+                  {!g.tourne && !g.encadrement && <span className={s.printArret}>à l'arrêt</span>}
                 </div>
                 <div className={s.printPostes}>
                   {g.postes.map((po) => {
@@ -1408,7 +1410,7 @@ export default function PlacementBoard({
                       );
                     };
                     return (
-                      <div key={po.id} className={`${s.printPoste} ${sur ? s.printSur : ""}`}>
+                      <div key={po.id} className={`${s.printPoste} ${sur ? s.printSur : ""} ${po.manager ? s.printManager : ""}`}>
                         <div className={s.printPosteHead}>
                           <span className={s.printPosteNom}>{po.nom}</span>
                           <span className={trou ? s.printTrou : sur ? s.printSurNb : s.printOk}>

@@ -24,7 +24,7 @@ type Atelier = { id: string; nom: string };
 type Equipe = { id: string; nom: string; couleur: string | null; quart_fixe?: string | null };
 type Quart = { code: string; libelle: string; ordre: number; creneau: string | null; couleur?: string | null };
 type Personne = { id: string; nom: string; prenom: string; equipe_id: string | null; atelier_id: string | null; type_contrat: string };
-type PosteRow = { id: string; nom: string; nom_court: string | null; actif: boolean; effectif_requis: number; niveau_min_requis: number; ordre_affichage: number; numero_rotation: string | null; imprimable?: boolean; zone_attente?: boolean };
+type PosteRow = { id: string; nom: string; nom_court: string | null; actif: boolean; effectif_requis: number; niveau_min_requis: number; ordre_affichage: number; numero_rotation: string | null; categorie: string | null; imprimable?: boolean; zone_attente?: boolean };
 type LigneRow = { id: string; nom: string; ordre_affichage: number; atelier_id: string; couleur: string | null; poste: PosteRow[] };
 type Placement = { personne_id: string; poste_id: string | null; motif_absence_id: string | null; non_travaille: boolean; quart_code: string | null; numero_rotation: string | null };
 type MatRow = { personne_id: string; poste_id: string; niveau_actuel: number };
@@ -209,7 +209,7 @@ export default async function PlacementPage({
           // requête imbriquée (L19) et viderait le plan. Replis successifs, défauts
           // false / true.
           const embed = (extra: string) =>
-            `id, nom, ordre_affichage, atelier_id, couleur, poste(id, nom, nom_court, actif, effectif_requis, niveau_min_requis, ordre_affichage, numero_rotation${extra})`;
+            `id, nom, ordre_affichage, atelier_id, couleur, poste(id, nom, nom_court, actif, effectif_requis, niveau_min_requis, ordre_affichage, numero_rotation, categorie${extra})`;
           const q = (extra: string) =>
             supabase.from("ligne").select(embed(extra)).eq("atelier_id", atelierId).eq("actif", true).order("nom").returns<LigneRow[]>();
           const colonneAbsente = (e: { code?: string } | null) => !!e && (e.code === "42703" || e.code === "PGRST204");
@@ -283,6 +283,8 @@ export default async function PlacementPage({
           imprimable: p.imprimable ?? true,
           // Zone d'attente (0077) : affichée dans la colonne « À répartir », hors du plan.
           attente: p.zone_attente === true,
+          // Poste d'encadrement : jamais « à l'arrêt » sur les feuilles imprimées.
+          manager: p.categorie === "manager",
         })),
     }))
     .filter((g) => g.postes.length > 0)
