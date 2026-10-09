@@ -23,7 +23,7 @@ type Poste = { id: string; nom: string; nomCourt: string | null; effectifRequis:
 // visibilité). Optionnel : `undefined` = ligne ouverte (rétro-compatibilité).
 type Group = { ligneId: string; ligneNom: string; postes: Poste[]; fermee?: boolean; couleur?: string | null };
 type Personne = { id: string; nom: string; prenom: string; equipe_id: string | null; atelier_id: string | null; type_contrat: string; couleur: string | null; editable: boolean };
-// `operateurs` (0083) : motif montré sur le PDF opérateurs (choix des RH).
+// `operateurs` (0083) : motif montré sur le « PDF pour Affich. » (choix des RH).
 type Motif = { id: string; code: string; libelle: string; couleur: string; operateurs?: boolean };
 
 // Pseudo-atelier de la vue Absences (valeur du parametre ?atelier=).
@@ -517,7 +517,7 @@ export default function PlacementBoard({
   // on retire la classe. Le « PDF Manager » (mode "ce") reste en A4.
   useEffect(() => {
     if (!prepImpression) return;
-    // « PDF heures » = feuille opérateurs (A3) avec l'horaire de chacun.
+    // « PDF heures » = feuille « PDF pour Affich. » (A3) avec l'horaire de chacun.
     const a3 = prepImpression !== "ce";
     if (a3) document.body.classList.add("print-a3");
     ajusterFeuille(a3);
@@ -736,7 +736,7 @@ export default function PlacementBoard({
       { key: "TP", titre: "Temps partiel", gens: gensTp },
     ].filter((c) => c.gens.length > 0);
   }, [motifs, personnes, place, atelierId, tpSetPourListe]);
-  // PDF opérateurs (« PDF », « PDF heures ») : seulement les motifs cochés par
+  // PDF pour Affich. (« PDF », « PDF heures ») : seulement les motifs cochés par
   // les RH dans Param. RH (0083) ; ni « Non travaillé », ni temps partiel.
   const absPrintOp = useMemo(() => {
     const visibles = new Set(motifs.filter((mo) => mo.operateurs).map((mo) => mo.id));
@@ -896,7 +896,7 @@ export default function PlacementBoard({
             type="button"
             className={s.navbtn}
             onClick={() => imprimer("simple")}
-            title="PDF opérateurs : plan, couleur des lignes qui tournent, et absents des seuls motifs cochés dans Param. RH (1 page A3 paysage)"
+            title="PDF pour Affich. : plan, couleur des lignes qui tournent, et absents des seuls motifs cochés dans Param. RH (1 page A3 paysage)"
             style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
           >
             <PrintIcon size={15} /> PDF
@@ -905,7 +905,7 @@ export default function PlacementBoard({
             type="button"
             className={s.navbtn}
             onClick={() => imprimer("heures")}
-            title="PDF opérateurs avec l'horaire de chacun au poste (horaire spécifique du jour, sinon temps partiel, sinon horaire du poste) — 1 page A3 paysage"
+            title="PDF pour Affich. avec l'horaire de chacun au poste (horaire spécifique du jour, sinon temps partiel, sinon horaire du poste) — 1 page A3 paysage"
             style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
           >
             <PrintIcon size={15} /> PDF heures

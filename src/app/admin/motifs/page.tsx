@@ -109,9 +109,9 @@ export default async function MotifsPage({
           )}
         </p>
         <p className="muted" style={{ marginTop: -8, marginBottom: 16 }}>
-          Cochez <strong>PDF opérateurs</strong> pour les motifs qui peuvent figurer, avec
-          leur libellé, dans la colonne « Absents du jour » de la feuille opérateurs du
-          Placement. Un motif non coché n&apos;y apparaît pas. Le PDF Manager montre
+          Cochez <strong>PDF pour Affich.</strong> pour les motifs qui peuvent figurer, avec
+          leur libellé, dans la colonne « Absents du jour » de la feuille « PDF pour Affich. »
+          du Placement. Un motif non coché n&apos;y apparaît pas. Le PDF Manager montre
           toujours tous les motifs.
         </p>
         <p className="muted" style={{ marginTop: -8, marginBottom: 16 }}>
@@ -155,7 +155,7 @@ export default async function MotifsPage({
                 <th>Code</th>
                 <th style={{ width: 90 }}>Code GT</th>
                 <th style={{ width: 90, textAlign: "center" }}>Non planifié</th>
-                <th style={{ width: 100, textAlign: "center" }} title="Coché : les personnes absentes pour ce motif figurent, avec le motif, sur le PDF opérateurs du Placement. Décoché : elles n'y apparaissent pas.">PDF opérateurs</th>
+                <th style={{ width: 100, textAlign: "center" }} title="Coché : les personnes absentes pour ce motif figurent, avec le motif, sur le « PDF pour Affich. » du Placement. Décoché : elles n'y apparaissent pas.">PDF pour Affich.</th>
                 <th style={{ width: 90 }}></th>
                 <th style={{ width: 60, textAlign: "center" }}>Actif</th>
               </tr>
@@ -177,7 +177,7 @@ export default async function MotifsPage({
                     <td><input form={`ed-motif-${m.id}`} name="code_court" defaultValue={m.code_court} maxLength={6} required style={{ width: 90 }} /></td>
                     <td><input form={`ed-motif-${m.id}`} name="code_gt" defaultValue={m.code_gt ?? ""} maxLength={20} placeholder="00CLFA" style={{ width: 90 }} /></td>
                     <td style={{ textAlign: "center" }}><ActifCheckbox id={m.id} actif={m.non_planifie} action={toggleNonPlanifie} title={m.non_planifie ? "Repasser en planifié" : "Marquer non planifié"} /></td>
-                    <td style={{ textAlign: "center" }}><ActifCheckbox id={m.id} actif={m.visible_operateurs} action={toggleVisibleOperateurs} title={m.visible_operateurs ? "Affiché sur le PDF opérateurs — masquer" : "Masqué du PDF opérateurs — afficher"} /></td>
+                    <td style={{ textAlign: "center" }}><ActifCheckbox id={m.id} actif={m.visible_operateurs} action={toggleVisibleOperateurs} title={m.visible_operateurs ? "Affiché sur le PDF pour Affich. — masquer" : "Masqué du PDF pour Affich. — afficher"} /></td>
                     <td style={{ whiteSpace: "nowrap", textAlign: "center" }}>
                       <button form={`ed-motif-${m.id}`} type="submit" title="Valider" className="iconbtn ok"><CheckIcon /></button>
                       <Link href="/admin/motifs" className="iconbtn ghost" scroll={false} title="Annuler">✕</Link>
@@ -194,7 +194,7 @@ export default async function MotifsPage({
                       <ActifCheckbox id={m.id} actif={m.non_planifie} action={toggleNonPlanifie} title={m.non_planifie ? "Non planifié — repasser en planifié" : "Planifié — marquer non planifié"} />
                     </td>
                     <td style={{ textAlign: "center" }}>
-                      <ActifCheckbox id={m.id} actif={m.visible_operateurs} action={toggleVisibleOperateurs} title={m.visible_operateurs ? "Affiché sur le PDF opérateurs — masquer" : "Masqué du PDF opérateurs — afficher"} />
+                      <ActifCheckbox id={m.id} actif={m.visible_operateurs} action={toggleVisibleOperateurs} title={m.visible_operateurs ? "Affiché sur le PDF pour Affich. — masquer" : "Masqué du PDF pour Affich. — afficher"} />
                     </td>
                     <td style={{ whiteSpace: "nowrap", textAlign: "center" }}>
                       <Link href={`/admin/motifs?edit=motif:${m.id}`} className="iconbtn edit" scroll={false} prefetch={false} title="Modifier"><EditIcon /></Link>

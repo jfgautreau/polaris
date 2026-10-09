@@ -87,7 +87,7 @@ export async function toggleNonPlanifie(fd: FormData) {
   done(error);
 }
 
-// Affichage du motif sur le PDF opérateurs du Placement (migration 0083).
+// Affichage du motif sur le « PDF pour Affich. » du Placement (migration 0083).
 // Même convention qu'au-dessus : le champ `actif` porte le NOUVEL état.
 export async function toggleVisibleOperateurs(fd: FormData) {
   const supabase = await requireModuleWrite("motifs");
