@@ -91,7 +91,7 @@ export default async function PersonnelPage({
     agenceCodesArr,
   ] = await Promise.all([
     supabase.from("equipe").select("id, nom, couleur, quart_fixe").order("nom").returns<Equipe[]>(),
-    supabase.from("atelier").select("id, nom").eq("actif", true).order("nom").returns<Atelier[]>(),
+    supabase.from("atelier").select("id, nom").eq("actif", true).order("ordre_affichage").order("nom").returns<Atelier[]>(),
     supabase.from("personne").select(COLS_PERSONNE).order("nom").returns<BaseRow[]>(),
     // Postes actifs (pour le sélecteur « Poste fixe »), avec leur atelier.
     // `atelier_id` + `regroupement` (0069) servent en plus à lister les

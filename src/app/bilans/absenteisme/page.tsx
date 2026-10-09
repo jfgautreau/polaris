@@ -46,7 +46,7 @@ export default async function AbsenteismeReport({ searchParams }: { searchParams
     supabase.from("motif_absence").select("id, code_court, libelle, couleur, non_planifie").returns<Motif[]>(),
     supabase.from("personne").select("id, nom, prenom, statut, equipe_id, atelier_id").returns<Personne[]>(),
     supabase.from("equipe").select("id, nom").returns<{ id: string; nom: string }[]>(),
-    supabase.from("atelier").select("id, nom").eq("actif", true).order("nom").returns<{ id: string; nom: string }[]>(),
+    supabase.from("atelier").select("id, nom").eq("actif", true).order("ordre_affichage").order("nom").returns<{ id: string; nom: string }[]>(),
     fetchAll<Placement>(() => supabase.from("placement").select("personne_id, jour, poste_id, motif_absence_id").gte("jour", firstIso).lte("jour", lastIso).order("id").returns<Placement[]>()),
   ]);
   // Repli sur l'heuristique de libellé tant que la migration 0060 (colonne

@@ -44,7 +44,7 @@ export default async function CouvertureReport({ searchParams }: { searchParams:
         supabase.from("matrice").select("personne_id, poste_id, niveau_actuel").order("id").returns<{ personne_id: string; poste_id: string; niveau_actuel: number }[]>()
       ),
       supabase.from("personne").select("id, nom, prenom").eq("statut", "ACTIF").returns<Named[]>(),
-      supabase.from("atelier").select("id, nom").eq("actif", true).order("nom").returns<{ id: string; nom: string }[]>(),
+      supabase.from("atelier").select("id, nom").eq("actif", true).order("ordre_affichage").order("nom").returns<{ id: string; nom: string }[]>(),
     ]);
 
   // Ce rapport n'a de sens qu'atelier par atelier : la vue « Tous » melangeait

@@ -45,7 +45,7 @@ export default async function PersonnelReport({ searchParams }: { searchParams: 
       .select("id, nom, prenom, statut, type_contrat, date_debut, date_fin, equipe_id, atelier_id")
       .returns<Personne[]>(),
     supabase.from("equipe").select("id, nom").returns<Named[]>(),
-    supabase.from("atelier").select("id, nom").eq("actif", true).order("nom").returns<Named[]>(),
+    supabase.from("atelier").select("id, nom").eq("actif", true).order("ordre_affichage").order("nom").returns<Named[]>(),
     supabase.from("motif_absence").select("id, code_court, libelle, couleur").order("libelle").returns<Motif[]>(),
     fetchAll<Placement>(() =>
       supabase.from("placement").select("personne_id, poste_id, motif_absence_id").in("jour", monthIsos).order("id").returns<Placement[]>()

@@ -7,7 +7,7 @@ import { chargerPosteQuart, tourneSurQuart } from "@/lib/poste-quart";
 import SemaineTypeEditor from "./SemaineTypeEditor";
 
 type Quart = { code: string; libelle: string; ordre: number; creneau: string | null };
-type Ligne = { id: string; nom: string; ordre_affichage: number | null; atelier: { nom: string } | null; poste: { id: string; actif: boolean }[] };
+type Ligne = { id: string; nom: string; ordre_affichage: number | null; atelier: { nom: string; ordre_affichage: number | null } | null; poste: { id: string; actif: boolean }[] };
 
 export default async function SemaineTypePage({ searchParams }: { searchParams: Promise<{ profil?: string }> }) {
   const { profile } = await requireModule("ordonnancement", "write");
@@ -24,7 +24,7 @@ export default async function SemaineTypePage({ searchParams }: { searchParams: 
     supabase.from("quart").select("code, libelle, ordre, creneau").order("ordre").returns<Quart[]>(),
     supabase
       .from("ligne")
-      .select("id, nom, ordre_affichage, atelier:atelier_id(nom), poste(id, actif)")
+      .select("id, nom, ordre_affichage, atelier:atelier_id(nom, ordre_affichage), poste(id, actif)")
       .eq("actif", true)
       .returns<Ligne[]>(),
     chargerPosteQuart(supabase),
@@ -45,6 +45,7 @@ export default async function SemaineTypePage({ searchParams }: { searchParams: 
     .slice()
     .sort(
       (a, b) =>
+        (a.atelier?.ordre_affichage ?? 0) - (b.atelier?.ordre_affichage ?? 0) ||
         (a.atelier?.nom ?? "").localeCompare(b.atelier?.nom ?? "") ||
         (a.ordre_affichage ?? 0) - (b.ordre_affichage ?? 0) ||
         a.nom.localeCompare(b.nom),

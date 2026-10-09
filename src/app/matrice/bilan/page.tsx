@@ -29,7 +29,7 @@ export default async function BilanPage({
   const supabase = await getServerClient();
 
   const [{ data: ateliersD }, { data: lignesD }, { data: equipesD }, nbNiveaux] = await Promise.all([
-    supabase.from("atelier").select("id, nom").eq("actif", true).order("nom").returns<Atelier[]>(),
+    supabase.from("atelier").select("id, nom").eq("actif", true).order("ordre_affichage").order("nom").returns<Atelier[]>(),
     supabase.from("ligne").select("id, nom, atelier_id").eq("actif", true).order("nom").returns<Ligne[]>(),
     supabase.from("equipe").select("id, nom").eq("actif", true).order("nom").returns<Equipe[]>(),
     getNbNiveauxC(),

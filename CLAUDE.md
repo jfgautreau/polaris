@@ -325,7 +325,7 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
 - **Habilitations** (`src/app/habilitations/`) : même principe de recherche transverse ;
   bilan sur le sous-ensemble affiché ; saisie au clic sur une pastille ; filtre au clic sur
   un en-tête.
-- **Référentiel** (`src/app/admin/referentiel/`, `/api/referentiel`) : colonnes N° rot,
+- **Référentiel** (`src/app/admin/referentiel/`, `/api/referentiel`) : N° aff. par service (`atelier.ordre_affichage`, 0085 — tout écran classe les services par ce numéro puis par nom) ; colonnes N° rot,
   Habil. requises, Rempl. (PTR/PTNR), Impr., Attente (`zone_attente`, 0077), Titulaire, effectif par quart (vide « – » / 0 /
   N), Ouvre / Ferme le, Regroup., Couleur de ligne (PDF du Placement) Noms de poste / nom court / ligne **uniques par site**
   parmi les actifs (409) ; erreurs en toast fixe bas-centre.

@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
     // Référentiels du site : effectif existant (dédoublonnage), ateliers,
     // équipes, codes de contrat autorisés.
     const [ateliersR, equipesR, typesR] = await Promise.all([
-      supabase.from("atelier").select("id, nom").eq("site_id", siteId).eq("actif", true).order("nom"),
+      supabase.from("atelier").select("id, nom").eq("site_id", siteId).eq("actif", true).order("ordre_affichage").order("nom"),
       supabase.from("equipe").select("id, nom").eq("site_id", siteId).eq("actif", true).order("nom"),
       supabase.from("type_contrat").select("code").eq("site_id", siteId),
     ]);

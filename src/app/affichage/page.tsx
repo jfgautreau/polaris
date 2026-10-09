@@ -20,7 +20,7 @@ export default async function AffichageIndex() {
     .select("id, nom")
     .eq("actif", true)
     .eq("site_id", site.id)
-    .order("nom")
+    .order("ordre_affichage").order("nom")
     .returns<Atelier[]>();
   const ateliers = data ?? [];
 

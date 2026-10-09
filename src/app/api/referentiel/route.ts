@@ -148,10 +148,20 @@ export async function POST(req: NextRequest) {
         // ensuite — même modèle que create-poste. Ne PAS exiger le nom ici,
         // sinon le bouton répond 400 « Nom requis » (bug vécu 2026-08-23).
         const nom = s(body.nom);
+        // N° d'affichage (0085) : un nouveau service se range en dernier.
+        const { data: dernier, error: errOrdre } = await supabase
+          .from("atelier")
+          .select("ordre_affichage")
+          .eq("site_id", site_id)
+          .order("ordre_affichage", { ascending: false })
+          .limit(1)
+          .maybeSingle<{ ordre_affichage: number }>();
+        if (errOrdre) throw errOrdre;
+        const ordre_affichage = (dernier?.ordre_affichage ?? 0) + 10;
         const { data, error } = await supabase
           .from("atelier")
-          .insert({ nom, site_id })
-          .select("id, nom, actif")
+          .insert({ nom, site_id, ordre_affichage })
+          .select("id, nom, actif, ordre_affichage")
           .single();
         if (error) throw error;
         // Cache refdata ateliers invalide (audit P2) : le nouveau apparait
@@ -201,7 +211,11 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true, row: data });
       }
       case "update-atelier": {
-        const { error } = await supabase.from("atelier").update({ nom: s(body.nom) }).eq("id", s(body.id)).eq("site_id", site_id);
+        const patch: Record<string, unknown> = {};
+        if (body.nom !== undefined) patch.nom = s(body.nom);
+        if (body.ordre_affichage !== undefined) patch.ordre_affichage = Math.max(0, Math.floor(Number(body.ordre_affichage) || 0));
+        if (Object.keys(patch).length === 0) return NextResponse.json({ error: "Rien à modifier" }, { status: 400 });
+        const { error } = await supabase.from("atelier").update(patch).eq("id", s(body.id)).eq("site_id", site_id);
         if (error) throw error;
         updateTag(ATELIERS_TAG);
         return NextResponse.json({ ok: true });

@@ -102,7 +102,7 @@ export default async function FeuilleRouteReport({
   const agenceCodes = new Set(await getTypesAgenceC());
 
   const [{ data: atD }, { data: persD }, { data: lignesD }, matD, plD, cpD, pcD, { data: pcrD }, { data: quartsD }, { data: eqRotD }, { data: rrD }, pq, ligneVal, posteVal, jqD, ovD] = await Promise.all([
-    supabase.from("atelier").select("id, nom").eq("actif", true).order("nom").returns<Atelier[]>(),
+    supabase.from("atelier").select("id, nom").eq("actif", true).order("ordre_affichage").order("nom").returns<Atelier[]>(),
     supabase.from("personne").select("id, atelier_id, equipe_id, regroupement, type_contrat").eq("statut", "ACTIF").returns<(Personne & { type_contrat: string })[]>(),
     supabase
       .from("ligne")

@@ -33,7 +33,7 @@ export default async function ImpressionTousLesPlannings({
     .from("atelier")
     .select("id, nom")
     .eq("site_id", site.id)
-    .order("nom")
+    .order("ordre_affichage").order("nom")
     .returns<{ id: string; nom: string }[]>();
   const { data: lignesD } = await admin
     .from("ligne")

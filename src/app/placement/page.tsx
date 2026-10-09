@@ -91,7 +91,7 @@ export default async function PlacementPage({
   );
 
   const [{ data: ateliersD }, { data: equipesD }, { data: quartsD, error: quartsErr }, { data: persD }, { data: motifsD }] = await Promise.all([
-    supabase.from("atelier").select("id, nom").eq("actif", true).order("nom").returns<Atelier[]>(),
+    supabase.from("atelier").select("id, nom").eq("actif", true).order("ordre_affichage").order("nom").returns<Atelier[]>(),
     supabase.from("equipe").select("id, nom, couleur, quart_fixe").eq("actif", true).order("nom").returns<Equipe[]>(),
     // Migration 0068 : la colonne `couleur` peut ne pas encore exister — repli
     // silencieux plus bas (relecture sans `couleur`) pour ne pas planter la page.

@@ -29,7 +29,7 @@ export default async function AssezCompetencesPage({ searchParams }: { searchPar
 
   const supabase = await getServerClient();
   const [{ data: atD }, res] = await Promise.all([
-    supabase.from("atelier").select("id, nom").eq("actif", true).order("nom").returns<{ id: string; nom: string }[]>(),
+    supabase.from("atelier").select("id, nom").eq("actif", true).order("ordre_affichage").order("nom").returns<{ id: string; nom: string }[]>(),
     chargerCouvertureConges(supabase, { lundiDepart, nbSemaines: 2 }),
   ]);
   const { cols, services, nbServices, nbEnTension, pireJour, nbAbsents, joursSansTension } = res;

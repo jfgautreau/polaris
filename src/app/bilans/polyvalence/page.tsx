@@ -37,7 +37,7 @@ export default async function PolyvalenceReport({ searchParams }: { searchParams
 
   const supabase = await getServerClient();
   const [{ data: atD }, { data: eqD }, r] = await Promise.all([
-    supabase.from("atelier").select("id, nom").eq("actif", true).order("nom").returns<{ id: string; nom: string }[]>(),
+    supabase.from("atelier").select("id, nom").eq("actif", true).order("ordre_affichage").order("nom").returns<{ id: string; nom: string }[]>(),
     supabase.from("equipe").select("id, nom, couleur").eq("actif", true).order("nom").returns<{ id: string; nom: string; couleur: string | null }[]>(),
     chargerPolyvalenceCompetences(supabase, { atelier, equipe }),
   ]);

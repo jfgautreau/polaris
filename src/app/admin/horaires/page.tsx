@@ -6,7 +6,7 @@ import { chargerPosteQuart, tourneSurQuart } from "@/lib/poste-quart";
 import HoraireEditor from "./HoraireEditor";
 
 type PosteRow = { id: string; nom: string; actif: boolean; ordre_affichage: number };
-type LigneRow = { id: string; nom: string; ordre_affichage: number; atelier: { id: string; nom: string } | null; poste: PosteRow[] };
+type LigneRow = { id: string; nom: string; ordre_affichage: number; atelier: { id: string; nom: string; ordre_affichage: number | null } | null; poste: PosteRow[] };
 type Quart = { code: string; libelle: string };
 type HoraireRow = { poste_id: string; quart_code: string; jour: number; debut: string | null; fin: string | null };
 
@@ -17,7 +17,7 @@ export default async function HorairesPage() {
   const [{ data: lignesD }, { data: quartsD }, pq] = await Promise.all([
     supabase
       .from("ligne")
-      .select("id, nom, ordre_affichage, atelier:atelier_id(id, nom), poste(id, nom, actif, ordre_affichage)")
+      .select("id, nom, ordre_affichage, atelier:atelier_id(id, nom, ordre_affichage), poste(id, nom, actif, ordre_affichage)")
       .eq("actif", true)
       .order("nom")
       .returns<LigneRow[]>(),
@@ -41,6 +41,7 @@ export default async function HorairesPage() {
       ligneOrdre: l.ordre_affichage ?? 0,
       atelierId: l.atelier?.id ?? "",
       atelierNom: l.atelier?.nom ?? "(Sans service)",
+      atelierOrdre: l.atelier?.ordre_affichage ?? 0,
       postes: [...(l.poste ?? [])]
         .filter((p) => p.actif)
         .sort((a, b) => ordreThenNom({ ordre: a.ordre_affichage ?? 0, nom: a.nom }, { ordre: b.ordre_affichage ?? 0, nom: b.nom }))
@@ -49,13 +50,15 @@ export default async function HorairesPage() {
     .filter((l) => l.postes.length > 0)
     .sort(
       (a, b) =>
+        a.atelierOrdre - b.atelierOrdre ||
         a.atelierNom.localeCompare(b.atelierNom) ||
         ordreThenNom({ ordre: a.ligneOrdre, nom: a.ligneNom }, { ordre: b.ligneOrdre, nom: b.ligneNom })
     );
 
+  // Lignes déjà triées par service (N° aff., 0085) : l'ordre d'insertion suffit.
   const ateliersMap = new Map<string, string>();
   for (const l of lignes) if (l.atelierId) ateliersMap.set(l.atelierId, l.atelierNom);
-  const ateliers = [...ateliersMap].map(([id, nom]) => ({ id, nom })).sort((a, b) => a.nom.localeCompare(b.nom));
+  const ateliers = [...ateliersMap].map(([id, nom]) => ({ id, nom }));
 
   const allPosteIds = lignes.flatMap((l) => l.postes.map((p) => p.id));
 

@@ -40,7 +40,7 @@ const getAteliersBySite = unstable_cache(
       .select("id, nom")
       .eq("actif", true)
       .eq("site_id", site)
-      .order("nom");
+      .order("ordre_affichage").order("nom");
     return (data ?? []) as { id: string; nom: string }[];
   },
   ["refdata-ateliers"],

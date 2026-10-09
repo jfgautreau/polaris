@@ -162,7 +162,7 @@ export async function chargerCouvertureConges(
     { data: tpF },
   ] = await Promise.all([
     supabase.from("ligne").select("id, nom, atelier_id, ordre_affichage, poste(id, nom, actif, effectif_requis, niveau_min_requis, categorie, remplacable, zone_attente, ordre_affichage)").eq("actif", true).returns<LigneRow[]>(),
-    supabase.from("atelier").select("id, nom").eq("actif", true).order("nom").returns<{ id: string; nom: string }[]>(),
+    supabase.from("atelier").select("id, nom").eq("actif", true).order("ordre_affichage").order("nom").returns<{ id: string; nom: string }[]>(),
     supabase.from("personne").select("id, equipe_id").returns<{ id: string; equipe_id: string | null }[]>(),
     fetchAll<{ personne_id: string; date_debut: string | null; date_fin: string | null }>(() =>
       supabase.from("contrat_periode").select("personne_id, date_debut, date_fin").order("id").returns<{ personne_id: string; date_debut: string | null; date_fin: string | null }[]>()
@@ -186,6 +186,8 @@ export async function chargerCouvertureConges(
   ]);
 
   const atelierNom = new Map((atD ?? []).map((a) => [a.id, a.nom]));
+  // Rang du service : atD est lu dans l'ordre du Référentiel (N° aff., 0085).
+  const rangAtelier = new Map((atD ?? []).map((a, i) => [a.id, i]));
   const quarts = (quartsD ?? []).map((q) => q.code); // triés par ordre
   const labelDe = new Map((quartsD ?? []).map((q) => [q.code, labelQuart(q.libelle, q.creneau)]));
 
@@ -419,7 +421,7 @@ export async function chargerCouvertureConges(
       });
       return { atelierId: sid, atelierNom: postesDuService[0]?.atelierNom ?? "Sans service", nbPostes: postesDuService.length, jours, enTension: jours.some((j) => j.deficit > 0), postes };
     })
-    .sort((a, b) => a.atelierNom.localeCompare(b.atelierNom));
+    .sort((a, b) => (rangAtelier.get(a.atelierId) ?? 1e9) - (rangAtelier.get(b.atelierId) ?? 1e9) || a.atelierNom.localeCompare(b.atelierNom));
 
   const nbEnTension = services.filter((s) => s.enTension).length;
   let pireJour: { iso: string | null; places: number } = { iso: null, places: 0 };

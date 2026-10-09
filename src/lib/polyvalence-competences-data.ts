@@ -116,7 +116,7 @@ export async function chargerPolyvalenceCompetences(
     fetchAll<Mat>(() => supabase.from("matrice").select("personne_id, poste_id, niveau_actuel, niveau_cible").order("id").returns<Mat[]>()),
     supabase.from("poste_competence_requise").select("poste_id, competence_id, competence:competence_id(nom, duree_validite_mois)").returns<Pcr[]>(),
     supabase.from("competence").select("id, nom, a_recycler, duree_validite_mois").eq("actif", true).returns<Comp[]>(),
-    supabase.from("atelier").select("id, nom").eq("actif", true).order("nom").returns<{ id: string; nom: string }[]>(),
+    supabase.from("atelier").select("id, nom").eq("actif", true).order("ordre_affichage").order("nom").returns<{ id: string; nom: string }[]>(),
     fetchAll<Contrat>(() => supabase.from("contrat_periode").select("personne_id, date_debut, date_fin, motif_fin").order("id").returns<Contrat[]>()),
     chargerValidites(supabase, "ligne"),
     chargerValidites(supabase, "poste"),

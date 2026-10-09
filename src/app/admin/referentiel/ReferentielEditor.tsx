@@ -22,7 +22,7 @@ type Poste = {
   actif: boolean;
 };
 type Ligne = { id: string; nom: string; actif: boolean; ordre_affichage: number; regroupement: string | null; couleur: string | null; poste: Poste[] };
-type Atelier = { id: string; nom: string; actif: boolean; ligne: Ligne[] };
+type Atelier = { id: string; nom: string; actif: boolean; ordre_affichage: number; ligne: Ligne[] };
 type Quart = { code: string; libelle: string };
 type Comp = { id: string; nom: string; a_recycler: boolean };
 
@@ -242,13 +242,18 @@ export default function ReferentielEditor({
     setAtelier(aid, (a) => ({ ...a, nom }));
     schedule(`a:${aid}`, () => post("update-atelier", { id: aid, nom }), 500);
   }
+  // N° d'affichage du service (0085) : ordre des services sur tous les écrans.
+  function atelierOrdre(aid: string, ordre_affichage: number) {
+    setAtelier(aid, (a) => ({ ...a, ordre_affichage }));
+    schedule(`a:${aid}:ordre`, () => post("update-atelier", { id: aid, ordre_affichage }), 500);
+  }
   function toggleAtelier(aid: string, actif: boolean) {
     setAtelier(aid, (a) => ({ ...a, actif }));
     post("toggle", { entity: "atelier", id: aid, actif });
   }
   async function addAtelier(nom: string) {
     const j = await post("create-atelier", { nom });
-    if (j?.row) setTree((t) => [...t, j.row as Atelier].sort(byNom));
+    if (j?.row) setTree((t) => [...t, j.row as Atelier]);
   }
 
   // -- Ligne --
@@ -454,6 +459,16 @@ export default function ReferentielEditor({
               onChange={(e) => renameAtelier(a.id, e.target.value)}
               style={{ fontSize: 16, fontWeight: 700, width: 260 }}
             />
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--muted)" }} title="N° d'affichage du service : ordre des services dans les filtres, le Placement, la TV et les bilans (croissant)">
+              N° aff.
+              <input
+                type="number"
+                min={0}
+                value={num(a.ordre_affichage)}
+                onChange={(e) => atelierOrdre(a.id, Number(e.target.value))}
+                style={{ width: 60 }}
+              />
+            </label>
             <ToggleSwitch on={a.actif} onChange={(v) => toggleAtelier(a.id, v)} title="Activer / désactiver le service" />
             <button type="button" style={ADD_BTN} onClick={() => addLigne(a.id, "")} title="Ajouter une ligne (à compléter ensuite)">
               ＋ Ajouter une ligne

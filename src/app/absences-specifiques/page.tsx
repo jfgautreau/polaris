@@ -36,7 +36,7 @@ export default async function AbsencesSpecifiquesPage({
     // afficher « ? » sur une absence dont la personne a changé de statut.
     supabase.from("personne").select("id, nom, prenom, atelier_id").order("nom").returns<Personne[]>(),
     supabase.from("motif_absence").select("id, code_court, libelle, couleur").eq("actif", true).order("libelle").returns<Motif[]>(),
-    supabase.from("atelier").select("id, nom").eq("actif", true).order("nom").returns<Atelier[]>(),
+    supabase.from("atelier").select("id, nom").eq("actif", true).order("ordre_affichage").order("nom").returns<Atelier[]>(),
     // Tous les jours d'absence, dédoublonnés par (personne, jour). fetchAll : la
     // table grandit et dépassera 1000 lignes (cf. CLAUDE.md L8).
     fetchAll<JourAbsence & { personne_id: string }>(() =>

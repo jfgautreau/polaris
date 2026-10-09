@@ -50,7 +50,7 @@ export default async function SynthesesPage({
 
   // Listes pour les filtres (vue Absences).
   const [{ data: atD }, { data: motifD }] = await Promise.all([
-    supabase.from("atelier").select("id, nom").eq("actif", true).order("nom").returns<{ id: string; nom: string }[]>(),
+    supabase.from("atelier").select("id, nom").eq("actif", true).order("ordre_affichage").order("nom").returns<{ id: string; nom: string }[]>(),
     supabase.from("motif_absence").select("id, libelle").eq("actif", true).order("libelle").returns<{ id: string; libelle: string }[]>(),
   ]);
 

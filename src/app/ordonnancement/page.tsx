@@ -15,7 +15,7 @@ type Ligne = {
   id: string;
   nom: string;
   ordre_affichage: number | null;
-  atelier: { id: string; nom: string } | null;
+  atelier: { id: string; nom: string; ordre_affichage: number | null } | null;
   poste: { id: string; actif: boolean }[];
 };
 type Quart = { code: string; libelle: string; ordre: number; creneau: string | null };
@@ -61,7 +61,7 @@ export default async function OrdonnancementPage({
     supabase.from("quart").select("code, libelle, ordre, creneau").order("ordre").returns<Quart[]>(),
     supabase
       .from("ligne")
-      .select("id, nom, ordre_affichage, atelier:atelier_id(id, nom), poste(id, actif)")
+      .select("id, nom, ordre_affichage, atelier:atelier_id(id, nom, ordre_affichage), poste(id, actif)")
       .eq("actif", true)
       .returns<Ligne[]>(),
     supabase
@@ -101,6 +101,7 @@ export default async function OrdonnancementPage({
   // Lignes triées comme au Référentiel : atelier, puis ordre_affichage, puis nom.
   // -> lignes regroupées par atelier dans la grille.
   const ordreThenNom = (a: Ligne, b: Ligne) =>
+    (a.atelier?.ordre_affichage ?? 0) - (b.atelier?.ordre_affichage ?? 0) ||
     (a.atelier?.nom ?? "").localeCompare(b.atelier?.nom ?? "") ||
     (a.ordre_affichage ?? 0) - (b.ordre_affichage ?? 0) ||
     a.nom.localeCompare(b.nom);
