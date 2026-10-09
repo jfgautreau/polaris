@@ -60,6 +60,7 @@ export default function AbsencesEditor({
   initial,
   atelierInit = "",
   nomInit = "",
+  motifInit = [],
   canEdit,
 }: {
   personnes: Personne[];
@@ -70,6 +71,7 @@ export default function AbsencesEditor({
   // (bouton « 🤒 »). Vides = aucun filtre — comportement historique.
   atelierInit?: string;
   nomInit?: string;
+  motifInit?: string[];
   // Droit « absences: write » (calculé serveur). En lecture seule, on masque
   // toute la saisie : « + Déclarer », crayon et corbeille. Sans ce garde, un
   // titulaire de `absences: read` (ordo, rh, codir…) voyait les boutons et
@@ -94,9 +96,11 @@ export default function AbsencesEditor({
   // mêmes params, donc le retour reste cohérent avec l'état visible.
   const [fNom, _setFNom] = useState(nomInit);
   const [fAtelier, _setFAtelier] = useState(atelierInit);
+  // Motifs : plusieurs à la fois (ex. maladie + accident du travail), ?motif=a,b.
+  const [fMotifs, _setFMotifs] = useState<string[]>(() => motifInit.filter((id) => motifs.some((m) => m.id === id)));
   const [fDu, setFDu] = useState("");
   const [fAu, setFAu] = useState("");
-  const syncUrl = (patch: Partial<{ search: string; atelier: string }>) => {
+  const syncUrl = (patch: Partial<{ search: string; atelier: string; motif: string }>) => {
     const p = new URLSearchParams(searchParams?.toString() ?? "");
     for (const [k, v] of Object.entries(patch)) {
       if (v) p.set(k, v);
@@ -107,6 +111,8 @@ export default function AbsencesEditor({
   };
   const setFNom = (v: string) => { _setFNom(v); syncUrl({ search: v }); };
   const setFAtelier = (v: string) => { _setFAtelier(v); syncUrl({ atelier: v }); };
+  const setFMotifs = (v: string[]) => { _setFMotifs(v); syncUrl({ motif: v.join(",") }); };
+  const basculerMotif = (id: string) => setFMotifs(fMotifs.includes(id) ? fMotifs.filter((x) => x !== id) : [...fMotifs, id]);
   // Lien de retour Planning : lit l'URL LIVE (pas nomInit qui reste figé à
   // l'initialisation) → l'utilisateur revient avec les filtres qu'il vient
   // d'ajuster, pas ceux d'arrivée.
@@ -259,19 +265,37 @@ export default function AbsencesEditor({
     }
   }
 
-  // Filtrage — nom (contient), atelier (via personne.atelier_id), période
+  // Filtrage — nom (contient), service (via personne.atelier_id), période
   // d'intersection (fDu et/ou fAu ; une absence apparaît dès qu'elle recouvre la
-  // fenêtre, même partiellement).
-  const filtered = useMemo(() => {
+  // fenêtre, même partiellement), puis motif(s). Les compteurs des boutons se
+  // calculent AVANT le filtre de leur propre dimension : chaque bouton dit
+  // combien il afficherait.
+  const horsMotif = useMemo(() => {
     const q = norm(fNom.trim());
     return initial.filter((a) => {
       if (q && !norm(a.label).includes(q)) return false;
-      if (fAtelier && a.atelier_id !== fAtelier) return false;
       if (fDu && a.fin < fDu) return false;
       if (fAu && a.debut > fAu) return false;
       return true;
     });
-  }, [initial, fNom, fAtelier, fDu, fAu]);
+  }, [initial, fNom, fDu, fAu]);
+  const parService = useMemo(() => {
+    const c = new Map<string, number>();
+    for (const a of horsMotif) if (!fMotifs.length || fMotifs.includes(a.motif_absence_id)) c.set(a.atelier_id ?? "", (c.get(a.atelier_id ?? "") ?? 0) + 1);
+    return c;
+  }, [horsMotif, fMotifs]);
+  const parMotif = useMemo(() => {
+    const c = new Map<string, number>();
+    for (const a of horsMotif) if (!fAtelier || a.atelier_id === fAtelier) c.set(a.motif_absence_id, (c.get(a.motif_absence_id) ?? 0) + 1);
+    return c;
+  }, [horsMotif, fAtelier]);
+  const filtered = useMemo(
+    () =>
+      horsMotif.filter(
+        (a) => (!fAtelier || a.atelier_id === fAtelier) && (!fMotifs.length || fMotifs.includes(a.motif_absence_id)),
+      ),
+    [horsMotif, fAtelier, fMotifs],
+  );
 
   const cellStyle: React.CSSProperties = { padding: "4px 6px", borderBottom: "1px solid #f1f5f9" };
 
@@ -404,13 +428,6 @@ export default function AbsencesEditor({
             <span>Nom</span>
             <input value={fNom} onChange={(e) => setFNom(e.target.value)} placeholder="🔍 rechercher un nom" />
           </div>
-          <div className="field" style={{ flex: "0 0 200px" }}>
-            <span>Service</span>
-            <select value={fAtelier} onChange={(e) => setFAtelier(e.target.value)}>
-              <option value="">Tous services</option>
-              {ateliers.map((a) => (<option key={a.id} value={a.id}>{a.nom}</option>))}
-            </select>
-          </div>
           <div className="field" style={{ flex: "0 0 160px" }}>
             <span>Période — du</span>
             <input type="date" value={fDu} onChange={(e) => setFDu(e.target.value)} />
@@ -419,8 +436,8 @@ export default function AbsencesEditor({
             <span>… au</span>
             <input type="date" value={fAu} onChange={(e) => setFAu(e.target.value)} />
           </div>
-          {(fNom || fAtelier || fDu || fAu) && (
-            <button type="button" className="btn-sm btn-ghost" style={{ width: "auto", padding: "6px 12px", marginBottom: 2 }} onClick={() => { setFNom(""); setFAtelier(""); setFDu(""); setFAu(""); }}>
+          {(fNom || fAtelier || fMotifs.length > 0 || fDu || fAu) && (
+            <button type="button" className="btn-sm btn-ghost" style={{ width: "auto", padding: "6px 12px", marginBottom: 2 }} onClick={() => { setFNom(""); setFAtelier(""); setFMotifs([]); setFDu(""); setFAu(""); }}>
               Réinitialiser
             </button>
           )}
@@ -432,6 +449,64 @@ export default function AbsencesEditor({
           <Link href={retourHref} className="navlink" style={{ marginLeft: 12 }}>
             &larr; Planning
           </Link>
+        </div>
+
+        {/* Service : un clic, avec le nombre d'absences de chacun. */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+          <span className="muted" style={{ fontSize: 13, minWidth: 54 }}>Service</span>
+          <div className="segments" style={{ flexWrap: "wrap" }}>
+            <button type="button" className={fAtelier === "" ? "seg active" : "seg"} onClick={() => setFAtelier("")}>
+              Tous
+            </button>
+            {ateliers.map((a) => (
+              <button key={a.id} type="button" className={fAtelier === a.id ? "seg active" : "seg"} onClick={() => setFAtelier(fAtelier === a.id ? "" : a.id)}>
+                {a.nom} <span style={{ opacity: 0.7 }}>({parService.get(a.id) ?? 0})</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Motifs : pastilles de leur couleur, plusieurs à la fois. */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+          <span className="muted" style={{ fontSize: 13, minWidth: 54 }}>Motif</span>
+          {motifs
+            .filter((m) => (parMotif.get(m.id) ?? 0) > 0 || fMotifs.includes(m.id))
+            .map((m) => {
+              const actif = fMotifs.includes(m.id);
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  aria-pressed={actif}
+                  onClick={() => basculerMotif(m.id)}
+                  title={m.libelle}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    width: "auto",
+                    margin: 0,
+                    padding: "3px 10px",
+                    borderRadius: 999,
+                    fontSize: 12.5,
+                    cursor: "pointer",
+                    color: "var(--text)",
+                    background: actif ? "#eef2ff" : "#fff",
+                    border: `1px solid ${actif ? "var(--primary)" : "var(--border)"}`,
+                    boxShadow: actif ? "inset 0 0 0 1px var(--primary)" : "none",
+                    fontWeight: actif ? 700 : 500,
+                  }}
+                >
+                  <span aria-hidden style={{ width: 10, height: 10, borderRadius: 3, background: m.couleur, border: "1px solid rgba(0,0,0,.15)" }} />
+                  {m.libelle} <span style={{ opacity: 0.7 }}>({parMotif.get(m.id) ?? 0})</span>
+                </button>
+              );
+            })}
+          {fMotifs.length > 0 && (
+            <button type="button" className="btn-sm btn-ghost" style={{ width: "auto", margin: 0, color: "var(--text)" }} onClick={() => setFMotifs([])}>
+              Tous les motifs
+            </button>
+          )}
         </div>
       </div>
 

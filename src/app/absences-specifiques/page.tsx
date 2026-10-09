@@ -22,13 +22,15 @@ type Atelier = { id: string; nom: string };
 export default async function AbsencesSpecifiquesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ atelier?: string; search?: string }>;
+  searchParams: Promise<{ atelier?: string; search?: string; motif?: string }>;
 }) {
   const { profile, perms } = await requireModule("absences", "read");
   const canEdit = canWrite(perms, "absences");
   const sp = await searchParams;
   const atelierInit = sp.atelier ?? "";
   const searchInit = sp.search ?? "";
+  // Motifs filtrés (?motif=id1,id2), revalidés côté client contre la liste.
+  const motifInit = (sp.motif ?? "").split(",").filter(Boolean);
 
   const supabase = await getServerClient();
   const [{ data: persData }, { data: motifData }, { data: ateliersData }, joursAll, { data: absData }] = await Promise.all([
@@ -99,7 +101,7 @@ export default async function AbsencesSpecifiquesPage({
         <p className="muted" style={{ marginBottom: 16 }}>
           Toutes les absences de l&apos;effectif, reconstruites à partir des jours posés au planning
           (une période déclarée <strong>ou</strong> des jours saisis un à un). Filtrez par nom,
-          atelier ou période. Le crayon modifie, la corbeille libère les jours.
+          service, motif ou période. Le crayon modifie, la corbeille libère les jours.
         </p>
         <AbsencesEditor
           personnes={personnes}
@@ -108,6 +110,7 @@ export default async function AbsencesSpecifiquesPage({
           initial={periodes}
           atelierInit={atelierInit}
           nomInit={searchInit}
+          motifInit={motifInit}
           canEdit={canEdit}
         />
       </div>
