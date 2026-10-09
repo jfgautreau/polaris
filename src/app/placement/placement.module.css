@@ -708,11 +708,26 @@
 /* « PDF heures » : horaire de chacun après son nom, tuiles plus larges pour
    qu'il tienne sur la même ligne (la mise à l'échelle rattrape la largeur). */
 .printSheet[data-heures] .printPoste { width: 205px; }
+/* PDF pour Affich. : nom à gauche, heure calée à droite sur la même ligne. */
+.printNomLigne {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+}
 .printHeure {
-  float: right;
-  margin-left: 6px;
+  flex: 0 0 auto;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
+  white-space: nowrap;
+}
+/* Commentaire du jour sous le nom : retrait pour le rattacher à la personne. */
+.printCommentBloc {
+  margin: 0 0 2px 16px;
+  color: #475569;
+  font-style: italic;
+  font-size: 0.88em;
+  line-height: 1.25;
 }
 
 .printComment {
