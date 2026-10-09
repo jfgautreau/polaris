@@ -8,6 +8,7 @@ import { INTERIM_BG } from "@/lib/interim";
 import ModaleDeplacable from "@/components/ModaleDeplacable";
 import { FillIcon } from "@/components/icons";
 import { texteSurCouleur } from "./QuartBandeau";
+import { planRecopie, compteRendu, estPoste, estRecopiable, type CaseCible } from "@/lib/planning-recopie";
 
 // `wi` : index de la semaine affichée (0..2) ; `quart` : quart affiché ce jour-là —
 // le même partout en « Suivre le quart », celui de l'équipe en « Suivre l'équipe ».
@@ -279,7 +280,9 @@ const LignePlanning = memo(function LignePlanning({
         // TP materialise (jeton "TP") : vraie ligne, deplacable, effacable.
         const vTP = v === "TP";
         const bloque = (tpb && !tpAbsence) || hors;
-        const showFill = pers.editable && !ctx.otherByCell[key(pers.id, d.iso)] && !bloque && !vTP;
+        // » : seulement sur une case qui se recopie (poste, NT) ou vide (vide la
+        // suite) — jamais sur une absence ni un TP (cf. src/lib/planning-recopie.ts).
+        const showFill = pers.editable && !ctx.otherByCell[key(pers.id, d.iso)] && !bloque && (v === "" || estRecopiable(v));
         const other = v === "" ? ctx.otherByCell[key(pers.id, d.iso)] : undefined;
         // Glisser-deposer. Source draggable : poste, NT ou TP reel (jamais
         // une absence, jamais le vide). Cible d'un depot : case VIDE,
@@ -395,7 +398,15 @@ const LignePlanning = memo(function LignePlanning({
               <button
                 type="button"
                 className="fillw"
-                title={dowMon(d.iso) < 4 ? "Recopier jusqu'à la fin de cette semaine" : "Recopier sur la semaine suivante"}
+                title={
+                  v === ""
+                    ? dowMon(d.iso) < 4
+                      ? "Vider la fin de cette semaine (absences et TP conservés)"
+                      : "Vider la semaine suivante (absences et TP conservés)"
+                    : dowMon(d.iso) < 4
+                      ? "Recopier sur les cases vides jusqu'à la fin de cette semaine"
+                      : "Recopier sur les cases vides de la semaine suivante"
+                }
                 onClick={() => actions.recopier(pers, i)}
               >
                 &raquo;
@@ -586,6 +597,9 @@ export default function PlanningGrid({
   "use memo"; // React Compiler (mode opt-in, cf. next.config.ts)
   const [vals, setVals] = useState<Record<string, string>>(initial);
   const [saving, setSaving] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  // Compte rendu bref de la dernière recopie (» d'une personne ou d'un jour).
+  // (Bouton » d'un jour : visible dès qu'une personne affichée est modifiable.)
+  const [recopieTxt, setRecopieTxt] = useState("");
   // Semaine (lundi) dont le pré-remplissage « postes fixes » est en cours.
   const [prefillWk, setPrefillWk] = useState<string | null>(null);
   // Surlignage d'un type d'anomalie pour un jour donne (clic sur une puce d'en-tete).
@@ -709,6 +723,7 @@ export default function PlanningGrid({
     if (!displayedSet) return personnes;
     return personnes.filter((p) => displayedSet.has(p.id));
   }, [personnes, search, displayedSet]);
+  const peutCopierJour = shown.some((p) => p.editable);
   const [exc, setExc] = useState(exceptions);
   const [excAt, setExcAt] = useState<string | null>(null); // cle "pid:iso"
   const [draft, setDraft] = useState<{ debut: string; fin: string; motif: string }>({ debut: "", fin: "", motif: "" });
@@ -1007,71 +1022,117 @@ export default function PlanningGrid({
     setTimeout(() => setSaving("idle"), 1200);
   }
 
-  // Recopie la valeur d'une case selon le jour de la semaine :
-  //  - du lundi au jeudi : sur le reste de la semaine en cours (jours affiches) ;
-  //  - a partir du vendredi : sur les jours affiches de la semaine SUIVANTE (une
-  //    seule semaine ; le week-end en cours n'est pas touche, les jours non
-  //    affiches ne sont pas remplis).
-  // On ne touche jamais aux jours ou la personne est deja placee sur un autre quart.
-  // Chaque jour est ecrit sur SON quart : en « Suivre l'equipe », la semaine
-  // suivante est sur le quart de l'equipe (ex. apres-midi apres le matin). Un poste
-  // qui n'y tourne pas n'est pas recopie ce jour-la, et on le dit.
-  async function fillWeek(pers: Personne, dayIndex: number) {
-    const value = vals[key(pers.id, days[dayIndex].iso)] ?? "";
+  // Recopie (règles pures et testées : src/lib/planning-recopie.ts, décision du
+  // 2026-10-09). Jours cibles depuis le jour `dayIndex` : du lundi au jeudi, la fin
+  // de la semaine en cours ; à partir du vendredi, la semaine SUIVANTE affichée
+  // (le week-end en cours n'est pas touché). Chaque jour est écrit sur SON quart :
+  // en « Suivre l'équipe », un poste qui ne tourne pas ce jour-là est sauté.
+  function joursCibles(dayIndex: number) {
     const wk = weekIdx[dayIndex];
     const avantVendredi = dowMon(days[dayIndex].iso) < 4; // 0 = lundi .. 4 = vendredi
-    const candidats = days
+    return days
       .filter((_, j) => (avantVendredi ? j > dayIndex && weekIdx[j] === wk : weekIdx[j] === wk + 1))
-      .filter((t) => !t.closed && !otherByCell[key(pers.id, t.iso)]);
-    const horsCycle = isPoste(value) ? candidats.filter((t) => !postesTournant[t.wi]?.has(value)) : [];
-    const targets = candidats.filter((t) => !horsCycle.includes(t));
-    const nomPoste = posteLabel[value] ?? posteLabelAll[value] ?? "?";
-    const texteHorsCycle = horsCycle.length
-      ? `Le poste ${nomPoste} ne tourne pas sur le quart ${[...new Set(horsCycle.map((t) => weekBlocks[t.wi]?.quart?.libelle ?? quartLabel[t.quart] ?? t.quart))].join(", ")} : ${horsCycle.length} jour(s) non recopié(s).`
-      : "";
-    if (targets.length === 0) {
-      // rien a recopier (fin de semaine / plus de semaine affichee / poste hors cycle)
-      if (texteHorsCycle) window.alert(texteHorsCycle);
-      return;
-    }
-    const hasExisting = targets.some((t) => (vals[key(pers.id, t.iso)] ?? "") !== "");
-    if (
-      hasExisting &&
-      !window.confirm(
-        avantVendredi
-          ? "Des affectations existent déjà sur la fin de cette semaine. Les écraser ?"
-          : "Des affectations existent déjà sur la semaine suivante. Les écraser ?"
-      )
-    ) {
-      return;
-    }
-    const avant = targets.map((t) => vals[key(pers.id, t.iso)] ?? "");
+      .filter((t) => !t.closed);
+  }
+  // Case cible : bloquée si la personne est sur un autre quart, en TP calculé
+  // (sans motif d'absence) ou hors contrat ce jour-là.
+  function ciblesDe(pid: string, source: string, jours: Jour[]): CaseCible[] {
+    return jours.map((t) => {
+      const k = key(pid, t.iso);
+      const v = vals[k] ?? "";
+      return {
+        iso: t.iso,
+        valeur: v,
+        bloquee: !!otherByCell[k] || (!!tpBlocked[k] && !v.startsWith("m:")) || !!horsEffectif[k],
+        horsCycle: estPoste(source) && !postesTournant[t.wi]?.has(source),
+      };
+    });
+  }
+  // Écrit un lot de cases (affichage immédiat, puis serveur) ; une case refusée
+  // (hors contrat, poste hors cycle…) revient à sa valeur enregistrée. Rend le
+  // nombre de refus.
+  async function appliquerRecopie(ecritures: { pid: string; equipe: string | null; iso: string; valeur: string }[]): Promise<number> {
+    if (ecritures.length === 0) return 0;
+    const avant = ecritures.map((e) => vals[key(e.pid, e.iso)] ?? "");
     setVals((s) => {
       const next = { ...s };
-      for (const t of targets) next[key(pers.id, t.iso)] = value;
+      for (const e of ecritures) next[key(e.pid, e.iso)] = e.valeur;
       return next;
     });
     setSaving("saving");
-    // `forcer` : la recopie duplique une affectation DEJA a l'ecran, donc deja
-    // acceptee (au besoin en la forcant). Redemander confirmation pour chaque
-    // jour recopie n'apprendrait rien. Chaque ligne reste tracee, et le rouge
-    // se recalcule a l'affichage.
-    const resultats = await Promise.all(targets.map((t) => postCell(pers.id, t.iso, pers.equipe_id, value, true)));
-    // Jours refuses par le serveur (hors effectif, poste hors cycle…) : la case
-    // revient a sa valeur enregistree au lieu de garder une valeur fausse.
-    const refuses = targets.filter((_, j) => !resultats[j].ok).length;
-    if (refuses > 0)
+    // `forcer` : la recopie duplique une affectation DÉJÀ à l'écran, donc déjà
+    // acceptée (au besoin en la forçant). Chaque ligne reste tracée, et le rouge
+    // se recalcule à l'affichage.
+    const resultats = await Promise.all(ecritures.map((e) => postCell(e.pid, e.iso, e.equipe, e.valeur, true)));
+    const refus = resultats.filter((r) => !r.ok).length;
+    if (refus > 0)
       setVals((s) => {
         const next = { ...s };
-        targets.forEach((t, j) => {
-          if (!resultats[j].ok) next[key(pers.id, t.iso)] = avant[j];
+        ecritures.forEach((e, j) => {
+          if (!resultats[j].ok) next[key(e.pid, e.iso)] = avant[j];
         });
         return next;
       });
-    setSaving(refuses === 0 ? "saved" : "error");
+    setSaving(refus === 0 ? "saved" : "error");
     setTimeout(() => setSaving("idle"), 1200);
-    const texteRefus = refuses > 0 ? `${refuses} jour(s) refusé(s) : cases remises à leur valeur.` : "";
-    if (texteHorsCycle || texteRefus) window.alert(`Recopie partielle.\n${[texteHorsCycle, texteRefus].filter(Boolean).join("\n")}`);
+    return refus;
+  }
+  function annoncer(txt: string) {
+    setRecopieTxt(txt);
+    setTimeout(() => setRecopieTxt((x) => (x === txt ? "" : x)), 5000);
+  }
+
+  // » d'une personne : recopie un poste ou un NT sur les cases VIDES ; une case
+  // vide recopiée vide la suite (postes et NT seulement, après confirmation).
+  async function fillWeek(pers: Personne, dayIndex: number) {
+    const source = vals[key(pers.id, days[dayIndex].iso)] ?? "";
+    const vider = source === "";
+    const plan = planRecopie(source, ciblesDe(pers.id, source, joursCibles(dayIndex)), true);
+    if (plan.ecrire.length === 0) {
+      annoncer(compteRendu(0, plan.laissees, plan.horsCycle, 0, vider));
+      return;
+    }
+    if (vider && !window.confirm(`Vider ${plan.ecrire.length} case(s) de ${pers.label} sur la suite ?
+Les absences et les temps partiels sont conservés.`)) return;
+    const refus = await appliquerRecopie(plan.ecrire.map((e) => ({ pid: pers.id, equipe: pers.equipe_id, ...e })));
+    annoncer(compteRendu(plan.ecrire.length - refus, plan.laissees, plan.horsCycle, refus, vider));
+  }
+
+  // » d'un jour (en-tête) : recopie ce jour, pour les personnes AFFICHÉES et
+  // modifiables, sur les jours suivants (même règle que ») — postes et NT
+  // seulement, cases vides seulement, jamais de propagation du vide.
+  async function fillDay(dayIndex: number) {
+    const jours = joursCibles(dayIndex);
+    if (jours.length === 0) return;
+    const iso = days[dayIndex].iso;
+    let laissees = 0;
+    let horsCycle = 0;
+    const ecritures: { pid: string; equipe: string | null; iso: string; valeur: string }[] = [];
+    for (const p of shown) {
+      if (!p.editable || otherByCell[key(p.id, iso)]) continue;
+      const source = vals[key(p.id, iso)] ?? "";
+      if (!estRecopiable(source)) continue;
+      const plan = planRecopie(source, ciblesDe(p.id, source, jours), false);
+      laissees += plan.laissees;
+      horsCycle += plan.horsCycle;
+      for (const e of plan.ecrire) ecritures.push({ pid: p.id, equipe: p.equipe_id, ...e });
+    }
+    const nomJour = `${days[dayIndex].nom} ${days[dayIndex].num}`;
+    const jusqua = `${jours[0].nom} ${jours[0].num}${jours.length > 1 ? ` → ${jours[jours.length - 1].nom} ${jours[jours.length - 1].num}` : ""}`;
+    if (ecritures.length === 0) {
+      annoncer(`Copie du ${nomJour} : rien à remplir. ${compteRendu(0, laissees, horsCycle, 0)}`);
+      return;
+    }
+    if (
+      !window.confirm(
+        `Copier le ${nomJour} sur ${jusqua} pour les personnes affichées ?
+
+${ecritures.length} case(s) vide(s) seront remplies (postes et NT). Les cases déjà remplies — absences, TP, autres affectations — ne sont pas touchées.`,
+      )
+    )
+      return;
+    const refus = await appliquerRecopie(ecritures);
+    annoncer(`Copie du ${nomJour} : ${compteRendu(ecritures.length - refus, laissees, horsCycle, refus)}`);
   }
 
   // Clavier : Suppr/Retour efface la case selectionnee ; Echap ferme.
@@ -1245,7 +1306,7 @@ export default function PlanningGrid({
       {/* Tableau 1 : en-tetes (dates) + bilan/alertes retractable (fixe) */}
       <div className="card" style={{ overflowX: "hidden", overflowY: "auto", scrollbarGutter: "stable", position: "relative", padding: "6px 12px" }}>
         <div style={{ position: "absolute", top: 8, right: 12, fontSize: 12, fontWeight: 600, color: saving === "error" ? "var(--danger)" : saving === "saved" ? "var(--ok)" : "var(--muted)" }}>
-          {saving === "saving" ? "Enregistrement..." : saving === "saved" ? "Enregistré" : saving === "error" ? "Échec" : ""}
+          {saving === "saving" ? "Enregistrement..." : recopieTxt ? recopieTxt : saving === "saved" ? "Enregistré" : saving === "error" ? "Échec" : ""}
         </div>
 
       <table ref={headTableRef} className="matrix" style={tStyle} onMouseOver={onCellOver} onMouseLeave={onCellLeave}>
@@ -1333,6 +1394,19 @@ export default function PlanningGrid({
                 {d.nom.slice(0, 2)}
                 <br />
                 <span className="muted" style={{ fontWeight: 400 }}>{d.num}</span>
+                {/* En ligne avec la date : l'en-tête garde sa hauteur (HEAD_H). */}
+                {!d.closed && peutCopierJour && (
+                  <button
+                    type="button"
+                    className="noprint"
+                    onClick={() => void fillDay(days.indexOf(d))}
+                    title={dowMon(d.iso) < 4 ? "Copier ce jour sur les jours suivants de la semaine (cases vides seulement, postes et NT)" : "Copier ce jour sur la semaine suivante (cases vides seulement, postes et NT)"}
+                    aria-label="Copier ce jour sur les jours suivants"
+                    style={{ display: "inline-block", verticalAlign: "middle", margin: "0 0 0 2px", width: 14, height: 13, padding: 0, lineHeight: "11px", fontSize: 10, fontWeight: 700, color: "#4f46e5", background: "#eef2ff", border: "1px solid #c7d2fe", borderRadius: 3, cursor: "pointer" }}
+                  >
+                    &raquo;
+                  </button>
+                )}
               </th>
             ))}
           </tr>

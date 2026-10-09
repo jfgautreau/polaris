@@ -292,7 +292,8 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   `BANDE_H` décale tous les en-têtes figés) ; `»` écrit chaque jour sur son quart et
   saute un poste hors cycle. Jours de semaine toujours affichés (jour fermé = message fusionné). Bascule
   Conducteurs (`?cond=1`). Pendule 🕐 (horaire + commentaire, `horaire_exception`),
-  recopie `»`, glisser-déposer, croix de survol. Le bouton de pré-remplissage recharge la vue.
+  recopie `»` (règles `src/lib/planning-recopie.ts` : postes et NT seulement, cases vides seulement ;
+  `»` sur case vide = vider la suite sauf absences / TP ; `»` du jour en en-tête = personnes affichées), glisser-déposer, croix de survol. Le bouton de pré-remplissage recharge la vue.
   Bascule **Par nom / Par poste** (`?par=poste`, `PlanningParPoste.tsx`, règles pures
   `src/lib/planning-par-poste.ts`, spec `tasks/planning-par-poste.md`) : une rangée par place
   (attribution stable : n° de rotation > continuité > 1re place libre > surnombre), un seul quart,
