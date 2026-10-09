@@ -708,7 +708,7 @@
 /* « PDF heures » : horaire de chacun après son nom, tuiles plus larges pour
    qu'il tienne sur la même ligne (la mise à l'échelle rattrape la largeur). */
 .printSheet[data-heures] .printPoste { width: 205px; }
-/* PDF pour Affich. : nom à gauche, heure calée à droite sur la même ligne. */
+/* Toutes les feuilles : nom à gauche, heure calée à droite sur la même ligne. */
 .printNomLigne {
   display: flex;
   justify-content: space-between;
@@ -728,11 +728,6 @@
   font-style: italic;
   font-size: 0.88em;
   line-height: 1.25;
-}
-
-.printComment {
-  color: #475569;
-  font-style: italic;
 }
 
 /* Feuille OPÉRATEURS (« PDF », data-mode="simple") : seule la couleur des lignes

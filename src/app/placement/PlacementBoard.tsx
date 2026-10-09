@@ -1353,28 +1353,18 @@ export default function PlacementBoard({
                     // éventuel commentaire du jour (horaire_exception.motif).
                     const ligneOcc = (p: Personne, badge: ReactNode) => {
                       const alerte = habManque(p.id, po.id).length > 0 || compState(p.id, po) !== "ok";
-                      // PDF pour Affich. : nom (et heure) sur la 1re ligne, commentaire
-                      // en dessous, sur toute la largeur de la tuile — lisible de loin.
-                      // PDF Manager : commentaire à la suite du nom, feuille compacte.
-                      if (prepImpression !== "ce") {
-                        return (
-                          <div key={p.id} className={`${s.printNom} ${alerte ? s.printAlerte : ""}`}>
-                            <div className={s.printNomLigne}>
-                              <span>
-                                {badge}
-                                {p.nom} {p.prenom.charAt(0).toUpperCase()}.
-                              </span>
-                              {prepImpression === "heures" && heures[p.id] && <span className={s.printHeure}>{heures[p.id]}</span>}
-                            </div>
-                            {commentaires[p.id] && <div className={s.printCommentBloc}>{commentaires[p.id]}</div>}
-                          </div>
-                        );
-                      }
+                      // Toutes les feuilles : nom (et heure) sur la 1re ligne, commentaire
+                      // du jour en dessous, sur toute la largeur de la tuile.
                       return (
                         <div key={p.id} className={`${s.printNom} ${alerte ? s.printAlerte : ""}`}>
-                          {badge}
-                          {p.nom} {p.prenom.charAt(0).toUpperCase()}.
-                          {commentaires[p.id] && <span className={s.printComment}> — {commentaires[p.id]}</span>}
+                          <div className={s.printNomLigne}>
+                            <span>
+                              {badge}
+                              {p.nom} {p.prenom.charAt(0).toUpperCase()}.
+                            </span>
+                            {prepImpression === "heures" && heures[p.id] && <span className={s.printHeure}>{heures[p.id]}</span>}
+                          </div>
+                          {commentaires[p.id] && <div className={s.printCommentBloc}>{commentaires[p.id]}</div>}
                         </div>
                       );
                     };
