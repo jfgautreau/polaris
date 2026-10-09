@@ -1,6 +1,6 @@
 # Reste à faire — Polaris
 
-> État au 2026-10-09. Migrations appliquées jusqu'à **0088**. **451** tests Vitest.
+> État au 2026-10-09. Migrations appliquées jusqu'à **0089**. **451** tests Vitest.
 > Ce fichier ne garde que ce qui reste ouvert ; le détail de ce qui est fait est dans
 > `git log` (et l'en-tête de chaque migration).
 
@@ -19,9 +19,6 @@
       Cycle de vie de la personne concernée.
 
 ## Base de données
-- [ ] **Appliquer `0089_nettoyage_colonnes_depreciees.sql`** : supprime `poste.suivi_motif`,
-      `poste.anci_usage` (0080), `visite.professionnel`, `visite.prochain_professionnel` (0081),
-      plus lues nulle part (report de sécurité vers les tableaux avant suppression).
 - [ ] **Backfill SQL** des `personne_competence.date_expiration` nulles alors que la
       formation a une durée de validité (aujourd'hui compensé à l'affichage seulement).
 - [ ] RLS `audit_log` : `can_read_audit()` nomme encore admin + codir. L'écran Journal ne

@@ -33,7 +33,7 @@ L'historique des décisions est dans git et dans l'en-tête de chaque migration.
    Pour de la *donnée* seulement, un script Node lisant `SUPABASE_SERVICE_ROLE_KEY` de
    `.env.local` est acceptable (simulation d'abord, écriture après accord).
    Projet Supabase : ref `stcxlsmmnplxpirrnefm`, eu-west-3.
-   **Dernière migration appliquée : `0088`** (horaires par place). Toute nouvelle policy RLS s'écrit
+   **Dernière migration appliquée : `0089`** (nettoyage des colonnes dépréciées). Toute nouvelle policy RLS s'écrit
    `site_id = (select public.current_site_id())` (forme InitPlan, calculée une fois par
    requête) — idem pour `is_admin()`, `has_role('x')`, `auth.uid()`.
 6. **PowerShell 5.1** : message de commit multi-lignes via here-string `@'…'@` (le `'@`

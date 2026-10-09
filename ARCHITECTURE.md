@@ -161,8 +161,8 @@ Triggers PostgreSQL (`audit_trigger`) sur les tables métier → `audit_log`
   (`journal_purger_personne`). Ces fonctions sont réservées au service_role.
 
 ## Migrations
-Fichiers SQL ordonnés dans `supabase/migrations/` (**0001 → 0088**, dernière appliquée :
-**0088**), **exécutés manuellement** par l'utilisateur dans le SQL Editor Supabase
+Fichiers SQL ordonnés dans `supabase/migrations/` (**0001 → 0089**, dernière appliquée :
+**0089**), **exécutés manuellement** par l'utilisateur dans le SQL Editor Supabase
 (`SUPABASE_DB_URL` est vide ; `npm run db:migrate` ne fonctionne que s'il est défini).
 
 Depuis la **0037**, trois séquences délicates passent par des **fonctions SQL** appelées
@@ -226,7 +226,7 @@ intégrés + `role_custom`).
   du Placement) ; **0078** — un départ libère le poste fixe (trigger
   `liberer_poste_fixe_au_depart` sur la mise à jour du statut, + rattrapage).
 
-**Octobre 2026 (0079 → 0088)** :
+**Octobre 2026 (0079 → 0089)** :
 - **0079 → 0081** — visites : professionnel vu / attendu (médecin, infirmière, cumulables
   en 0081) ; poste à risque avec plusieurs motifs et attestations (0080).
 - **0082** — `ligne.couleur` ; **0083** — `motif_absence.visible_operateurs` ;
