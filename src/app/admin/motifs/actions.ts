@@ -87,6 +87,17 @@ export async function toggleNonPlanifie(fd: FormData) {
   done(error);
 }
 
+// Affichage du motif sur le PDF opérateurs du Placement (migration 0083).
+// Même convention qu'au-dessus : le champ `actif` porte le NOUVEL état.
+export async function toggleVisibleOperateurs(fd: FormData) {
+  const supabase = await requireModuleWrite("motifs");
+  const { error } = await supabase
+    .from("motif_absence")
+    .update({ visible_operateurs: fd.get("actif") === "true" })
+    .eq("id", s(fd, "id"));
+  done(error);
+}
+
 // ----- Agences d'interim -----
 // Liste fermee alimentant le menu deroulant « Agence » des periodes de contrat
 // (cf. src/app/personnel/PeriodesEditor.tsx). Desactiver plutot que supprimer :

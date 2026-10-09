@@ -5,7 +5,7 @@ import { requireModule, canWrite } from "@/lib/permissions";
 import LectureSeule from "@/components/LectureSeule";
 import ActifCheckbox from "@/components/ActifCheckbox";
 import {
-  createMotif, updateMotif, toggleMotif, toggleNonPlanifie,
+  createMotif, updateMotif, toggleMotif, toggleNonPlanifie, toggleVisibleOperateurs,
   createAgence, updateAgence, toggleAgence,
   createTypeContrat, updateTypeContrat, toggleTypeContrat, toggleTypeContratAgence,
 } from "./actions";
@@ -16,7 +16,7 @@ import ImportAbsences from "./ImportAbsences";
 import ImportPersonnel from "./ImportPersonnel";
 import { CheckIcon, EditIcon } from "@/components/icons";
 
-type Motif = { id: string; libelle: string; code_court: string; couleur: string; actif: boolean; non_planifie: boolean; code_gt: string | null };
+type Motif = { id: string; libelle: string; code_court: string; couleur: string; actif: boolean; non_planifie: boolean; code_gt: string | null; visible_operateurs: boolean };
 type Agence = { id: string; nom: string; actif: boolean };
 type TypeContrat = { code: string; libelle: string; actif: boolean; ordre: number; avec_agence: boolean };
 type FenetreAffichage = { mode?: "relatif" | "absolu"; jours_avant: number; jours_apres: number; nb_semaines?: number };
@@ -40,7 +40,7 @@ export default async function MotifsPage({
   const sp = await searchParams;
   const supabase = await getServerClient();
   const [motifsR, agencesR, typesR, fenR] = await Promise.all([
-    supabase.from("motif_absence").select("id, libelle, code_court, couleur, actif, non_planifie, code_gt").order("libelle").returns<Motif[]>(),
+    supabase.from("motif_absence").select("id, libelle, code_court, couleur, actif, non_planifie, code_gt, visible_operateurs").order("libelle").returns<Motif[]>(),
     supabase.from("agence_interim").select("id, nom, actif").order("nom").returns<Agence[]>(),
     supabase.from("type_contrat").select("code, libelle, actif, ordre, avec_agence").order("ordre").returns<TypeContrat[]>(),
     supabase.from("parametre_affichage").select("mode, jours_avant, jours_apres, nb_semaines").maybeSingle<FenetreAffichage>(),
@@ -51,13 +51,13 @@ export default async function MotifsPage({
   let gtDispo = !motifsR.error;
   let npDispo = !motifsR.error;
   if (motifsR.error) {
-    const r2 = await supabase.from("motif_absence").select("id, libelle, code_court, couleur, actif, non_planifie").order("libelle").returns<Omit<Motif, "code_gt">[]>();
+    const r2 = await supabase.from("motif_absence").select("id, libelle, code_court, couleur, actif, non_planifie").order("libelle").returns<Omit<Motif, "code_gt" | "visible_operateurs">[]>();
     if (!r2.error) {
       npDispo = true;
-      motifs = (r2.data ?? []).map((m) => ({ ...m, code_gt: null }));
+      motifs = (r2.data ?? []).map((m) => ({ ...m, code_gt: null, visible_operateurs: false }));
     } else {
-      const { data } = await supabase.from("motif_absence").select("id, libelle, code_court, couleur, actif").order("libelle").returns<Omit<Motif, "non_planifie" | "code_gt">[]>();
-      motifs = (data ?? []).map((m) => ({ ...m, non_planifie: false, code_gt: null }));
+      const { data } = await supabase.from("motif_absence").select("id, libelle, code_court, couleur, actif").order("libelle").returns<Omit<Motif, "non_planifie" | "code_gt" | "visible_operateurs">[]>();
+      motifs = (data ?? []).map((m) => ({ ...m, non_planifie: false, code_gt: null, visible_operateurs: false }));
     }
   }
   const agences = agencesR.data ?? [];
@@ -109,6 +109,12 @@ export default async function MotifsPage({
           )}
         </p>
         <p className="muted" style={{ marginTop: -8, marginBottom: 16 }}>
+          Cochez <strong>PDF opérateurs</strong> pour les motifs qui peuvent figurer, avec
+          leur libellé, dans la colonne « Absents du jour » de la feuille opérateurs du
+          Placement. Un motif non coché n&apos;y apparaît pas. Le PDF Manager montre
+          toujours tous les motifs.
+        </p>
+        <p className="muted" style={{ marginTop: -8, marginBottom: 16 }}>
           Le <strong>Code GT</strong> est le code du logiciel RH (« 00CLFA »,
           « 00MASH »…) rattaché à ce motif : il sert à l&apos;import automatique
           des absences (section plus bas). Un code inconnu à l&apos;import crée un
@@ -149,6 +155,7 @@ export default async function MotifsPage({
                 <th>Code</th>
                 <th style={{ width: 90 }}>Code GT</th>
                 <th style={{ width: 90, textAlign: "center" }}>Non planifié</th>
+                <th style={{ width: 100, textAlign: "center" }} title="Coché : les personnes absentes pour ce motif figurent, avec le motif, sur le PDF opérateurs du Placement. Décoché : elles n'y apparaissent pas.">PDF opérateurs</th>
                 <th style={{ width: 90 }}></th>
                 <th style={{ width: 60, textAlign: "center" }}>Actif</th>
               </tr>
@@ -170,6 +177,7 @@ export default async function MotifsPage({
                     <td><input form={`ed-motif-${m.id}`} name="code_court" defaultValue={m.code_court} maxLength={6} required style={{ width: 90 }} /></td>
                     <td><input form={`ed-motif-${m.id}`} name="code_gt" defaultValue={m.code_gt ?? ""} maxLength={20} placeholder="00CLFA" style={{ width: 90 }} /></td>
                     <td style={{ textAlign: "center" }}><ActifCheckbox id={m.id} actif={m.non_planifie} action={toggleNonPlanifie} title={m.non_planifie ? "Repasser en planifié" : "Marquer non planifié"} /></td>
+                    <td style={{ textAlign: "center" }}><ActifCheckbox id={m.id} actif={m.visible_operateurs} action={toggleVisibleOperateurs} title={m.visible_operateurs ? "Affiché sur le PDF opérateurs — masquer" : "Masqué du PDF opérateurs — afficher"} /></td>
                     <td style={{ whiteSpace: "nowrap", textAlign: "center" }}>
                       <button form={`ed-motif-${m.id}`} type="submit" title="Valider" className="iconbtn ok"><CheckIcon /></button>
                       <Link href="/admin/motifs" className="iconbtn ghost" scroll={false} title="Annuler">✕</Link>
@@ -185,6 +193,9 @@ export default async function MotifsPage({
                     <td style={{ textAlign: "center" }}>
                       <ActifCheckbox id={m.id} actif={m.non_planifie} action={toggleNonPlanifie} title={m.non_planifie ? "Non planifié — repasser en planifié" : "Planifié — marquer non planifié"} />
                     </td>
+                    <td style={{ textAlign: "center" }}>
+                      <ActifCheckbox id={m.id} actif={m.visible_operateurs} action={toggleVisibleOperateurs} title={m.visible_operateurs ? "Affiché sur le PDF opérateurs — masquer" : "Masqué du PDF opérateurs — afficher"} />
+                    </td>
                     <td style={{ whiteSpace: "nowrap", textAlign: "center" }}>
                       <Link href={`/admin/motifs?edit=motif:${m.id}`} className="iconbtn edit" scroll={false} prefetch={false} title="Modifier"><EditIcon /></Link>
                     </td>
@@ -194,7 +205,7 @@ export default async function MotifsPage({
                   </tr>
                 )
               )}
-              {motifs.length === 0 && (<tr><td colSpan={7} className="muted">Aucun motif.</td></tr>)}
+              {motifs.length === 0 && (<tr><td colSpan={8} className="muted">Aucun motif.</td></tr>)}
             </tbody>
           </table>
         </div>

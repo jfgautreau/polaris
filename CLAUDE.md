@@ -304,7 +304,7 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   numérotées, rangs en 1 à 3 colonnes (au-delà de 10 par colonne). Bascule Plan /
   Absences. `JourNav` (calendrier grisant les jours sans quart actif). Filtres de la liste
   (recherche, équipe) dans l'URL. Trois PDF : **PDF Manager** (A4, plan en couleurs + absents / TP du jour,
-  ex-« PDF CE ») et **PDF** opérateurs (A3, plan seul, codes d'alerte en noir), plus **PDF heures** (= opérateurs + horaire de chacun, résolu par `src/lib/horaires.ts` côté `page.tsx`) ; sur les deux, les lignes qui tournent (≥ 1 personne placée) prennent la couleur fixe de leur ligne (`ligne.couleur`, 0082, choisie au Référentiel dans la palette fermée `src/lib/ligne-couleurs.ts`), celles à l'arrêt restent grisées ; en-tête service ·
+  ex-« PDF CE ») et **PDF** opérateurs (A3, codes d'alerte en noir, colonne « Absents du jour » limitée aux motifs `motif_absence.visible_operateurs`, 0083, cochés dans Param. RH), plus **PDF heures** (= opérateurs + horaire de chacun, résolu par `src/lib/horaires.ts` côté `page.tsx`) ; sur les deux, les lignes qui tournent (≥ 1 personne placée) prennent la couleur fixe de leur ligne (`ligne.couleur`, 0082, choisie au Référentiel dans la palette fermée `src/lib/ligne-couleurs.ts`), celles à l'arrêt restent grisées ; en-tête service ·
   quart (pastille centrée) · date, hors zone mise à l'échelle ; numéros vides et commentaires du jour imprimés ; filtre
   `imprimable`. TP du jour sans placement = carte « Temps partiel », pas « à placer ».
   Postes `zone_attente` (CDT) : hors du plan, colonne « À répartir » entre le plan et les noms
@@ -357,7 +357,7 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   visite de mi-carrière. Paramétrage (`/admin/visites-param`, droit `visites_param`) :
   régimes, déclencheurs (quarts / postes / habilitations / motifs), catalogue, alertes —
   **séparé de Param. RH**, ce sont deux métiers.
-- **Param. RH** (`/admin/motifs`, droit `motifs`) : motifs (code GT, planifié ou non),
+- **Param. RH** (`/admin/motifs`, droit `motifs`) : motifs (code GT, planifié ou non, affiché sur le PDF opérateurs),
   agences, types de contrat (`avec_agence`), fenêtre d'affichage TV, import des absences RH
   (`src/lib/import-absences-rh.ts`).
 - **Plateforme** (super_admin, `src/app/platform/`) : sites, impersonation, masquage par

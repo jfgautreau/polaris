@@ -27,7 +27,7 @@ type PosteRow = { id: string; nom: string; nom_court: string | null; actif: bool
 type LigneRow = { id: string; nom: string; ordre_affichage: number; atelier_id: string; couleur: string | null; poste: PosteRow[] };
 type Placement = { personne_id: string; poste_id: string | null; motif_absence_id: string | null; non_travaille: boolean; quart_code: string | null; numero_rotation: string | null };
 type MatRow = { personne_id: string; poste_id: string; niveau_actuel: number };
-type Motif = { id: string; code_court: string; libelle: string; couleur: string };
+type Motif = { id: string; code_court: string; libelle: string; couleur: string; visible_operateurs?: boolean };
 type PcrRow = { poste_id: string; competence_id: string; competence: { nom: string; duree_validite_mois: number | null } | null };
 type PcDetRow = { personne_id: string; competence_id: string; date_obtention: string | null; date_expiration: string | null };
 
@@ -97,7 +97,7 @@ export default async function PlacementPage({
     // silencieux plus bas (relecture sans `couleur`) pour ne pas planter la page.
     supabase.from("quart").select("code, libelle, ordre, creneau, couleur").order("ordre").returns<Quart[]>(),
     supabase.from("personne").select("id, nom, prenom, equipe_id, atelier_id, type_contrat").in("statut", ["ACTIF", "A_VENIR"]).order("nom").returns<Personne[]>(),
-    supabase.from("motif_absence").select("id, code_court, libelle, couleur").eq("actif", true).order("libelle").returns<Motif[]>(),
+    supabase.from("motif_absence").select("id, code_court, libelle, couleur, visible_operateurs").eq("actif", true).order("libelle").returns<Motif[]>(),
   ]);
 
   const ateliers = ateliersD ?? [];
@@ -558,7 +558,7 @@ export default async function PlacementPage({
         autreQuart={autreQuart}
         horsPlan={horsPlan}
         matrice={matrice}
-        motifs={motifs.map((m) => ({ id: m.id, code: m.code_court, libelle: m.libelle, couleur: m.couleur }))}
+        motifs={motifs.map((m) => ({ id: m.id, code: m.code_court, libelle: m.libelle, couleur: m.couleur, operateurs: m.visible_operateurs === true }))}
         equipesParQuart={parQuart}
         habPoste={habPoste}
         habComp={habComp}

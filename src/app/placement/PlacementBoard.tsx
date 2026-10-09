@@ -23,7 +23,8 @@ type Poste = { id: string; nom: string; nomCourt: string | null; effectifRequis:
 // visibilité). Optionnel : `undefined` = ligne ouverte (rétro-compatibilité).
 type Group = { ligneId: string; ligneNom: string; postes: Poste[]; fermee?: boolean; couleur?: string | null };
 type Personne = { id: string; nom: string; prenom: string; equipe_id: string | null; atelier_id: string | null; type_contrat: string; couleur: string | null; editable: boolean };
-type Motif = { id: string; code: string; libelle: string; couleur: string };
+// `operateurs` (0083) : motif montré sur le PDF opérateurs (choix des RH).
+type Motif = { id: string; code: string; libelle: string; couleur: string; operateurs?: boolean };
 
 // Pseudo-atelier de la vue Absences (valeur du parametre ?atelier=).
 const VUE_ABSENCES = "absences";
@@ -735,6 +736,12 @@ export default function PlacementBoard({
       { key: "TP", titre: "Temps partiel", gens: gensTp },
     ].filter((c) => c.gens.length > 0);
   }, [motifs, personnes, place, atelierId, tpSetPourListe]);
+  // PDF opérateurs (« PDF », « PDF heures ») : seulement les motifs cochés par
+  // les RH dans Param. RH (0083) ; ni « Non travaillé », ni temps partiel.
+  const absPrintOp = useMemo(() => {
+    const visibles = new Set(motifs.filter((mo) => mo.operateurs).map((mo) => mo.id));
+    return absPrint.filter((c) => visibles.has(c.key));
+  }, [absPrint, motifs]);
 
   const absCartes = useMemo(() => {
     if (!vueAbsences) return [];
@@ -889,7 +896,7 @@ export default function PlacementBoard({
             type="button"
             className={s.navbtn}
             onClick={() => imprimer("simple")}
-            title="PDF opérateurs : plan seul, couleur des lignes qui tournent, sans colonne des absents (1 page A3 paysage)"
+            title="PDF opérateurs : plan, couleur des lignes qui tournent, et absents des seuls motifs cochés dans Param. RH (1 page A3 paysage)"
             style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
           >
             <PrintIcon size={15} /> PDF
@@ -1396,6 +1403,24 @@ export default function PlacementBoard({
             ))}
             {groupsImpr.length === 0 && <p className={s.printVide}>Aucun poste imprimable ce jour-là sur ce quart.</p>}
           </div>
+
+          {prepImpression !== "ce" && absPrintOp.length > 0 && (
+          <div className={s.printAbs}>
+            <div className={s.printAbsTitre}>Absents du jour</div>
+            {absPrintOp.map((c) => (
+              <div key={c.key} className={s.printAbsBloc}>
+                <div className={s.printAbsMotif}>
+                  {c.titre} <span className={s.printAbsNb}>({c.gens.length})</span>
+                </div>
+                {c.gens.map((p) => (
+                  <div key={p.id} className={s.printAbsNom}>
+                    {p.nom} {p.prenom.charAt(0).toUpperCase()}.
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+          )}
 
           {prepImpression === "ce" && (
           <div className={s.printAbs}>
