@@ -566,6 +566,24 @@
   width: 1480px;
   height: 980px;
 }
+/* PDF Manager en A4 portrait (zone imprimable ~733 × 1062 px) : feuille
+   700 × 990, contenu ramené à 930 par ajusterFeuille(). */
+.printSheet[data-orient="portrait"] {
+  width: 700px;
+  height: 990px;
+}
+/* PDF Manager, version compacte : tuiles plus étroites, interlignes et
+   marges resserrés — plus de postes par rangée, donc une échelle plus grande
+   pour tenir sur une page. */
+.printSheet[data-mode="ce"] .printLigne { gap: 4px; margin-bottom: 3px; }
+.printSheet[data-mode="ce"] .printLigneNom { flex-basis: 60px; padding-left: 4px; }
+.printSheet[data-mode="ce"] .printPostes { gap: 3px; }
+.printSheet[data-mode="ce"] .printPoste { width: 128px; padding: 1px 3px 2px; }
+.printSheet[data-mode="ce"] .printNom { line-height: 1.2; }
+.printSheet[data-mode="ce"] .printCommentBloc { margin-left: 10px; font-size: 0.82em; line-height: 1.15; }
+.printSheet[data-mode="ce"] .printAbs { flex-basis: 140px; padding: 3px 5px; }
+.printSheet[data-mode="ce"] .printAbsNom { line-height: 1.2; }
+.printSheet[data-mode="ce"] .printBody { gap: 8px; }
 .printInner {
   width: 1020px;
   transform-origin: top left;

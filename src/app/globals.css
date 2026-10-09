@@ -1193,6 +1193,18 @@ select.flat {
   body.print-a3 [data-mode="simple"] {
     page: plcA3;
   }
+  /* PDF Manager en A4 portrait quand le plan s'y imprime plus grand
+     (ajusterFeuille de PlacementBoard pose `print-a4p` et data-orient). */
+  @page plcA4P {
+    size: A4 portrait;
+    margin: 8mm;
+  }
+  body.print-a4p {
+    page: plcA4P;
+  }
+  body.print-a4p [data-orient="portrait"] {
+    page: plcA4P;
+  }
   html,
   body {
     background: #fff !important;
