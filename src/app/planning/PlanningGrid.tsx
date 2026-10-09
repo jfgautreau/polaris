@@ -514,6 +514,8 @@ export default function PlanningGrid({
   canPrefill = false,
   todayIso = "",
   personnes = [],
+  equipeSelectionnee = "",
+  equipeSelectionneeNom = "",
   displayedIds = null,
   statIds = [],
   groups = [],
@@ -549,6 +551,10 @@ export default function PlanningGrid({
   canPrefill?: boolean;
   todayIso?: string;
   personnes?: Personne[];
+  // Équipe choisie dans le filtre (vide en AUTO / Toutes) : le » d'un jour ne
+  // copie que ses membres, et n'apparaît pas sans équipe choisie.
+  equipeSelectionnee?: string;
+  equipeSelectionneeNom?: string;
   // Sous-ensemble affiche par defaut (filtre equipe/atelier serveur). `null` =
   // toutes les personnes. La recherche par nom (client) filtre dans le TOTAL,
   // ce qui permet de retrouver quelqu'un hors filtre courant.
@@ -723,7 +729,13 @@ export default function PlanningGrid({
     if (!displayedSet) return personnes;
     return personnes.filter((p) => displayedSet.has(p.id));
   }, [personnes, search, displayedSet]);
-  const peutCopierJour = shown.some((p) => p.editable);
+  // » d'un jour : réservé à une équipe choisie (en AUTO, la liste mêle des
+  // personnes d'autres équipes placées sur ce quart).
+  const membresEquipe = useMemo(
+    () => (equipeSelectionnee ? shown.filter((p) => p.equipe_id === equipeSelectionnee) : []),
+    [shown, equipeSelectionnee],
+  );
+  const peutCopierJour = membresEquipe.some((p) => p.editable);
   const [exc, setExc] = useState(exceptions);
   const [excAt, setExcAt] = useState<string | null>(null); // cle "pid:iso"
   const [draft, setDraft] = useState<{ debut: string; fin: string; motif: string }>({ debut: "", fin: "", motif: "" });
@@ -1098,9 +1110,9 @@ Les absences et les temps partiels sont conservés.`)) return;
     annoncer(compteRendu(plan.ecrire.length - refus, plan.laissees, plan.horsCycle, refus, vider));
   }
 
-  // » d'un jour (en-tête) : recopie ce jour, pour les personnes AFFICHÉES et
-  // modifiables, sur les jours suivants (même règle que ») — postes et NT
-  // seulement, cases vides seulement, jamais de propagation du vide.
+  // » d'un jour (en-tête) : recopie ce jour, pour les membres affichés et
+  // modifiables de l'ÉQUIPE CHOISIE, sur les jours suivants (même règle que ») —
+  // postes et NT seulement, cases vides seulement, jamais de propagation du vide.
   async function fillDay(dayIndex: number) {
     const jours = joursCibles(dayIndex);
     if (jours.length === 0) return;
@@ -1108,7 +1120,7 @@ Les absences et les temps partiels sont conservés.`)) return;
     let laissees = 0;
     let horsCycle = 0;
     const ecritures: { pid: string; equipe: string | null; iso: string; valeur: string }[] = [];
-    for (const p of shown) {
+    for (const p of membresEquipe) {
       if (!p.editable || otherByCell[key(p.id, iso)]) continue;
       const source = vals[key(p.id, iso)] ?? "";
       if (!estRecopiable(source)) continue;
@@ -1117,6 +1129,7 @@ Les absences et les temps partiels sont conservés.`)) return;
       horsCycle += plan.horsCycle;
       for (const e of plan.ecrire) ecritures.push({ pid: p.id, equipe: p.equipe_id, ...e });
     }
+    const nomEquipe = equipeSelectionneeNom || "choisie";
     const nomJour = `${days[dayIndex].nom} ${days[dayIndex].num}`;
     const jusqua = `${jours[0].nom} ${jours[0].num}${jours.length > 1 ? ` → ${jours[jours.length - 1].nom} ${jours[jours.length - 1].num}` : ""}`;
     if (ecritures.length === 0) {
@@ -1125,7 +1138,7 @@ Les absences et les temps partiels sont conservés.`)) return;
     }
     if (
       !window.confirm(
-        `Copier le ${nomJour} sur ${jusqua} pour les personnes affichées ?
+        `Copier le ${nomJour} sur ${jusqua} pour l'équipe ${nomEquipe} ?
 
 ${ecritures.length} case(s) vide(s) seront remplies (postes et NT). Les cases déjà remplies — absences, TP, autres affectations — ne sont pas touchées.`,
       )
@@ -1400,7 +1413,7 @@ ${ecritures.length} case(s) vide(s) seront remplies (postes et NT). Les cases d�
                     type="button"
                     className="noprint"
                     onClick={() => void fillDay(days.indexOf(d))}
-                    title={dowMon(d.iso) < 4 ? "Copier ce jour sur les jours suivants de la semaine (cases vides seulement, postes et NT)" : "Copier ce jour sur la semaine suivante (cases vides seulement, postes et NT)"}
+                    title={`Équipe ${equipeSelectionneeNom} : ${dowMon(d.iso) < 4 ? "copier ce jour sur les jours suivants de la semaine" : "copier ce jour sur la semaine suivante"} (cases vides seulement, postes et NT)`}
                     aria-label="Copier ce jour sur les jours suivants"
                     style={{ display: "inline-block", verticalAlign: "middle", margin: "0 0 0 2px", width: 14, height: 13, padding: 0, lineHeight: "11px", fontSize: 10, fontWeight: 700, color: "#4f46e5", background: "#eef2ff", border: "1px solid #c7d2fe", borderRadius: 3, cursor: "pointer" }}
                   >

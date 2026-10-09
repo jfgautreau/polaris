@@ -1073,6 +1073,8 @@ export default async function PlanningPage({
           days={days}
           weekBlocks={weekBlocks}
           canPrefill={canEditPlanningFull}
+          equipeSelectionnee={equipeIdSel}
+          equipeSelectionneeNom={(equipesD ?? []).find((e) => e.id === equipeIdSel)?.nom ?? ""}
           todayIso={isoDate(new Date())}
           personnes={gridPersonnes}
           displayedIds={displayedIds}
