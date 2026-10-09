@@ -37,7 +37,7 @@ export default async function HabilitationsPage({
   // Matrice de polyvalence, cf. src/app/matrice/page.tsx.
   const persQ = supabase.from("personne").select("id, nom, prenom, type_contrat, equipe_id, atelier_id").eq("statut", "ACTIF").order("nom");
 
-  const [{ data: compsD }, { data: persD }, pcD, ateliers, equipes, agenceCodes] = await Promise.all([
+  const [{ data: compsD }, { data: persD }, pcD, ateliers, equipes, agenceCodes, suppD] = await Promise.all([
     supabase
       .from("competence")
       .select("id, nom, duree_validite_mois, categorie, groupe, ordre, a_autorisation_conduite")
@@ -57,7 +57,18 @@ export default async function HabilitationsPage({
     getAteliersC(),
     getEquipesC(),
     getTypesAgenceC(),
+    // Historique (0084) : couples personne × habilitation ayant subi une
+    // suppression — la case vide correspondante est grisée dans la grille.
+    fetchAll<{ personne_id: string; competence_id: string }>(() =>
+      supabase
+        .from("personne_competence_historique")
+        .select("personne_id, competence_id")
+        .eq("action", "suppression")
+        .order("id")
+        .returns<{ personne_id: string; competence_id: string }[]>()
+    ),
   ]);
+  const supprimees = [...new Set(suppD.map((r) => `${r.personne_id}:${r.competence_id}`))];
 
   const comps = compsD ?? [];
   const personnes = persD ?? [];
@@ -115,6 +126,7 @@ export default async function HabilitationsPage({
           atelier={sp.atelier ?? ""}
           equipe={sp.equipe ?? ""}
           agenceCodes={agenceCodes}
+          supprimees={supprimees}
           lienParam={canRead(perms, "habilitations_param")}
         />
       </div>

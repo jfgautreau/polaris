@@ -203,6 +203,7 @@ export default function HabilitationsList({
   atelier = "",
   equipe = "",
   agenceCodes = ["INTERIM"],
+  supprimees = [],
   lienParam = false,
 }: {
   rows: Row[];
@@ -221,8 +222,11 @@ export default function HabilitationsList({
   // en jaune (intérim + CDI intérimaire…).
   agenceCodes?: string[];
   lienParam?: boolean; // droit de lecture sur « Param. Habilitation »
+  // Clés `personne:habilitation` déjà supprimées une fois (historique, 0084).
+  supprimees?: string[];
 }) {
   const agenceSet = useMemo(() => new Set(agenceCodes), [agenceCodes]);
+  const supprSet = useMemo(() => new Set(supprimees), [supprimees]);
   // Recherche ⚠️ PORTÉE PAR L'URL (?search=) : survit au rafraîchissement et
   // VOYAGE entre Planning / Personnel / Matrice / Habilitations (cf. MainNav).
   const router = useRouter();
@@ -670,11 +674,18 @@ export default function HabilitationsList({
                         const { statut, title } = cellOf(p.id, c);
                         const rec = recMap.get(`${p.id}:${c.id}`);
                         const hint = canEdit ? `\n(cliquer pour ${rec ? "recycler" : "enregistrer"})` : "";
+                        // Case vide dont l'habilitation a été supprimée : gris clair,
+                        // l'historique de la modale en garde le détail.
+                        const supprimee = !rec && supprSet.has(`${p.id}:${c.id}`);
                         return (
-                          <td key={c.id} className={g.cellTd}>
+                          <td
+                            key={c.id}
+                            className={g.cellTd}
+                            style={supprimee ? { background: "#e5e7eb" } : undefined}
+                          >
                             <span
                               className={g.cellMark}
-                              title={`${p.nom} ${p.prenom}\n${title}${hint}`}
+                              title={`${p.nom} ${p.prenom}\n${title}${supprimee ? "\nSupprimée (voir l'historique)" : ""}${hint}`}
                               onClick={
                                 canEdit
                                   ? () =>

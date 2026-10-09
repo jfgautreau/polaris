@@ -39,6 +39,13 @@ export default function HabLegendeModal({ onClose }: { onClose: () => void }) {
             (date propre à chaque personne, visible dans l&apos;infobulle de la case).
           </span>
         </p>
+        <p className="muted" style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 7 }}>
+          <span style={{ flexShrink: 0, width: 16, height: 16, borderRadius: 3, background: "#e5e7eb", border: "1px solid #cbd5e1" }} />
+          <span>
+            case grise = habilitation <strong>supprimée</strong> ; le détail reste dans
+            l&apos;historique de la case.
+          </span>
+        </p>
         <p className="muted" style={{ marginTop: 6, fontWeight: 600 }}>
           Saisie : cliquez une pastille de la grille. L&apos;échéance est calculée depuis la date de
           passage et la durée de validité.
