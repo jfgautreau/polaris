@@ -39,7 +39,38 @@ export type MapsHoraire = {
    */
   apresNuitMap?: ReadonlyMap<string, HM>;
   nuitAvant?: (posteId: string, iso: string) => boolean;
+  /**
+   * Horaire par PLACE (0088), `${poste}:${quart}:${numero}` — valable toute la
+   * semaine, avec sa variante « après une nuit ». Facultatif.
+   */
+  placeMap?: ReadonlyMap<string, HorairePlace>;
 };
+
+export type HorairePlace = { debut: string | null; fin: string | null; debutN: string | null; finN: string | null };
+
+/**
+ * Horaire du poste ce jour-là, hors personne (ni TP ni horaire spécifique) :
+ * borne par borne, place après une nuit > place > poste après une nuit > poste.
+ */
+export function horaireDuPoste(
+  maps: MapsHoraire,
+  quarts: QuartRef[],
+  posteId: string,
+  quartCode: string | null,
+  iso: string,
+  numero?: string | null,
+): HM | undefined {
+  const q = quartOuDefaut(quartCode, quarts);
+  const cleStd = `${posteId}:${q}:${dowLundi(iso)}`;
+  const base = maps.horMap.get(cleStd);
+  const nuit = !!maps.nuitAvant?.(posteId, iso);
+  const an = nuit ? maps.apresNuitMap?.get(cleStd) : undefined;
+  const pl = numero ? maps.placeMap?.get(`${posteId}:${q}:${numero}`) : undefined;
+  const borne = (...v: (string | null | undefined)[]) => v.find((x) => !!x) || null;
+  const debut = borne(nuit ? pl?.debutN : null, pl?.debut, an?.debut, base?.debut);
+  const fin = borne(nuit ? pl?.finN : null, pl?.fin, an?.fin, base?.fin);
+  return debut || fin ? { debut, fin } : undefined;
+}
 
 // Jour de semaine base lundi : 0 = lundi .. 6 = dimanche. Cle de `horaire_poste`.
 export function dowLundi(iso: string): number {
@@ -79,18 +110,14 @@ export function resoudreHoraire(
   personId: string,
   posteId: string,
   quartCode: string | null,
-  iso: string
+  iso: string,
+  numero?: string | null,
 ): { debut: string | null; fin: string | null } {
   const q = quartOuDefaut(quartCode, quarts);
   const creneau = quarts.find((x) => x.code === q)?.creneau ?? null;
-  const cleStd = `${posteId}:${q}:${dowLundi(iso)}`;
-  const base = maps.horMap.get(cleStd);
-  // Après une nuit, la variante remplace l'horaire du poste borne par borne
-  // (vide = même borne). Le temps partiel, prioritaire, garde son horaire.
-  const an = maps.nuitAvant?.(posteId, iso) ? maps.apresNuitMap?.get(cleStd) : undefined;
-  const std: HM | undefined = renseigne(an)
-    ? { debut: an?.debut || base?.debut || null, fin: an?.fin || base?.fin || null }
-    : base;
+  // Horaire du poste (place, après une nuit). Le temps partiel, prioritaire,
+  // garde son horaire.
+  const std = horaireDuPoste(maps, quarts, posteId, quartCode, iso, numero);
   const ex = maps.excMap.get(`${personId}:${iso}`);
   const tp = horaireTp(maps.tpCfgMap.get(personId), creneau, iso);
   const generique = renseigne(tp) ? tp : std;
@@ -106,9 +133,10 @@ export function horaireTxt(
   personId: string,
   posteId: string,
   quartCode: string | null,
-  iso: string
+  iso: string,
+  numero?: string | null,
 ): string {
-  const { debut, fin } = resoudreHoraire(maps, quarts, personId, posteId, quartCode, iso);
+  const { debut, fin } = resoudreHoraire(maps, quarts, personId, posteId, quartCode, iso, numero);
   if (!debut && !fin) return "";
   return `${debut ?? "?"}-${fin ?? "?"}`;
 }

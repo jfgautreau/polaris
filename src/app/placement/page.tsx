@@ -15,7 +15,7 @@ import { getRotationRefsC, getTypesAgenceC } from "@/lib/refdata";
 import { rotationForWeek, equipesParQuart } from "@/lib/rotation";
 import { addMonthsIso } from "@/lib/habilitations";
 import { estAuTravailLe, deriverArriveeDepart } from "@/lib/personne-statut";
-import { horaireTxt, dowLundi, type HM, type TpCfg } from "@/lib/horaires";
+import { horaireTxt, dowLundi, type HM, type TpCfg, type HorairePlace } from "@/lib/horaires";
 import { chargerNuitsAvant } from "@/lib/nuit-avant-data";
 import PlacementBoard from "./PlacementBoard";
 import QuartBandeau from "../planning/QuartBandeau";
@@ -416,7 +416,7 @@ export default async function PlacementPage({
   // aux postes du plan et aux personnes placées ce jour-là : petites lectures.
   const placesPoste = (plD ?? []).filter((r) => r.poste_id && posteIdsAffiches.includes(r.poste_id));
   const idsPlaces = [...new Set(placesPoste.map((r) => r.personne_id))];
-  const [{ data: horD }, { data: tpD }, nuits] = await Promise.all([
+  const [{ data: horD }, { data: tpD }, nuits, { data: hpD }] = await Promise.all([
     posteIdsAffiches.length
       ? supabase
           .from("horaire_poste")
@@ -435,7 +435,17 @@ export default async function PlacementPage({
       : { data: [] },
     // Horaires « après une nuit » (0087) : la ligne a-t-elle tourné de nuit la veille ?
     chargerNuitsAvant(supabase, profile.siteId, [jour]),
+    // Horaires par place (0088).
+    posteIdsAffiches.length
+      ? supabase
+          .from("horaire_place")
+          .select("poste_id, quart_code, numero, debut, fin, debut_apres_nuit, fin_apres_nuit")
+          .in("poste_id", posteIdsAffiches)
+          .returns<{ poste_id: string; quart_code: string; numero: string; debut: string | null; fin: string | null; debut_apres_nuit: string | null; fin_apres_nuit: string | null }[]>()
+      : { data: [] },
   ]);
+  const placeMap = new Map<string, HorairePlace>();
+  for (const h of hpD ?? []) placeMap.set(`${h.poste_id}:${h.quart_code}:${h.numero}`, { debut: h.debut, fin: h.fin, debutN: h.debut_apres_nuit, finN: h.fin_apres_nuit });
   const horMap = new Map<string, HM>();
   const apresNuitMap = new Map<string, HM>();
   for (const h of horD ?? []) {
@@ -449,7 +459,7 @@ export default async function PlacementPage({
   for (const r of tpD ?? []) if (r.tp_config) tpCfgMap.set(r.id, r.tp_config);
   const heures: Record<string, string> = {};
   for (const r of placesPoste) {
-    const h = horaireTxt({ horMap, excMap, tpCfgMap, apresNuitMap, nuitAvant: nuits.parPoste }, quarts, r.personne_id, r.poste_id!, r.quart_code, jour);
+    const h = horaireTxt({ horMap, excMap, tpCfgMap, apresNuitMap, nuitAvant: nuits.parPoste, placeMap }, quarts, r.personne_id, r.poste_id!, r.quart_code, jour, r.numero_rotation);
     if (h) heures[r.personne_id] = h;
   }
 

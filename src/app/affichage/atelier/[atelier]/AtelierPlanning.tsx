@@ -4,7 +4,7 @@ import { fetchAll } from "@/lib/fetch-all";
 import { getRotationRefsC } from "@/lib/refdata";
 import { rotationForWeek } from "@/lib/rotation";
 import { quartOuDefaut } from "@/lib/quarts";
-import { horaireTxt as horaireTxtShared, type MapsHoraire } from "@/lib/horaires";
+import { horaireTxt as horaireTxtShared, type MapsHoraire, type HorairePlace } from "@/lib/horaires";
 import { chargerNuitsAvant } from "@/lib/nuit-avant-data";
 import { INTERIM_BG } from "@/lib/interim";
 import { isoDate, mondayOf, type Jour } from "@/lib/week";
@@ -18,6 +18,7 @@ type PlacementRow = {
   jour: string;
   quart_code: string | null;
   personne_id: string;
+  numero_rotation: string | null;
 };
 type HoraireRow = { poste_id: string; quart_code: string; jour: number; debut: string | null; fin: string | null; debut_apres_nuit: string | null; fin_apres_nuit: string | null };
 
@@ -133,6 +134,8 @@ export default async function AtelierPlanning({
   const horMap = new Map<string, { debut: string | null; fin: string | null }>(); // `${poste}:${quart}:${dow}`
   // Variante « après une nuit » (0087), même clé ; et la règle de nuit des lignes.
   const apresNuitMap = new Map<string, { debut: string | null; fin: string | null }>();
+  // Horaires par place (0088), « poste:quart:numero ».
+  const placeMap = new Map<string, HorairePlace>();
   const pNuits = chargerNuitsAvant(admin, site.id, isos);
   const excMap = new Map<string, { debut: string | null; fin: string | null; motif: string | null }>(); // `${personne}:${iso}` (horaire specifique + commentaire)
   type TpHM = Record<string, { debut: string; fin: string }>;
@@ -174,7 +177,7 @@ export default async function AtelierPlanning({
       ? await fetchAll<PlacementRow>(() =>
           admin
             .from("placement")
-            .select("poste_id, jour, quart_code, personne_id")
+            .select("poste_id, jour, quart_code, personne_id, numero_rotation")
             .eq("site_id", site.id)
             .in("jour", isos)
             .in("personne_id", displayIds)
@@ -187,6 +190,15 @@ export default async function AtelierPlanning({
     // est prêté. On ne charge les horaires standards que pour ceux-là.
     const involved = new Set<string>(posteIds);
     for (const r of pl) if (r.poste_id) involved.add(r.poste_id);
+    const pPlaces = fetchAll<{ poste_id: string; quart_code: string; numero: string; debut: string | null; fin: string | null; debut_apres_nuit: string | null; fin_apres_nuit: string | null }>(() =>
+      admin
+        .from("horaire_place")
+        .select("poste_id, quart_code, numero, debut, fin, debut_apres_nuit, fin_apres_nuit")
+        .eq("site_id", site.id)
+        .in("poste_id", [...involved])
+        .order("poste_id").order("quart_code").order("numero")
+        .returns<{ poste_id: string; quart_code: string; numero: string; debut: string | null; fin: string | null; debut_apres_nuit: string | null; fin_apres_nuit: string | null }[]>()
+    );
 
     // Les autres lectures couvrent une SEMAINE ENTIERE, tous quarts confondus, et
     // peuvent dépasser 1000 lignes (cf. L8) → fetchAll avec `.order()` déterministe
@@ -232,6 +244,7 @@ export default async function AtelierPlanning({
         apresNuitMap.set(`${h.poste_id}:${h.quart_code}:${h.jour}`, { debut: h.debut_apres_nuit, fin: h.fin_apres_nuit });
     }
     for (const e of exc ?? []) excMap.set(`${e.personne_id}:${e.jour}`, { debut: e.debut, fin: e.fin, motif: e.motif });
+  for (const h of await pPlaces) placeMap.set(`${h.poste_id}:${h.quart_code}:${h.numero}`, { debut: h.debut, fin: h.fin, debutN: h.debut_apres_nuit, finN: h.fin_apres_nuit });
     for (const r of tpH ?? []) if (r.tp_config) tpCfgMap.set(r.id, r.tp_config);
     // TP bloque : periodes datees (tp_periode, 0052) avec repli sur personne.tp_config.
     {
@@ -389,9 +402,9 @@ export default async function AtelierPlanning({
   // Resolution de l'horaire affiche : logique partagee avec la synthese interim
   // (`src/lib/horaires.ts`), pour que les deux ecrans ne divergent pas.
   const nuits = await pNuits;
-  const mapsHoraire: MapsHoraire = { horMap, excMap, tpCfgMap, apresNuitMap, nuitAvant: nuits.parPoste };
-  const horaireTxt = (personId: string, posteId: string, quartCode: string | null, iso: string) =>
-    horaireTxtShared(mapsHoraire, quarts, personId, posteId, quartCode, iso);
+  const mapsHoraire: MapsHoraire = { horMap, excMap, tpCfgMap, apresNuitMap, nuitAvant: nuits.parPoste, placeMap };
+  const horaireTxt = (personId: string, posteId: string, quartCode: string | null, iso: string, numero?: string | null) =>
+    horaireTxtShared(mapsHoraire, quarts, personId, posteId, quartCode, iso, numero);
 
   // Commentaire de l'horaire specifique (saisi dans le planning), affiche sous l'horaire.
   const commentTxt = (personId: string, iso: string) => (excMap.get(`${personId}:${iso}`)?.motif || "").trim();
@@ -421,7 +434,7 @@ export default async function AtelierPlanning({
       if (!r.poste_id) return null;
       const info = posteInfo.get(r.poste_id);
       const distant = info && info.atelierId !== atelier.id;
-      const h = horaireTxt(personId, r.poste_id, r.quart_code, iso);
+      const h = horaireTxt(personId, r.poste_id, r.quart_code, iso, r.numero_rotation);
       const cmt = commentTxt(personId, iso);
       return (
         <div key={i} style={{ lineHeight: 1.2, marginBottom: i < rows.length - 1 ? 6 : 0 }}>

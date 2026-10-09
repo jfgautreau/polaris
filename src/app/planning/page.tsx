@@ -29,6 +29,7 @@ import { parseNumeros } from "@/lib/numeros-rotation";
 import { getRotationRefsC, getTypesAgenceC } from "@/lib/refdata";
 import { rotationForWeek } from "@/lib/rotation";
 import { chargerNuitsAvant } from "@/lib/nuit-avant-data";
+import { horaireDuPoste, type HM, type HorairePlace, type MapsHoraire } from "@/lib/horaires";
 import { addMonthsIso } from "@/lib/habilitations";
 import { quartParDefaut, quartOuDefaut, memeQuart } from "@/lib/quarts";
 import { chargerPosteQuart, tourneSurQuart, effectifSurQuart } from "@/lib/poste-quart";
@@ -637,13 +638,42 @@ export default async function PlanningPage({
   // Horaire « après une nuit » (0087), par DATE : « quart:poste:iso », seulement
   // là où la ligne du poste sort d'une nuit et où une variante est saisie.
   const horaireApresNuit: Record<string, { debut: string; fin: string }> = {};
+  // Horaire d'une CASE dont la place (n° de rotation) a son propre horaire
+  // (0088) : « personne:iso ». Calculé ici par la règle partagée.
+  const horaireCase: Record<string, { debut: string; fin: string }> = {};
   if (allIds.length && visIsos.length) {
     // Lancées en vague 3 (placements, matrice, exceptions, horaires, TP réels).
     const [pl, mat, { data: exc }, { data: horStd }, { data: tpReal, error: tpRealErr }] = await pCases;
     for (const h of horStd ?? []) horaireStd[`${h.quart_code}:${h.poste_id}:${h.jour}`] = { debut: h.debut ?? "", fin: h.fin ?? "" };
     const variantes = (horStd ?? []).filter((h) => h.debut_apres_nuit || h.fin_apres_nuit);
-    if (variantes.length) {
-      const nuits = await chargerNuitsAvant(supabase, profile.siteId, visIsos);
+    // Places occupées sur la période affichée, et leurs horaires (0088).
+    const postesNumerotes = [...new Set(pl.filter((r) => r.poste_id && r.numero_rotation).map((r) => r.poste_id!))];
+    const { data: hpD } = postesNumerotes.length
+      ? await supabase
+          .from("horaire_place")
+          .select("poste_id, quart_code, numero, debut, fin, debut_apres_nuit, fin_apres_nuit")
+          .in("poste_id", postesNumerotes)
+          .returns<{ poste_id: string; quart_code: string; numero: string; debut: string | null; fin: string | null; debut_apres_nuit: string | null; fin_apres_nuit: string | null }[]>()
+      : { data: [] };
+    const placeMap = new Map<string, HorairePlace>();
+    for (const h of hpD ?? []) placeMap.set(`${h.poste_id}:${h.quart_code}:${h.numero}`, { debut: h.debut, fin: h.fin, debutN: h.debut_apres_nuit, finN: h.fin_apres_nuit });
+    const avecNuitPossible = variantes.length > 0 || (hpD ?? []).some((h) => h.debut_apres_nuit || h.fin_apres_nuit);
+    const nuits = avecNuitPossible ? await chargerNuitsAvant(supabase, profile.siteId, visIsos) : null;
+    if (placeMap.size) {
+      const horMap = new Map<string, HM>();
+      const apresNuitMap = new Map<string, HM>();
+      for (const h of horStd ?? []) {
+        horMap.set(`${h.poste_id}:${h.quart_code}:${h.jour}`, { debut: h.debut, fin: h.fin });
+        if (h.debut_apres_nuit || h.fin_apres_nuit) apresNuitMap.set(`${h.poste_id}:${h.quart_code}:${h.jour}`, { debut: h.debut_apres_nuit, fin: h.fin_apres_nuit });
+      }
+      const maps: MapsHoraire = { horMap, excMap: new Map(), tpCfgMap: new Map(), apresNuitMap, nuitAvant: nuits?.parPoste, placeMap };
+      for (const r of pl) {
+        if (!r.poste_id || !r.numero_rotation || !placeMap.has(`${r.poste_id}:${quartOuDefaut(r.quart_code, quarts)}:${r.numero_rotation}`)) continue;
+        const h = horaireDuPoste(maps, quarts, r.poste_id, r.quart_code, r.jour, r.numero_rotation);
+        if (h) horaireCase[`${r.personne_id}:${r.jour}`] = { debut: h.debut ?? "", fin: h.fin ?? "" };
+      }
+    }
+    if (variantes.length && nuits) {
       for (const iso of visIsos)
         for (const h of variantes)
           if (h.jour === dowMon(iso) && nuits.parPoste(h.poste_id, iso))
@@ -1116,6 +1146,7 @@ export default async function PlanningPage({
           exceptions={exceptions}
           horaireStd={horaireStd}
           horaireApresNuit={horaireApresNuit}
+          horaireCase={horaireCase}
           weekNav={<WeekNav base="/planning" semaine={centerIso} extra={extra} />}
           initialSearch={searchParam}
           gauche={<VueBascule parPoste={false} />}

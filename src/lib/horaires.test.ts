@@ -115,3 +115,29 @@ describe("resoudreHoraire — après une nuit (0087)", () => {
     expect(resoudreHoraire(avecNuit(true, { excMap }), quarts, "X", "P1", "matin", LUNDI)).toEqual({ debut: "07:30", fin: "13:00" });
   });
 });
+
+describe("resoudreHoraire — horaire par place (0088)", () => {
+  const k = `P1:matin:${dowLundi(LUNDI)}`;
+  const horMap = new Map([[k, { debut: "05:00", fin: "13:00" }]]);
+  const apresNuitMap = new Map([[k, { debut: "06:00", fin: null }]]);
+  const placeMap = new Map([
+    ["P1:matin:12", { debut: "05:30", fin: "13:30", debutN: "06:30", finN: null }],
+    ["P1:matin:15", { debut: "05:45", fin: null, debutN: null, finN: null }],
+  ]);
+  const m = (nuit: boolean): MapsHoraire => ({ ...maps({ horMap }), apresNuitMap, placeMap, nuitAvant: () => nuit });
+  it("la place l'emporte sur le poste, toute la semaine", () => {
+    expect(resoudreHoraire(m(false), quarts, "X", "P1", "matin", LUNDI, "12")).toEqual({ debut: "05:30", fin: "13:30" });
+    expect(resoudreHoraire(m(false), quarts, "X", "P1", "matin", VENDREDI, "12")).toEqual({ debut: "05:30", fin: "13:30" });
+  });
+  it("borne vide de la place = borne du poste", () => {
+    expect(resoudreHoraire(m(false), quarts, "X", "P1", "matin", LUNDI, "15")).toEqual({ debut: "05:45", fin: "13:00" });
+  });
+  it("après une nuit : variante de la place d'abord, puis place, puis variante du poste", () => {
+    expect(resoudreHoraire(m(true), quarts, "X", "P1", "matin", LUNDI, "12")).toEqual({ debut: "06:30", fin: "13:30" });
+    expect(resoudreHoraire(m(true), quarts, "X", "P1", "matin", LUNDI, "15")).toEqual({ debut: "05:45", fin: "13:00" });
+  });
+  it("sans place ou place inconnue : horaire du poste", () => {
+    expect(resoudreHoraire(m(true), quarts, "X", "P1", "matin", LUNDI, null)).toEqual({ debut: "06:00", fin: "13:00" });
+    expect(resoudreHoraire(m(false), quarts, "X", "P1", "matin", LUNDI, "99")).toEqual({ debut: "05:00", fin: "13:00" });
+  });
+});

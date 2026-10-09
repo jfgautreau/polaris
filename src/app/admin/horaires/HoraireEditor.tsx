@@ -4,7 +4,7 @@ import { useMemo, useRef, useState } from "react";
 
 // debutN / finN : variante « après une nuit » (0087), facultative.
 type Cell = { debut: string; fin: string; debutN: string; finN: string };
-type Poste = { id: string; nom: string; quarts: string[] }; // quarts = codes actifs
+type Poste = { id: string; nom: string; quarts: string[]; numeros: string[] }; // quarts = codes actifs ; numeros = places (0088)
 type LigneGroup = {
   ligneId: string;
   ligneNom: string;
@@ -16,6 +16,7 @@ type Quart = { code: string; libelle: string };
 type AtelierOpt = { id: string; nom: string };
 type ApiCell = { poste_id: string; quart_code: string; jour: number; debut: string; fin: string; debutN: string; finN: string };
 const VIDE: Cell = { debut: "", fin: "", debutN: "", finN: "" };
+type ApiPlace = { poste_id: string; quart_code: string; numero: string; debut: string; fin: string; debutN: string; finN: string };
 
 const JOURS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -24,12 +25,15 @@ export default function HoraireEditor({
   lignes,
   quarts,
   initial,
+  initialPlaces = {},
   avecNuit = false,
 }: {
   ateliers: AtelierOpt[];
   lignes: LigneGroup[];
   quarts: Quart[];
   initial: Record<string, Cell>;
+  /** Horaires par place (0088), « poste:quart:numero », toute la semaine. */
+  initialPlaces?: Record<string, Cell>;
   /** Le site a un quart de nuit : la variante « après une nuit » est proposée. */
   avecNuit?: boolean;
 }) {
@@ -40,6 +44,9 @@ export default function HoraireEditor({
   const [bulkQuart, setBulkQuart] = useState(quarts[0]?.code ?? "");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [voirNuit, setVoirNuit] = useState(false);
+  const [places, setPlaces] = useState<Record<string, Cell>>(initialPlaces);
+  const placesRef = useRef(places);
+  placesRef.current = places;
 
   const key = (p: string, q: string, j: number) => `${p}:${q}:${j}`;
   const get = (p: string, q: string, j: number): Cell => ({ ...VIDE, ...vals[key(p, q, j)] });
@@ -54,14 +61,14 @@ export default function HoraireEditor({
 
   const quartLib = useMemo(() => Object.fromEntries(quarts.map((q) => [q.code, q.libelle])), [quarts]);
 
-  async function pushCells(cells: ApiCell[]) {
-    if (cells.length === 0) return;
+  async function pushCells(cells: ApiCell[], placesApi: ApiPlace[] = []) {
+    if (cells.length === 0 && placesApi.length === 0) return;
     setSaveState("saving");
     try {
       const res = await fetch("/api/horaires", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cells }),
+        body: JSON.stringify({ cells, places: placesApi }),
       });
       setSaveState(res.ok ? "saved" : "error");
     } catch {
@@ -77,6 +84,20 @@ export default function HoraireEditor({
     if (cellTimers.current[k]) clearTimeout(cellTimers.current[k]);
     cellTimers.current[k] = setTimeout(() => {
       pushCells([api(p, q, j, valsRef.current[k] ?? VIDE)]);
+    }, 500);
+  }
+
+  // Horaire d'une place (0088) : même débounce, une seule valeur pour la semaine.
+  const clePlace = (p: string, q: string, n: string) => `${p}:${q}:${n}`;
+  const getPlace = (p: string, q: string, n: string): Cell => ({ ...VIDE, ...places[clePlace(p, q, n)] });
+  const apiPlace = (p: string, q: string, n: string, c: Cell): ApiPlace => ({ poste_id: p, quart_code: q, numero: n, ...VIDE, ...c });
+  function setPlace(p: string, q: string, n: string, champ: keyof Cell, v: string) {
+    const k = clePlace(p, q, n);
+    setPlaces((s) => ({ ...s, [k]: { ...VIDE, ...s[k], [champ]: v } }));
+    const t = `place:${k}`;
+    if (cellTimers.current[t]) clearTimeout(cellTimers.current[t]);
+    cellTimers.current[t] = setTimeout(() => {
+      pushCells([], [apiPlace(p, q, n, placesRef.current[k] ?? VIDE)]);
     }, 500);
   }
 
@@ -187,7 +208,15 @@ export default function HoraireEditor({
     });
     for (const po of visiblePostes)
       if (po.quarts.includes(qc)) for (let j = 0; j < 7; j++) out.push(api(po.id, qc, j, VIDE));
-    pushCells(out);
+    // Le quart vidé emporte aussi les horaires de ses places.
+    const outPl: ApiPlace[] = [];
+    setPlaces((s) => {
+      const n = { ...s };
+      for (const po of visiblePostes) if (po.quarts.includes(qc)) for (const num of po.numeros) delete n[clePlace(po.id, qc, num)];
+      return n;
+    });
+    for (const po of visiblePostes) if (po.quarts.includes(qc)) for (const num of po.numeros) outPl.push(apiPlace(po.id, qc, num, VIDE));
+    pushCells(out, outPl);
   }
 
   const toggle = (lid: string) =>
@@ -394,6 +423,37 @@ export default function HoraireEditor({
                                   </td>
                                 </tr>
                               ))}
+                              {/* Places du poste (0088) : un horaire pour toute la semaine,
+                                  facultatif (vide = horaire du poste ci-dessus). */}
+                              {po.numeros.length > 0 &&
+                                po.quarts.flatMap((qc) =>
+                                  po.numeros.map((num) => {
+                                    const c = getPlace(po.id, qc, num);
+                                    return (
+                                      <tr key={`place:${qc}:${num}`} style={{ background: "#f8fafc" }}>
+                                        <td style={{ whiteSpace: "nowrap", fontSize: 12, paddingLeft: 12 }}>
+                                          <span className="muted">{quartLib[qc] ?? qc} ·</span> <strong>Place {num}</strong>
+                                        </td>
+                                        <td colSpan={7} style={{ padding: "2px 4px" }}>
+                                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                                            <span className="muted" style={{ fontSize: 12 }}>Toute la semaine</span>
+                                            <input type="time" value={c.debut} onChange={(e) => setPlace(po.id, qc, num, "debut", e.target.value)} style={{ width: 82, fontSize: 12, padding: "2px 3px" }} aria-label={`Début place ${num}`} />
+                                            <input type="time" value={c.fin} onChange={(e) => setPlace(po.id, qc, num, "fin", e.target.value)} style={{ width: 82, fontSize: 12, padding: "2px 3px" }} aria-label={`Fin place ${num}`} />
+                                            {voirNuit && (
+                                              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, marginLeft: 8, padding: "1px 6px", background: "#eef2ff", border: "1px dashed #a5b4fc", borderRadius: 3 }}>
+                                                <span style={{ fontSize: 10, color: "#4338ca", fontWeight: 600 }}>après nuit</span>
+                                                <input type="time" value={c.debutN} onChange={(e) => setPlace(po.id, qc, num, "debutN", e.target.value)} style={{ width: 82, fontSize: 12, padding: "2px 3px" }} aria-label={`Début place ${num} après une nuit`} />
+                                                <input type="time" value={c.finN} onChange={(e) => setPlace(po.id, qc, num, "finN", e.target.value)} style={{ width: 82, fontSize: 12, padding: "2px 3px" }} aria-label={`Fin place ${num} après une nuit`} />
+                                              </span>
+                                            )}
+                                            <span className="muted" style={{ fontSize: 11 }}>vide = horaire du poste</span>
+                                          </span>
+                                        </td>
+                                        <td></td>
+                                      </tr>
+                                    );
+                                  }),
+                                )}
                             </tbody>
                           </table>
                         )}

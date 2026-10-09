@@ -3,9 +3,10 @@ import AppHeader from "@/components/AppHeader";
 import { requireModule, canWrite } from "@/lib/permissions";
 import LectureSeule from "@/components/LectureSeule";
 import { chargerPosteQuart, tourneSurQuart } from "@/lib/poste-quart";
+import { parseNumeros } from "@/lib/numeros-rotation";
 import HoraireEditor from "./HoraireEditor";
 
-type PosteRow = { id: string; nom: string; actif: boolean; ordre_affichage: number };
+type PosteRow = { id: string; nom: string; actif: boolean; ordre_affichage: number; numero_rotation: string | null };
 type LigneRow = { id: string; nom: string; ordre_affichage: number; atelier: { id: string; nom: string; ordre_affichage: number | null } | null; poste: PosteRow[] };
 type Quart = { code: string; libelle: string; nuit: boolean };
 type HoraireRow = { poste_id: string; quart_code: string; jour: number; debut: string | null; fin: string | null; debut_apres_nuit: string | null; fin_apres_nuit: string | null };
@@ -17,7 +18,7 @@ export default async function HorairesPage() {
   const [{ data: lignesD }, { data: quartsD }, pq] = await Promise.all([
     supabase
       .from("ligne")
-      .select("id, nom, ordre_affichage, atelier:atelier_id(id, nom, ordre_affichage), poste(id, nom, actif, ordre_affichage)")
+      .select("id, nom, ordre_affichage, atelier:atelier_id(id, nom, ordre_affichage), poste(id, nom, actif, ordre_affichage, numero_rotation)")
       .eq("actif", true)
       .order("nom")
       .returns<LigneRow[]>(),
@@ -45,7 +46,13 @@ export default async function HorairesPage() {
       postes: [...(l.poste ?? [])]
         .filter((p) => p.actif)
         .sort((a, b) => ordreThenNom({ ordre: a.ordre_affichage ?? 0, nom: a.nom }, { ordre: b.ordre_affichage ?? 0, nom: b.nom }))
-        .map((p) => ({ id: p.id, nom: p.nom, quarts: quarts.filter((q) => tourneSurQuart(pq, p.id, q.code)).map((q) => q.code) })),
+        .map((p) => ({
+          id: p.id,
+          nom: p.nom,
+          quarts: quarts.filter((q) => tourneSurQuart(pq, p.id, q.code)).map((q) => q.code),
+          // Places du poste (numéros de rotation) : un horaire par place possible (0088).
+          numeros: parseNumeros(p.numero_rotation),
+        })),
     }))
     .filter((l) => l.postes.length > 0)
     .sort(
@@ -80,6 +87,23 @@ export default async function HorairesPage() {
       };
   }
 
+  // Horaires par place (0088), « poste:quart:numero ».
+  const initialPlaces: Record<string, { debut: string; fin: string; debutN: string; finN: string }> = {};
+  if (allPosteIds.length) {
+    const { data: hp } = await supabase
+      .from("horaire_place")
+      .select("poste_id, quart_code, numero, debut, fin, debut_apres_nuit, fin_apres_nuit")
+      .in("poste_id", allPosteIds)
+      .returns<{ poste_id: string; quart_code: string; numero: string; debut: string | null; fin: string | null; debut_apres_nuit: string | null; fin_apres_nuit: string | null }[]>();
+    for (const r of hp ?? [])
+      initialPlaces[`${r.poste_id}:${r.quart_code}:${r.numero}`] = {
+        debut: r.debut ?? "",
+        fin: r.fin ?? "",
+        debutN: r.debut_apres_nuit ?? "",
+        finN: r.fin_apres_nuit ?? "",
+      };
+  }
+
   return (
     <>
       <AppHeader role={profile.role} active="/admin/horaires" />
@@ -95,7 +119,7 @@ export default async function HorairesPage() {
         </p>
 
         <LectureSeule actif={!canWrite(perms, "horaires")}>
-          <HoraireEditor ateliers={ateliers} lignes={lignes} quarts={quarts} initial={initial} avecNuit={avecNuit} />
+          <HoraireEditor ateliers={ateliers} lignes={lignes} quarts={quarts} initial={initial} initialPlaces={initialPlaces} avecNuit={avecNuit} />
         </LectureSeule>
       </div>
     </>

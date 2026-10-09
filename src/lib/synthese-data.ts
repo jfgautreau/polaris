@@ -11,7 +11,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchAll } from "@/lib/fetch-all";
-import { horaireTxt, type MapsHoraire, type HM, type TpCfg } from "@/lib/horaires";
+import { horaireTxt, type MapsHoraire, type HM, type TpCfg, type HorairePlace } from "@/lib/horaires";
 import { chargerNuitsAvant } from "@/lib/nuit-avant-data";
 import { estAvecAgence } from "@/lib/interim";
 import type { QuartRef } from "@/lib/quarts";
@@ -201,15 +201,15 @@ export async function chargerHorairesInterim(
 
   // 2) Leurs placements de la semaine (sur poste), + tables de resolution.
   const [placements, { data: lignesSiteD }, { data: atD }, hor, { data: exc }, { data: tpH }] = await Promise.all([
-    fetchAll<{ personne_id: string; poste_id: string | null; jour: string; quart_code: string | null }>(() =>
+    fetchAll<{ personne_id: string; poste_id: string | null; jour: string; quart_code: string | null; numero_rotation: string | null }>(() =>
       supabase
         .from("placement")
-        .select("personne_id, poste_id, jour, quart_code")
+        .select("personne_id, poste_id, jour, quart_code, numero_rotation")
         .in("jour", weekIsos)
         .in("personne_id", interimIds)
         .not("poste_id", "is", null)
         .order("id")
-        .returns<{ personne_id: string; poste_id: string | null; jour: string; quart_code: string | null }[]>()
+        .returns<{ personne_id: string; poste_id: string | null; jour: string; quart_code: string | null; numero_rotation: string | null }[]>()
     ),
     supabase.from("ligne").select("id, atelier_id, poste(id, nom)").returns<{ id: string; atelier_id: string | null; poste: { id: string; nom: string }[] }[]>(),
     supabase.from("atelier").select("id, nom").returns<{ id: string; nom: string }[]>(),
@@ -254,7 +254,23 @@ export async function chargerHorairesInterim(
   const tpCfgMap = new Map<string, TpCfg>();
   for (const r of tpH ?? []) if (r.tp_config) tpCfgMap.set(r.id, r.tp_config);
   const nuits = siteId ? await chargerNuitsAvant(supabase, siteId, weekIsos) : null;
-  const maps: MapsHoraire = { horMap, excMap, tpCfgMap, apresNuitMap, nuitAvant: nuits?.parPoste };
+  // Horaires par place (0088) des postes occupés.
+  const placeMap = new Map<string, HorairePlace>();
+  const postesOccupes = [...new Set(placements.map((p) => p.poste_id).filter((x): x is string => !!x))];
+  if (postesOccupes.length) {
+    const hp = await fetchAll<{ poste_id: string; quart_code: string; numero: string; debut: string | null; fin: string | null; debut_apres_nuit: string | null; fin_apres_nuit: string | null }>(() =>
+      supabase
+        .from("horaire_place")
+        .select("poste_id, quart_code, numero, debut, fin, debut_apres_nuit, fin_apres_nuit")
+        .in("poste_id", postesOccupes)
+        .order("poste_id")
+        .order("quart_code")
+        .order("numero")
+        .returns<{ poste_id: string; quart_code: string; numero: string; debut: string | null; fin: string | null; debut_apres_nuit: string | null; fin_apres_nuit: string | null }[]>(),
+    );
+  for (const h of hp) placeMap.set(`${h.poste_id}:${h.quart_code}:${h.numero}`, { debut: h.debut, fin: h.fin, debutN: h.debut_apres_nuit, finN: h.fin_apres_nuit });
+  }
+  const maps: MapsHoraire = { horMap, excMap, tpCfgMap, apresNuitMap, nuitAvant: nuits?.parPoste, placeMap };
 
   // 3) Cellules par personne / jour.
   const cellsByPerson = new Map<string, Record<string, CelluleInterim[]>>();
@@ -269,7 +285,7 @@ export async function chargerHorairesInterim(
       posteNom: info?.nom ?? "?",
       atelierNom: info?.atelierId ? atNom.get(info.atelierId) ?? "—" : "—",
       distant: !!info && info.atelierId !== affId && affId !== null,
-      horaire: horaireTxt(maps, quarts, r.personne_id, r.poste_id, r.quart_code, r.jour),
+      horaire: horaireTxt(maps, quarts, r.personne_id, r.poste_id, r.quart_code, r.jour, r.numero_rotation),
     });
   }
 

@@ -130,6 +130,7 @@ type ContexteGrille = {
   quartLabel: Record<string, string>;
   horaireStd: Record<string, { debut: string; fin: string }>;
   horaireApresNuit: Record<string, { debut: string; fin: string }>;
+  horaireCase: Record<string, { debut: string; fin: string }>;
   formationMotifId: string | null;
   posteLabel: Record<string, string>;
   posteLabelAll: Record<string, string>;
@@ -155,8 +156,11 @@ const excKey = key;
 const isPoste = (v: string) => v !== "" && v !== "X" && v !== "TP" && !v.startsWith("m:");
 // Horaire du poste ce jour-là : la variante « après une nuit » (0087, calculée
 // côté serveur par date) l'emporte sur l'horaire standard du jour de semaine.
-const horaireDuPoste = (ctx: ContexteGrille, quart: string, poste: string, iso: string) =>
-  ctx.horaireApresNuit[`${quart}:${poste}:${iso}`] ?? ctx.horaireStd[`${quart}:${poste}:${dowMon(iso)}`];
+// Une place (n° de rotation) qui a son propre horaire (0088) passe avant tout.
+const horaireDuPoste = (ctx: ContexteGrille, quart: string, poste: string, iso: string, pid: string) =>
+  ctx.horaireCase[`${pid}:${iso}`] ??
+  ctx.horaireApresNuit[`${quart}:${poste}:${iso}`] ??
+  ctx.horaireStd[`${quart}:${poste}:${dowMon(iso)}`];
 // Horaire spécifique affiché : une borne non saisie reprend celle de l'horaire
 // standard du poste (module Horaires) — même règle que src/lib/horaires.ts.
 const excLabel = (e: { debut: string; fin: string }, std?: { debut: string; fin: string }) =>
@@ -301,7 +305,7 @@ const LignePlanning = memo(function LignePlanning({
         // remontés dans le title de TOUTE la case — pas seulement de la
         // pendule — pour qu'ils s'affichent au survol de la cellule entière.
         const exCell = exc[excKey(pers.id, d.iso)];
-        const stdCell = isPoste(v) ? horaireDuPoste(ctx, d.quart, v, d.iso) : undefined;
+        const stdCell = isPoste(v) ? horaireDuPoste(ctx, d.quart, v, d.iso, pers.id) : undefined;
         const excInfo = exCell
           ? [
               exCell.debut || exCell.fin ? `Horaire : ${excLabel(exCell, stdCell)}` : "",
@@ -433,7 +437,7 @@ const LignePlanning = memo(function LignePlanning({
               const canEditExc = pers.editable && (isPoste(v) || estFormation(ctx, v) || !!e);
               if (!e && !canEditExc) return null;
               // Horaire par defaut (standard du poste pour ce quart / jour de semaine).
-              const std = isPoste(v) ? horaireDuPoste(ctx, d.quart, v, d.iso) : undefined;
+              const std = isPoste(v) ? horaireDuPoste(ctx, d.quart, v, d.iso, pers.id) : undefined;
               const stdTxt = std && (std.debut || std.fin) ? `${std.debut || "?"}-${std.fin || "?"}` : "";
               // Info-bulle de la pendule, hors JSX (même contrainte du React Compiler
               // que `titreCase` ci-dessus : pas de « [ternaires…].join() || … »).
@@ -543,6 +547,7 @@ export default function PlanningGrid({
   exceptions = {},
   horaireStd = {},
   horaireApresNuit = {},
+  horaireCase = {},
   formationMotifId = null,
   weekNav = null,
   initialSearch,
@@ -594,6 +599,7 @@ export default function PlanningGrid({
   exceptions?: Record<string, { debut: string; fin: string; motif: string }>;
   horaireStd?: Record<string, { debut: string; fin: string }>; // `${quart}:${poste}:${dow}` -> horaire par defaut
   horaireApresNuit?: Record<string, { debut: string; fin: string }>; // `${quart}:${poste}:${iso}` -> après une nuit (0087)
+  horaireCase?: Record<string, { debut: string; fin: string }>; // `${personne}:${iso}` -> horaire de la place occupée (0088)
   formationMotifId?: string | null; // motif "Formation" -> pendule active (horaires + sujet)
   weekNav?: React.ReactNode;
   /** Recherche initiale (portee par l'URL, pour survivre a la navigation). */
@@ -1226,11 +1232,11 @@ ${ecritures.length} case(s) vide(s) seront remplies (postes et NT). Les cases d�
   const ctx = useMemo<ContexteGrille>(
     () => ({
       matrice, niveauMin, effectif, habPoste, habComp, habPers, motifColor, motifs,
-      tpBlocked, horsEffectif, otherByCell, otherPosteByCell, quartLabel, horaireStd, horaireApresNuit,
+      tpBlocked, horsEffectif, otherByCell, otherPosteByCell, quartLabel, horaireStd, horaireApresNuit, horaireCase,
       formationMotifId, posteLabel, posteLabelAll,
     }),
     [matrice, niveauMin, effectif, habPoste, habComp, habPers, motifColor, motifs,
-     tpBlocked, horsEffectif, otherByCell, otherPosteByCell, quartLabel, horaireStd, horaireApresNuit,
+     tpBlocked, horsEffectif, otherByCell, otherPosteByCell, quartLabel, horaireStd, horaireApresNuit, horaireCase,
      formationMotifId, posteLabel, posteLabelAll],
   );
 
