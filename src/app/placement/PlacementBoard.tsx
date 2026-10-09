@@ -887,7 +887,7 @@ export default function PlacementBoard({
             type="button"
             className={s.navbtn}
             onClick={() => imprimer("ce")}
-            title="PDF Manager : plan en couleurs + colonne « Absents / TP » à droite (1 page A4 paysage)"
+            title="PDF Manager : plan avec surnombre et hors compétence en couleur, sans couleur de ligne, + colonne « Absents / TP » à droite (1 page A4 paysage)"
             style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
           >
             <PrintIcon size={15} /> PDF Manager
@@ -1332,7 +1332,9 @@ export default function PlacementBoard({
             {groupsImpr.map((g) => (
               <div
                 key={g.ligneId}
-                className={`${s.printLigne} ${g.tourne ? s.printLigneOn : s.printLigneOff}`}
+                // PDF Manager : pas de couleur de ligne, pour que le surnombre (fond orangé)
+                // et le hors compétence (rouge) ressortent seuls. Ligne à l'arrêt : grisée partout.
+                className={`${s.printLigne} ${!g.tourne ? s.printLigneOff : prepImpression !== "ce" ? s.printLigneOn : ""}`}
                 style={{ "--lc": g.couleur.lc, "--lc-pale": g.couleur.pale, "--lc-dark": g.couleur.dark } as CSSProperties}
               >
                 <div className={s.printLigneNom}>
