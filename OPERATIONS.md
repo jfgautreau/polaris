@@ -8,6 +8,8 @@
 ## Migrations de base de données
 - Ajouter un fichier `supabase/migrations/00XX_*.sql` (idempotent : `if not exists`,
   `create or replace`, `drop policy if exists`...).
+- **Ordre de mise en ligne** : la migration d'abord, le code qui lit ses colonnes ensuite.
+  Pousser le code avant fait tomber en erreur les écrans qui lisent une colonne absente.
 - L'exécuter dans le **SQL Editor** Supabase (ou `npm run db:migrate`).
 - Après un DDL, le cache de schéma PostgREST peut mettre ~1 min à se rafraîchir
   (*Project Settings > API > Reload schema* pour forcer).
@@ -71,11 +73,28 @@
 - Registre des traitements : `/admin/rgpd`.
 
 ## Journal d'audit
-- `/journal` (admin + codir) : toutes les modifications métier tracées.
-- Conservation cible 3 ans (purge automatique à mettre en place via tâche planifiée).
+- `/journal` (droit `journal` de la matrice ; admin et CODIR par défaut) : toutes les
+  modifications métier, avec leur auteur réel (y compris les écritures faites par le
+  serveur, depuis la migration 0086). Filtres par période, auteur, élément, action et
+  recherche ; une opération de masse (copie, import…) tient en une ligne.
+- **Conservation** réglable en haut de l'écran (13 mois par défaut, droit `journal` en
+  écriture). Ce qui dépasse est effacé à l'ouverture du Journal.
+- **RGPD** : anonymiser une personne efface du journal les lignes de sa fiche ; la
+  supprimer efface toutes les lignes qui la référencent.
+
+## Horaires des postes
+- `/admin/horaires` : horaire standard par poste × quart × jour.
+- **Quart de nuit** : case « Nuit » dans *Équipes → Rotation des équipes & horaires des
+  quarts* (même donnée que dans les paramètres des visites médicales). Indispensable pour
+  les horaires « après une nuit ».
+- **Horaires après une nuit** : case « Horaires après une nuit » dans Horaires ; appliqués
+  automatiquement le lendemain d'une nuit où la ligne a tourné (d'après l'Ordonnancement).
+- **Horaires par place** : un poste avec des numéros de rotation (Référentiel) a une ligne
+  « Place N » par quart, valable toute la semaine. La personne prend l'horaire de la place
+  qu'elle occupe : la poser sur la bonne place au Placement.
 
 ## Affichage couloir
-- `/affichage` (admin) liste les ateliers ; `/affichage/atelier/{id}` = écran TV
+- `/affichage` liste les services ; `/affichage/atelier/{id}` = écran TV
   (**fenêtre glissante** autour d'aujourd'hui, refresh **5 min**, bouton Imprimer/PDF).
 - **Fenêtre paramétrable** dans `/admin/motifs` (section « Fenêtre d'affichage du
   planning ») : nombre de jours avant J et après J, auto-sauvegardés (défaut J-1 / J+4).

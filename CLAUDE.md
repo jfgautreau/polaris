@@ -312,7 +312,7 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   numérotées, rangs en 1 à 3 colonnes (au-delà de 10 par colonne). Bascule Plan /
   Absences. `JourNav` (calendrier grisant les jours sans quart actif). Filtres de la liste
   (recherche, équipe) dans l'URL. Trois PDF : **PDF Manager** (A4 compact, paysage OU portrait selon ce qui imprime le plus grand — `ajusterFeuille`, page `plcA4P` —, absents / TP du jour,
-  ex-« PDF CE ») et **PDF** « pour Affich. » (ex-« PDF opérateurs », A3 compact paysage OU portrait — page `plcA3P` —, codes d'alerte en noir, colonne « Absents du jour » limitée aux motifs `motif_absence.visible_operateurs`, 0083, cochés dans Param. RH), plus **PDF pour Affich. + heures** (= PDF pour Affich. + horaire de chacun, résolu par `src/lib/horaires.ts` côté `page.tsx`) ; sur les PDF pour Affich. (pas le Manager, qui garde le surnombre et le hors compétence seuls en couleur), les lignes qui tournent (≥ 1 personne placée) prennent la couleur fixe de leur ligne (`ligne.couleur`, 0082, choisie au Référentiel dans la palette fermée `src/lib/ligne-couleurs.ts`), celles à l'arrêt restent grisées ; en-tête service ·
+  ex-« PDF CE ») et **PDF** « pour Affich. » (ex-« PDF opérateurs », A3 compact paysage OU portrait — page `plcA3P` —, codes d'alerte en noir, colonne « Absents du jour » limitée aux motifs `motif_absence.visible_operateurs`, 0083, cochés dans Param. RH), plus **PDF pour Affich. + heures** (= PDF pour Affich. + horaire de chacun, résolu par `src/lib/horaires.ts` côté `page.tsx`) ; sur les PDF pour Affich. (pas le Manager, qui garde le surnombre et le hors compétence seuls en couleur), les lignes qui tournent (≥ 1 personne placée) prennent la couleur fixe de leur ligne (`ligne.couleur`, 0082, choisie au Référentiel dans la palette fermée `src/lib/ligne-couleurs.ts`), celles à l'arrêt restent grisées (jamais une ligne d'encadrement, que des postes `manager`) ; en-tête service ·
   quart (pastille centrée) · date, hors zone mise à l'échelle ; numéros vides et commentaires du jour imprimés ; filtre
   `imprimable`. TP du jour sans placement = carte « Temps partiel », pas « à placer ».
   Postes `zone_attente` (CDT) : hors du plan, colonne « À répartir » entre le plan et les noms
@@ -332,13 +332,19 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   niveau ≥ 1 nulle part, calcul serveur). Filtre au clic sur un en-tête.
 - **Habilitations** (`src/app/habilitations/`) : même principe de recherche transverse ;
   bilan sur le sous-ensemble affiché ; saisie au clic sur une pastille ; filtre au clic sur
-  un en-tête.
+  un en-tête. **Historique** (`personne_competence_historique`, 0084, écrit par déclencheur) :
+  rien n'est perdu à la suppression ; case grisée si supprimée ; vue Liste « Détenues /
+  Supprimées / Toutes » + bouton Historique en lecture seule. Noms d'auteurs via
+  `src/lib/noms-comptes.ts` (service_role borné au site).
 - **Référentiel** (`src/app/admin/referentiel/`, `/api/referentiel`) : N° aff. par service (`atelier.ordre_affichage`, 0085 — tout écran classe les services par ce numéro puis par nom) ; colonnes N° rot,
   Habil. requises, Rempl. (PTR/PTNR), Impr., Attente (`zone_attente`, 0077), Titulaire, effectif par quart (vide « – » / 0 /
-  N), Ouvre / Ferme le, Regroup., Couleur de ligne (PDF du Placement) Noms de poste / nom court / ligne **uniques par site**
+  N), Ouvre / Ferme le, Regroup., Couleur de ligne (PDF du Placement, `PastillesCouleur` / `CouleurLigne`).
+  Noms de poste / nom court / ligne **uniques par site**
   parmi les actifs (409) ; erreurs en toast fixe bas-centre.
 - **Absences** (module `absences`, `src/app/absences-specifiques/`) : périodes reconstruites
-  depuis les jours ; édition inline ; filtres synchronisés à l'URL.
+  depuis les jours ; édition inline ; filtres synchronisés à l'URL — nom, période, **Service**
+  et **Équipe** en boutons avec compteurs, **Motif** en pastilles (plusieurs, `motif=a,b`) ;
+  chaque compteur tient compte des autres filtres.
 - **Bilans** (`src/app/bilans/`, liste `src/lib/bilans-rapports.ts`) : Cockpit + rapports
   imprimables (bouton « PDF »). Feuille de route (24 semaines × service × catégorie ;
   besoin = somme simple des quarts, **journée comprise** ; besoin actualisé par
@@ -351,7 +357,9 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   sections Matin / Après-midi / Nuit classées par `creneau` ; fenêtre relative ou absolue
   (`getFenetreAffichage`, `joursDeFenetre`) ; PDF A3 portrait multi-pages.
 - **Visites médicales** (`src/app/visites/`, droit `visites`) : deux écrans seulement,
-  Suivi et Paramètres — pas de troisième. Le **régime** (`simple` / `adapte` / `renforce`)
+  Suivi et Paramètres — pas de troisième (le « rapport » des retards par régime × visite due
+  × professionnel est un panneau du Suivi, filtres dans l'URL). Visite : médecin et/ou
+  infirmière, vu et prévu (0081) ; poste à risque : plusieurs motifs et attestations (0080). Le **régime** (`simple` / `adapte` / `renforce`)
   n'est jamais saisi : il est **calculé** (`src/lib/visites.ts`, pur et testé ;
   `visites-data.ts` pour les lectures) à partir des quarts de nuit, des postes tenus
   (titulaire **ou** N placements sur M semaines) et des habilitations détenues — le plus
@@ -388,10 +396,12 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   `calendrier`, `numeros-rotation`, `absences-periodes`, `erreurs`, `noms`, `parametres`,
   `filtres-session`, `bilans-rapports`, `*-data` (données des bilans), `visites`
   (règles pures), `visites-data` (lectures de l'écran Suivi), `visites-placement`
-  (avertissement sans motif).
+  (avertissement sans motif), `journal` (règles de l'écran Journal) et `journal-contexte`
+  (en-têtes auteur / lot), `nuit-avant` (+ `-data`), `planning-recopie`, `ligne-couleurs`,
+  `noms-comptes`.
 - `src/components/` : `AppHeader`, `MainNav`, `GardeCacheNavigation`, `icons`,
-  `ModaleDeplacable`, `InfoBulle`, `usePersonGrid`, `persongrid.module.css`, composants
-  partagés listés plus haut.
+  `ModaleDeplacable`, `InfoBulle`, `usePersonGrid`, `persongrid.module.css`,
+  `PastillesCouleur`, composants partagés listés plus haut.
 - Guide utilisateur : `public/guide.html` (lien dans `UserMenu`).
 
 ## Tests (Vitest)

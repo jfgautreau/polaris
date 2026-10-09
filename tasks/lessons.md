@@ -841,3 +841,25 @@ seul service dense suffisait à rétrécir toutes les feuilles bien en deçà de
 naturelle (`thead { display: table-header-group }`, `tr { break-inside: avoid }`) et un
 saut de page par bloc. La mise à l'échelle mesurée (`ajusterFeuille`) reste réservée à ce qui
 DOIT tenir sur une feuille (plan de Placement), et se calcule bloc par bloc.
+
+## L51 — Ne jamais enchaîner un commit derrière `vitest | grep`
+**Contexte** : 2026-10-09, `npx vitest run | grep -E "Tests|failed" && git commit … && git push`.
+Deux tests de garde échouaient (admin-client / isolation-site), mais le `grep` trouvait le
+mot « failed » et sortait en succès : le commit fautif est parti en production.
+**Règle** : lancer tests et build en lisant leur **code de sortie** (sortie redirigée vers un
+fichier, puis `echo $?`) et ne committer que si les deux valent 0. Les gardes statiques sont
+**par fichier** : un fichier qui appelle `getAdminClient()` doit mentionner `site_id` ;
+une lecture service_role d'appoint (noms de comptes…) va dans un helper de `src/lib/`
+borné au site (ex. `noms-comptes.ts`).
+
+## L52 — Orientation d'impression choisie au moment du clic
+**Contexte** : PDF du Placement en portrait OU paysage selon le plan (2026-10-09).
+`@page { size }` ne se modifie pas en JS ; un `@page` nommé (`plcA3P`, `plcA4P`) est
+activé par une classe posée sur `<body>` (`page: plcA4P`) juste avant `window.print()`,
+puis retirée. On **mesure** le contenu dans les deux orientations (même cible de hauteur
+plus courte que la feuille, cf. L42) et on garde la plus grande échelle ; le portrait ne
+l'emporte qu'au-delà de 5 % de gain pour éviter de basculer pour rien. Ceinture et
+bretelles : poser aussi la page nommée sur la feuille elle-même (`[data-orient]`), Chrome
+ne propageant pas toujours `page` depuis `<body>`. À vérifier à l'aperçu : si le
+navigateur ignore la page nommée, la feuille portrait sort réduite dans un coin.
+

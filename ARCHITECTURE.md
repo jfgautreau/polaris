@@ -32,14 +32,17 @@ placement journalier, habilitations, visites médicales, affichage couloir, bila
 ## Modèle de données (Supabase / PostgreSQL)
 - **Auth & droits** : `app_user` (compte + rôle), liée à `auth.users` (trigger
   `handle_new_user`) ; `role_permission` (surcharge de la matrice de droits par module).
-- **Référentiel** : `atelier` > `ligne` > `poste` (`effectif_requis` = abaque **déprécié**,
+- **Référentiel** : `atelier` (= « service » à l'écran ; `ordre_affichage`, 0085 : ordre des
+  services sur tous les écrans) > `ligne` (`couleur`, 0082 : couleur fixe sur les PDF du
+  Placement, palette fermée `src/lib/ligne-couleurs.ts`) > `poste` (`effectif_requis` = abaque **déprécié**,
   repli de l'effectif par quart depuis 0070 ; `nom_court`,
   `categorie` manager/conducteur/operateur, `niveau_min_requis`, `objectif_polyvalence`,
   `objectif_cible`, `ordre_affichage`, `zone_attente` — 0077 : poste de pré-affectation
   à répartir, ex. CDT ; hors matrice et hors bilans de compétence), `equipe` (+ `quart_fixe`), `equipe_chef`.
   `ligne` et `poste` portent aussi `date_ouverture`/`date_fermeture` (0071 :
   ouverture/fermeture datée, helper `src/lib/referentiel-validite.ts`).
-- **Quarts** : `quart` (`journee`/`matin`/`apres_midi`/`nuit` + horaires),
+- **Quarts** : `quart` (code figé à la création, `libelle`, horaires, `rotation`, `creneau`,
+  `couleur`, `nuit` — 0076, réglable aussi dans Équipes),
   `rotation_reference` (**rotation par référence datée** : une semaine (lundi) × équipe →
   quart ; l'alternance des semaines suivantes est *calculée* par `src/lib/rotation.ts`,
   jamais stockée — pour une semaine cible, la référence active est la plus récente ≤ cette
@@ -50,7 +53,11 @@ placement journalier, habilitations, visites médicales, affichage couloir, bila
   repli sur `poste.effectif_requis` ; `actif=false` = « – » ne tourne pas ;
   `actif=true` = tourne à 0 ou N. L'ancien « ne stocke que les désactivations » n'est
   plus vrai), `jour_quart`, `ouverture_quart`, `horaire_poste` (poste × quart × jour,
-  = horaire *standard* affiché à la TV et proposé par défaut dans la pendule du planning).
+  = horaire *standard* affiché à la TV et proposé par défaut dans la pendule du planning ;
+  variante facultative `debut_apres_nuit` / `fin_apres_nuit`, 0087, appliquée quand la ligne a
+  tourné de nuit la veille), `horaire_place` (0088 : horaire d'une **place** = numéro de
+  rotation du poste, toute la semaine, avec sa variante après une nuit). Résolution :
+  `src/lib/horaires.ts` (`horaireDuPoste`, `resoudreHoraire`) et `src/lib/nuit-avant.ts`.
 - **Personnel** : `personne` (équipe, atelier, type_contrat, sexe, `numero_badge`,
   `date_livret_accueil`, temps partiel `tp_config` jsonb ; champs RGPD
   `anonymise`/`anonymise_at`) ; `contrat_periode` (source de vérité du cycle de vie).
@@ -71,12 +78,15 @@ placement journalier, habilitations, visites médicales, affichage couloir, bila
   la restriction restent toujours présents.
 - **Habilitations** : `competence` (`a_recycler`, `duree_validite_mois`, `categorie`,
   `groupe`, `ordre`, `a_autorisation_conduite`), `personne_competence`
-  (`date_obtention`, `date_expiration` **stockée à la saisie**, `date_autorisation_conduite`).
+  (`date_obtention`, `date_expiration` **stockée à la saisie**, `date_autorisation_conduite`),
+  `personne_competence_historique` (0084 : ajout / modification / suppression, écrite par
+  déclencheur, reprise depuis `audit_log` ; une suppression n'efface plus rien).
 - **Planning** : `ligne_ouverture`, `jour_equipe`, `placement` (1 personne/jour : poste,
   ou motif d'absence, ou non travaillé), `horaire_exception` (personne × jour),
   `absence` (période longue → `placement.absence_id`, cascade),
   `semaine_type` (+ ouverture, profils).
-- **Absences** : `motif_absence` (paramétrable, couleur ; `visite_reprise` depuis 0076).
+- **Absences** : `motif_absence` (paramétrable, couleur ; `visite_reprise` depuis 0076 ;
+  `visible_operateurs`, 0083 : motif montré sur le « PDF pour Affich. »).
 - **Visites médicales** (0076, module RH) — **aucune donnée de santé** : des dates, un
   type de visite, et un `avis` borné par CHECK à quatre valeurs (attestation, apte, apte
   avec aménagements, inapte).
@@ -86,16 +96,20 @@ placement journalier, habilitations, visites médicales, affichage couloir, bila
     (usages d'attestation de non contre-indication : conduite, électrique…),
     `visite_parametre` (clé / valeur, défauts portés par `src/lib/visites.ts`).
   - `visite` (personne × type : `date_rdv`, `date_visite`, `avis`, `prochaine_date` fixée
-    par le professionnel, commentaire logistique) et `visite_anci` (usages délivrés par
+    par le professionnel, `professionnels` / `prochains_professionnels` = médecin et/ou
+    infirmière, 0081, commentaire logistique) et `visite_anci` (usages délivrés par
     la visite).
   - `personne_suivi` (`suivi_adapte` **sans motif**, `regime_force`) et
     `contrainte_affectation` (quart ou poste exclu sur une période, **sans motif**).
   - Drapeaux posés sur les référentiels existants, écrits **seulement** par
-    `/api/visites-param` : `quart.nuit`, `poste.suivi_renforce` / `suivi_motif` /
-    `anci_usage`, `competence.suivi_renforce` / `anci_usage`, `motif_absence.visite_reprise`.
+    `/api/visites-param` : `quart.nuit` (aussi réglable dans Équipes depuis 0087),
+    `poste.suivi_renforce` / `suivi_motifs` / `anci_usages` (tableaux, 0080 ; les colonnes
+    scalaires `suivi_motif` / `anci_usage` sont dépréciées), `competence.suivi_renforce` /
+    `anci_usage`, `motif_absence.visite_reprise`.
   - Le **régime n'est pas stocké** : il est recalculé à chaque affichage
     (`evaluerPersonne`) depuis ces drapeaux, les placements récents et les habilitations.
-- **Transverse** : `audit_log` (alimenté par triggers).
+- **Transverse** : `audit_log` (alimenté par triggers ; `lot` / `lot_libelle` depuis 0086),
+  `site.journal_conservation_mois` (0086).
 
 ## Rôles & périmètres
 Deux couches, à ne pas confondre :
@@ -119,7 +133,8 @@ chantier : `tasks/multi-site.md`.
 - Référentiel, équipes, compétences, motifs, objectifs, personnel : **admin**.
 - Matrice / placement / habilitations : **admin ou chef de l'équipe** (`can_edit_personne()`).
 - Ouverture de lignes, rotation des équipes : **admin ou ordo** (`has_role('ordo')`).
-- Journal d'audit : lecture **admin + codir** (`can_read_audit()`).
+- Journal d'audit : la matrice décide (module `journal`) ; l'écran lit en service_role
+  borné au site (la RLS `can_read_audit()` nomme encore admin + codir, simple filet).
 - Visites médicales : modules `visites` et `visites_param`, accordés au seul rôle `rh`
   par défaut. Lecture RLS bornée au site ; écriture par les routes API gardées par
   `moduleWriteGuard` (service_role). Le Placement n'en voit qu'un avertissement **sans
@@ -129,19 +144,25 @@ Rôles : `admin`, `chef_equipe`, `ordo`, `rh`, `codir`, `planning`.
 
 ## Audit
 Triggers PostgreSQL (`audit_trigger`) sur les tables métier → `audit_log`
-(qui, action, table, ancienne/nouvelle valeur en JSON).
-⚠️ L'auteur est `auth.uid()`, **null quand l'écriture passe par le service role**
-(`getAdminClient()`, utilisé dès qu'un module est en écriture « complète ») → l'entrée
-tombait en « Système ». Depuis la **migration 0031**, le trigger prend en repli
-`new/old.created_by` puis `auteur_app_user_id` : `placement`, `matrice` et
-`horaire_exception` sont donc attribués. Les tables sans colonne d'auteur (ex. `personne`)
-restent en « Système » — c'est le choix « ciblé » retenu.
-Le journal (`/journal`) affiche qui / valeur avant / valeur après / date-heure, en masquant
-les champs techniques et en résolvant les clés étrangères en libellés.
+(qui, action, table, ancienne/nouvelle valeur en JSON, site, lot).
+- **Auteur** (refonte 0086) : `auth.uid()` ; sinon l'en-tête `x-polaris-auteur` que le
+  serveur joint à chaque écriture service_role (fetch des clients Supabase,
+  `src/lib/journal-contexte.ts`) ; sinon les colonnes d'auteur de la ligne. Avant 0086,
+  36 % des entrées (dont tous les changements de droits) tombaient en « Système ».
+- **Lots** : une opération de masse (copie, pré-remplissage, réinitialisation, imports,
+  absence sur une période) passe par `avecLotJournal()` ; ses lignes portent le même `lot`
+  et une ligne de synthèse `LOT` est ajoutée (`journal_clore_lot`).
+- **Écran** `/journal` : filtres dans l'URL (période, auteur, élément, action, recherche
+  personne / poste / habilitation), 100 lignes par page, Planning + Polyvalence masqués par
+  défaut, élément décrit en clair (`src/lib/journal.ts`, testé), badge « via support ».
+- **Conservation** : `site.journal_conservation_mois` (13 par défaut), purge
+  `journal_purger()` à l'ouverture du Journal. **RGPD** : anonymiser une personne efface les
+  lignes de sa fiche, la supprimer efface tout ce qui la référence
+  (`journal_purger_personne`). Ces fonctions sont réservées au service_role.
 
 ## Migrations
-Fichiers SQL ordonnés dans `supabase/migrations/` (**0001 → 0076**, dernière appliquée :
-**0076**), **exécutés manuellement** par l'utilisateur dans le SQL Editor Supabase
+Fichiers SQL ordonnés dans `supabase/migrations/` (**0001 → 0088**, dernière appliquée :
+**0088**), **exécutés manuellement** par l'utilisateur dans le SQL Editor Supabase
 (`SUPABASE_DB_URL` est vide ; `npm run db:migrate` ne fonctionne que s'il est défini).
 
 Depuis la **0037**, trois séquences délicates passent par des **fonctions SQL** appelées
@@ -204,6 +225,16 @@ intégrés + `role_custom`).
 - **0077** — `poste.zone_attente` (vue « Par poste » du Planning, colonne « À répartir »
   du Placement) ; **0078** — un départ libère le poste fixe (trigger
   `liberer_poste_fixe_au_depart` sur la mise à jour du statut, + rattrapage).
+
+**Octobre 2026 (0079 → 0088)** :
+- **0079 → 0081** — visites : professionnel vu / attendu (médecin, infirmière, cumulables
+  en 0081) ; poste à risque avec plusieurs motifs et attestations (0080).
+- **0082** — `ligne.couleur` ; **0083** — `motif_absence.visible_operateurs` ;
+  **0084** — historique des habilitations ; **0085** — `atelier.ordre_affichage`.
+- **0086** — refonte du journal (auteur par en-tête, lots, conservation, purge RGPD).
+- **0087** — horaires « après une nuit » ; **0088** — horaires par place (`horaire_place`).
+- Colonnes dépréciées, plus lues, à supprimer : `poste.suivi_motif`, `poste.anci_usage`,
+  `visite.professionnel`, `visite.prochain_professionnel`.
 
 ## Sitemap (principales routes)
 - `/` accueil (logo + titre « planning »), `/planning` (+ vue `?par=poste`), `/placement` (saisie par

@@ -1,170 +1,82 @@
 # Reste à faire — Polaris
 
-> État au 2026-10-08. Migrations appliquées jusqu'à **0078**. **427** tests Vitest.
-> Historique détaillé : `git log`.
+> État au 2026-10-09. Migrations appliquées jusqu'à **0088**. **451** tests Vitest.
+> Ce fichier ne garde que ce qui reste ouvert ; le détail de ce qui est fait est dans
+> `git log` (et l'en-tête de chaque migration).
 
-## Revue — lot du 2026-10-08
-- [x] **Pré-affectation et départ prévu** : règle vérifiée (le pré-remplissage contrôle le
-      contrat jour par jour : une personne encore ACTIF n'est pas posée après sa fin de
-      contrat). Cas réel trouvé : fin de contrat saisie le lendemain du pré-remplissage →
-      **Cycle de vie** signale les affectations à venir hors contrat et propose de les
-      retirer sur confirmation.
-- [x] **Affichage — impression de plusieurs services** : à la largeur de l'A3, multi-pages,
-      un service par page (règles de l'écran TV).
-- [x] **Matrice** : postes « en attente » (CDT, Conducteur, Périphériques au Bignon) retirés
-      de la matrice et des bilans de compétence ; Feuille de route inchangée. Les 2 niveaux
-      saisis sur ces postes ont été effacés.
-- [x] `.gitignore` : dossier `capture écran/` (captures avec données réelles) exclu du repo.
+## À vérifier sur le terrain (lot du 2026-10-09)
+- [ ] **Impressions du Placement** : PDF Manager et PDF pour Affich. compacts, en portrait
+      ou paysage selon le plan. Si l'aperçu reste en paysage alors que le plan a été
+      calculé en portrait (feuille réduite dans un coin), passer par un autre réglage
+      d'impression (cf. `lessons.md` L52).
+- [ ] **Journal** : contrôler que les nouvelles entrées ne sont plus signées « Système »
+      (comptage en lecture seule à refaire quelques jours après le 2026-10-09).
+- [ ] **Horaires après une nuit / par place** : saisir les variantes sur le site concerné,
+      ajouter les numéros de rotation des postes à arrivées décalées, puis comparer la TV
+      un jour qui suit une nuit et un jour sans nuit.
 - [ ] Vérifier sur une vraie impression l'Affichage multi-services (2 ou 3 services cochés).
 - [ ] Retirer les 2 affectations hors contrat restantes (15 et 16/10, Le Bignon) depuis le
       Cycle de vie de la personne concernée.
 
-## Titulaires des personnes parties (2026-10-07)
-- [x] **Migration `0078_depart_libere_poste_fixe.sql` appliquée** : au passage à PARTI, le
-      poste fixe est retiré (trigger `liberer_poste_fixe_au_depart`). Rattrapage vérifié en
-      base : plus aucune personne partie titulaire (Le Bignon 0, La Vraie Croix 0).
+## Base de données
+- [ ] **Supprimer les colonnes dépréciées** (plus lues nulle part) dans une prochaine
+      migration : `poste.suivi_motif`, `poste.anci_usage` (0080), `visite.professionnel`,
+      `visite.prochain_professionnel` (0081).
+- [ ] **Backfill SQL** des `personne_competence.date_expiration` nulles alors que la
+      formation a une durée de validité (aujourd'hui compensé à l'affichage seulement).
+- [ ] RLS `audit_log` : `can_read_audit()` nomme encore admin + codir. L'écran Journal ne
+      s'en sert plus (lecture service_role après la garde de module) ; l'aligner sur la
+      matrice ou la laisser comme simple filet.
 
-## Planning « Par poste » (cahier des charges validé le 2026-10-07)
-Spécification complète : `tasks/planning-par-poste.md`.
-- [x] **Migration `0077_poste_zone_attente.sql` appliquée** (2026-10-07).
-- [x] « Attente » coché sur CDT (Le Bignon) au Référentiel.
-- [x] Colonne « Attente » au Référentiel (`poste.zone_attente`).
-- [x] Bascule Par nom / Par poste dans le Planning (`?par=poste`), une rangée par place.
-- [x] Saisie : panneau des candidats, `»` jusqu'à la fin de semaine, menu Remplacer / Retirer,
-      « + ajouter » ; drapeau `proteger` dans `/api/placement/cell`.
+## Planning « Par poste »
+Spécification : `tasks/planning-par-poste.md`.
 - [ ] Mesurer la fluidité au Bignon (99 postes) ; virtualiser les rangées si besoin.
 - [ ] **Plus tard** : impression A3 paysage de la vue par poste.
 - [ ] **Plus tard** : glisser-déposer d'une barre.
 
-## Revue — lot du 2026-10-07
-- [x] **Calendriers** : aujourd'hui en vert (fond pâle + anneau) dans `DateRangePicker`
-      (congés / absences) et `JourNav` (Placement) — `isoAujourdhui()` et
-      `STYLE_AUJOURDHUI` dans `src/lib/calendrier.ts`. Les `<input type="date">` natifs
-      restent ceux du navigateur.
-- [x] **PDF du Placement** : « PDF » = feuille opérateurs **sans couleur** ; « PDF CE »
-      renommé **« PDF Manager »** (garde les couleurs).
-- [x] **Affichage TV** : `/affichage` liste les services avec cases à cocher → impression
-      A3 d'une page par service coché (`/affichage/impression?atelier=…`) ; lien « Écran
-      TV » conservé par service.
-- [x] **Horaires** : une borne d'horaire spécifique manquante reprend l'horaire générique
-      (temps partiel, sinon standard du poste) — TV, Synthèses, info-bulles du Planning.
-- [x] **Placement** : postes « Attente » hors du plan, dans une colonne « À répartir »
-      entre le plan et les noms (PDF inchangés).
-
-## Visites médicales (module RH, 2026-09-28)
-- [x] **Migration `0076_visites_medicales.sql` appliquée** dans le SQL Editor.
-- [x] Écrans **Suivi** (`/visites`) et **Paramètres** (`/admin/visites-param`), droits
-      `visites` / `visites_param` donnés au rôle `rh`. Calcul pur et testé
-      (`src/lib/visites.ts`, 50 cas).
-- [x] Avertissement du Placement / Planning **sans motif**, quatre cas activables —
-      **tous éteints** tant que le module est vide.
+## Visites médicales (module RH)
 - [ ] **Import initial de l'historique** des visites (matricule, date, type, éventuelles
-      ANCI). Sans lui, tout le personnel apparaît « En retard ». Format à obtenir des RH
-      (Excel interne ou export du portail du service de santé au travail) ; s'inspirer
-      de l'import des absences RH (`src/lib/import-absences-rh.ts`).
-- [ ] **Relire les déclencheurs posés par la migration** avec les RH : quarts de nuit
-      (déduits de l'heure de début), habilitations à autorisation de conduite (suivi
-      renforcé + ANCI conduite), motifs d'arrêt cochés pour la reprise.
+      ANCI). Sans lui, tout le personnel apparaît « En retard ». Format à obtenir des RH ;
+      s'inspirer de l'import des absences RH (`src/lib/import-absences-rh.ts`).
+- [ ] **Relire les déclencheurs posés par la migration 0076** avec les RH : quarts de nuit,
+      habilitations à autorisation de conduite, motifs d'arrêt cochés pour la reprise.
 - [ ] **Postes à risques particuliers** : à cocher depuis la liste annuelle transmise au
       service de santé au travail (à demander aux RH, sans noms).
 - [ ] **Motifs d'arrêt** : vérifier qu'AT, maladie professionnelle et maternité sont
-      distincts de « AM » ; sinon la règle de reprise ne les distingue pas (seuil unique).
-- [ ] **Visite de mi-carrière** (L4624-2-2) : pas de date de naissance dans Polaris, type
-      créé mais désactivé. Décision RH : « pas pratiqué dans cette industrie » — à
-      confronter à la convention collective applicable.
-- [ ] Rappel « rendez-vous de liaison » à 30 jours d'arrêt (L1226-1-3) : proposé dans la
-      maquette, non codé.
+      distincts de « AM » ; sinon la règle de reprise ne les distingue pas.
+- [ ] **Visite de mi-carrière** (L4624-2-2) : type créé mais désactivé (pas de date de
+      naissance). À confronter à la convention collective applicable.
+- [ ] Rappel « rendez-vous de liaison » à 30 jours d'arrêt (L1226-1-3) : non codé.
 - [ ] Guide utilisateur (`public/guide.html`) : section Visites médicales à écrire.
-- [x] 0079 : professionnel vu / attendu (médecin, infirmier) sur chaque visite.
-- [x] 0080 : poste à risque → plusieurs motifs réglementaires et attestations
-      (`poste.suivi_motifs`, `anci_usages`).
-- [ ] **Supprimer `poste.suivi_motif`, `poste.anci_usage` (0080), `visite.professionnel`,
-      `visite.prochain_professionnel` (0081)** (dépréciés, plus
-      lus nulle part) dans une prochaine migration.
-
-## Revue — Poste imprimable + colonnes de noms Placement (2026-09-16)
-- [x] **Migration `0073_poste_imprimable.sql` appliquée** (2026-09-17) dans le SQL Editor
-      Supabase (`poste.imprimable boolean not null default true`). Le code reste tolérant à
-      son absence (repli `imprimable = true`, codes 42703/PGRST204) pour les autres sites.
-- [x] **Référentiel — colonne « Impr. »** (Oui/Non) par poste : choisit s'il figure sur les
-      **feuilles de placement imprimées** (PDF / PDF CE). « Non » masque à l'impression les
-      postes qui ne servent qu'à **construire le planning** ; ils restent utilisables à
-      l'écran. Whitelist `posteValue` + `updateTable` (repli colonne absente).
-- [x] **Placement PDF/PDF CE** : le plan imprimé (`groupsImpr`) exclut les postes non
-      imprimables et les lignes qui n'ont plus aucun poste imprimable. L'écran montre tous
-      les postes.
-- [x] **Placement écran — noms sur 2/3 colonnes** : les rangs d'un poste (numéros de rotation
-      + case sans numéro) se répartissent en colonnes de **10 rangs max** (plafond 3 colonnes),
-      via multi-colonnes CSS pilotées par `--cols` (calc largeur de tuile). Évite les tuiles
-      interminables sur les postes à nombreux numéros.
-- [x] `tsc`, `npm run build`, `npm test` (313) OK.
-
-## Revue — PDF Placement & tooltip Planning (2026-09-16)
-- [x] **PDF & PDF CE Placement** : les **numéros de rotation** figurent maintenant sur
-      chaque poste numéroté, même vide (ligne « n° · libre ») — avant, un numéro sans
-      personne était invisible (cf. `PlacementBoard.tsx`, section feuille imprimable).
-- [x] **PDF & PDF CE Placement** : les **commentaires du jour** (`horaire_exception.motif`,
-      saisis via la pendule du Planning) s'affichent en italique à côté du nom. Chargés
-      dans `placement/page.tsx` (lecture bornée à 1 jour, site-scopée), passés en prop
-      `commentaires`.
-- [x] **PDF Placement en A3 paysage** (bouton « PDF » seulement ; le « PDF CE » reste A4) :
-      page nommée `plcA3` (globals.css) activée via `body.print-a3` le temps du print ;
-      feuille et cible d'échelle redimensionnées (`PAGE_*_A3`, `LARGEURS_ESSAI_A3`,
-      `.printSheet[data-mode="simple"]`). Respecte L42 (cible < feuille).
-- [x] **Planning** : horaire spécifique + commentaire affichés au survol de **toute la
-      case** (title de la cellule et du bouton), plus seulement de la pendule 🕐.
-- [x] `tsc`, `npm run build`, `npm test` (313) OK.
 
 ## Sécurité / multi-site
-- [x] Isolation multi-tenant : `site_id` + RLS sur toutes les tables métier (0043–0054).
-- [x] Bornage explicite `site_id` de **toutes** les lectures/écritures via `getAdminClient()`,
-      verrouillé par `isolation-site.test.ts` (Sujet 1, 2026-08-23).
 - [ ] **Test d'isolation « en conditions réelles »** — les gardes actuelles sont statiques
       (analyse du source). Un vrai test RLS cross-site (deux sites, une base de test)
       reste à mettre en place quand un environnement de test avec base dédiée existera.
-- [x] **Résolution du site par le compte connecté** (2026-08-23) : « site courant » =
-      `getCurrentProfile().siteId`, conscient de l'impersonation (cookie). Multi-site
-      fonctionnel sur `bigplann.vercel.app` **sans sous-domaine**. ⚠️ L'approche
-      `app_metadata`/`x-site-id` (proxy) a été **abandonnée** — le `site_id` vient de la
-      table `app_user`. Le script `scripts/backfill-app-metadata-site.mjs` est **obsolète**
-      (peut être supprimé). Incident du jour consigné dans `tasks/multi-site.md §5bis`.
-- [x] **Masquage d'éléments par site** (2026-08-24) : `/platform/[id]` → « Éléments visibles ».
-      Table `site_module` (0056, appliquée). Menus = blocage réel (nav + route) ;
-      extras hors nav (`MASQUABLES_EXTRA`) = `guide` (lien Guide utilisateur du menu user).
-      Helper `src/lib/site-modules.ts`.
-- [ ] **`/affichage` (TV public) par site** — seul flux sans compte connecté. À faire au
-      2ᵉ site : slug dans le chemin (`/affichage/<slug>/…`).
-- [ ] **Domaine `polaris.app` + sous-domaines par site** — cosmétique désormais (non
-      bloquant) ; `polaris.app` non acheté (plan Vercel gratuit). Le jour venu : wildcard
-      DNS + slug → `x-site-id` dans `src/proxy.ts` (cf. `tasks/multi-site.md`).
+- [ ] **`/affichage` (TV public) par site** — seul flux sans compte connecté : slug dans le
+      chemin (`/affichage/<slug>/…`).
+- [ ] **Domaine `polaris.app` + sous-domaines par site** — cosmétique, non bloquant
+      (cf. `tasks/multi-site.md`).
 
 ## Chantiers techniques
-- [x] **Virtualisation des grandes grilles** (2026-08-26) — Matrice + Habilitations ne
-      rendent que les lignes visibles (fenêtre + overscan 16, cales `<tr>` calées sur
-      `--grid-row-h`), via le socle partagé `usePersonGrid`. Colonnes **non** virtualisées
-      (noms figés, en-têtes collants, survol en croix intacts). Allège dessin + hydratation ;
-      **n'accélère pas** la récupération serveur (cf. « Lenteurs post-0053 » ci-dessous).
-- [ ] **Lenteurs post-0053 à investiguer** — chargement perçu plus lent depuis la
-      séparation des référentiels. Pistes : index sur composite FK/PK `jour_quart`
-      (EXPLAIN planning + placement), round-trip `getCurrentSite()` par appel de
-      permissions, invalidations de cache Next. Cf. `tasks/multi-site.md`.
-- [ ] **Backfill SQL** des `personne_competence.date_expiration` nulles alors que la
-      formation a une durée de validité (aujourd'hui compensé à l'affichage seulement).
-- [ ] Journal : les tables sans colonne d'auteur (ex. `personne`) restent en « Système ».
-      Choix « ciblé » assumé (cf. `lessons.md` L12).
+- [ ] **Lenteurs post-0053 à investiguer** — pistes : index sur composite FK/PK
+      `jour_quart` (EXPLAIN planning + placement), invalidations de cache Next.
+      Cf. `tasks/multi-site.md`.
+- [ ] Prochain candidat React Compiler : `PlacementBoard`.
 
 ## Décisions ouvertes (arbitrage utilisateur)
-- [ ] **Anonymisation RGPD** — aujourd'hui conserve matricule, badge, sexe, pointure,
-      contrats, motifs d'horaires : c'est une **pseudonymisation**, pas une anonymisation.
-      Soit effacer tout ce qui ré-identifie, soit renommer le bouton. Par ailleurs
-      `/api/personnel/[id]/export` exige le droit `personnel: write` alors que c'est une
-      lecture sensible → devrait relever du module `rgpd`.
+- [ ] **Anonymisation RGPD** — conserve matricule, badge, sexe, pointure, contrats,
+      motifs d'horaires : c'est une **pseudonymisation**, pas une anonymisation. Soit
+      effacer tout ce qui ré-identifie, soit renommer le bouton. (Le journal d'audit, lui,
+      est purgé des traces d'identité depuis 0086.)
 - [ ] **Placement multi-quart** — afficher les quarts cochés côte à côte (3 dispositions
       proposées, en attente d'arbitrage).
 - [ ] **Placement V2** — vrai plan géographique (image d'atelier + position x/y des
       postes, écran de calibrage) → migration à prévoir. La V1 schématique est en place.
 
 ## Rappels
-- `npm run build` **et** `npm test` avant chaque commit ; commit + push sur `main`
-  (déploiement Vercel auto). Auteur git = `jf.gautreau@gmail.com`.
-- Toute nouvelle migration s'exécute **manuellement** dans le SQL Editor Supabase.
+- Tests et build avant chaque commit, en lisant leur **code de sortie** (pas de
+  `vitest | grep`, cf. `lessons.md` L51) ; commit + push sur `main` (déploiement Vercel
+  auto). Auteur git = `jf.gautreau@gmail.com`.
+- Toute nouvelle migration s'exécute **manuellement** dans le SQL Editor Supabase ; le
+  code qui la lit ne part qu'une fois la migration appliquée.

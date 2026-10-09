@@ -55,23 +55,32 @@ menu suit l'écriture, pas la lecture.
   que `ligneOuverte` : `jour_quart.actif` + `ouverture_quart`, défaut ouvert), à laquelle
   la navigation du calendrier est bornée. **Aujourd'hui** est marqué en vert (même style que
   le `DateRangePicker` des absences : `STYLE_AUJOURDHUI`, `src/lib/calendrier.ts`).
-- **Deux boutons PDF**, mise à l'échelle **mesurée** (cf. `lessons.md` L16, L42) :
-  - **PDF Manager** (`mode="ce"`, **A4 paysage**) = plan + colonne de droite « **Absents / TP du
-    jour** » (motifs d'absence **et** bloc « **Temps partiel** » — personnes indisponibles ce
-    jour au sens TP, non déjà placées ni absentes ; TP calculé **serveur** `page.tsx`/`tpIds`,
-    mêmes règles que Planning / TV).
-  - **PDF** (`mode="simple"`, **A3 paysage**, plan seul) — A3 via `print-a3` posé sur `<body>`
-    (page nommée `plcA3`, globals.css). Feuille **opérateurs, sans couleur** : couverture,
-    surnombre et compétence manquante imprimés en noir (`.printSheet[data-mode="simple"]`).
-  - Sur les deux : **numéros de rotation imprimés même vides** (« n° · libre ») et
-    **commentaire du jour** (`horaire_exception.motif`) à côté du nom. Le plan imprimé exclut
-    les postes `imprimable = false` (`groupsImpr`).
-  - **En-tête** (2026-10-07) : grille 3 colonnes `1fr auto 1fr` — service à gauche, quart
-    en **pastille noire** au **centre** de la page, date en toutes lettres à droite (jour de
-    la semaine en gras, `jourLong`). Pas d'équipe. Noir et gris seulement (identique sur
-    les deux PDF ; un cran plus grand en A3). L'en-tête est **hors de `printInner`** : il
-    n'est jamais réduit par `ajusterFeuille()`, qui retranche sa hauteur (`printHeadRef`)
-    de la cible `PAGE_H` / `PAGE_H_A3`.
+- **Trois boutons PDF**, mise à l'échelle **mesurée** (cf. `lessons.md` L16, L42) :
+  - **PDF Manager** (`mode="ce"`, **A4**) = plan + colonne « **Absents / TP du jour** » (tous
+    les motifs, + bloc « Temps partiel » : personnes TP ce jour non placées ni absentes, TP
+    calculé serveur). **Sans couleur de ligne** : seuls le surnombre (fond orangé) et le hors
+    compétence (rouge) sont en couleur.
+  - **PDF pour Affich.** (`mode="simple"`, ex-« PDF opérateurs », **A3**) = plan + colonne
+    « **Absents du jour** » limitée aux motifs `visible_operateurs` (0083, cochés dans
+    Param. RH ; colonne absente s'il n'y a personne). Codes d'alerte en noir.
+  - **PDF pour Affich. + heures** (`mode="heures"`) = la même, avec l'horaire de chacun au
+    bout de son nom (résolu **serveur** dans `page.tsx` par `src/lib/horaires.ts` :
+    pendule > TP > place > poste, variantes après une nuit).
+  - **Couleur des lignes** (PDF pour Affich. seulement) : une ligne qui **tourne** (≥ 1
+    personne placée sur un de ses postes) prend `ligne.couleur` (0082, Référentiel) :
+    liseré, bandeau pâle sur le nom des postes. Une ligne sans personne est **« à l'arrêt »**
+    (pointillés, gris) — sauf une ligne d'**encadrement** (que des postes `categorie =
+    manager`), jamais à l'arrêt ; une case manager n'est jamais grisée.
+  - **Mise en page compacte, portrait OU paysage** : `ajusterFeuille()` mesure le plan dans
+    les deux orientations (A4 pour le Manager, A3 pour les autres) et garde la plus grande
+    échelle (portrait seulement s'il gagne > 5 %) ; pages nommées `plcA3`, `plcA3P`,
+    `plcA4P` (globals.css) via une classe posée sur `<body>` le temps du print (L52).
+  - Sur toutes : **numéros de rotation imprimés même vides** (« n° · libre »), nom (et heure)
+    sur une ligne, **commentaire du jour** dessous en retrait. Le plan imprimé exclut les
+    postes `imprimable = false` (`groupsImpr`).
+  - **En-tête** : grille 3 colonnes `1fr auto 1fr` — service à gauche, quart en **pastille
+    noire** au centre, date en toutes lettres à droite. Hors de `printInner` : jamais réduit,
+    sa hauteur est retranchée de la cible.
 - **Écran** : les rangs d'un poste (numéros + occupants) se répartissent en **2-3 colonnes**
   (10 lignes max par colonne, variable CSS `--cols`) — chaque occupant est une rangée.
 - **Colonne « À répartir »** (2026-10-07) : les postes `zone_attente` (0077, ex. CDT) sortent
@@ -162,10 +171,22 @@ Priorité d'affichage de l'horaire (TV) : **exception ponctuelle > temps partiel
   motif **Formation**, et tant qu'une exception subsiste. Champ libre = **commentaire**
   (colonne `motif` réutilisée) affiché sur la TV. L'infobulle propose l'horaire par
   défaut (`horaire_poste`).
-- Flèche `»` de recopie : lundi→jeudi = fin de semaine en cours ; à partir du vendredi =
-  jours affichés de la semaine suivante.
+- **Recopie `»`** (règles `src/lib/planning-recopie.ts`, testées, 2026-10-09) : lundi→jeudi =
+  fin de semaine en cours ; à partir du vendredi = semaine suivante affichée. Seuls un
+  **poste** et le **NT** se recopient, et **sur les cases vides seulement** (absence, TP,
+  autre poste jamais écrasés). Sur une case vide, `»` **vide la suite** après confirmation
+  (postes et NT ; absences et TP conservés). Pas de `»` sur une absence ni un TP.
+- **`»` d'un jour** (petite flèche à côté de la date, en-tête) : copie ce jour pour les
+  membres affichés de l'**équipe choisie** (masqué en AUTO / Toutes), postes et NT, cases
+  vides seulement, sans propagation du vide. Compte rendu bref à la place de « Enregistré ».
+- **Bande de quart** colorée (MATIN / APRÈS-MIDI / NUIT) au-dessus de chaque semaine, dans
+  les deux vues (même quart sur les trois semaines en « Suivre le quart »).
+- **Alertes indépendantes du filtre** : habilitations exigées et niveau minimum sont lus pour
+  **tous les postes du site** (une personne listée peut être placée dans un autre service).
 - Info-bulles de l'horaire spécifique : une borne non saisie est complétée par l'horaire
-  standard du poste (`excLabel(e, std)`), même règle que `src/lib/horaires.ts`.
+  du poste (`excLabel(e, std)`), même règle que `src/lib/horaires.ts`. L'horaire du poste
+  tient compte de la place (`horaireCase`, calculé serveur) et de la variante après une nuit
+  (`horaireApresNuit`, par date).
 - **Vue « Par poste »** (`?par=poste`, 2026-10-07) — spec `tasks/planning-par-poste.md`.
   Bascule `VueBascule` (SlideSwitch) à **gauche de la recherche** dans les deux vues (prop
   `gauche`) ; `par` propagé par `QuartSelector`, `AtelierFilter` et l'`extra` des
@@ -243,6 +264,12 @@ Priorité d'affichage de l'horaire (TV) : **exception ponctuelle > temps partiel
 - Formation sans durée de validité → échéance « **-** ». Statut : rouge < 30 j · orange
   30–90 j · vert > 90 j. ⚠️ `date_expiration` est **stockée à la saisie** — repli
   `addMonthsIso(date_obtention, duree)` à l'affichage (cf. `lessons.md` L6).
+- **Historique** (0084) : chaque ajout, recyclage, modification et suppression est gardé
+  (`personne_competence_historique`, déclencheur). Fenêtre de saisie → section Historique ;
+  une case vide dont l'habilitation a été supprimée est **grisée** dans la grille.
+- **Vue Liste** : segments **Détenues / Supprimées / Toutes** (suppressions = dernière de
+  chaque couple, sauf ressaisie depuis) et bouton **Historique** par ligne, en lecture seule
+  (`HistoriqueHabilitation.tsx`, route `/api/habilitations/historique`, droit de lecture).
 - Paramétrage : `/admin/habilitations-param`.
 
 ## Visites médicales (`/visites`, `/admin/visites-param`)
@@ -275,6 +302,33 @@ pas de troisième** : la fiche d'une personne est une modale du Suivi.
 - Écritures : `/api/visites` (visite, suivi, contraintes) et `/api/visites-param`
   (régimes, types, usages, drapeaux des référentiels, réglages). Une visite se
   réécrit avec sa liste d'ANCI (effacer puis poser `visite_anci`).
+
+## Absences (`/absences-specifiques`, module `absences`)
+- Périodes **reconstruites depuis les jours** d'absence (`src/lib/absences-periodes.ts`) ;
+  édition inline, crayon / corbeille.
+- Filtres (2026-10-09) : nom, période, et en un clic **Service** et **Équipe** (boutons avec
+  le nombre d'absences) et **Motif** (pastilles de couleur, plusieurs à la fois). Chaque
+  compteur tient compte des autres filtres. Tous portés par l'URL (`search`, `atelier`,
+  `equipe`, `motif=a,b`). L'équipe est celle, **actuelle**, de la personne.
+
+## Horaires (`/admin/horaires`, module `horaires`)
+- Horaire **standard** par poste × quart × jour de semaine (`horaire_poste`).
+- **Après une nuit** (0087) : case « Horaires après une nuit » (sites avec un quart `nuit`) →
+  seconde saisie sous chaque horaire ; appliquée le lendemain d'une nuit où la ligne a
+  tourné (quart de nuit activé dans `jour_quart`, ligne non fermée dans `ouverture_quart`,
+  un poste qui tourne : `src/lib/nuit-avant.ts`). Borne vide = même horaire.
+- **Par place** (0088) : un poste à numéros de rotation affiche une ligne « Place N » par
+  quart, **valable toute la semaine**, avec sa variante après une nuit. Priorité, borne par
+  borne : place après nuit > place > poste après nuit > poste (`horaireDuPoste`).
+- L'écran envoie toujours les quatre bornes d'une case (rien n'est écrasé par omission).
+- Lus par la TV, les Synthèses intérim, le PDF pour Affich. + heures et l'info-bulle du
+  Planning. Pendule et temps partiel restent prioritaires (le TP garde son horaire).
+
+## Journal (`/journal`, module `journal`)
+- Voir `ARCHITECTURE.md` § Audit. Lecture service_role bornée au site après la garde de
+  module ; filtres dans l'URL ; 100 lignes par page ; Planning + Polyvalence masqués par
+  défaut ; opérations groupées en une ligne `LOT` (« voir le détail » = `?lot=`) ;
+  conservation réglable (droit `journal` en écriture).
 
 ## Affichage TV (`/affichage`)
 - Index : liste des services avec **cases à cocher** (« Tous les services », date de
@@ -330,9 +384,9 @@ référence (`lib/refdata.ts`, `unstable_cache` 30 s, segmenté par site), Perso
 **une vague** de requêtes, `loading.tsx` sur les gros écrans, agrégats du bilan matrice
 en une passe.
 
-⚠️ **Plafond structurel** : `/matrice` sans filtre construit ~22 000 cellules
-(268 × 82), HTML ~1,8 Mo, hydratation très lourde ; `/habilitations` du même ordre. La
-**virtualisation** des grandes grilles est le prochain gros chantier (cf. `tasks/todo.md`).
+Grandes grilles (`/matrice`, `/habilitations`, ~22 000 cellules sans filtre) : lignes
+**virtualisées** depuis 2026-08-26 (`usePersonGrid`) ; la récupération serveur reste le
+facteur limitant.
 
 Redéployer sans changement de code : `git commit --allow-empty`.
 

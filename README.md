@@ -1,9 +1,9 @@
 # Polaris
 
 Application web de gestion des plannings d'une **usine agroalimentaire** :
-référentiel (ateliers / lignes / postes), matrice de polyvalence, planning et
-placement journalier, habilitations à recycler, visites médicales (RH), affichage
-couloir (TV), bilans.
+référentiel (services / lignes / postes), matrice de polyvalence, planning et
+placement journalier, absences, habilitations à recycler, visites médicales (RH),
+horaires, affichage couloir (TV), bilans, journal d'audit.
 Plateforme **multi-site** (SaaS multi-tenant : plusieurs usines isolées sur une
 seule base). Interface en français.
 
@@ -23,23 +23,25 @@ npm run dev                           # http://localhost:3000
 Détails : **[INSTALL.md](INSTALL.md)**.
 
 ## Modules
-- **Référentiel** — ateliers / lignes / postes (abaque, catégorie, habilitations requises), équipes & chefs.
-- **Personnel** — fiche, cycle de vie (contrats = source de vérité), absences, RGPD.
+- **Référentiel** — services / lignes / postes (effectif par quart, catégorie, habilitations requises, numéros de rotation, couleur de ligne, ordre d'affichage), équipes & chefs.
+- **Personnel** — fiche, cycle de vie (contrats = source de vérité), temps partiel, RGPD.
+- **Absences** — périodes reconstruites depuis les jours posés, filtres service / équipe / motif.
 - **Matrice de polyvalence** — niveaux actuel / cible par personne × poste, objectifs, bilan. Échelle du carré magique paramétrable par site (nombre de niveaux, seuil « compétent », couleur par niveau) dans l'écran Compétences.
-- **Habilitations** — échéances de recyclage, alertes couleur, cloche d'alerte.
+- **Habilitations** — échéances de recyclage, alertes couleur, cloche d'alerte, historique (suppressions comprises).
 - **Visites médicales** (RH) — dates et types de visites de médecine du travail, sans aucune donnée de santé. Le régime de suivi (simple / adapté / renforcé) est calculé à partir des quarts de nuit, des postes tenus et des habilitations ; les déclencheurs se règlent dans Param. Visites.
 - **Ordonnancement** — ouverture des lignes par quart, semaines types, rotation des équipes.
-- **Planning** — placement (poste / absence / non travaillé) sur plusieurs semaines, indicateurs.
-- **Placement** — saisie glisser-déposer par jour et par quart, copie, export PDF.
-- **Affichage couloir** — écran TV public par atelier (fenêtre glissante paramétrable).
+- **Planning** — placement (poste / absence / non travaillé) sur plusieurs semaines, vues par nom ou par poste, recopie sans écrasement, indicateurs.
+- **Placement** — saisie glisser-déposer par jour et par quart, copie, trois feuilles PDF (Manager, pour Affichage, pour Affichage + heures).
+- **Horaires** — horaire par poste, quart et jour ; variantes « après une nuit » et par place.
+- **Affichage couloir** — écran TV public par service (fenêtre glissante paramétrable).
 - **Bilans** — cockpit CODIR + rapports imprimables (effectifs, polyvalence, couverture, anticipation).
-- **Journal d'audit** + notifications (cloche habilitations).
+- **Journal d'audit** — auteur réel, filtres, opérations groupées, conservation réglable ; notifications (cloche habilitations).
 - **Plateforme** (`/platform`) — back-office super_admin : gestion des sites, impersonation tracée.
 
 ## Commandes
 ```sh
 npm run dev      # développement
-npm run build    # build production (échoue sur toute erreur TS/ESLint)
+npm run build    # build production (échoue sur toute erreur TypeScript ; pas d'ESLint)
 npm test         # tests unitaires (règles métier + gardes statiques)
 ```
 
