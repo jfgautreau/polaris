@@ -231,7 +231,8 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   « Filtres repris ».
 - **Composants partagés** : `SlideSwitch` (entre deux vues, largeur fixe) ≠ `ToggleSwitch`
   (actif/inactif) · `AtelierEquipeFiltres` · `LectureSeule` · `PageTitle` · `PrintButton` ·
-  `DateRangePicker` (logique `src/lib/calendrier.ts`) · `BandeauErreur` · `InfoBulle`.
+  `DateRangePicker` (logique `src/lib/calendrier.ts`) · `BandeauErreur` · `InfoBulle` ·
+  `PastillesCouleur` (choix de couleur par pastilles, input caché + `form=`).
 - **Pièges CSS globaux** : `button` impose `color` blanc (poser `color` sur un bouton clair)
   et `margin-top: 18px` (annuler par `margin: 0` dans une rangée d'icônes) ; `.navlink`
   porte un padding qui casse une taille fixe. Boutons icône côte à côte :

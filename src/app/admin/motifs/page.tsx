@@ -15,6 +15,7 @@ import FenetreAffichageInline from "./FenetreAffichageInline";
 import ImportAbsences from "./ImportAbsences";
 import ImportPersonnel from "./ImportPersonnel";
 import { CheckIcon, EditIcon } from "@/components/icons";
+import PastillesCouleur from "@/components/PastillesCouleur";
 
 type Motif = { id: string; libelle: string; code_court: string; couleur: string; actif: boolean; non_planifie: boolean; code_gt: string | null; visible_operateurs: boolean };
 type Agence = { id: string; nom: string; actif: boolean };
@@ -128,7 +129,7 @@ export default async function MotifsPage({
           <form action={createMotif} autoComplete="off" className="inline-form">
             <div className="field">
               <span>Couleur</span>
-              <input name="couleur" type="color" defaultValue="#e5e7eb" style={{ width: 48, padding: 2 }} />
+              <PastillesCouleur name="couleur" defaultValue="#e2e8f0" />
             </div>
             <div className="field">
               <span>Libellé</span>
@@ -171,7 +172,7 @@ export default async function MotifsPage({
                     <td>
                       <form id={`ed-motif-${m.id}`} action={updateMotif} autoComplete="off" />
                       <input form={`ed-motif-${m.id}`} type="hidden" name="id" value={m.id} />
-                      <input form={`ed-motif-${m.id}`} name="couleur" type="color" defaultValue={m.couleur} style={{ width: 40, height: 26, padding: 1 }} />
+                      <PastillesCouleur form={`ed-motif-${m.id}`} name="couleur" defaultValue={m.couleur} />
                     </td>
                     <td><input form={`ed-motif-${m.id}`} name="libelle" defaultValue={m.libelle} autoFocus required style={{ width: "100%" }} /></td>
                     <td><input form={`ed-motif-${m.id}`} name="code_court" defaultValue={m.code_court} maxLength={6} required style={{ width: 90 }} /></td>
