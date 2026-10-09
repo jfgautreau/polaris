@@ -19,9 +19,9 @@
       Cycle de vie de la personne concernée.
 
 ## Base de données
-- [ ] **Supprimer les colonnes dépréciées** (plus lues nulle part) dans une prochaine
-      migration : `poste.suivi_motif`, `poste.anci_usage` (0080), `visite.professionnel`,
-      `visite.prochain_professionnel` (0081).
+- [ ] **Appliquer `0089_nettoyage_colonnes_depreciees.sql`** : supprime `poste.suivi_motif`,
+      `poste.anci_usage` (0080), `visite.professionnel`, `visite.prochain_professionnel` (0081),
+      plus lues nulle part (report de sécurité vers les tableaux avant suppression).
 - [ ] **Backfill SQL** des `personne_competence.date_expiration` nulles alors que la
       formation a une durée de validité (aujourd'hui compensé à l'affichage seulement).
 - [ ] RLS `audit_log` : `can_read_audit()` nomme encore admin + codir. L'écran Journal ne

@@ -233,8 +233,8 @@ intégrés + `role_custom`).
   **0084** — historique des habilitations ; **0085** — `atelier.ordre_affichage`.
 - **0086** — refonte du journal (auteur par en-tête, lots, conservation, purge RGPD).
 - **0087** — horaires « après une nuit » ; **0088** — horaires par place (`horaire_place`).
-- Colonnes dépréciées, plus lues, à supprimer : `poste.suivi_motif`, `poste.anci_usage`,
-  `visite.professionnel`, `visite.prochain_professionnel`.
+- **0089** — suppression des colonnes dépréciées : `poste.suivi_motif`, `poste.anci_usage`,
+  `visite.professionnel`, `visite.prochain_professionnel` (`competence.anci_usage` est gardée).
 
 ## Sitemap (principales routes)
 - `/` accueil (logo + titre « planning »), `/planning` (+ vue `?par=poste`), `/placement` (saisie par
