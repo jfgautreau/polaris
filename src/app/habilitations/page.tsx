@@ -1,4 +1,14 @@
-import { getServerClient } from "@/lib/supabase-server";
+import { getServerClient, getAdminClient } from "@/lib/supabase-server";
+
+type SuppRow = {
+  personne_id: string;
+  competence_id: string;
+  date_obtention: string | null;
+  date_expiration: string | null;
+  commentaire: string | null;
+  auteur: string | null;
+  created_at: string;
+};
 import AppHeader from "@/components/AppHeader";
 import { fetchAll } from "@/lib/fetch-all";
 import { requireModule, canWrite, canRead } from "@/lib/permissions";
@@ -57,18 +67,45 @@ export default async function HabilitationsPage({
     getAteliersC(),
     getEquipesC(),
     getTypesAgenceC(),
-    // Historique (0084) : couples personne × habilitation ayant subi une
-    // suppression — la case vide correspondante est grisée dans la grille.
-    fetchAll<{ personne_id: string; competence_id: string }>(() =>
+    // Historique (0084) : suppressions — case grisée dans la grille, lignes
+    // « supprimée » dans la vue Liste (dernière suppression de chaque couple).
+    fetchAll<SuppRow>(() =>
       supabase
         .from("personne_competence_historique")
-        .select("personne_id, competence_id")
+        .select("personne_id, competence_id, date_obtention, date_expiration, commentaire, auteur, created_at")
         .eq("action", "suppression")
         .order("id")
-        .returns<{ personne_id: string; competence_id: string }[]>()
+        .returns<SuppRow[]>()
     ),
   ]);
   const supprimees = [...new Set(suppD.map((r) => `${r.personne_id}:${r.competence_id}`))];
+  // Dernière suppression par couple ; noms des auteurs lus en service_role (la
+  // table des comptes n'est pas lisible par tous les rôles).
+  const derniere = new Map<string, SuppRow>();
+  for (const r of suppD) {
+    const k = `${r.personne_id}:${r.competence_id}`;
+    const prec = derniere.get(k);
+    if (!prec || r.created_at > prec.created_at) derniere.set(k, r);
+  }
+  const auteursIds = [...new Set([...derniere.values()].map((r) => r.auteur).filter((x): x is string => !!x))];
+  const nomsAuteurs = new Map<string, string>();
+  if (auteursIds.length) {
+    const { data: us } = await getAdminClient()
+      .from("app_user")
+      .select("user_id, name, email")
+      .in("user_id", auteursIds)
+      .returns<{ user_id: string; name: string | null; email: string | null }[]>();
+    for (const u of us ?? []) nomsAuteurs.set(u.user_id, u.name || u.email || "");
+  }
+  const supprimeesDetail = [...derniere.values()].map((r) => ({
+    personne_id: r.personne_id,
+    competence_id: r.competence_id,
+    date_obtention: r.date_obtention,
+    date_expiration: r.date_expiration,
+    commentaire: r.commentaire,
+    supprimee_le: r.created_at.slice(0, 10),
+    supprimee_par: r.auteur ? nomsAuteurs.get(r.auteur) || null : null,
+  }));
 
   const comps = compsD ?? [];
   const personnes = persD ?? [];
@@ -127,6 +164,7 @@ export default async function HabilitationsPage({
           equipe={sp.equipe ?? ""}
           agenceCodes={agenceCodes}
           supprimees={supprimees}
+          supprimeesDetail={supprimeesDetail}
           lienParam={canRead(perms, "habilitations_param")}
         />
       </div>

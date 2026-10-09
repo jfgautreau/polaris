@@ -9,6 +9,8 @@ import g from "@/components/persongrid.module.css";
 import HabMark from "./HabMark";
 import HabLegendeModal from "./HabLegendeModal";
 import HabMajModal from "./HabMajModal";
+import { HabHistoriqueModal } from "./HistoriqueHabilitation";
+import { HistoryIcon } from "@/components/icons";
 import AutorisationMark from "./AutorisationMark";
 import PageTitle from "@/components/PageTitle";
 import SlideSwitch from "@/components/SlideSwitch";
@@ -29,6 +31,18 @@ type Row = {
   competence: { nom: string; a_recycler: boolean; a_autorisation_conduite: boolean } | null;
 };
 type Personne = { id: string; nom: string; prenom: string; type_contrat?: string };
+// Dernière suppression d'un couple personne × habilitation (historique, 0084).
+type Supprimee = {
+  personne_id: string;
+  competence_id: string;
+  date_obtention: string | null;
+  date_expiration: string | null;
+  commentaire: string | null;
+  supprimee_le: string;
+  supprimee_par: string | null;
+};
+// Vue Liste : habilitations détenues, supprimées, ou les deux.
+type Perimetre = "actives" | "supprimees" | "toutes";
 type Comp = { id: string; nom: string; duree_validite_mois: number | null; categorie: string | null; groupe: string | null; ordre: number; a_autorisation_conduite: boolean };
 
 const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
@@ -204,6 +218,7 @@ export default function HabilitationsList({
   equipe = "",
   agenceCodes = ["INTERIM"],
   supprimees = [],
+  supprimeesDetail = [],
   lienParam = false,
 }: {
   rows: Row[];
@@ -224,6 +239,7 @@ export default function HabilitationsList({
   lienParam?: boolean; // droit de lecture sur « Param. Habilitation »
   // Clés `personne:habilitation` déjà supprimées une fois (historique, 0084).
   supprimees?: string[];
+  supprimeesDetail?: Supprimee[];
 }) {
   const agenceSet = useMemo(() => new Set(agenceCodes), [agenceCodes]);
   const supprSet = useMemo(() => new Set(supprimees), [supprimees]);
@@ -248,6 +264,8 @@ export default function HabilitationsList({
   // Saisie ouverte au clic sur une pastille, pre-remplie avec cette case.
   const [maj, setMaj] = useState<{ personneId: string; competenceId: string; dateObtention: string | null; autorisationRemise: boolean; commentaire: string | null } | null>(null);
   const [showLegende, setShowLegende] = useState(false);
+  const [perimetre, setPerimetre] = useState<Perimetre>("actives");
+  const [historique, setHistorique] = useState<{ personneId: string; competenceId: string; titre: string } | null>(null);
   const [showBilan, setShowBilan] = useState(false);
   // Filtre posé au clic sur un en-tête de colonne (formation / groupe / catégorie),
   // comme la Matrice : affiche les personnes AYANT au moins une habilitation du
@@ -376,6 +394,22 @@ export default function HabilitationsList({
     if (colPersonSet && !q) return rows.filter((r) => colPersonSet.has(r.personne_id));
     return r0;
   })();
+  // Vue Liste, habilitations supprimées : mêmes filtres que les lignes actives,
+  // sans celles ressaisies depuis (le couple a de nouveau une ligne), et pour
+  // l'effectif actif seulement. Les plus récemment supprimées d'abord.
+  const personById = new Map(personnes.map((p) => [p.id, p]));
+  const shownSupprimees = supprimeesDetail
+    .filter((s) => !recMap.has(`${s.personne_id}:${s.competence_id}`) && personById.has(s.personne_id))
+    .filter((s) => {
+      const p = personById.get(s.personne_id)!;
+      const c = compById.get(s.competence_id);
+      if (q) return personMatch(p) || (c ? compMatch(c) : false);
+      if (colPersonSet) return colPersonSet.has(s.personne_id);
+      return displayedSet ? displayedSet.has(s.personne_id) : true;
+    })
+    .sort((a, b) => b.supprimee_le.localeCompare(a.supprimee_le));
+  const listeActives = perimetre === "supprimees" ? [] : shownRows;
+  const listeSupprimees = perimetre === "actives" ? [] : shownSupprimees;
 
   // Virtualisation des lignes de la grille (cf. usePersonGrid) : seules les
   // personnes visibles sont rendues. `rowCount` suit le filtre de recherche.
@@ -483,6 +517,19 @@ export default function HabilitationsList({
             width={156}
             title="Basculer entre la grille et la liste par échéance"
           />
+          {view === "liste" && (
+            <div className="segments" title="Habilitations détenues, supprimées (historique), ou les deux">
+              {([
+                ["actives", `Détenues (${shownRows.length})`],
+                ["supprimees", `Supprimées (${shownSupprimees.length})`],
+                ["toutes", "Toutes"],
+              ] as [Perimetre, string][]).map(([k, lib]) => (
+                <button key={k} type="button" className={perimetre === k ? "seg active" : "seg"} onClick={() => setPerimetre(k)}>
+                  {lib}
+                </button>
+              ))}
+            </div>
+          )}
           <span className="hb-fin">
             <AtelierEquipeFiltres base="/habilitations" ateliers={ateliers} equipes={equipes} atelier={atelier} equipe={equipe} />
             <ConducteurFiltre />
@@ -737,10 +784,11 @@ export default function HabilitationsList({
                     {anyAutor && <th style={{ width: 110, textAlign: "center" }}>Autorisation</th>}
                     <th>Statut</th>
                     <th>Commentaire</th>
+                    <th style={{ width: 40 }} title="Historique"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {shownRows.map((r) => {
+                  {listeActives.map((r) => {
                     const exp = effExp(r, compById.get(r.competence_id));
                     const j = joursRestants(exp);
                     const st = exp ? habStatut(j) : "vert";
@@ -777,13 +825,56 @@ export default function HabilitationsList({
                             r.commentaire ? r.commentaire : <span className="muted">—</span>
                           )}
                         </td>
+                        <td>
+                          <BoutonHistorique
+                            onClick={() =>
+                              setHistorique({
+                                personneId: r.personne_id,
+                                competenceId: r.competence_id,
+                                titre: `${r.personne ? `${r.personne.nom} ${r.personne.prenom}` : "?"} — ${r.competence?.nom ?? "?"}`,
+                              })
+                            }
+                          />
+                        </td>
                       </tr>
                     );
                   })}
-                  {shownRows.length === 0 && (
+                  {listeSupprimees.map((s) => {
+                    const p = personById.get(s.personne_id)!;
+                    const c = compById.get(s.competence_id);
+                    const barre: React.CSSProperties = { whiteSpace: "nowrap", textDecoration: "line-through" };
+                    return (
+                      <tr key={`supp:${s.personne_id}:${s.competence_id}`} style={{ background: "#f1f5f9", color: "#64748b" }}>
+                        <td>{p.nom} {p.prenom}</td>
+                        <td>{c?.nom ?? "?"}</td>
+                        <td style={barre}>{fmtDate(s.date_obtention)}</td>
+                        <td style={barre}>{s.date_expiration ? fmtDate(s.date_expiration) : "-"}</td>
+                        {anyAutor && <td style={{ textAlign: "center" }}>—</td>}
+                        <td>
+                          <span className="tag" style={{ background: "#94a3b8", color: "#fff" }}>
+                            supprimée le {fmtDate(s.supprimee_le)}
+                          </span>
+                          {s.supprimee_par && <span style={{ display: "block", fontSize: 11 }}>par {s.supprimee_par}</span>}
+                        </td>
+                        <td>{s.commentaire ?? "—"}</td>
+                        <td>
+                          <BoutonHistorique
+                            onClick={() =>
+                              setHistorique({ personneId: s.personne_id, competenceId: s.competence_id, titre: `${p.nom} ${p.prenom} — ${c?.nom ?? "?"}` })
+                            }
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {listeActives.length === 0 && listeSupprimees.length === 0 && (
                     <tr>
-                      <td colSpan={anyAutor ? 7 : 6} className="muted">
-                        {rows.length === 0 ? "Aucune habilitation enregistrée." : "Aucun résultat pour cette recherche."}
+                      <td colSpan={anyAutor ? 8 : 7} className="muted">
+                        {perimetre === "supprimees"
+                          ? "Aucune habilitation supprimée pour ces filtres."
+                          : rows.length === 0
+                            ? "Aucune habilitation enregistrée."
+                            : "Aucun résultat pour cette recherche."}
                       </td>
                     </tr>
                   )}
@@ -796,6 +887,15 @@ export default function HabilitationsList({
 
       {showLegende && <HabLegendeModal onClose={() => setShowLegende(false)} />}
 
+      {historique && (
+        <HabHistoriqueModal
+          personneId={historique.personneId}
+          competenceId={historique.competenceId}
+          titre={historique.titre}
+          onClose={() => setHistorique(null)}
+        />
+      )}
+
       {/* Saisie / recyclage, ouverte au clic sur une pastille de la grille */}
       {maj && (
         <HabMajModal
@@ -807,5 +907,14 @@ export default function HabilitationsList({
         />
       )}
     </>
+  );
+}
+
+// Ouvre l'historique d'une ligne de la vue Liste (lecture seule).
+function BoutonHistorique({ onClick }: { onClick: () => void }) {
+  return (
+    <button type="button" className="iconbtn ghost" onClick={onClick} title="Historique de cette habilitation" aria-label="Historique">
+      <HistoryIcon />
+    </button>
   );
 }
