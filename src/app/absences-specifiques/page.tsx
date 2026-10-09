@@ -2,10 +2,11 @@ import { getServerClient } from "@/lib/supabase-server";
 import AppHeader from "@/components/AppHeader";
 import { requireModule, canWrite } from "@/lib/permissions";
 import { fetchAll } from "@/lib/fetch-all";
+import { getEquipesC } from "@/lib/refdata";
 import { grouperAbsences, type JourAbsence } from "@/lib/absences-periodes";
 import AbsencesEditor, { type PeriodeVue } from "./AbsencesEditor";
 
-type Personne = { id: string; nom: string; prenom: string; atelier_id: string | null };
+type Personne = { id: string; nom: string; prenom: string; atelier_id: string | null; equipe_id: string | null };
 type Motif = { id: string; code_court: string; libelle: string; couleur: string };
 type Atelier = { id: string; nom: string };
 
@@ -22,7 +23,7 @@ type Atelier = { id: string; nom: string };
 export default async function AbsencesSpecifiquesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ atelier?: string; search?: string; motif?: string }>;
+  searchParams: Promise<{ atelier?: string; search?: string; motif?: string; equipe?: string }>;
 }) {
   const { profile, perms } = await requireModule("absences", "read");
   const canEdit = canWrite(perms, "absences");
@@ -31,12 +32,13 @@ export default async function AbsencesSpecifiquesPage({
   const searchInit = sp.search ?? "";
   // Motifs filtrés (?motif=id1,id2), revalidés côté client contre la liste.
   const motifInit = (sp.motif ?? "").split(",").filter(Boolean);
+  const equipeInit = sp.equipe ?? "";
 
   const supabase = await getServerClient();
-  const [{ data: persData }, { data: motifData }, { data: ateliersData }, joursAll, { data: absData }] = await Promise.all([
+  const [{ data: persData }, { data: motifData }, { data: ateliersData }, joursAll, { data: absData }, equipes] = await Promise.all([
     // Map des libellés : toutes les personnes (y compris parties) pour ne jamais
     // afficher « ? » sur une absence dont la personne a changé de statut.
-    supabase.from("personne").select("id, nom, prenom, atelier_id").order("nom").returns<Personne[]>(),
+    supabase.from("personne").select("id, nom, prenom, atelier_id, equipe_id").order("nom").returns<Personne[]>(),
     supabase.from("motif_absence").select("id, code_court, libelle, couleur").eq("actif", true).order("libelle").returns<Motif[]>(),
     supabase.from("atelier").select("id, nom").eq("actif", true).order("ordre_affichage").order("nom").returns<Atelier[]>(),
     // Tous les jours d'absence, dédoublonnés par (personne, jour). fetchAll : la
@@ -52,6 +54,7 @@ export default async function AbsencesSpecifiquesPage({
     ),
     // Commentaires des absences déclarées, indexés par id.
     supabase.from("absence").select("id, commentaire").returns<{ id: string; commentaire: string | null }[]>(),
+    getEquipesC(),
   ]);
 
   const personnes = persData ?? [];
@@ -76,6 +79,7 @@ export default async function AbsencesSpecifiquesPage({
         personne_id: pid,
         label,
         atelier_id: p?.atelier_id ?? null,
+        equipe_id: p?.equipe_id ?? null,
         motif_absence_id: per.motif_absence_id ?? "",
         debut: per.debut,
         fin: per.fin,
@@ -101,7 +105,7 @@ export default async function AbsencesSpecifiquesPage({
         <p className="muted" style={{ marginBottom: 16 }}>
           Toutes les absences de l&apos;effectif, reconstruites à partir des jours posés au planning
           (une période déclarée <strong>ou</strong> des jours saisis un à un). Filtrez par nom,
-          service, motif ou période. Le crayon modifie, la corbeille libère les jours.
+          service, équipe, motif ou période. Le crayon modifie, la corbeille libère les jours.
         </p>
         <AbsencesEditor
           personnes={personnes}
@@ -111,6 +115,8 @@ export default async function AbsencesSpecifiquesPage({
           atelierInit={atelierInit}
           nomInit={searchInit}
           motifInit={motifInit}
+          equipes={equipes.map((e) => ({ id: e.id, nom: e.nom }))}
+          equipeInit={equipeInit}
           canEdit={canEdit}
         />
       </div>

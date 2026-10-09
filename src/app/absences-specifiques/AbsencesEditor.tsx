@@ -20,6 +20,7 @@ export type PeriodeVue = {
   personne_id: string;
   label: string;
   atelier_id: string | null;
+  equipe_id: string | null;
   motif_absence_id: string;
   debut: string;
   fin: string;
@@ -61,6 +62,8 @@ export default function AbsencesEditor({
   atelierInit = "",
   nomInit = "",
   motifInit = [],
+  equipes = [],
+  equipeInit = "",
   canEdit,
 }: {
   personnes: Personne[];
@@ -72,6 +75,8 @@ export default function AbsencesEditor({
   atelierInit?: string;
   nomInit?: string;
   motifInit?: string[];
+  equipes?: { id: string; nom: string }[];
+  equipeInit?: string;
   // Droit « absences: write » (calculé serveur). En lecture seule, on masque
   // toute la saisie : « + Déclarer », crayon et corbeille. Sans ce garde, un
   // titulaire de `absences: read` (ordo, rh, codir…) voyait les boutons et
@@ -100,7 +105,8 @@ export default function AbsencesEditor({
   const [fMotifs, _setFMotifs] = useState<string[]>(() => motifInit.filter((id) => motifs.some((m) => m.id === id)));
   const [fDu, setFDu] = useState("");
   const [fAu, setFAu] = useState("");
-  const syncUrl = (patch: Partial<{ search: string; atelier: string; motif: string }>) => {
+  const [fEquipe, _setFEquipe] = useState(equipeInit);
+  const syncUrl = (patch: Partial<{ search: string; atelier: string; motif: string; equipe: string }>) => {
     const p = new URLSearchParams(searchParams?.toString() ?? "");
     for (const [k, v] of Object.entries(patch)) {
       if (v) p.set(k, v);
@@ -112,6 +118,7 @@ export default function AbsencesEditor({
   const setFNom = (v: string) => { _setFNom(v); syncUrl({ search: v }); };
   const setFAtelier = (v: string) => { _setFAtelier(v); syncUrl({ atelier: v }); };
   const setFMotifs = (v: string[]) => { _setFMotifs(v); syncUrl({ motif: v.join(",") }); };
+  const setFEquipe = (v: string) => { _setFEquipe(v); syncUrl({ equipe: v }); };
   const basculerMotif = (id: string) => setFMotifs(fMotifs.includes(id) ? fMotifs.filter((x) => x !== id) : [...fMotifs, id]);
   // Lien de retour Planning : lit l'URL LIVE (pas nomInit qui reste figé à
   // l'initialisation) → l'utilisateur revient avec les filtres qu'il vient
@@ -279,23 +286,18 @@ export default function AbsencesEditor({
       return true;
     });
   }, [initial, fNom, fDu, fAu]);
-  const parService = useMemo(() => {
+  const okService = (a: PeriodeVue) => !fAtelier || a.atelier_id === fAtelier;
+  const okEquipe = (a: PeriodeVue) => !fEquipe || a.equipe_id === fEquipe;
+  const okMotif = (a: PeriodeVue) => !fMotifs.length || fMotifs.includes(a.motif_absence_id);
+  const compter = (lignes: PeriodeVue[], cle: (a: PeriodeVue) => string) => {
     const c = new Map<string, number>();
-    for (const a of horsMotif) if (!fMotifs.length || fMotifs.includes(a.motif_absence_id)) c.set(a.atelier_id ?? "", (c.get(a.atelier_id ?? "") ?? 0) + 1);
+    for (const a of lignes) c.set(cle(a), (c.get(cle(a)) ?? 0) + 1);
     return c;
-  }, [horsMotif, fMotifs]);
-  const parMotif = useMemo(() => {
-    const c = new Map<string, number>();
-    for (const a of horsMotif) if (!fAtelier || a.atelier_id === fAtelier) c.set(a.motif_absence_id, (c.get(a.motif_absence_id) ?? 0) + 1);
-    return c;
-  }, [horsMotif, fAtelier]);
-  const filtered = useMemo(
-    () =>
-      horsMotif.filter(
-        (a) => (!fAtelier || a.atelier_id === fAtelier) && (!fMotifs.length || fMotifs.includes(a.motif_absence_id)),
-      ),
-    [horsMotif, fAtelier, fMotifs],
-  );
+  };
+  const parService = compter(horsMotif.filter((a) => okEquipe(a) && okMotif(a)), (a) => a.atelier_id ?? "");
+  const parEquipe = compter(horsMotif.filter((a) => okService(a) && okMotif(a)), (a) => a.equipe_id ?? "");
+  const parMotif = compter(horsMotif.filter((a) => okService(a) && okEquipe(a)), (a) => a.motif_absence_id);
+  const filtered = horsMotif.filter((a) => okService(a) && okEquipe(a) && okMotif(a));
 
   const cellStyle: React.CSSProperties = { padding: "4px 6px", borderBottom: "1px solid #f1f5f9" };
 
@@ -436,8 +438,8 @@ export default function AbsencesEditor({
             <span>… au</span>
             <input type="date" value={fAu} onChange={(e) => setFAu(e.target.value)} />
           </div>
-          {(fNom || fAtelier || fMotifs.length > 0 || fDu || fAu) && (
-            <button type="button" className="btn-sm btn-ghost" style={{ width: "auto", padding: "6px 12px", marginBottom: 2 }} onClick={() => { setFNom(""); setFAtelier(""); setFMotifs([]); setFDu(""); setFAu(""); }}>
+          {(fNom || fAtelier || fEquipe || fMotifs.length > 0 || fDu || fAu) && (
+            <button type="button" className="btn-sm btn-ghost" style={{ width: "auto", padding: "6px 12px", marginBottom: 2 }} onClick={() => { setFNom(""); setFAtelier(""); setFEquipe(""); setFMotifs([]); setFDu(""); setFAu(""); }}>
               Réinitialiser
             </button>
           )}
@@ -465,6 +467,23 @@ export default function AbsencesEditor({
             ))}
           </div>
         </div>
+
+        {/* Équipe : un clic, avec le nombre d'absences de chacune. */}
+        {equipes.length > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+            <span className="muted" style={{ fontSize: 13, minWidth: 54 }}>Équipe</span>
+            <div className="segments" style={{ flexWrap: "wrap" }}>
+              <button type="button" className={fEquipe === "" ? "seg active" : "seg"} onClick={() => setFEquipe("")}>
+                Toutes
+              </button>
+              {equipes.map((e) => (
+                <button key={e.id} type="button" className={fEquipe === e.id ? "seg active" : "seg"} onClick={() => setFEquipe(fEquipe === e.id ? "" : e.id)}>
+                  {e.nom} <span style={{ opacity: 0.7 }}>({parEquipe.get(e.id) ?? 0})</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Motifs : pastilles de leur couleur, plusieurs à la fois. */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
