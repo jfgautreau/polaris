@@ -90,3 +90,28 @@ describe("resoudreHoraire — priorite des sources", () => {
     expect(resoudreHoraire(m, quarts, "X", "P1", "apres_midi", VENDREDI)).toEqual({ debut: "14:00", fin: "18:00" });
   });
 });
+
+describe("resoudreHoraire — après une nuit (0087)", () => {
+  const k = `P1:matin:${dowLundi(LUNDI)}`;
+  const horMap = new Map([[k, { debut: "05:00", fin: "13:00" }]]);
+  const apresNuitMap = new Map([[k, { debut: "06:00", fin: null }]]);
+  const avecNuit = (oui: boolean, p?: Partial<MapsHoraire>): MapsHoraire => ({
+    ...maps({ horMap, ...p }),
+    apresNuitMap,
+    nuitAvant: () => oui,
+  });
+  it("sans nuit avant : horaire standard", () => {
+    expect(resoudreHoraire(avecNuit(false), quarts, "X", "P1", "matin", LUNDI)).toEqual({ debut: "05:00", fin: "13:00" });
+  });
+  it("après une nuit : la variante remplace, borne vide = borne standard", () => {
+    expect(resoudreHoraire(avecNuit(true), quarts, "X", "P1", "matin", LUNDI)).toEqual({ debut: "06:00", fin: "13:00" });
+  });
+  it("le temps partiel garde son horaire", () => {
+    const tpCfgMap = new Map([["X", { horaires: { "1": { debut: "08:00", fin: "12:00" } } }]]);
+    expect(resoudreHoraire(avecNuit(true, { tpCfgMap }), quarts, "X", "P1", "matin", LUNDI)).toEqual({ debut: "08:00", fin: "12:00" });
+  });
+  it("l'horaire spécifique du jour reste prioritaire", () => {
+    const excMap = new Map([[`X:${LUNDI}`, { debut: "07:30", fin: null }]]);
+    expect(resoudreHoraire(avecNuit(true, { excMap }), quarts, "X", "P1", "matin", LUNDI)).toEqual({ debut: "07:30", fin: "13:00" });
+  });
+});

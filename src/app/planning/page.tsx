@@ -28,6 +28,7 @@ import VueBascule from "./VueBascule";
 import { parseNumeros } from "@/lib/numeros-rotation";
 import { getRotationRefsC, getTypesAgenceC } from "@/lib/refdata";
 import { rotationForWeek } from "@/lib/rotation";
+import { chargerNuitsAvant } from "@/lib/nuit-avant-data";
 import { addMonthsIso } from "@/lib/habilitations";
 import { quartParDefaut, quartOuDefaut, memeQuart } from "@/lib/quarts";
 import { chargerPosteQuart, tourneSurQuart, effectifSurQuart } from "@/lib/poste-quart";
@@ -45,6 +46,7 @@ type PosteRow = {
   categorie: string;
   ordre_affichage: number;
 };
+type HorStdRow = { poste_id: string; jour: number; debut: string | null; fin: string | null; quart_code: string; debut_apres_nuit: string | null; fin_apres_nuit: string | null };
 type LigneRow = { id: string; nom: string; ordre_affichage: number; atelier: { id: string; nom: string; ordre_affichage: number | null } | null; poste: PosteRow[] };
 type Equipe = { id: string; nom: string; couleur: string; quart_fixe: string | null };
 type Quart = { code: string; libelle: string; ordre: number; creneau: string | null; couleur?: string | null };
@@ -520,10 +522,10 @@ export default async function PlanningPage({
       avecCases
         ? supabase
             .from("horaire_poste")
-            .select("poste_id, jour, debut, fin, quart_code")
+            .select("poste_id, jour, debut, fin, quart_code, debut_apres_nuit, fin_apres_nuit")
             .in("quart_code", quartsDistincts)
-            .returns<{ poste_id: string; jour: number; debut: string | null; fin: string | null; quart_code: string }[]>()
-        : Promise.resolve({ data: [] as { poste_id: string; jour: number; debut: string | null; fin: string | null; quart_code: string }[], error: null }),
+            .returns<HorStdRow[]>()
+        : Promise.resolve({ data: [] as HorStdRow[], error: null }),
       // TP MATÉRIALISÉS (0064) — best-effort, cf. plus bas.
       avecCases
         ? supabase
@@ -632,10 +634,24 @@ export default async function PlanningPage({
   // « quart:poste:jour » : sert a afficher l'horaire par defaut dans l'infobulle de
   // la pendule.
   const horaireStd: Record<string, { debut: string; fin: string }> = {};
+  // Horaire « après une nuit » (0087), par DATE : « quart:poste:iso », seulement
+  // là où la ligne du poste sort d'une nuit et où une variante est saisie.
+  const horaireApresNuit: Record<string, { debut: string; fin: string }> = {};
   if (allIds.length && visIsos.length) {
     // Lancées en vague 3 (placements, matrice, exceptions, horaires, TP réels).
     const [pl, mat, { data: exc }, { data: horStd }, { data: tpReal, error: tpRealErr }] = await pCases;
     for (const h of horStd ?? []) horaireStd[`${h.quart_code}:${h.poste_id}:${h.jour}`] = { debut: h.debut ?? "", fin: h.fin ?? "" };
+    const variantes = (horStd ?? []).filter((h) => h.debut_apres_nuit || h.fin_apres_nuit);
+    if (variantes.length) {
+      const nuits = await chargerNuitsAvant(supabase, profile.siteId, visIsos);
+      for (const iso of visIsos)
+        for (const h of variantes)
+          if (h.jour === dowMon(iso) && nuits.parPoste(h.poste_id, iso))
+            horaireApresNuit[`${h.quart_code}:${h.poste_id}:${iso}`] = {
+              debut: h.debut_apres_nuit || h.debut || "",
+              fin: h.fin_apres_nuit || h.fin || "",
+            };
+    }
     for (const r of pl) {
       const k = `${r.personne_id}:${r.jour}`;
       if (r.non_travaille) initial[k] = "X";
@@ -1099,6 +1115,7 @@ export default async function PlanningPage({
           posteLabelAll={posteLabelAll}
           exceptions={exceptions}
           horaireStd={horaireStd}
+          horaireApresNuit={horaireApresNuit}
           weekNav={<WeekNav base="/planning" semaine={centerIso} extra={extra} />}
           initialSearch={searchParam}
           gauche={<VueBascule parPoste={false} />}

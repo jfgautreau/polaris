@@ -160,7 +160,11 @@ L'historique des décisions est dans git et dans l'en-tête de chaque migration.
   `placement.absence_id`). Les périodes affichées sont **reconstruites depuis les jours**
   (`src/lib/absences-periodes.ts`) : la plupart sont saisies au Planning sans période.
 - **Horaire affiché** : exception ponctuelle > temps partiel > standard, par source
-  (`src/lib/horaires.ts`, partagé TV / Synthèses) ; une exception saisie d’un seul côté
+  (`src/lib/horaires.ts`, partagé TV / Synthèses / PDF heures / Planning). Standard = horaire du
+  poste, ou sa variante **« après une nuit »** (`horaire_poste.debut_apres_nuit` / `fin_apres_nuit`,
+  0087, vide = même borne) quand la ligne a tourné de nuit la veille (`quart.nuit` activé dans
+  jour_quart, ligne non fermée, un poste qui tourne : `src/lib/nuit-avant.ts` + `-data.ts`) ;
+  le temps partiel garde son horaire ; une exception saisie d’un seul côté
   complète la borne manquante par le temps partiel, sinon le standard du poste.
 - **Séquences « effacer puis réécrire »** → fonction SQL (`set_rotation_reference`,
   `creer_absence`, `maj_absence`), jamais deux requêtes applicatives.

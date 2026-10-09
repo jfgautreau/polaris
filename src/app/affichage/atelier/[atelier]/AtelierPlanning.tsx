@@ -5,6 +5,7 @@ import { getRotationRefsC } from "@/lib/refdata";
 import { rotationForWeek } from "@/lib/rotation";
 import { quartOuDefaut } from "@/lib/quarts";
 import { horaireTxt as horaireTxtShared, type MapsHoraire } from "@/lib/horaires";
+import { chargerNuitsAvant } from "@/lib/nuit-avant-data";
 import { INTERIM_BG } from "@/lib/interim";
 import { isoDate, mondayOf, type Jour } from "@/lib/week";
 
@@ -18,7 +19,7 @@ type PlacementRow = {
   quart_code: string | null;
   personne_id: string;
 };
-type HoraireRow = { poste_id: string; quart_code: string; jour: number; debut: string | null; fin: string | null };
+type HoraireRow = { poste_id: string; quart_code: string; jour: number; debut: string | null; fin: string | null; debut_apres_nuit: string | null; fin_apres_nuit: string | null };
 
 const isoDow = (iso: string) => {
   const d = new Date(iso + "T00:00").getDay();
@@ -130,6 +131,9 @@ export default async function AtelierPlanning({
   for (const t of typesAg ?? []) if (t.avec_agence) agenceSet.add(t.code);
 
   const horMap = new Map<string, { debut: string | null; fin: string | null }>(); // `${poste}:${quart}:${dow}`
+  // Variante « après une nuit » (0087), même clé ; et la règle de nuit des lignes.
+  const apresNuitMap = new Map<string, { debut: string | null; fin: string | null }>();
+  const pNuits = chargerNuitsAvant(admin, site.id, isos);
   const excMap = new Map<string, { debut: string | null; fin: string | null; motif: string | null }>(); // `${personne}:${iso}` (horaire specifique + commentaire)
   type TpHM = Record<string, { debut: string; fin: string }>;
   type TpCfg = { demi?: { source?: string; matin?: TpHM; aprem?: TpHM }; horaires?: TpHM };
@@ -195,7 +199,7 @@ export default async function AtelierPlanning({
       fetchAll<HoraireRow>(() =>
         admin
           .from("horaire_poste")
-          .select("poste_id, quart_code, jour, debut, fin")
+          .select("poste_id, quart_code, jour, debut, fin, debut_apres_nuit, fin_apres_nuit")
           .eq("site_id", site.id)
           .in("poste_id", [...involved])
           .order("poste_id").order("quart_code").order("jour")
@@ -222,7 +226,11 @@ export default async function AtelierPlanning({
         .eq("temps_partiel", true)
         .returns<{ id: string; tp_config: TpCfg | null; equipe_id: string | null }[]>(),
     ]);
-    for (const h of hor) horMap.set(`${h.poste_id}:${h.quart_code}:${h.jour}`, { debut: h.debut, fin: h.fin });
+    for (const h of hor) {
+      horMap.set(`${h.poste_id}:${h.quart_code}:${h.jour}`, { debut: h.debut, fin: h.fin });
+      if (h.debut_apres_nuit || h.fin_apres_nuit)
+        apresNuitMap.set(`${h.poste_id}:${h.quart_code}:${h.jour}`, { debut: h.debut_apres_nuit, fin: h.fin_apres_nuit });
+    }
     for (const e of exc ?? []) excMap.set(`${e.personne_id}:${e.jour}`, { debut: e.debut, fin: e.fin, motif: e.motif });
     for (const r of tpH ?? []) if (r.tp_config) tpCfgMap.set(r.id, r.tp_config);
     // TP bloque : periodes datees (tp_periode, 0052) avec repli sur personne.tp_config.
@@ -380,7 +388,8 @@ export default async function AtelierPlanning({
 
   // Resolution de l'horaire affiche : logique partagee avec la synthese interim
   // (`src/lib/horaires.ts`), pour que les deux ecrans ne divergent pas.
-  const mapsHoraire: MapsHoraire = { horMap, excMap, tpCfgMap };
+  const nuits = await pNuits;
+  const mapsHoraire: MapsHoraire = { horMap, excMap, tpCfgMap, apresNuitMap, nuitAvant: nuits.parPoste };
   const horaireTxt = (personId: string, posteId: string, quartCode: string | null, iso: string) =>
     horaireTxtShared(mapsHoraire, quarts, personId, posteId, quartCode, iso);
 

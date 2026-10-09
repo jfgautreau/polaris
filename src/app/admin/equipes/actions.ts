@@ -131,6 +131,7 @@ export async function createQuart(fd: FormData) {
   const debut = s(fd, "debut") || null;
   const fin = s(fd, "fin") || null;
   const rotation = fd.get("rotation") === "on";
+  const nuit = fd.get("nuit") === "on";
   const creneau = normaliserCreneau(s(fd, "creneau"));
   const couleur = normaliserCouleur(s(fd, "couleur"));
 
@@ -145,7 +146,7 @@ export async function createQuart(fd: FormData) {
 
   // On tente d'écrire `couleur` seulement si fournie ; sur une base sans la
   // migration 0068, Postgres renvoie 42703 et on retente sans (best-effort).
-  const payload: Record<string, unknown> = { code, libelle, ordre, debut, fin, rotation, creneau, site_id: siteId };
+  const payload: Record<string, unknown> = { code, libelle, ordre, debut, fin, rotation, creneau, nuit, site_id: siteId };
   if (couleur) payload.couleur = couleur;
   const { error } = await supabase.from("quart").insert(payload);
   if (error && (error.code === "42703" || error.code === "PGRST204") && couleur) {
@@ -180,10 +181,11 @@ export async function saveQuartHoraires(fd: FormData) {
     const debut = s(fd, `debut_${code}`) || null;
     const fin = s(fd, `fin_${code}`) || null;
     const rotation = fd.get(`rot_${code}`) === "on";
+    const nuit = fd.get(`nuit_${code}`) === "on";
     const creneau = normaliserCreneau(s(fd, `creneau_${code}`));
     const couleur = normaliserCouleur(s(fd, `couleur_${code}`));
     if (libelle) {
-      const payload: Record<string, unknown> = { libelle, debut, fin, rotation, creneau, couleur };
+      const payload: Record<string, unknown> = { libelle, debut, fin, rotation, creneau, couleur, nuit };
       let { error } = await supabase
         .from("quart")
         .update(payload)

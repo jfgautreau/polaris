@@ -3,11 +3,13 @@ import { getAdminClient } from "@/lib/supabase-server";
 import { getCurrentProfile } from "@/lib/current-user";
 import { canWriteModule } from "@/lib/permissions";
 
-// POST /api/horaires { cells: [{ poste_id, quart_code, jour, debut, fin }] }
-// Enregistrement dynamique (par case ou par lot). debut/fin vides => la case est
-// effacee. RLS horaire_poste = admin only en ecriture -> client admin, apres
+// POST /api/horaires { cells: [{ poste_id, quart_code, jour, debut, fin, debutN?, finN? }] }
+// Enregistrement dynamique (par case ou par lot). Une case porte l'horaire
+// standard ET sa variante « après une nuit » (0087, debutN / finN) : l'écran
+// envoie toujours les quatre, rien n'est écrasé par omission. Tout vide => la
+// case est effacee. RLS horaire_poste = admin only en ecriture -> client admin, apres
 // controle admin ou droit "horaires: write".
-type Cell = { poste_id?: string; quart_code?: string; jour?: number; debut?: string; fin?: string };
+type Cell = { poste_id?: string; quart_code?: string; jour?: number; debut?: string; fin?: string; debutN?: string; finN?: string };
 
 export async function POST(req: NextRequest) {
   const profile = await getCurrentProfile();
@@ -21,7 +23,16 @@ export async function POST(req: NextRequest) {
   // MULTI-SITE : site_id explicite pour le cas admin client (service_role).
   const site_id = profile!.siteId;
 
-  const ups: { poste_id: string; quart_code: string; jour: number; debut: string | null; fin: string | null; site_id: string }[] = [];
+  const ups: {
+    poste_id: string;
+    quart_code: string;
+    jour: number;
+    debut: string | null;
+    fin: string | null;
+    debut_apres_nuit: string | null;
+    fin_apres_nuit: string | null;
+    site_id: string;
+  }[] = [];
   const dels: { poste_id: string; quart_code: string; jour: number }[] = [];
   for (const c of cells) {
     const poste_id = String(c.poste_id ?? "");
@@ -30,7 +41,10 @@ export async function POST(req: NextRequest) {
     if (!poste_id || !quart_code || !Number.isInteger(jour) || jour < 0 || jour > 6) continue;
     const debut = String(c.debut ?? "").trim();
     const fin = String(c.fin ?? "").trim();
-    if (debut || fin) ups.push({ poste_id, quart_code, jour, debut: debut || null, fin: fin || null, site_id });
+    const debutN = String(c.debutN ?? "").trim();
+    const finN = String(c.finN ?? "").trim();
+    if (debut || fin || debutN || finN)
+      ups.push({ poste_id, quart_code, jour, debut: debut || null, fin: fin || null, debut_apres_nuit: debutN || null, fin_apres_nuit: finN || null, site_id });
     else dels.push({ poste_id, quart_code, jour });
   }
   if (ups.length) {

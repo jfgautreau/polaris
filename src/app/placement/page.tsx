@@ -16,6 +16,7 @@ import { rotationForWeek, equipesParQuart } from "@/lib/rotation";
 import { addMonthsIso } from "@/lib/habilitations";
 import { estAuTravailLe, deriverArriveeDepart } from "@/lib/personne-statut";
 import { horaireTxt, dowLundi, type HM, type TpCfg } from "@/lib/horaires";
+import { chargerNuitsAvant } from "@/lib/nuit-avant-data";
 import PlacementBoard from "./PlacementBoard";
 import QuartBandeau from "../planning/QuartBandeau";
 
@@ -415,14 +416,14 @@ export default async function PlacementPage({
   // aux postes du plan et aux personnes placées ce jour-là : petites lectures.
   const placesPoste = (plD ?? []).filter((r) => r.poste_id && posteIdsAffiches.includes(r.poste_id));
   const idsPlaces = [...new Set(placesPoste.map((r) => r.personne_id))];
-  const [{ data: horD }, { data: tpD }] = await Promise.all([
+  const [{ data: horD }, { data: tpD }, nuits] = await Promise.all([
     posteIdsAffiches.length
       ? supabase
           .from("horaire_poste")
-          .select("poste_id, quart_code, jour, debut, fin")
+          .select("poste_id, quart_code, jour, debut, fin, debut_apres_nuit, fin_apres_nuit")
           .in("poste_id", posteIdsAffiches)
           .eq("jour", dowLundi(jour))
-          .returns<{ poste_id: string; quart_code: string; jour: number; debut: string | null; fin: string | null }[]>()
+          .returns<{ poste_id: string; quart_code: string; jour: number; debut: string | null; fin: string | null; debut_apres_nuit: string | null; fin_apres_nuit: string | null }[]>()
       : { data: [] },
     idsPlaces.length
       ? supabase
@@ -432,16 +433,23 @@ export default async function PlacementPage({
           .eq("temps_partiel", true)
           .returns<{ id: string; tp_config: TpCfg | null }[]>()
       : { data: [] },
+    // Horaires « après une nuit » (0087) : la ligne a-t-elle tourné de nuit la veille ?
+    chargerNuitsAvant(supabase, profile.siteId, [jour]),
   ]);
   const horMap = new Map<string, HM>();
-  for (const h of horD ?? []) horMap.set(`${h.poste_id}:${h.quart_code}:${h.jour}`, { debut: h.debut, fin: h.fin });
+  const apresNuitMap = new Map<string, HM>();
+  for (const h of horD ?? []) {
+    horMap.set(`${h.poste_id}:${h.quart_code}:${h.jour}`, { debut: h.debut, fin: h.fin });
+    if (h.debut_apres_nuit || h.fin_apres_nuit)
+      apresNuitMap.set(`${h.poste_id}:${h.quart_code}:${h.jour}`, { debut: h.debut_apres_nuit, fin: h.fin_apres_nuit });
+  }
   const excMap = new Map<string, HM>();
   for (const e of hexD ?? []) excMap.set(`${e.personne_id}:${jour}`, { debut: e.debut, fin: e.fin });
   const tpCfgMap = new Map<string, TpCfg>();
   for (const r of tpD ?? []) if (r.tp_config) tpCfgMap.set(r.id, r.tp_config);
   const heures: Record<string, string> = {};
   for (const r of placesPoste) {
-    const h = horaireTxt({ horMap, excMap, tpCfgMap }, quarts, r.personne_id, r.poste_id!, r.quart_code, jour);
+    const h = horaireTxt({ horMap, excMap, tpCfgMap, apresNuitMap, nuitAvant: nuits.parPoste }, quarts, r.personne_id, r.poste_id!, r.quart_code, jour);
     if (h) heures[r.personne_id] = h;
   }
 

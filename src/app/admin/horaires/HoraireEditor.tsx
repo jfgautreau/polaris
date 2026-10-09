@@ -2,7 +2,8 @@
 
 import { useMemo, useRef, useState } from "react";
 
-type Cell = { debut: string; fin: string };
+// debutN / finN : variante « après une nuit » (0087), facultative.
+type Cell = { debut: string; fin: string; debutN: string; finN: string };
 type Poste = { id: string; nom: string; quarts: string[] }; // quarts = codes actifs
 type LigneGroup = {
   ligneId: string;
@@ -13,7 +14,8 @@ type LigneGroup = {
 };
 type Quart = { code: string; libelle: string };
 type AtelierOpt = { id: string; nom: string };
-type ApiCell = { poste_id: string; quart_code: string; jour: number; debut: string; fin: string };
+type ApiCell = { poste_id: string; quart_code: string; jour: number; debut: string; fin: string; debutN: string; finN: string };
+const VIDE: Cell = { debut: "", fin: "", debutN: "", finN: "" };
 
 const JOURS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -22,11 +24,14 @@ export default function HoraireEditor({
   lignes,
   quarts,
   initial,
+  avecNuit = false,
 }: {
   ateliers: AtelierOpt[];
   lignes: LigneGroup[];
   quarts: Quart[];
   initial: Record<string, Cell>;
+  /** Le site a un quart de nuit : la variante « après une nuit » est proposée. */
+  avecNuit?: boolean;
 }) {
   const [vals, setVals] = useState<Record<string, Cell>>(initial);
   const [atelier, setAtelier] = useState("");
@@ -34,9 +39,11 @@ export default function HoraireEditor({
   const [clip, setClip] = useState<{ from: string; cells: Record<string, Cell> } | null>(null);
   const [bulkQuart, setBulkQuart] = useState(quarts[0]?.code ?? "");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [voirNuit, setVoirNuit] = useState(false);
 
   const key = (p: string, q: string, j: number) => `${p}:${q}:${j}`;
-  const get = (p: string, q: string, j: number): Cell => vals[key(p, q, j)] ?? { debut: "", fin: "" };
+  const get = (p: string, q: string, j: number): Cell => ({ ...VIDE, ...vals[key(p, q, j)] });
+  const api = (p: string, q: string, j: number, c: Cell): ApiCell => ({ poste_id: p, quart_code: q, jour: j, ...VIDE, ...c });
 
   // Enregistrement dynamique. Une ref suit `vals` pour que le débounce lise la
   // valeur à jour de la case.
@@ -69,13 +76,12 @@ export default function HoraireEditor({
     const k = key(p, q, j);
     if (cellTimers.current[k]) clearTimeout(cellTimers.current[k]);
     cellTimers.current[k] = setTimeout(() => {
-      const c = valsRef.current[k] ?? { debut: "", fin: "" };
-      pushCells([{ poste_id: p, quart_code: q, jour: j, debut: c.debut, fin: c.fin }]);
+      pushCells([api(p, q, j, valsRef.current[k] ?? VIDE)]);
     }, 500);
   }
 
-  const set = (p: string, q: string, j: number, champ: "debut" | "fin", v: string) => {
-    setVals((s) => ({ ...s, [key(p, q, j)]: { ...(s[key(p, q, j)] ?? { debut: "", fin: "" }), [champ]: v } }));
+  const set = (p: string, q: string, j: number, champ: keyof Cell, v: string) => {
+    setVals((s) => ({ ...s, [key(p, q, j)]: { ...VIDE, ...s[key(p, q, j)], [champ]: v } }));
     scheduleCell(p, q, j);
   };
 
@@ -109,7 +115,7 @@ export default function HoraireEditor({
       for (let j = 1; j < 7; j++) n[key(p, q, j)] = { ...lun };
       return n;
     });
-    pushCells(Array.from({ length: 6 }, (_, i) => ({ poste_id: p, quart_code: q, jour: i + 1, debut: lun.debut, fin: lun.fin })));
+    pushCells(Array.from({ length: 6 }, (_, i) => api(p, q, i + 1, lun)));
   }
   function copierPoste(po: Poste) {
     const cells: Record<string, Cell> = {};
@@ -131,7 +137,7 @@ export default function HoraireEditor({
     for (const q of po.quarts)
       for (let j = 0; j < 7; j++) {
         const c = clip.cells[`${q}:${j}`];
-        if (c) out.push({ poste_id: po.id, quart_code: q, jour: j, debut: c.debut, fin: c.fin });
+        if (c) out.push(api(po.id, q, j, c));
       }
     pushCells(out);
   }
@@ -151,7 +157,7 @@ export default function HoraireEditor({
       for (const q of other.quarts)
         for (let j = 0; j < 7; j++) {
           const src = get(po.id, q, j);
-          out.push({ poste_id: other.id, quart_code: q, jour: j, debut: src.debut, fin: src.fin });
+          out.push(api(other.id, q, j, src));
         }
     }
     pushCells(out);
@@ -167,7 +173,7 @@ export default function HoraireEditor({
       for (const po of visiblePostes) for (const q of po.quarts) delete n[key(po.id, q, j)];
       return n;
     });
-    for (const po of visiblePostes) for (const q of po.quarts) out.push({ poste_id: po.id, quart_code: q, jour: j, debut: "", fin: "" });
+    for (const po of visiblePostes) for (const q of po.quarts) out.push(api(po.id, q, j, VIDE));
     pushCells(out);
   }
   function viderQuart(qc: string) {
@@ -180,7 +186,7 @@ export default function HoraireEditor({
       return n;
     });
     for (const po of visiblePostes)
-      if (po.quarts.includes(qc)) for (let j = 0; j < 7; j++) out.push({ poste_id: po.id, quart_code: qc, jour: j, debut: "", fin: "" });
+      if (po.quarts.includes(qc)) for (let j = 0; j < 7; j++) out.push(api(po.id, qc, j, VIDE));
     pushCells(out);
   }
 
@@ -221,6 +227,15 @@ export default function HoraireEditor({
           </div>
           <span style={{ flex: 1 }} />
           <span style={{ fontSize: 12, fontWeight: 600, minWidth: 120, textAlign: "right", color: saveColor }}>{saveLabel}</span>
+          {avecNuit && (
+            <label
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}
+              title="Horaire appliqué le lendemain d'une nuit où la ligne a tourné (quart de nuit activé, ligne non fermée). Vide = même horaire."
+            >
+              <input type="checkbox" checked={voirNuit} onChange={(e) => setVoirNuit(e.target.checked)} style={{ width: "auto", margin: 0 }} />
+              Horaires après une nuit
+            </label>
+          )}
           <button type="button" className="btn-sm btn-ghost" onClick={toggleAll}>
             {allCollapsed ? "Tout déplier" : "Tout replier"}
           </button>
@@ -342,6 +357,28 @@ export default function HoraireEditor({
                                           onChange={(e) => set(po.id, qc, j, "fin", e.target.value)}
                                           style={{ width: 82, fontSize: 12, padding: "2px 3px", marginTop: 2 }}
                                         />
+                                        {voirNuit && (
+                                          <div
+                                            title="Après une nuit (vide = même horaire)"
+                                            style={{ marginTop: 3, paddingTop: 3, borderTop: "1px dashed #a5b4fc", background: "#eef2ff", borderRadius: 3 }}
+                                          >
+                                            <span style={{ display: "block", fontSize: 10, color: "#4338ca", fontWeight: 600 }}>après nuit</span>
+                                            <input
+                                              type="time"
+                                              value={c.debutN}
+                                              onChange={(e) => set(po.id, qc, j, "debutN", e.target.value)}
+                                              style={{ width: 82, fontSize: 12, padding: "2px 3px" }}
+                                              aria-label="Début après une nuit"
+                                            />
+                                            <input
+                                              type="time"
+                                              value={c.finN}
+                                              onChange={(e) => set(po.id, qc, j, "finN", e.target.value)}
+                                              style={{ width: 82, fontSize: 12, padding: "2px 3px", marginTop: 2 }}
+                                              aria-label="Fin après une nuit"
+                                            />
+                                          </div>
+                                        )}
                                       </td>
                                     );
                                   })}

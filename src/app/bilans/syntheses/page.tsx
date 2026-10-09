@@ -63,7 +63,7 @@ export default async function SynthesesPage({
   if (vue === "absences") {
     abs = await chargerAbsences4Semaines(supabase, workdayIsos, atelier || undefined, motif || undefined, agenceCodes);
   } else {
-    groupes = await chargerHorairesInterim(supabase, weekIsos, quarts, agenceCodes);
+    groupes = await chargerHorairesInterim(supabase, weekIsos, quarts, agenceCodes, profile.siteId);
   }
 
   const nbPlaces = groupes.reduce((s, g) => s + g.lignes.length, 0);

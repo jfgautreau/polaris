@@ -25,7 +25,12 @@ import BandeauErreur from "@/components/BandeauErreur";
 type Chef = { id: string; app_user_id: string };
 type Equipe = { id: string; nom: string; actif: boolean; couleur: string; quart_fixe: string | null; equipe_chef: Chef[] };
 type AppUser = { user_id: string; name: string; email: string };
-type Quart = { code: string; libelle: string; debut: string | null; fin: string | null; rotation: boolean; creneau: string | null; couleur: string | null };
+// Case « Nuit » (quart.nuit, 0076) : même information que dans les paramètres des
+// visites médicales — elle sert aussi aux horaires « après une nuit » (0087).
+const TITRE_NUIT =
+  "Quart de nuit : le lendemain, les horaires « après une nuit » s'appliquent aux lignes qui ont tourné cette nuit-là ; compte aussi pour le suivi médical des travailleurs de nuit.";
+
+type Quart = { code: string; libelle: string; debut: string | null; fin: string | null; rotation: boolean; creneau: string | null; couleur: string | null; nuit: boolean };
 
 const NB_APERCU = 8;
 
@@ -60,13 +65,13 @@ export default async function EquipesPage({
       .order("name")
       .returns<AppUser[]>(),
     // Migration 0068 : `couleur` peut ne pas exister — repli plus bas.
-    supabase.from("quart").select("code, libelle, debut, fin, rotation, creneau, couleur").order("ordre").returns<Quart[]>(),
+    supabase.from("quart").select("code, libelle, debut, fin, rotation, creneau, couleur, nuit").order("ordre").returns<Quart[]>(),
     supabase.from("rotation_reference").select("semaine, equipe_id, quart_code").order("semaine").returns<RotationRef[]>(),
   ]);
   let quarts: Quart[] = quartsData ?? [];
   if (quartsErr && (quartsErr.code === "42703" || quartsErr.code === "PGRST204")) {
-    const { data: q2 } = await supabase.from("quart").select("code, libelle, debut, fin, rotation, creneau").order("ordre").returns<Omit<Quart, "couleur">[]>();
-    quarts = (q2 ?? []).map((q) => ({ ...q, couleur: null }));
+    const { data: q2 } = await supabase.from("quart").select("code, libelle, debut, fin, rotation, creneau").order("ordre").returns<Omit<Quart, "couleur" | "nuit">[]>();
+    quarts = (q2 ?? []).map((q) => ({ ...q, couleur: null, nuit: false }));
   }
   // Quarts composant le cycle de rotation : seuls ceux-ci sont proposés dans le
   // formulaire de référence (le « quart fixe » d'une équipe, lui, peut être
@@ -234,6 +239,10 @@ export default async function EquipesPage({
                   <span>Rotation</span>
                   <input type="checkbox" name="rotation" style={{ width: "auto" }} title="Ce quart fait partie du cycle de rotation des équipes tournantes." />
                 </label>
+                <label className="field" style={{ alignItems: "center" }}>
+                  <span>Nuit</span>
+                  <input type="checkbox" name="nuit" style={{ width: "auto" }} title={TITRE_NUIT} />
+                </label>
                 <div className="field">
                   <span>Créneau (TP)</span>
                   <select name="creneau" defaultValue="" title="Demi-journée du quart, pour le temps partiel « une semaine sur deux ».">
@@ -281,6 +290,10 @@ export default async function EquipesPage({
                     <label className="field" style={{ alignItems: "center" }}>
                       <span>Rotation</span>
                       <input type="checkbox" name={`rot_${q.code}`} defaultChecked={q.rotation} style={{ width: "auto" }} title="Ce quart fait partie du cycle de rotation des équipes tournantes." />
+                    </label>
+                    <label className="field" style={{ alignItems: "center" }}>
+                      <span>Nuit</span>
+                      <input type="checkbox" name={`nuit_${q.code}`} defaultChecked={q.nuit} style={{ width: "auto" }} title={TITRE_NUIT} />
                     </label>
                     <div className="field">
                       <span>Créneau (TP)</span>

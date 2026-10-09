@@ -32,6 +32,13 @@ export type MapsHoraire = {
   excMap: ReadonlyMap<string, HM>;
   /** personne_id -> tp_config (temps partiel). */
   tpCfgMap: ReadonlyMap<string, TpCfg>;
+  /**
+   * Variante « après une nuit » (0087), même clé que `horMap` ; et la règle qui
+   * dit si la ligne du poste sort d'une nuit ce jour-là (src/lib/nuit-avant.ts).
+   * Facultatifs : absents, l'horaire du poste reste l'horaire standard.
+   */
+  apresNuitMap?: ReadonlyMap<string, HM>;
+  nuitAvant?: (posteId: string, iso: string) => boolean;
 };
 
 // Jour de semaine base lundi : 0 = lundi .. 6 = dimanche. Cle de `horaire_poste`.
@@ -76,7 +83,14 @@ export function resoudreHoraire(
 ): { debut: string | null; fin: string | null } {
   const q = quartOuDefaut(quartCode, quarts);
   const creneau = quarts.find((x) => x.code === q)?.creneau ?? null;
-  const std = maps.horMap.get(`${posteId}:${q}:${dowLundi(iso)}`);
+  const cleStd = `${posteId}:${q}:${dowLundi(iso)}`;
+  const base = maps.horMap.get(cleStd);
+  // Après une nuit, la variante remplace l'horaire du poste borne par borne
+  // (vide = même borne). Le temps partiel, prioritaire, garde son horaire.
+  const an = maps.nuitAvant?.(posteId, iso) ? maps.apresNuitMap?.get(cleStd) : undefined;
+  const std: HM | undefined = renseigne(an)
+    ? { debut: an?.debut || base?.debut || null, fin: an?.fin || base?.fin || null }
+    : base;
   const ex = maps.excMap.get(`${personId}:${iso}`);
   const tp = horaireTp(maps.tpCfgMap.get(personId), creneau, iso);
   const generique = renseigne(tp) ? tp : std;

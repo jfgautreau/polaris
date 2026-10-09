@@ -7,8 +7,8 @@ import HoraireEditor from "./HoraireEditor";
 
 type PosteRow = { id: string; nom: string; actif: boolean; ordre_affichage: number };
 type LigneRow = { id: string; nom: string; ordre_affichage: number; atelier: { id: string; nom: string; ordre_affichage: number | null } | null; poste: PosteRow[] };
-type Quart = { code: string; libelle: string };
-type HoraireRow = { poste_id: string; quart_code: string; jour: number; debut: string | null; fin: string | null };
+type Quart = { code: string; libelle: string; nuit: boolean };
+type HoraireRow = { poste_id: string; quart_code: string; jour: number; debut: string | null; fin: string | null; debut_apres_nuit: string | null; fin_apres_nuit: string | null };
 
 export default async function HorairesPage() {
   const { profile, perms } = await requireModule("horaires", "read");
@@ -21,7 +21,7 @@ export default async function HorairesPage() {
       .eq("actif", true)
       .order("nom")
       .returns<LigneRow[]>(),
-    supabase.from("quart").select("code, libelle").order("ordre").returns<Quart[]>(),
+    supabase.from("quart").select("code, libelle, nuit").order("ordre").returns<Quart[]>(),
     // Effectif par quart (trois états) : on n'édite les horaires que sur les quarts
     // où le poste tourne (cf. src/lib/poste-quart.ts).
     chargerPosteQuart(supabase),
@@ -62,15 +62,22 @@ export default async function HorairesPage() {
 
   const allPosteIds = lignes.flatMap((l) => l.postes.map((p) => p.id));
 
-  const initial: Record<string, { debut: string; fin: string }> = {};
+  // Variante « après une nuit » (0087) : proposée seulement si le site a un quart de nuit.
+  const avecNuit = (quartsD ?? []).some((q) => q.nuit);
+  const initial: Record<string, { debut: string; fin: string; debutN: string; finN: string }> = {};
   if (allPosteIds.length) {
     const { data: h } = await supabase
       .from("horaire_poste")
-      .select("poste_id, quart_code, jour, debut, fin")
+      .select("poste_id, quart_code, jour, debut, fin, debut_apres_nuit, fin_apres_nuit")
       .in("poste_id", allPosteIds)
       .returns<HoraireRow[]>();
     for (const r of h ?? [])
-      initial[`${r.poste_id}:${r.quart_code}:${r.jour}`] = { debut: r.debut ?? "", fin: r.fin ?? "" };
+      initial[`${r.poste_id}:${r.quart_code}:${r.jour}`] = {
+        debut: r.debut ?? "",
+        fin: r.fin ?? "",
+        debutN: r.debut_apres_nuit ?? "",
+        finN: r.fin_apres_nuit ?? "",
+      };
   }
 
   return (
@@ -88,7 +95,7 @@ export default async function HorairesPage() {
         </p>
 
         <LectureSeule actif={!canWrite(perms, "horaires")}>
-          <HoraireEditor ateliers={ateliers} lignes={lignes} quarts={quarts} initial={initial} />
+          <HoraireEditor ateliers={ateliers} lignes={lignes} quarts={quarts} initial={initial} avecNuit={avecNuit} />
         </LectureSeule>
       </div>
     </>

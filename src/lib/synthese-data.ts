@@ -12,6 +12,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchAll } from "@/lib/fetch-all";
 import { horaireTxt, type MapsHoraire, type HM, type TpCfg } from "@/lib/horaires";
+import { chargerNuitsAvant } from "@/lib/nuit-avant-data";
 import { estAvecAgence } from "@/lib/interim";
 import type { QuartRef } from "@/lib/quarts";
 
@@ -183,6 +184,8 @@ export async function chargerHorairesInterim(
   // Codes de contrat pilotés par agence (0072) : intérim + CDI intérimaire…
   // Repli (undefined/vide) = le seul code INTERIM historique.
   agenceCodes?: Iterable<string>,
+  // Site courant : règle des horaires « après une nuit » (0087).
+  siteId?: string,
 ): Promise<GroupeAgence[]> {
   const codesAgence = [...new Set([...(agenceCodes ?? []), "INTERIM"])];
   // 1) Les personnes pilotées par agence du site (non parties).
@@ -210,14 +213,14 @@ export async function chargerHorairesInterim(
     ),
     supabase.from("ligne").select("id, atelier_id, poste(id, nom)").returns<{ id: string; atelier_id: string | null; poste: { id: string; nom: string }[] }[]>(),
     supabase.from("atelier").select("id, nom").returns<{ id: string; nom: string }[]>(),
-    fetchAll<{ poste_id: string; quart_code: string; jour: number; debut: string | null; fin: string | null }>(() =>
+    fetchAll<{ poste_id: string; quart_code: string; jour: number; debut: string | null; fin: string | null; debut_apres_nuit: string | null; fin_apres_nuit: string | null }>(() =>
       supabase
         .from("horaire_poste")
-        .select("poste_id, quart_code, jour, debut, fin")
+        .select("poste_id, quart_code, jour, debut, fin, debut_apres_nuit, fin_apres_nuit")
         .order("poste_id")
         .order("quart_code")
         .order("jour")
-        .returns<{ poste_id: string; quart_code: string; jour: number; debut: string | null; fin: string | null }[]>()
+        .returns<{ poste_id: string; quart_code: string; jour: number; debut: string | null; fin: string | null; debut_apres_nuit: string | null; fin_apres_nuit: string | null }[]>()
     ),
     supabase
       .from("horaire_exception")
@@ -240,12 +243,18 @@ export async function chargerHorairesInterim(
 
   // Maps de resolution d'horaire (cf. src/lib/horaires.ts).
   const horMap = new Map<string, HM>();
-  for (const h of hor) horMap.set(`${h.poste_id}:${h.quart_code}:${h.jour}`, { debut: h.debut, fin: h.fin });
+  const apresNuitMap = new Map<string, HM>();
+  for (const h of hor) {
+    horMap.set(`${h.poste_id}:${h.quart_code}:${h.jour}`, { debut: h.debut, fin: h.fin });
+    if (h.debut_apres_nuit || h.fin_apres_nuit)
+      apresNuitMap.set(`${h.poste_id}:${h.quart_code}:${h.jour}`, { debut: h.debut_apres_nuit, fin: h.fin_apres_nuit });
+  }
   const excMap = new Map<string, HM>();
   for (const e of exc ?? []) excMap.set(`${e.personne_id}:${e.jour}`, { debut: e.debut, fin: e.fin });
   const tpCfgMap = new Map<string, TpCfg>();
   for (const r of tpH ?? []) if (r.tp_config) tpCfgMap.set(r.id, r.tp_config);
-  const maps: MapsHoraire = { horMap, excMap, tpCfgMap };
+  const nuits = siteId ? await chargerNuitsAvant(supabase, siteId, weekIsos) : null;
+  const maps: MapsHoraire = { horMap, excMap, tpCfgMap, apresNuitMap, nuitAvant: nuits?.parPoste };
 
   // 3) Cellules par personne / jour.
   const cellsByPerson = new Map<string, Record<string, CelluleInterim[]>>();
