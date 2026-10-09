@@ -77,6 +77,7 @@ export async function POST(req: NextRequest) {
 // Retire l'habilitation : erreur de saisie, ou perte de l'habilitation a la suite
 // d'un incident. On supprime la ligne plutot que de la marquer expiree — une
 // habilitation expiree se recycle, une habilitation retiree n'a jamais existe.
+// Rien n'est perdu : l'historique (0084) garde la ligne supprimee.
 export async function DELETE(req: NextRequest) {
   const profile = await getCurrentProfile();
   if (!profile) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
@@ -93,6 +94,18 @@ export async function DELETE(req: NextRequest) {
   }
 
   const supabase = (await canWriteModule(profile.role, "habilitations")) ? getAdminClient() : await getServerClient();
+
+  // Historique (0084) : la suppression est journalisée par un déclencheur, qui
+  // prend l'auteur sur la ligne quand la session est absente (client admin).
+  // On y pose donc d'abord celui qui supprime — modification sans effet métier,
+  // que le déclencheur ne journalise pas.
+  const { error: errAuteur } = await supabase
+    .from("personne_competence")
+    .update({ auteur_app_user_id: profile.authId })
+    .eq("personne_id", personne_id)
+    .eq("competence_id", competence_id)
+    .eq("site_id", profile.siteId);
+  if (errAuteur) return NextResponse.json({ error: messageRefusPerimetre({ code: errAuteur.code, message: errAuteur.message, details: null }) }, { status: 403 });
 
   const { error } = await supabase
     .from("personne_competence")

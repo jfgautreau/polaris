@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   // MULTI-SITE : borne par site_id (défense en profondeur avec service_role).
   const { error } = await supabase
     .from("personne_competence")
-    .update({ commentaire })
+    .update({ commentaire, auteur_app_user_id: profile.authId, date_maj: new Date().toISOString() })
     .eq("id", id)
     .eq("site_id", profile.siteId);
   if (error) return NextResponse.json({ error: messageRefusPerimetre({ code: error.code, message: error.message, details: null }) }, { status: 403 });

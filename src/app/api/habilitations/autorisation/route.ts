@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
 
   const { error } = await supabase
     .from("personne_competence")
-    .update({ date_autorisation_conduite: remise ? rec!.date_obtention : null })
+    .update({ date_autorisation_conduite: remise ? rec!.date_obtention : null, auteur_app_user_id: profile.authId, date_maj: new Date().toISOString() })
     .eq("id", id)
     .eq("site_id", site_id);
   if (error) return NextResponse.json({ error: messageRefusPerimetre({ code: error.code, message: error.message, details: null }) }, { status: 403 });
