@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { avecLotJournal } from "@/lib/journal-contexte";
 import { getServerClient, getAdminClient } from "@/lib/supabase-server";
 import { getCurrentProfile } from "@/lib/current-user";
 import { canWritePlacementData } from "@/lib/permissions";
@@ -25,7 +26,7 @@ import { motifInactivite } from "@/lib/personne-statut";
 //        d'etre fait a la main.
 const isDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
 
-export async function POST(req: NextRequest) {
+async function traiterPOST(req: NextRequest) {
   const profile = await getCurrentProfile();
   if (!profile) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
@@ -146,4 +147,14 @@ export async function POST(req: NextRequest) {
     inactives,
     rows: rows.map((r) => ({ personne_id: r.personne_id, poste_id: r.poste_id })),
   });
+}
+
+// Journal (0086) : l'opération entière forme UN lot — une ligne de synthèse au
+// Journal au lieu de centaines. La garde d'accès reste dans traiterPOST.
+export async function POST(req: NextRequest) {
+  const profile = await getCurrentProfile();
+  if (!profile) return traiterPOST(req);
+  const b = (await req.clone().json().catch(() => null)) as { source?: string; cible?: string; quart?: string; mode?: string } | null;
+  const fr = (iso?: string) => (iso && /^d{4}-d{2}-d{2}$/.test(iso) ? iso.split("-").reverse().join("/") : iso ?? "");
+  return avecLotJournal(profile.siteId, `${b?.mode === "completer" ? "Copie (compléter)" : "Copie (écraser)"} des affectations du ${fr(b?.source)} vers le ${fr(b?.cible)}${b?.quart ? ` — quart ${b.quart}` : ""}`, () => traiterPOST(req));
 }

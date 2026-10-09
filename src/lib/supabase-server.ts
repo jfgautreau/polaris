@@ -4,6 +4,7 @@ import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getImpersonatedSiteId, IMPERSONATE_HEADER } from "@/lib/impersonation";
+import { fetchJournal } from "@/lib/journal-contexte";
 
 // Client serveur lie aux cookies de la requete (lit la session du user appelant).
 // `parRequete` : un seul client instancie par requete, meme si plusieurs couches
@@ -44,7 +45,9 @@ export const getServerClient = parRequete(async function getServerClient(): Prom
           }
         },
       },
-      global: { headers: extraHeaders },
+      // Lot d'une opération de masse en cours (journal, 0086). Pas d'en-tête
+      // d'auteur ici : la session fournit déjà auth.uid().
+      global: { headers: extraHeaders, fetch: fetchJournal(false) },
     }
   );
 });
@@ -62,7 +65,12 @@ export function getAdminClient(): SupabaseClient {
   adminClient ??= createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false, autoRefreshToken: false } }
+    {
+      auth: { persistSession: false, autoRefreshToken: false },
+      // Journal (0086) : chaque ÉCRITURE porte l'auteur de la requête en cours
+      // (et le lot éventuel) — le client lui-même reste sans session ni état.
+      global: { fetch: fetchJournal(true) },
+    }
   );
   return adminClient;
 }

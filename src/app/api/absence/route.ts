@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { avecLotJournal } from "@/lib/journal-contexte";
 import { getServerClient, getAdminClient } from "@/lib/supabase-server";
 import { getCurrentProfile } from "@/lib/current-user";
 import { canWriteModule } from "@/lib/permissions";
@@ -12,7 +13,7 @@ import { messageErreur } from "@/lib/erreurs";
 const s = (v: unknown) => String(v ?? "").trim();
 const orNull = (v: string) => (v === "" ? null : v);
 
-export async function POST(req: NextRequest) {
+async function traiterPOST(req: NextRequest) {
   const profile = await getCurrentProfile();
   if (!profile) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
@@ -174,4 +175,14 @@ export async function POST(req: NextRequest) {
     const msg = messageErreur({ code: pg?.code, message: pg?.message ?? "Erreur", details: pg?.details ?? null });
     return NextResponse.json({ error: msg ?? "Erreur" }, { status: 403 });
   }
+}
+
+// Journal (0086) : l'opération entière forme UN lot — une ligne de synthèse au
+// Journal au lieu de centaines. La garde d'accès reste dans traiterPOST.
+export async function POST(req: NextRequest) {
+  const profile = await getCurrentProfile();
+  if (!profile) return traiterPOST(req);
+  const b = (await req.clone().json().catch(() => null)) as Record<string, unknown> | null;
+  const fr = (iso?: string) => (iso && /^d{4}-d{2}-d{2}$/.test(iso) ? iso.split("-").reverse().join("/") : iso ?? "");
+  return avecLotJournal(profile.siteId, `Absence — ${String(b?.op ?? "")}${b?.date_debut ? ` du ${fr(String(b.date_debut))}` : ""}${b?.date_fin ? ` au ${fr(String(b.date_fin))}` : ""}`, () => traiterPOST(req));
 }

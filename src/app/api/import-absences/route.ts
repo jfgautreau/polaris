@@ -1,4 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { avecLotJournal } from "@/lib/journal-contexte";
+import { getCurrentProfile } from "@/lib/current-user";
 import { moduleWriteGuard } from "@/lib/permissions";
 import { messageErreur } from "@/lib/erreurs";
 import { fetchAll } from "@/lib/fetch-all";
@@ -66,7 +68,7 @@ function devineNonPlanifie(libelle: string): boolean {
   return /malad|accident|acc\.?\s?trav|absence non|injustif|hospitalis/.test(t);
 }
 
-export async function POST(req: NextRequest) {
+async function traiterPOST(req: NextRequest) {
   const garde = await moduleWriteGuard("motifs");
   if (!garde.ok) return NextResponse.json({ error: garde.error }, { status: garde.status });
   const { supabase, profile } = garde;
@@ -299,4 +301,12 @@ export async function POST(req: NextRequest) {
     const msg = messageErreur({ code: pg?.code, message: pg?.message ?? "Erreur", details: pg?.details ?? null });
     return NextResponse.json({ error: msg ?? "Erreur" }, { status: 400 });
   }
+}
+
+// Journal (0086) : l'opération entière forme UN lot — une ligne de synthèse au
+// Journal au lieu de centaines. La garde d'accès reste dans traiterPOST.
+export async function POST(req: NextRequest) {
+  const profile = await getCurrentProfile();
+  if (!profile) return traiterPOST(req);
+  return avecLotJournal(profile.siteId, "Import des absences RH", () => traiterPOST(req));
 }

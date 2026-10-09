@@ -360,6 +360,15 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
 - **Param. RH** (`/admin/motifs`, droit `motifs`) : motifs (code GT, planifié ou non, affiché sur le « PDF pour Affich. »),
   agences, types de contrat (`avec_agence`), fenêtre d'affichage TV, import des absences RH
   (`src/lib/import-absences-rh.ts`).
+- **Journal** (`src/app/journal/`, droit `journal`, règles pures `src/lib/journal.ts`) : lu en
+  service_role borné au site (la matrice décide, pas la RLS d'audit_log à rôles en dur) ;
+  filtres dans l'URL, 100 lignes par page, Planning + Polyvalence masqués par défaut.
+  **Auteur** : toute écriture service_role porte l'en-tête `x-polaris-auteur` (fetch des
+  clients Supabase, `src/lib/journal-contexte.ts`) lu par `audit_trigger()` (0086).
+  **Opérations de masse** (copie, pré-remplissage, réinitialisation, imports, absence) :
+  `avecLotJournal()` → une ligne de synthèse `LOT`, détail à la demande. Conservation
+  `site.journal_conservation_mois` (purge à l'ouverture) ; RGPD : anonymiser / supprimer
+  une personne purge ses traces (`journal_purger_personne`).
 - **Plateforme** (super_admin, `src/app/platform/`) : sites, impersonation, masquage par
   site (`site_module` : menus, `guide`, rapports `bilan:<slug>`).
 

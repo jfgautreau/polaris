@@ -1,238 +1,340 @@
-import { getServerClient } from "@/lib/supabase-server";
-import { roleLabel } from "@/lib/roles";
+import Link from "next/link";
+import { getAdminClient } from "@/lib/supabase-server";
 import AppHeader from "@/components/AppHeader";
-import { requireModule } from "@/lib/permissions";
+import BandeauErreur from "@/components/BandeauErreur";
+import { requireModule, canWrite } from "@/lib/permissions";
+import { getQuartsC } from "@/lib/refdata";
+import {
+  ACTION_FR,
+  TABLE_FR,
+  TABLES_BRUIT,
+  champLabel,
+  champsMontres,
+  decrireElement,
+  idsReferences,
+  minuitParis,
+  valeurLisible,
+  type EntreeJournal,
+} from "@/lib/journal";
+import JournalFiltres, { type FiltresJournal } from "./JournalFiltres";
+import { reglerConservation } from "./actions";
 
-type Json = Record<string, unknown> | null;
-type Entry = {
-  id: number;
-  app_user_id: string | null;
-  action: string;
-  table_name: string;
-  record_id: string | null;
-  old_values: Json;
-  new_values: Json;
-  created_at: string;
-};
+// Journal d'audit (refonte 0086).
+//
+// DROIT : la matrice de modules décide seule (`journal`, lecture). La lecture
+// passe donc par le client service_role, bornée au site du profil — la RLS
+// d'audit_log nomme encore admin et CODIR en dur, si bien qu'un rôle à qui l'on
+// accordait le droit voyait une page vide sans message.
+//
+// VOLUME : ~900 lignes par jour, 78 % Planning + Polyvalence. Par défaut, ces
+// deux tables sont masquées, et une opération de masse (copie, import…) n'est
+// montrée que par sa ligne de synthèse, dont le détail s'ouvre à la demande.
 
-const ACTION_FR: Record<string, string> = { INSERT: "Création", UPDATE: "Modification", DELETE: "Suppression" };
+const PAR_PAGE = 100;
 
-// Nom de table lisible (repli : le nom brut).
-const TABLE_FR: Record<string, string> = {
-  matrice: "Polyvalence",
-  placement: "Planning",
-  personne_competence: "Habilitation",
-  motif_absence: "Motif d'absence",
-  personne: "Personne",
-  poste: "Poste",
-  ligne: "Ligne",
-  atelier: "Service",
-  equipe: "Équipe",
-  competence: "Compétence",
-  absence: "Absence",
-  rotation_reference: "Rotation",
-  role_permission: "Droits",
-  app_user: "Utilisateur",
-};
+// ⚠️ Fuseau forcé : le rendu a lieu sur Vercel (UTC) ; l'usine est en France.
+const HORODATAGE = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "medium", timeZone: "Europe/Paris" });
 
-// Libelle de champ lisible (repli : la cle brute).
-const CHAMP_FR: Record<string, string> = {
-  niveau_actuel: "Niveau actuel",
-  niveau_cible: "Niveau cible",
-  jour: "Jour",
-  quart_code: "Quart",
-  poste_id: "Poste",
-  personne_id: "Personne",
-  equipe_id: "Équipe",
-  ligne_id: "Ligne",
-  atelier_id: "Service",
-  competence_id: "Compétence",
-  motif_absence_id: "Motif",
-  absence_id: "Absence",
-  non_travaille: "Non travaillé",
-  commentaire: "Commentaire",
-  libelle: "Libellé",
-  couleur: "Couleur",
-  code_court: "Code",
-  nom: "Nom",
-  prenom: "Prénom",
-  actif: "Actif",
-  statut: "Statut",
-  date_obtention: "Date d'obtention",
-  date_expiration: "Échéance",
-  date_autorisation_conduite: "Autorisation conduite",
-  role: "Rôle",
-  niveau: "Niveau",
-  quart_fixe: "Quart fixe",
-  semaine: "Semaine",
-};
+const ISO = /^\d{4}-\d{2}-\d{2}$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const COLONNES = "id, app_user_id, action, table_name, record_id, old_values, new_values, created_at, impersonated_by, lot, lot_libelle";
 
-// Champs techniques masques du diff (bruit : ids, horodatages, auteur deja affiche).
-const TECH = new Set(["id", "created_at", "updated_at", "date_maj", "auteur_app_user_id", "created_by"]);
+type Sp = { du?: string; au?: string; auteur?: string; element?: string; action?: string; q?: string; tout?: string; page?: string; lot?: string; err?: string };
 
-// ⚠️ Fuseau force. `audit_log.created_at` est un timestamptz, mais cette page est
-// un composant serveur : le formatage a lieu sur Vercel, dont l'horloge est en UTC.
-// Sans `timeZone`, le journal affichait donc les heures avec 1 h (hiver) ou 2 h
-// (ete) de retard sur l'usine. L'application n'est utilisee qu'en France.
-const HORODATAGE = new Intl.DateTimeFormat("fr-FR", {
-  dateStyle: "short",
-  timeStyle: "medium",
-  timeZone: "Europe/Paris",
-});
+export default async function JournalPage({ searchParams }: { searchParams: Promise<Sp> }) {
+  const { profile, perms } = await requireModule("journal", "read");
+  const sp = await searchParams;
+  const site = profile.siteId;
+  const admin = getAdminClient();
 
-const champLabel = (k: string) => CHAMP_FR[k] ?? k;
+  const filtres: FiltresJournal = {
+    du: ISO.test(sp.du ?? "") ? sp.du! : "",
+    au: ISO.test(sp.au ?? "") ? sp.au! : "",
+    auteur: sp.auteur === "systeme" || UUID.test(sp.auteur ?? "") ? sp.auteur! : "",
+    element: sp.element && TABLE_FR[sp.element] ? sp.element : "",
+    action: ["INSERT", "UPDATE", "DELETE", "LOT"].includes(sp.action ?? "") ? sp.action! : "",
+    q: (sp.q ?? "").trim().slice(0, 60),
+    tout: sp.tout === "1",
+  };
+  const lot = UUID.test(sp.lot ?? "") ? sp.lot! : "";
+  const page = Math.max(0, Math.floor(Number(sp.page) || 0));
 
-export default async function JournalPage() {
-  const { profile } = await requireModule("journal", "read");
+  // Conservation (étape 6) : on purge ce qui dépasse à chaque ouverture — une
+  // suppression par plage d'index, sans coût notable. Lancée en parallèle.
+  const pPurge = admin.rpc("journal_purger", { p_site: site });
+  const pSite = admin.from("site").select("journal_conservation_mois").eq("id", site).maybeSingle<{ journal_conservation_mois: number }>();
+  const pAuteurs = admin
+    .from("app_user")
+    .select("user_id, name, email")
+    .eq("site_id", site)
+    .order("name")
+    .returns<{ user_id: string; name: string | null; email: string | null }[]>();
 
-  const supabase = await getServerClient();
-  const [entriesR, usersR, persR, posteR, eqR, motifR, compR, ligneR] = await Promise.all([
-    supabase
-      .from("audit_log")
-      .select("id, app_user_id, action, table_name, record_id, old_values, new_values, created_at")
+  // Recherche : on résout le texte en identifiants (personnes, postes,
+  // habilitations, lignes, services) puis on cherche ces identifiants dans les
+  // lignes du journal. Plafonné pour garder une requête de taille raisonnable.
+  // Chaque catégorie ne cherche que ses colonnes, et les plafonds tiennent
+  // l'URL de la requête sous quelques kilo-octets.
+  let idsRecherche: string[] | null = null;
+  let conditions: string[] = [];
+  if (filtres.q) {
+    const motif = `%${filtres.q.replace(/[%_,()]/g, " ")}%`;
+    const [pers, postes, comps, lignes, ateliers] = await Promise.all([
+      admin.from("personne").select("id").eq("site_id", site).or(`nom.ilike.${motif},prenom.ilike.${motif},matricule.ilike.${motif}`).limit(15).returns<{ id: string }[]>(),
+      admin.from("poste").select("id").eq("site_id", site).ilike("nom", motif).limit(10).returns<{ id: string }[]>(),
+      admin.from("competence").select("id").eq("site_id", site).ilike("nom", motif).limit(5).returns<{ id: string }[]>(),
+      admin.from("ligne").select("id").eq("site_id", site).ilike("nom", motif).limit(5).returns<{ id: string }[]>(),
+      admin.from("atelier").select("id").eq("site_id", site).ilike("nom", motif).limit(3).returns<{ id: string }[]>(),
+    ]);
+    const ids = (r: { data: { id: string }[] | null }) => (r.data ?? []).map((x) => x.id);
+    const cat: [string[], string][] = [
+      [ids(pers), "personne_id"],
+      [ids(postes), "poste_id"],
+      [ids(comps), "competence_id"],
+      [ids(lignes), "ligne_id"],
+      [ids(ateliers), "atelier_id"],
+    ];
+    idsRecherche = cat.flatMap(([l]) => l);
+    conditions = cat
+      .filter(([l]) => l.length)
+      .flatMap(([l, col]) => {
+        const v = `(${l.join(",")})`;
+        // record_id : la fiche elle-même (personne, poste…) ; sinon les lignes qui la référencent.
+        return [`record_id.in.${v}`, `new_values->>${col}.in.${v}`, `old_values->>${col}.in.${v}`];
+      });
+  }
+
+  let entrees: EntreeJournal[] = [];
+  let erreur: string | null = null;
+  if (idsRecherche === null || idsRecherche.length > 0) {
+    let q = admin.from("audit_log").select(COLONNES).eq("site_id", site);
+    if (lot) {
+      q = q.eq("lot", lot).neq("action", "LOT");
+    } else {
+      if (filtres.element) q = q.eq("table_name", filtres.element);
+      else if (!filtres.tout && !idsRecherche) q = q.not("table_name", "in", `(${TABLES_BRUIT.join(",")})`);
+      if (filtres.action) q = q.eq("action", filtres.action);
+      if (idsRecherche) {
+        q = q.or(conditions.join(","));
+      } else if (!filtres.element) {
+        // Une opération de masse ne montre que sa ligne de synthèse.
+        q = q.or("lot.is.null,action.eq.LOT");
+      }
+    }
+    if (filtres.auteur === "systeme") q = q.is("app_user_id", null);
+    else if (filtres.auteur) q = q.eq("app_user_id", filtres.auteur);
+    if (filtres.du) q = q.gte("created_at", minuitParis(filtres.du));
+    if (filtres.au) {
+      const [y, m, d] = filtres.au.split("-").map(Number);
+      const lendemain = new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+      q = q.lt("created_at", minuitParis(lendemain));
+    }
+    const { data, error } = await q
       .order("created_at", { ascending: false })
-      .limit(200)
-      .returns<Entry[]>(),
-    supabase.from("app_user").select("user_id, name, email").returns<{ user_id: string; name: string; email: string }[]>(),
-    supabase.from("personne").select("id, nom, prenom").returns<{ id: string; nom: string; prenom: string }[]>(),
-    supabase.from("poste").select("id, nom").returns<{ id: string; nom: string }[]>(),
-    supabase.from("equipe").select("id, nom").returns<{ id: string; nom: string }[]>(),
-    supabase.from("motif_absence").select("id, libelle").returns<{ id: string; libelle: string }[]>(),
-    supabase.from("competence").select("id, nom").returns<{ id: string; nom: string }[]>(),
-    supabase.from("ligne").select("id, nom").returns<{ id: string; nom: string }[]>(),
+      .order("id", { ascending: false })
+      .range(page * PAR_PAGE, page * PAR_PAGE + PAR_PAGE) // une de plus : « page suivante ? »
+      .returns<EntreeJournal[]>();
+    if (error) erreur = error.message;
+    entrees = data ?? [];
+  }
+  const pageSuivante = entrees.length > PAR_PAGE;
+  if (pageSuivante) entrees = entrees.slice(0, PAR_PAGE);
+
+  // Noms (étape 4) : seulement les identifiants des lignes affichées.
+  const ids = [...new Set(entrees.flatMap(idsReferences))];
+  const noms: Record<string, string> = {};
+  const [quarts, { data: siteD }, { data: auteursD }, ...dicos] = await Promise.all([
+    getQuartsC(),
+    pSite,
+    pAuteurs,
+    ...(ids.length
+      ? [
+          admin.from("personne").select("id, nom, prenom").eq("site_id", site).in("id", ids).returns<{ id: string; nom: string; prenom: string }[]>(),
+          admin.from("poste").select("id, nom").eq("site_id", site).in("id", ids).returns<{ id: string; nom: string }[]>(),
+          admin.from("ligne").select("id, nom").eq("site_id", site).in("id", ids).returns<{ id: string; nom: string }[]>(),
+          admin.from("atelier").select("id, nom").eq("site_id", site).in("id", ids).returns<{ id: string; nom: string }[]>(),
+          admin.from("equipe").select("id, nom").eq("site_id", site).in("id", ids).returns<{ id: string; nom: string }[]>(),
+          admin.from("motif_absence").select("id, libelle").eq("site_id", site).in("id", ids).returns<{ id: string; libelle: string }[]>(),
+          admin.from("competence").select("id, nom").eq("site_id", site).in("id", ids).returns<{ id: string; nom: string }[]>(),
+          admin.from("app_user").select("user_id, name, email").in("user_id", ids).returns<{ user_id: string; name: string | null; email: string | null }[]>(),
+        ]
+      : []),
+    pPurge,
   ]);
-
-  const entries = entriesR.data ?? [];
-  const users = usersR.data ?? [];
-
-  // Dictionnaire uuid -> libelle, pour rendre les cles etrangeres en clair.
-  const labelById: Record<string, string> = {};
-  for (const p of persR.data ?? []) labelById[p.id] = `${p.nom} ${p.prenom}`;
-  for (const p of posteR.data ?? []) labelById[p.id] = p.nom;
-  for (const e of eqR.data ?? []) labelById[e.id] = e.nom;
-  for (const m of motifR.data ?? []) labelById[m.id] = m.libelle;
-  for (const c of compR.data ?? []) labelById[c.id] = c.nom;
-  for (const l of ligneR.data ?? []) labelById[l.id] = l.nom;
-  for (const u of users) labelById[u.user_id] = u.name || u.email;
-
-  const who = (id: string | null) => {
-    if (!id) return "Système";
-    return labelById[id] ?? id.slice(0, 8);
-  };
-
-  // Valeur formatee en clair (booleen, vide, cle etrangere resolue).
-  const fmtVal = (key: string, v: unknown): string => {
-    if (v === null || v === undefined || v === "") return "∅";
-    if (typeof v === "boolean") return v ? "oui" : "non";
-    if (typeof v === "object") return JSON.stringify(v);
-    const s = String(v);
-    if ((key.endsWith("_id") || key === "created_by") && labelById[s]) return labelById[s];
-    return s;
-  };
-
-  // Champs metier renseignes (INSERT / DELETE).
-  const metierFields = (obj: Json): { k: string; v: unknown }[] => {
-    if (!obj) return [];
-    return Object.entries(obj)
-      .filter(([k, v]) => !TECH.has(k) && v !== null && v !== "")
-      .map(([k, v]) => ({ k, v }));
-  };
-
-  // Champs modifies (UPDATE) : old != new, hors champs techniques.
-  const changedFields = (o: Json, n: Json): { k: string; a: unknown; b: unknown }[] => {
-    const keys = new Set([...Object.keys(o ?? {}), ...Object.keys(n ?? {})]);
-    const out: { k: string; a: unknown; b: unknown }[] = [];
-    for (const k of keys) {
-      if (TECH.has(k)) continue;
-      const a = o?.[k];
-      const b = n?.[k];
-      if (JSON.stringify(a) !== JSON.stringify(b)) out.push({ k, a, b });
+  for (const r of dicos) {
+    for (const x of ((r as { data: Record<string, string | null>[] | null }).data ?? [])) {
+      if ("user_id" in x) noms[x.user_id!] = x.name || x.email || "";
+      else if ("prenom" in x) noms[x.id!] = `${x.nom} ${x.prenom}`.trim();
+      else if ("libelle" in x) noms[x.id!] = x.libelle ?? "";
+      else noms[x.id!] = x.nom ?? "";
     }
-    return out;
+  }
+  for (const q of quarts) noms[q.code] = q.libelle;
+  const auteurs = (auteursD ?? []).map((u) => ({ id: u.user_id, nom: u.name || u.email || u.user_id.slice(0, 8) }));
+  for (const a of auteurs) noms[a.id] ??= a.nom;
+
+  const qui = (id: string | null) => (id ? noms[id] || "Compte supprimé" : "Système");
+  const conservation = siteD?.journal_conservation_mois ?? 13;
+  const ecrire = canWrite(perms, "journal");
+
+  const lien = (patch: Record<string, string | number | null>) => {
+    const p = new URLSearchParams();
+    const tout: Record<string, string | number | null> = {
+      du: filtres.du, au: filtres.au, auteur: filtres.auteur, element: filtres.element,
+      action: filtres.action, q: filtres.q, tout: filtres.tout ? "1" : "", lot, page, ...patch,
+    };
+    for (const [k, v] of Object.entries(tout)) if (v !== null && v !== "" && v !== 0) p.set(k, String(v));
+    const s = p.toString();
+    return s ? `/journal?${s}` : "/journal";
   };
 
-  // Prepare, pour chaque entree, les listes « avant » et « apres » alignees.
-  const rendered = entries.map((e) => {
-    let before: { k: string; v: unknown }[] = [];
-    let after: { k: string; v: unknown }[] = [];
-    if (e.action === "UPDATE") {
-      const ch = changedFields(e.old_values, e.new_values);
-      before = ch.map((c) => ({ k: c.k, v: c.a }));
-      after = ch.map((c) => ({ k: c.k, v: c.b }));
-    } else if (e.action === "INSERT") {
-      after = metierFields(e.new_values);
-    } else if (e.action === "DELETE") {
-      before = metierFields(e.old_values);
-    }
-    return { e, before, after };
-  });
-
-  const cellStyle = (side: "avant" | "apres"): React.CSSProperties => ({
+  const libelleLot = lot ? entrees[0]?.lot_libelle ?? "Opération groupée" : null;
+  const cellule = (cote: "avant" | "apres"): React.CSSProperties => ({
     verticalAlign: "top",
     fontSize: 13,
-    background: side === "avant" ? "#fef6f6" : "#f4fbf6",
-    minWidth: 180,
+    background: cote === "avant" ? "#fef6f6" : "#f4fbf6",
+    minWidth: 170,
   });
-
-  const FieldList = ({ items, empty }: { items: { k: string; v: unknown }[]; empty: boolean }) =>
-    items.length === 0 ? (
-      <span className="muted">{empty ? "—" : "∅"}</span>
-    ) : (
-      <>
-        {items.map(({ k, v }) => (
-          <div key={k} style={{ lineHeight: 1.5 }}>
-            <span className="muted">{champLabel(k)} :</span> <strong>{fmtVal(k, v)}</strong>
-          </div>
-        ))}
-      </>
-    );
 
   return (
     <>
       <AppHeader role={profile.role} active="/journal" />
       <div className="container" style={{ maxWidth: 1500 }}>
-        <h1>Journal d&apos;audit</h1>
-        <p className="muted" style={{ marginBottom: 16 }}>
-          200 dernières modifications : qui, quoi, valeur avant et après, date et heure. Visible par
-          l&apos;administrateur et le CODIR ({roleLabel(profile.role)}).
-        </p>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 16, flexWrap: "wrap" }}>
+          <h1 style={{ margin: 0 }}>Journal d&apos;audit</h1>
+          <span className="muted" style={{ fontSize: 13 }}>
+            Qui a changé quoi, avant / après. Conservation :{" "}
+            {ecrire ? (
+              <form action={reglerConservation} style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+                <input type="number" name="mois" min={1} max={120} defaultValue={conservation} style={{ width: 64, fontSize: 13, padding: "2px 4px" }} />
+                mois
+                <button type="submit" className="btn-sm btn-ghost" style={{ margin: 0, width: "auto", color: "var(--text)" }}>
+                  Enregistrer
+                </button>
+              </form>
+            ) : (
+              <strong>{conservation} mois</strong>
+            )}
+            {" "}— au-delà, les entrées sont effacées.
+          </span>
+        </div>
+        <BandeauErreur message={sp.err} />
+
+        {lot ? (
+          <p style={{ margin: "12px 0" }}>
+            <Link href={lien({ lot: null, page: null })} prefetch={false}>
+              &larr; Retour au journal
+            </Link>{" "}
+            · Détail de l&apos;opération groupée : <strong>{libelleLot}</strong>
+          </p>
+        ) : (
+          <div style={{ marginTop: 12 }}>
+            <JournalFiltres
+              filtres={filtres}
+              auteurs={auteurs}
+              elements={Object.entries(TABLE_FR).map(([code, libelle]) => ({ code, libelle })).sort((a, b) => a.libelle.localeCompare(b.libelle))}
+            />
+          </div>
+        )}
+
+        {erreur && <BandeauErreur message={`Lecture du journal impossible : ${erreur}`} />}
+
         <div className="card" style={{ overflowX: "auto" }}>
           <table>
             <thead>
               <tr>
                 <th>Date &amp; heure</th>
-                <th>Utilisateur</th>
+                <th>Auteur</th>
                 <th>Action</th>
+                <th>Type</th>
                 <th>Élément</th>
                 <th>Valeur avant</th>
                 <th>Valeur après</th>
               </tr>
             </thead>
             <tbody>
-              {rendered.map(({ e, before, after }) => (
-                <tr key={e.id}>
-                  <td style={{ whiteSpace: "nowrap" }}>{HORODATAGE.format(new Date(e.created_at))}</td>
-                  <td style={{ whiteSpace: "nowrap" }}>{who(e.app_user_id)}</td>
-                  <td>{ACTION_FR[e.action] ?? e.action}</td>
-                  <td>{TABLE_FR[e.table_name] ?? e.table_name}</td>
-                  <td style={cellStyle("avant")}>
-                    <FieldList items={before} empty={e.action === "INSERT"} />
-                  </td>
-                  <td style={cellStyle("apres")}>
-                    <FieldList items={after} empty={e.action === "DELETE"} />
-                  </td>
-                </tr>
-              ))}
-              {rendered.length === 0 && (
+              {entrees.map((e) => {
+                const champs = champsMontres(e);
+                const nbLot = Number((e.new_values as { lignes?: number } | null)?.lignes ?? 0);
+                return (
+                  <tr key={e.id} style={e.action === "LOT" ? { background: "#f8fafc" } : undefined}>
+                    <td style={{ whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{HORODATAGE.format(new Date(e.created_at))}</td>
+                    <td style={{ whiteSpace: "nowrap" }}>
+                      {qui(e.app_user_id)}
+                      {e.impersonated_by && (
+                        <span
+                          title={`Action faite en mode support par ${qui(e.impersonated_by)}`}
+                          style={{ display: "block", fontSize: 11, color: "#9a3412", fontWeight: 600 }}
+                        >
+                          via support
+                        </span>
+                      )}
+                    </td>
+                    <td>{ACTION_FR[e.action] ?? e.action}</td>
+                    <td>{TABLE_FR[e.table_name] ?? e.table_name}</td>
+                    <td style={{ minWidth: 220 }}>{decrireElement(e, noms)}</td>
+                    {e.action === "LOT" ? (
+                      <td colSpan={2} style={{ fontSize: 13 }}>
+                        {nbLot} ligne(s) —{" "}
+                        <Link href={lien({ lot: e.lot, page: null })} prefetch={false}>
+                          voir le détail
+                        </Link>
+                      </td>
+                    ) : (
+                      <>
+                        <td style={cellule("avant")}>
+                          {champs.filter((c) => "avant" in c).map((c) => (
+                            <div key={c.k} style={{ lineHeight: 1.5 }}>
+                              <span className="muted">{champLabel(c.k)} :</span> <strong>{valeurLisible(c.k, c.avant, noms)}</strong>
+                            </div>
+                          ))}
+                          {!champs.some((c) => "avant" in c) && <span className="muted">—</span>}
+                        </td>
+                        <td style={cellule("apres")}>
+                          {champs.filter((c) => "apres" in c).map((c) => (
+                            <div key={c.k} style={{ lineHeight: 1.5 }}>
+                              <span className="muted">{champLabel(c.k)} :</span> <strong>{valeurLisible(c.k, c.apres, noms)}</strong>
+                            </div>
+                          ))}
+                          {!champs.some((c) => "apres" in c) && <span className="muted">—</span>}
+                        </td>
+                      </>
+                    )}
+                  </tr>
+                );
+              })}
+              {entrees.length === 0 && !erreur && (
                 <tr>
-                  <td colSpan={6} className="muted">
-                    Aucune entrée.
+                  <td colSpan={7} className="muted">
+                    {idsRecherche && idsRecherche.length === 0
+                      ? "Aucune personne, aucun poste ni aucune habilitation ne correspond à cette recherche."
+                      : "Aucune entrée pour ces filtres."}
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
+
+        {(page > 0 || pageSuivante) && (
+          <div style={{ display: "flex", gap: 16, justifyContent: "center", margin: "12px 0 24px", fontSize: 14 }}>
+            {page > 0 ? (
+              <Link href={lien({ page: page - 1 })} prefetch={false}>
+                &larr; Plus récents
+              </Link>
+            ) : (
+              <span className="muted">&larr; Plus récents</span>
+            )}
+            <span className="muted">Page {page + 1}</span>
+            {pageSuivante ? (
+              <Link href={lien({ page: page + 1 })} prefetch={false}>
+                Plus anciens &rarr;
+              </Link>
+            ) : (
+              <span className="muted">Plus anciens &rarr;</span>
+            )}
+          </div>
+        )}
       </div>
     </>
   );

@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { avecLotJournal } from "@/lib/journal-contexte";
 import { getAdminClient } from "@/lib/supabase-server";
 import { getCurrentProfile } from "@/lib/current-user";
 import { canWritePlacementData } from "@/lib/permissions";
@@ -33,7 +34,7 @@ import { addMonthsIso, habValable } from "@/lib/habilitations";
 // Les deux passes insèrent en `ignoreDuplicates` (onConflict personne,jour) :
 // jamais d'écrasement. Faire le TP D'ABORD garantit qu'un jour de TP d'une
 // personne à poste fixe reste un TP (le poste fixe saute la case déjà prise).
-export async function POST(req: NextRequest) {
+async function traiterPOST(req: NextRequest) {
   const profile = await getCurrentProfile();
   if (!profile) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   // Écriture « complète » (droit Planning OU Placement) : action de masse, client
@@ -379,4 +380,14 @@ export async function POST(req: NextRequest) {
     const msg = e instanceof Error ? `${e.message}` : String(e);
     return NextResponse.json({ error: `prefill: ${msg}` }, { status: 500 });
   }
+}
+
+// Journal (0086) : l'opération entière forme UN lot — une ligne de synthèse au
+// Journal au lieu de centaines. La garde d'accès reste dans traiterPOST.
+export async function POST(req: NextRequest) {
+  const profile = await getCurrentProfile();
+  if (!profile) return traiterPOST(req);
+  const b = (await req.clone().json().catch(() => null)) as { semaines?: unknown; semaine?: string } | null;
+  const fr = (iso?: string) => (iso && /^d{4}-d{2}-d{2}$/.test(iso) ? iso.split("-").reverse().join("/") : iso ?? "");
+  return avecLotJournal(profile.siteId, `Pré-remplissage TP + pré-affectation — semaine${Array.isArray(b?.semaines) && b.semaines.length > 1 ? "s" : ""} du ${(Array.isArray(b?.semaines) && b.semaines.length ? b.semaines : [b?.semaine]).map((x) => fr(String(x ?? ""))).join(", ")}`, () => traiterPOST(req));
 }
