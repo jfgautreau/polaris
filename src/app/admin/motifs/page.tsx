@@ -13,7 +13,6 @@ import AjoutModal from "./AjoutModal";
 import BandeauErreur from "@/components/BandeauErreur";
 import FenetreAffichageInline from "./FenetreAffichageInline";
 import ImportAbsences from "./ImportAbsences";
-import ImportPersonnel from "./ImportPersonnel";
 import { CheckIcon, EditIcon } from "@/components/icons";
 import PastillesCouleur from "@/components/PastillesCouleur";
 
@@ -414,20 +413,6 @@ export default async function MotifsPage({
           compte pour une <strong>journée entière</strong>.
         </p>
         <ImportAbsences />
-
-        {/* ---------------- Import Base personnel (fichier Excel RH) ---------------- */}
-        <h2 style={{ marginTop: 32, marginBottom: 4 }}>Import Base personnel</h2>
-        <p className="muted" style={{ marginBottom: 16 }}>
-          Déposez l&apos;export <strong>Excel (.xlsx)</strong> de la base du personnel (une ligne
-          par personne, regroupées par section). L&apos;analyse lit nom, prénom, sexe, matricule,
-          type de contrat et date de début. Une personne au <strong>matricule connu</strong> est
-          ignorée ; un <strong>homonyme</strong> (même nom sans matricule correspondant) est signalé
-          {" "}<strong>« à confirmer »</strong> — vous décidez alors de la <em>rapprocher</em> ou de la
-          {" "}créer. Vous rattachez chaque <strong>section</strong> du fichier à un Service et une
-          Équipe Polaris, puis l&apos;import <strong>crée les personnes retenues</strong> et leur
-          contrat initial. Import <strong>additif</strong> : jamais destructeur.
-        </p>
-        <ImportPersonnel />
 
         </LectureSeule>
       </div>
