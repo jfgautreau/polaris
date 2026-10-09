@@ -1,4 +1,5 @@
-import { getServerClient, getAdminClient } from "@/lib/supabase-server";
+import { getServerClient } from "@/lib/supabase-server";
+import { nomsDeComptes } from "@/lib/noms-comptes";
 
 type SuppRow = {
   personne_id: string;
@@ -79,24 +80,17 @@ export default async function HabilitationsPage({
     ),
   ]);
   const supprimees = [...new Set(suppD.map((r) => `${r.personne_id}:${r.competence_id}`))];
-  // Dernière suppression par couple ; noms des auteurs lus en service_role (la
-  // table des comptes n'est pas lisible par tous les rôles).
+  // Dernière suppression par couple, avec le nom de son auteur.
   const derniere = new Map<string, SuppRow>();
   for (const r of suppD) {
     const k = `${r.personne_id}:${r.competence_id}`;
     const prec = derniere.get(k);
     if (!prec || r.created_at > prec.created_at) derniere.set(k, r);
   }
-  const auteursIds = [...new Set([...derniere.values()].map((r) => r.auteur).filter((x): x is string => !!x))];
-  const nomsAuteurs = new Map<string, string>();
-  if (auteursIds.length) {
-    const { data: us } = await getAdminClient()
-      .from("app_user")
-      .select("user_id, name, email")
-      .in("user_id", auteursIds)
-      .returns<{ user_id: string; name: string | null; email: string | null }[]>();
-    for (const u of us ?? []) nomsAuteurs.set(u.user_id, u.name || u.email || "");
-  }
+  const nomsAuteurs = await nomsDeComptes(
+    [...derniere.values()].map((r) => r.auteur ?? ""),
+    profile.siteId,
+  );
   const supprimeesDetail = [...derniere.values()].map((r) => ({
     personne_id: r.personne_id,
     competence_id: r.competence_id,
