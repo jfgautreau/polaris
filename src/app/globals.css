@@ -1205,6 +1205,17 @@ select.flat {
   body.print-a4p [data-orient="portrait"] {
     page: plcA4P;
   }
+  /* PDF pour Affich. en A3 portrait, même logique (`print-a3p`). */
+  @page plcA3P {
+    size: A3 portrait;
+    margin: 8mm;
+  }
+  body.print-a3p {
+    page: plcA3P;
+  }
+  body.print-a3p [data-orient="portrait"] {
+    page: plcA3P;
+  }
   html,
   body {
     background: #fff !important;

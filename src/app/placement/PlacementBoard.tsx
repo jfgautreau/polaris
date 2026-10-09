@@ -496,6 +496,11 @@ export default function PlacementBoard({
   const PAGE_L_P = 700;
   const PAGE_H_P = 930;
   const LARGEURS_ESSAI_P = [460, 560, 660, 760, 880, 1000, 1200];
+  // PDF pour Affich. en A3 PORTRAIT (zone imprimable ~1062 × 1527 px) : feuille
+  // 1020 × 1480, cible de hauteur 1420. Même règle : retenu s'il imprime plus grand.
+  const PAGE_L_A3P = 1020;
+  const PAGE_H_A3P = 1420;
+  const LARGEURS_ESSAI_A3P = [700, 820, 1000, 1200, 1480, 1800, 2200];
   // Borne haute de l'agrandissement : au-dela, un plan de deux lignes donne des
   // pavés demesurés pour rien.
   const ECHELLE_MAX = 1.6;
@@ -514,29 +519,28 @@ export default function PlacementBoard({
     return meilleur;
   }
 
-  // Renvoie l'orientation retenue (le PDF Manager essaie paysage ET portrait).
+  // Mesure le plan en paysage ET en portrait (A4 pour le Manager, A3 pour le
+  // PDF pour Affich.) et retient l'orientation qui imprime le plus grand.
   function ajusterFeuille(a3: boolean): "paysage" | "portrait" {
     const el = printRef.current;
     const feuille = el?.parentElement;
     if (!el || !feuille) return "paysage";
     el.style.transform = "none";
-    let orient: "paysage" | "portrait" = "paysage";
-    let meilleur;
-    if (a3) {
-      meilleur = meilleureLargeur(PAGE_L_A3, PAGE_H_A3, LARGEURS_ESSAI_A3);
-    } else {
+    delete feuille.dataset.orient;
+    const paysage = a3
+      ? meilleureLargeur(PAGE_L_A3, PAGE_H_A3, LARGEURS_ESSAI_A3)
+      : meilleureLargeur(PAGE_L, PAGE_H, LARGEURS_ESSAI);
+    feuille.dataset.orient = "portrait"; // l'en-tête se mesure à la largeur portrait
+    const portrait = a3
+      ? meilleureLargeur(PAGE_L_A3P, PAGE_H_A3P, LARGEURS_ESSAI_A3P)
+      : meilleureLargeur(PAGE_L_P, PAGE_H_P, LARGEURS_ESSAI_P);
+    // Le portrait doit apporter un vrai gain (> 5 %) pour l'emporter.
+    let orient: "paysage" | "portrait" = "portrait";
+    let meilleur = portrait;
+    if (!(portrait.f > paysage.f * 1.05)) {
+      orient = "paysage";
+      meilleur = paysage;
       delete feuille.dataset.orient;
-      const paysage = meilleureLargeur(PAGE_L, PAGE_H, LARGEURS_ESSAI);
-      feuille.dataset.orient = "portrait"; // l'en-tête se mesure à la largeur portrait
-      const portrait = meilleureLargeur(PAGE_L_P, PAGE_H_P, LARGEURS_ESSAI_P);
-      // Le portrait doit apporter un vrai gain (> 5 %) pour l'emporter.
-      if (portrait.f > paysage.f * 1.05) {
-        orient = "portrait";
-        meilleur = portrait;
-      } else {
-        delete feuille.dataset.orient;
-        meilleur = paysage;
-      }
     }
     el.style.width = `${meilleur.w}px`;
     el.style.transform = `scale(${meilleur.f})`;
@@ -551,14 +555,13 @@ export default function PlacementBoard({
     if (!prepImpression) return;
     // « PDF pour Affich. + heures » = même feuille (A3) avec l'horaire de chacun.
     const a3 = prepImpression !== "ce";
-    if (a3) document.body.classList.add("print-a3");
-    // PDF Manager : paysage ou portrait selon ce qui imprime le plus grand
-    // (page nommée `plcA4P` de globals.css, via `print-a4p` sur <body>).
+    // Paysage ou portrait selon ce qui imprime le plus grand ; la classe posée
+    // sur <body> choisit la page nommée de globals.css (format papier réel).
     const portrait = ajusterFeuille(a3) === "portrait";
-    if (portrait) document.body.classList.add("print-a4p");
+    const classe = a3 ? (portrait ? "print-a3p" : "print-a3") : portrait ? "print-a4p" : null;
+    if (classe) document.body.classList.add(classe);
     window.print();
-    if (a3) document.body.classList.remove("print-a3");
-    if (portrait) document.body.classList.remove("print-a4p");
+    if (classe) document.body.classList.remove(classe);
     setPrepImpression(false);
   });
 
