@@ -103,9 +103,9 @@ export default function PlacementBoard({
   vueAbsences?: boolean; // pseudo-atelier « Absences » : photo transverse, pas de plan
   numeroInit?: Record<string, string>; // personne -> numero de rotation occupe
   // Commentaire du jour par personne (horaire_exception.motif) : affiché à côté
-  // du nom dans les deux PDF (« PDF » et « PDF Manager »).
+  // du nom dans les PDF (« PDF pour Affich. » et « PDF Manager »).
   commentaires?: Record<string, string>;
-  // Heures de chacun au poste ce jour-là (« 05:00-12:30 »), pour le « PDF heures ».
+  // Heures de chacun au poste ce jour-là (« 05:00-12:30 »), pour le « PDF pour Affich. + heures ».
   heures?: Record<string, string>;
   quartOuvert?: boolean; // le quart est-il ouvert ce jour-la (Ordonnancement) ?
   siteNom?: string; // multi-tenant : nom d'usine dans le pied de page du PDF
@@ -465,7 +465,7 @@ export default function PlacementBoard({
   // etroite qu'une page permet a l'inverse d'AGRANDIR un petit plan pour qu'il
   // remplisse la feuille au lieu de se tasser dans le coin superieur gauche.
   const LARGEURS_ESSAI = [700, 820, 940, 1060, 1300, 1600, 1900, 2200];
-  // Largeurs d'essai pour la sortie A3 (bouton « PDF », mode "simple") : une feuille
+  // Largeurs d'essai pour la sortie A3 (bouton « PDF pour Affich. », mode "simple") : une feuille
   // A3 paysage est bien plus large qu'une A4, on autorise donc des rangées plus
   // larges pour éviter de tasser un plan dense dans le coin supérieur gauche.
   const LARGEURS_ESSAI_A3 = [1000, 1200, 1480, 1800, 2200, 2600, 3000];
@@ -512,12 +512,12 @@ export default function PlacementBoard({
   }
 
   // La feuille doit etre montee (donc mesurable) avant d'ouvrir la boite d'impression.
-  // Le bouton « PDF » (mode "simple") imprime en A3 : on pose `print-a3` sur <body>
+  // Le bouton « PDF pour Affich. » (mode "simple") imprime en A3 : on pose `print-a3` sur <body>
   // (bascule la page nommée `plcA3` de globals.css) le temps de l'impression, puis
   // on retire la classe. Le « PDF Manager » (mode "ce") reste en A4.
   useEffect(() => {
     if (!prepImpression) return;
-    // « PDF heures » = feuille « PDF pour Affich. » (A3) avec l'horaire de chacun.
+    // « PDF pour Affich. + heures » = même feuille (A3) avec l'horaire de chacun.
     const a3 = prepImpression !== "ce";
     if (a3) document.body.classList.add("print-a3");
     ajusterFeuille(a3);
@@ -736,7 +736,7 @@ export default function PlacementBoard({
       { key: "TP", titre: "Temps partiel", gens: gensTp },
     ].filter((c) => c.gens.length > 0);
   }, [motifs, personnes, place, atelierId, tpSetPourListe]);
-  // PDF pour Affich. (« PDF », « PDF heures ») : seulement les motifs cochés par
+  // PDF pour Affich. (avec ou sans heures) : seulement les motifs cochés par
   // les RH dans Param. RH (0083) ; ni « Non travaillé », ni temps partiel.
   const absPrintOp = useMemo(() => {
     const visibles = new Set(motifs.filter((mo) => mo.operateurs).map((mo) => mo.id));
@@ -899,7 +899,7 @@ export default function PlacementBoard({
             title="PDF pour Affich. : plan, couleur des lignes qui tournent, et absents des seuls motifs cochés dans Param. RH (1 page A3 paysage)"
             style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
           >
-            <PrintIcon size={15} /> PDF
+            <PrintIcon size={15} /> PDF pour Affich.
           </button>
           <button
             type="button"
@@ -908,7 +908,7 @@ export default function PlacementBoard({
             title="PDF pour Affich. avec l'horaire de chacun au poste (horaire spécifique du jour, sinon temps partiel, sinon horaire du poste) — 1 page A3 paysage"
             style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
           >
-            <PrintIcon size={15} /> PDF heures
+            <PrintIcon size={15} /> PDF pour Affich. + heures
           </button>
           <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
             <input type="checkbox" checked={hidePlaced} onChange={(e) => setHidePlaced(e.target.checked)} style={{ width: "auto" }} />
