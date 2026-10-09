@@ -15,6 +15,7 @@ import { getRotationRefsC, getTypesAgenceC } from "@/lib/refdata";
 import { rotationForWeek, equipesParQuart } from "@/lib/rotation";
 import { addMonthsIso } from "@/lib/habilitations";
 import { estAuTravailLe, deriverArriveeDepart } from "@/lib/personne-statut";
+import { horaireTxt, dowLundi, type HM, type TpCfg } from "@/lib/horaires";
 import PlacementBoard from "./PlacementBoard";
 import QuartBandeau from "../planning/QuartBandeau";
 
@@ -65,7 +66,11 @@ export default async function PlacementPage({
     supabase.from("placement").select("personne_id, poste_id, motif_absence_id, non_travaille, quart_code, numero_rotation").eq("jour", jour).returns<Placement[]>()
   );
   const pCommentaires = enAvance(
-    supabase.from("horaire_exception").select("personne_id, motif").eq("jour", jour).returns<{ personne_id: string; motif: string | null }[]>()
+    supabase
+      .from("horaire_exception")
+      .select("personne_id, motif, debut, fin")
+      .eq("jour", jour)
+      .returns<{ personne_id: string; motif: string | null; debut: string | null; fin: string | null }[]>()
   );
   const pFullWrite = enAvance(canWritePlacementData(profile.role));
   const pChefTeams = enAvance(
@@ -404,6 +409,42 @@ export default async function PlacementPage({
     if (m) commentaires[r.personne_id] = m;
   }
 
+  // Heures de chacun au poste, pour le « PDF heures » : même résolution que la
+  // TV et les Synthèses (src/lib/horaires.ts) — horaire spécifique du jour >
+  // temps partiel > horaire standard du poste pour ce quart et ce jour. Bornées
+  // aux postes du plan et aux personnes placées ce jour-là : petites lectures.
+  const placesPoste = (plD ?? []).filter((r) => r.poste_id && posteIdsAffiches.includes(r.poste_id));
+  const idsPlaces = [...new Set(placesPoste.map((r) => r.personne_id))];
+  const [{ data: horD }, { data: tpD }] = await Promise.all([
+    posteIdsAffiches.length
+      ? supabase
+          .from("horaire_poste")
+          .select("poste_id, quart_code, jour, debut, fin")
+          .in("poste_id", posteIdsAffiches)
+          .eq("jour", dowLundi(jour))
+          .returns<{ poste_id: string; quart_code: string; jour: number; debut: string | null; fin: string | null }[]>()
+      : { data: [] },
+    idsPlaces.length
+      ? supabase
+          .from("personne")
+          .select("id, tp_config")
+          .in("id", idsPlaces)
+          .eq("temps_partiel", true)
+          .returns<{ id: string; tp_config: TpCfg | null }[]>()
+      : { data: [] },
+  ]);
+  const horMap = new Map<string, HM>();
+  for (const h of horD ?? []) horMap.set(`${h.poste_id}:${h.quart_code}:${h.jour}`, { debut: h.debut, fin: h.fin });
+  const excMap = new Map<string, HM>();
+  for (const e of hexD ?? []) excMap.set(`${e.personne_id}:${jour}`, { debut: e.debut, fin: e.fin });
+  const tpCfgMap = new Map<string, TpCfg>();
+  for (const r of tpD ?? []) if (r.tp_config) tpCfgMap.set(r.id, r.tp_config);
+  const heures: Record<string, string> = {};
+  for (const r of placesPoste) {
+    const h = horaireTxt({ horMap, excMap, tpCfgMap }, quarts, r.personne_id, r.poste_id!, r.quart_code, jour);
+    if (h) heures[r.personne_id] = h;
+  }
+
   // Niveau de competence par (personne, poste) pour l'aide au placement.
   const matrice: Record<string, number> = {};
   for (const r of mat) matrice[`${r.personne_id}:${r.poste_id}`] = r.niveau_actuel;
@@ -502,6 +543,7 @@ export default async function PlacementPage({
         vueAbsences={vueAbsences}
         numeroInit={numeroInit}
         commentaires={commentaires}
+        heures={heures}
         title={<PageTitle module="placement" style={{ fontSize: 20 }}>Placement</PageTitle>}
         jour={jour}
         quart={quart}

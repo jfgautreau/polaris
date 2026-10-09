@@ -68,6 +68,7 @@ export default function PlacementBoard({
   vueAbsences = false,
   numeroInit = {},
   commentaires = {},
+  heures = {},
   quartOuvert = true,
   siteNom = "",
   tpIds = [],
@@ -103,6 +104,8 @@ export default function PlacementBoard({
   // Commentaire du jour par personne (horaire_exception.motif) : affiché à côté
   // du nom dans les deux PDF (« PDF » et « PDF Manager »).
   commentaires?: Record<string, string>;
+  // Heures de chacun au poste ce jour-là (« 05:00-12:30 »), pour le « PDF heures ».
+  heures?: Record<string, string>;
   quartOuvert?: boolean; // le quart est-il ouvert ce jour-la (Ordonnancement) ?
   siteNom?: string; // multi-tenant : nom d'usine dans le pied de page du PDF
   tpIds?: string[]; // personnes en temps partiel (indisponibles) ce jour-la
@@ -235,7 +238,7 @@ export default function PlacementBoard({
   //  - "simple": version courte (plan seul, pas de colonne à droite) — utilisée
   //              pour un affichage passé de main en main où la liste des
   //              absents n'a pas d'intérêt et volerait de la place au plan.
-  const [prepImpression, setPrepImpression] = useState<false | "ce" | "simple">(false);
+  const [prepImpression, setPrepImpression] = useState<false | "ce" | "simple" | "heures">(false);
 
   const persById = useMemo(() => new Map(personnes.map((p) => [p.id, p])), [personnes]);
   const posteNom = useMemo(() => {
@@ -513,7 +516,8 @@ export default function PlacementBoard({
   // on retire la classe. Le « PDF Manager » (mode "ce") reste en A4.
   useEffect(() => {
     if (!prepImpression) return;
-    const a3 = prepImpression === "simple";
+    // « PDF heures » = feuille opérateurs (A3) avec l'horaire de chacun.
+    const a3 = prepImpression !== "ce";
     if (a3) document.body.classList.add("print-a3");
     ajusterFeuille(a3);
     window.print();
@@ -521,7 +525,7 @@ export default function PlacementBoard({
     setPrepImpression(false);
   });
 
-  const imprimer = (mode: "ce" | "simple" = "ce") => setPrepImpression(mode);
+  const imprimer = (mode: "ce" | "simple" | "heures" = "ce") => setPrepImpression(mode);
 
   const copyImpossible = copying || !copySrc || !copyDst || copySrc === copyDst;
 
@@ -889,6 +893,15 @@ export default function PlacementBoard({
             style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
           >
             <PrintIcon size={15} /> PDF
+          </button>
+          <button
+            type="button"
+            className={s.navbtn}
+            onClick={() => imprimer("heures")}
+            title="PDF opérateurs avec l'horaire de chacun au poste (horaire spécifique du jour, sinon temps partiel, sinon horaire du poste) — 1 page A3 paysage"
+            style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+          >
+            <PrintIcon size={15} /> PDF heures
           </button>
           <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
             <input type="checkbox" checked={hidePlaced} onChange={(e) => setHidePlaced(e.target.checked)} style={{ width: "auto" }} />
@@ -1285,7 +1298,12 @@ export default function PlacementBoard({
           meme non pourvus.
           ------------------------------------------------------------------ */}
       {prepImpression && (
-      <div className={s.printSheet} data-mode={prepImpression} aria-hidden="true">
+      <div
+        className={s.printSheet}
+        data-mode={prepImpression === "heures" ? "simple" : prepImpression}
+        data-heures={prepImpression === "heures" ? "1" : undefined}
+        aria-hidden="true"
+      >
       {/* En-tête à taille fixe : service à gauche, quart en pastille pleine au
           centre, date à droite — lisibles d'un coup d'œil, en couleur comme en noir. */}
       <div className={s.printHead} ref={printHeadRef}>
@@ -1330,6 +1348,7 @@ export default function PlacementBoard({
                         <div key={p.id} className={`${s.printNom} ${alerte ? s.printAlerte : ""}`}>
                           {badge}
                           {p.nom} {p.prenom.charAt(0).toUpperCase()}.
+                          {prepImpression === "heures" && heures[p.id] && <span className={s.printHeure}>{heures[p.id]}</span>}
                           {commentaires[p.id] && <span className={s.printComment}> — {commentaires[p.id]}</span>}
                         </div>
                       );

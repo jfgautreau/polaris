@@ -705,6 +705,16 @@
 }
 .printVide { color: #94a3b8; }
 /* Commentaire du jour (horaire_exception.motif) accolé au nom sur la feuille. */
+/* « PDF heures » : horaire de chacun après son nom, tuiles plus larges pour
+   qu'il tienne sur la même ligne (la mise à l'échelle rattrape la largeur). */
+.printSheet[data-heures] .printPoste { width: 205px; }
+.printHeure {
+  float: right;
+  margin-left: 6px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
 .printComment {
   color: #475569;
   font-style: italic;
