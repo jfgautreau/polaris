@@ -34,6 +34,7 @@ export default function MatrixGrid({
   seuilCompetent = 2,
   couleurs = FILL,
   onCount,
+  oblique = false,
 }: {
   groups?: Group[];
   personnes?: Personne[];
@@ -48,6 +49,7 @@ export default function MatrixGrid({
   seuilCompetent?: number; // niveau minimal « compétent » (bilan Compétences ≥N)
   couleurs?: Record<number, string | null>; // couleur par niveau (0 = contour)
   onCount?: (affiches: number, total: number) => void; // compteur remonté à l'en-tête
+  oblique?: boolean; // essai : intitulés de poste inclinés à 45°
 }) {
   const EMPTY_STAT = useMemo(() => emptyStat(nbNiveaux), [nbNiveaux]);
   const CYCLE = useMemo(() => buildCycle(nbNiveaux), [nbNiveaux]);
@@ -286,6 +288,12 @@ export default function MatrixGrid({
   const nameW = Math.min(320, Math.max(150, personnes.reduce((m, p) => Math.max(m, p.label.length), 0) * 7.2 + 30));
   // `colgroup` construit une fois : le meme element est reutilise par les deux
   // tables, ce qui garantit des colonnes alignees sans le recreer a chaque rendu.
+  // Intitulés obliques (essai) : la rangée d'en-tête prend la hauteur du plus
+  // long libellé incliné (≈ 7,4 px par capitale à 12 px, × sin 45°), et une
+  // colonne vide en bout de tableau laisse dépasser les derniers libellés.
+  const obliqueH = oblique
+    ? Math.min(240, Math.max(60, Math.ceil(allPostes.reduce((m, p) => Math.max(m, p.nom.length), 0) * 7.4 * 0.71) + 18))
+    : 0;
   const cols = useMemo(
     () => (
       <colgroup>
@@ -293,16 +301,20 @@ export default function MatrixGrid({
         {allPostes.map((p) => (
           <col key={p.id} />
         ))}
+        {oblique && <col style={{ width: obliqueH }} />}
       </colgroup>
     ),
-    [nameW, allPostes]
+    [nameW, allPostes, oblique, obliqueH]
   );
 
   return (
     <div
       className={`${g.grid} ${s.matrice}`}
       data-mode={mode}
-      style={{ "--name-w": `${nameW}px`, "--n-cols": allPostes.length } as React.CSSProperties}
+      data-oblique={oblique ? "" : undefined}
+      // En oblique, la colonne de marge entre dans la largeur minimale (min-width
+      // = --name-w + n × --col-min) pour ne pas comprimer les colonnes de postes.
+      style={{ "--name-w": `${nameW + obliqueH}px`, "--n-cols": allPostes.length, "--oblique-h": `${obliqueH}px` } as React.CSSProperties}
     >
       {/* Tableau 1 : en-tetes + bilan retractable (fixe) */}
       <div className={`card ${g.headCard}`} ref={headCardRef}>
@@ -366,6 +378,7 @@ export default function MatrixGrid({
                   <div className={g.groupLabel}>{gr.ligneNom}</div>
                 </th>
               ))}
+              {oblique && <th rowSpan={2} className={g.obliqueGutter} />}
             </tr>
             <tr>
               {groups.flatMap((gr) =>
@@ -375,13 +388,13 @@ export default function MatrixGrid({
                     title={`${p.nom} — cliquer pour filtrer les personnes compétentes sur ce poste`}
                     className={i === 0 ? `${g.colHead} ${g.groupStart}` : g.colHead}
                     onClick={() => toggleFiltre("poste", p.id, p.nom)}
-                    style={{
-                      cursor: "pointer",
-                      ...((colFilter?.kind === "poste" && colFilter.id === p.id) ||
+                    data-sel={
+                      (colFilter?.kind === "poste" && colFilter.id === p.id) ||
                       (colFilter?.kind === "ligne" && colFilter.id === gr.ligneId)
-                        ? { background: "#eef2ff" }
-                        : undefined),
-                    }}
+                        ? ""
+                        : undefined
+                    }
+                    style={{ cursor: "pointer" }}
                   >
                     {/* Nom de poste vertical, sur une seule ligne (table plus haute mais lisible). */}
                     <div className={g.colLabel}>{p.nom}</div>

@@ -48,6 +48,8 @@ export default function MatricePanel({
 }) {
   const [mode, setMode] = useState<"actuel" | "cible">("actuel");
   const [showLegende, setShowLegende] = useState(false);
+  // Essai : intitulés de poste inclinés plutôt que verticaux (non mémorisé).
+  const [oblique, setOblique] = useState(false);
   // Compteur « affichés / total » remonté par la grille (reflète recherche +
   // filtres atelier/équipe + filtre ligne/poste). Initialisé au sous-ensemble
   // affiché pour éviter un flash « 0 » avant le 1er rendu de la grille.
@@ -112,6 +114,16 @@ export default function MatricePanel({
             width={156}
             title="Basculer entre niveau actuel et niveau cible"
           />
+          <SlideSwitch
+            on={oblique}
+            onChange={setOblique}
+            offLabel="Verticaux"
+            onLabel="Obliques"
+            offColor="#475569"
+            onColor="#475569"
+            width={180}
+            title="Essai : intitulés de poste verticaux ou inclinés"
+          />
           <span className="hb-fin">
             <AtelierEquipeFiltres base="/matrice" ateliers={ateliers} equipes={equipes} atelier={atelier} equipe={equipe} />
             <ConducteurFiltre />
@@ -123,7 +135,7 @@ export default function MatricePanel({
         {groups.length === 0 ? (
           <p className="muted">Aucun poste actif (vérifiez le référentiel / le filtre atelier).</p>
         ) : (
-          <MatrixGrid groups={groups} personnes={personnes} displayedIds={displayedIds} initial={initial} canEditObjectif={canEditObjectif} mode={mode} search={search} nbNiveaux={nbNiveaux} seuilCompetent={seuilCompetent} couleurs={couleurs} onCount={onCount} />
+          <MatrixGrid groups={groups} personnes={personnes} displayedIds={displayedIds} initial={initial} canEditObjectif={canEditObjectif} mode={mode} search={search} nbNiveaux={nbNiveaux} seuilCompetent={seuilCompetent} couleurs={couleurs} onCount={onCount} oblique={oblique} />
         )}
       </div>
 
