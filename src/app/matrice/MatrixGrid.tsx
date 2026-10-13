@@ -366,11 +366,12 @@ export default function MatrixGrid({
                   {showBilan ? "− Bilan" : "+ Bilan"}
                 </button>
               </th>
-              {groups.map((gr) => (
+              {groups.map((gr, gi) => (
                 <th
                   key={gr.ligneId}
                   colSpan={gr.postes.length}
                   className={g.groupHead}
+                  data-alt={gi % 2 ? "" : undefined}
                   title={`${gr.ligneNom} — cliquer pour filtrer les personnes compétentes sur cette ligne`}
                   onClick={() => toggleFiltre("ligne", gr.ligneId, gr.ligneNom)}
                   style={{ cursor: "pointer", ...(colFilter?.kind === "ligne" && colFilter.id === gr.ligneId ? { background: "#c7d2fe" } : undefined) }}
@@ -381,7 +382,7 @@ export default function MatrixGrid({
               {oblique && <th rowSpan={2} className={g.obliqueGutter} />}
             </tr>
             <tr>
-              {groups.flatMap((gr) =>
+              {groups.flatMap((gr, gi) =>
                 gr.postes.map((p, i) => (
                   <th
                     key={p.id}
@@ -394,7 +395,7 @@ export default function MatrixGrid({
                         ? ""
                         : undefined
                     }
-                    data-alt={i % 2 ? "" : undefined}
+                    data-alt={gi % 2 ? "" : undefined}
                     style={{ cursor: "pointer" }}
                   >
                     {/* Oblique : bande inclinée qui prolonge la colonne jusqu'au libellé. */}

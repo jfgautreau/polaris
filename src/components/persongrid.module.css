@@ -179,7 +179,8 @@
    45 degres (parallelogramme : `skewX` depuis le coin bas gauche), qui porte
    le fond, le separateur et le libelle sur son axe. Les bandes se juxtaposent
    sans se chevaucher, d'ou un quadrillage oblique continu ; elles alternent
-   deux teintes pour suivre une colonne de l'oeil. Survol et selection
+   deux teintes d'une ligne de production a l'autre (le nom de ligne prend
+   la teinte de ses bandes), pour rattacher chaque poste a sa ligne. Survol et selection
    teintent la bande. */
 .grid[data-oblique] .colHead,
 .grid[data-oblique] .colHead.groupStart {
@@ -200,6 +201,12 @@
   border-left: 1px solid var(--accent-soft);
 }
 .grid[data-oblique] .colHead[data-alt] .obliqueBand {
+  background: #fff;
+}
+.grid[data-oblique] .groupHead {
+  background: var(--accent-bg);
+}
+.grid[data-oblique] .groupHead[data-alt] {
   background: #fff;
 }
 .grid[data-oblique] .colHead.groupStart .obliqueBand {

@@ -70,6 +70,13 @@ Spécification : `tasks/planning-par-poste.md`.
       proposées, en attente d'arbitrage).
 - [ ] **Placement V2** — vrai plan géographique (image d'atelier + position x/y des
       postes, écran de calibrage) → migration à prévoir. La V1 schématique est en place.
+- [ ] **Poste à cheval sur deux lignes** (sortie de ligne servant A et B) — EN ATTENTE.
+      Proposition du 2026-10-13 : ligne principale + lignes partagées
+      (`poste_ligne_partagee`, migration 0090) ; besoin si AU MOINS une ligne ouverte,
+      compté une fois ; reflet en pointillés au Placement ; Matrice / bilans inchangés
+      (ligne principale). Alternative sans code : une ligne commune « Sortie A/B ».
+      À trancher : option, règle du besoin (une / toutes), même service seulement ?,
+      placement depuis le reflet, impression du reflet.
 
 ## Rappels
 - Tests et build avant chaque commit, en lisant leur **code de sortie** (pas de
