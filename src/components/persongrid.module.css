@@ -175,40 +175,60 @@
 }
 
 /* --- Intitules obliques (essai, Matrice) -------------------------------
-   Le libelle part du pied de sa colonne et monte a 45 degres vers la droite,
-   par-dessus les en-tetes voisins. Chaque `th` collant est un contexte
-   d'empilement peint dans l'ordre du DOM : son fond recouvrirait le libelle
-   de la colonne precedente. Le fond passe donc sur la rangee, et le survol /
-   la selection se marquent sur le libelle lui-meme. */
-.grid[data-oblique] thead tr:nth-child(2) {
-  background: var(--accent-bg);
-}
-.grid[data-oblique] .colHead {
+   Chaque colonne se prolonge au-dessus de son pied par une bande inclinee a
+   45 degres (parallelogramme : `skewX` depuis le coin bas gauche), qui porte
+   le fond, le separateur et le libelle sur son axe. Les bandes se juxtaposent
+   sans se chevaucher, d'ou un quadrillage oblique continu ; elles alternent
+   deux teintes pour suivre une colonne de l'oeil. Survol et selection
+   teintent la bande. */
+.grid[data-oblique] .colHead,
+.grid[data-oblique] .colHead.groupStart {
   height: var(--oblique-h);
   padding: 0;
   background: transparent;
+  border-left: none;
 }
 .grid[data-oblique] .colHead.colHover {
   box-shadow: none;
 }
-.grid[data-oblique] .colLabel {
+.obliqueBand {
   position: absolute;
-  bottom: 6px;
-  left: calc(50% + 3px);
-  writing-mode: horizontal-tb;
+  inset: 0;
   transform-origin: 0 100%;
-  transform: rotate(-45deg);
-  margin: 0;
-  padding: 1px 5px;
-  border-radius: 4px;
-  border-bottom: 1px solid var(--accent-soft);
+  transform: skewX(-45deg);
+  background: var(--accent-bg);
+  border-left: 1px solid var(--accent-soft);
 }
-.grid[data-oblique] .colHead.colHover .colLabel {
-  background: rgba(15, 23, 42, 0.08);
+.grid[data-oblique] .colHead[data-alt] .obliqueBand {
+  background: #fff;
+}
+.grid[data-oblique] .colHead.groupStart .obliqueBand {
+  border-left: 2px solid var(--accent);
+}
+.grid[data-oblique] .colHead.colHover .obliqueBand {
+  box-shadow: inset 0 0 0 999px rgba(15, 23, 42, 0.1);
+}
+.grid[data-oblique] .colHead[data-sel] .obliqueBand {
+  background: #c7d2fe;
 }
 .grid[data-oblique] .colHead[data-sel] .colLabel {
-  background: #c7d2fe;
   font-weight: 600;
+}
+/* Libelle sur l'axe de sa bande : son milieu gauche est pose au pied de la
+   colonne, au centre, puis il pivote et s'ecarte de 6 px le long de l'axe. */
+.grid[data-oblique] .colLabel {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  writing-mode: horizontal-tb;
+  transform-origin: 0 50%;
+  transform: translateY(50%) rotate(-45deg) translateX(6px);
+  margin: 0;
+}
+/* Les noms de ligne suivent le haut des bandes, decale de la hauteur de la
+   rangee inclinee vers la droite. */
+.grid[data-oblique] .groupHead {
+  transform: translateX(var(--oblique-h));
 }
 /* Colonne vide en bout de tableau : place laissee aux derniers libelles. */
 .obliqueGutter {

@@ -394,8 +394,11 @@ export default function MatrixGrid({
                         ? ""
                         : undefined
                     }
+                    data-alt={i % 2 ? "" : undefined}
                     style={{ cursor: "pointer" }}
                   >
+                    {/* Oblique : bande inclinée qui prolonge la colonne jusqu'au libellé. */}
+                    {oblique && <div className={g.obliqueBand} />}
                     {/* Nom de poste vertical, sur une seule ligne (table plus haute mais lisible). */}
                     <div className={g.colLabel}>{p.nom}</div>
                   </th>
