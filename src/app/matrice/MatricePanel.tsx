@@ -48,7 +48,7 @@ export default function MatricePanel({
 }) {
   const [mode, setMode] = useState<"actuel" | "cible">("actuel");
   const [showLegende, setShowLegende] = useState(false);
-  // Essai : intitulés de poste inclinés plutôt que verticaux (non mémorisé).
+  // Intitulés de poste verticaux (défaut) ou inclinés à 45° (non mémorisé).
   const [oblique, setOblique] = useState(false);
   // Compteur « affichés / total » remonté par la grille (reflète recherche +
   // filtres atelier/équipe + filtre ligne/poste). Initialisé au sous-ensemble
@@ -122,7 +122,7 @@ export default function MatricePanel({
             offColor="#475569"
             onColor="#475569"
             width={180}
-            title="Essai : intitulés de poste verticaux ou inclinés"
+            title="Intitulés de poste verticaux ou inclinés"
           />
           <span className="hb-fin">
             <AtelierEquipeFiltres base="/matrice" ateliers={ateliers} equipes={equipes} atelier={atelier} equipe={equipe} />

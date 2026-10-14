@@ -174,7 +174,7 @@
   background: #eef2ff;
 }
 
-/* --- Intitules obliques (essai, Matrice) -------------------------------
+/* --- Intitules obliques (Matrice) --------------------------------------
    Chaque colonne se prolonge au-dessus de son pied par une bande inclinee a
    45 degres (parallelogramme : `skewX` depuis le coin bas gauche), qui porte
    le fond, le separateur et le libelle sur son axe. Les bandes se juxtaposent

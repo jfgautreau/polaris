@@ -864,7 +864,7 @@ ne propageant pas toujours `page` depuis `<body>`. À vérifier à l'aperçu : s
 navigateur ignore la page nommée, la feuille portrait sort réduite dans un coin.
 
 ## L53 — En-têtes inclinés dans une grille à `th` collants : incliner la colonne, pas seulement le texte
-**Contexte** : essai d'intitulés obliques dans la Matrice (2026-10-13). Première version :
+**Contexte** : intitulés obliques dans la Matrice (essai du 2026-10-13, validé). Première version :
 seul le libellé tournait (`rotate(-45deg)`), les cases restaient droites — jugé
 **illisible** par l'utilisateur (impossible de relier un nom à sa colonne).
 **Règle** : prolonger chaque colonne par une bande `skewX(-45deg)` (origine bas gauche) qui

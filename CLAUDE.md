@@ -329,8 +329,8 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
 - **Matrice** (`src/app/matrice/`) : charge tout l'effectif, `displayedIds` = sous-ensemble
   par défaut, la recherche balaie tout ; colonnes bornées au service. Cible qui suit
   l'actuel si elle y collait, sinon `cible ≥ actuel`. Pastille « sans compétence » (aucun
-  niveau ≥ 1 nulle part, calcul serveur). Filtre au clic sur un en-tête. **Essai** (2026-10-13,
-  en attente d'avis) : bascule « Verticaux / Obliques » non mémorisée — en oblique, chaque
+  niveau ≥ 1 nulle part, calcul serveur). Filtre au clic sur un en-tête. Bascule **« Verticaux /
+  Obliques »** (2026-10-13, validée, non mémorisée, Verticaux par défaut) — en oblique, chaque
   colonne se prolonge par une bande inclinée à 45° (`.obliqueBand`, `skewX`) portant le
   libellé, teintes alternées **par ligne de production**, noms de ligne décalés de
   `--oblique-h`, colonne de marge en bout de tableau (cf. `lessons.md` L53).

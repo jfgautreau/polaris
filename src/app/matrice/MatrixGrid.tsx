@@ -49,7 +49,7 @@ export default function MatrixGrid({
   seuilCompetent?: number; // niveau minimal « compétent » (bilan Compétences ≥N)
   couleurs?: Record<number, string | null>; // couleur par niveau (0 = contour)
   onCount?: (affiches: number, total: number) => void; // compteur remonté à l'en-tête
-  oblique?: boolean; // essai : intitulés de poste inclinés à 45°
+  oblique?: boolean; // intitulés de poste inclinés à 45° (bascule de MatricePanel)
 }) {
   const EMPTY_STAT = useMemo(() => emptyStat(nbNiveaux), [nbNiveaux]);
   const CYCLE = useMemo(() => buildCycle(nbNiveaux), [nbNiveaux]);
@@ -288,7 +288,7 @@ export default function MatrixGrid({
   const nameW = Math.min(320, Math.max(150, personnes.reduce((m, p) => Math.max(m, p.label.length), 0) * 7.2 + 30));
   // `colgroup` construit une fois : le meme element est reutilise par les deux
   // tables, ce qui garantit des colonnes alignees sans le recreer a chaque rendu.
-  // Intitulés obliques (essai) : la rangée d'en-tête prend la hauteur du plus
+  // Intitulés obliques : la rangée d'en-tête prend la hauteur du plus
   // long libellé incliné (≈ 7,4 px par capitale à 12 px, × sin 45°), et une
   // colonne vide en bout de tableau laisse dépasser les derniers libellés.
   const obliqueH = oblique
