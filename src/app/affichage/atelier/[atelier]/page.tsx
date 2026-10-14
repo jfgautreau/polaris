@@ -2,7 +2,6 @@ import { getCurrentSite } from "@/lib/current-site";
 import { getQuartsC } from "@/lib/refdata";
 import { parseJour, isoDate, mondayOf } from "@/lib/week";
 import { getFenetreAffichage, joursDeFenetre } from "@/lib/parametres";
-import AutoRefresh from "@/components/AutoRefresh";
 import AffichageBarre from "./AffichageBarre";
 import AtelierPlanning from "./AtelierPlanning";
 
@@ -43,14 +42,12 @@ export default async function AffichageAtelier({
     // borne a UNE page A3 verticale ; `affichage-contenu` porte la mise a l'echelle
     // mesuree par AffichageBarre. A l'ecran, elles sont transparentes.
     <div id="affichage-feuille" style={{ padding: "18px 24px" }}>
-      <AutoRefresh seconds={300} />
       <div id="affichage-contenu" style={{ transformOrigin: "top left" }}>
         <AtelierPlanning
           atelierRef={param}
           site={site}
           quarts={quarts}
           days={days}
-          refreshNote
           actions={
             <AffichageBarre
               cadreId="affichage-feuille"

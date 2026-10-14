@@ -894,3 +894,13 @@ devenu `$`. Commit poussé abîmé, réparé au commit suivant.
 (`s.replace(a, () => b)`) ou couper / recoller (`split` + `join`) ; ou utiliser l'outil Edit.
 Relire le diff (`git diff --stat` : un +37 pour une ligne modifiée doit alerter) avant de
 committer.
+
+## L56 — `updateTag` dans une route API : l'écriture passe, l'écran affiche une erreur
+**Contexte** : 2026-10-14, analyse de la consommation Supabase. `/api/referentiel`
+appelait `updateTag(ATELIERS_TAG)` après avoir créé, renommé ou (dés)activé un service.
+Next 16 réserve `updateTag` aux Server Actions : dans une route il LÈVE (E872), APRÈS
+l'écriture — réponse 500 pour une modification enregistrée.
+**Règle** : en route API, `revalidateTag(TAG, { expire: 0 })` (expiration immédiate) ;
+`updateTag` seulement dans un fichier `"use server"`. Test `cache-invalidation`.
+Corollaire pour tout cache inter-requêtes (`unstable_cache`) : une lecture en échec doit
+LEVER dans la fonction cachée, sinon l'échec est mémorisé jusqu'à l'expiration.

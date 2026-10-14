@@ -270,8 +270,15 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   `site` obligatoire). Toute écriture dans une table référencée appelle
   `updateTag(TAG)` (`ATELIERS_TAG`, `EQUIPES_TAG`, `QUARTS_TAG`, `MOTIFS_TAG`, `NIVEAUX_TAG`,
   `NB_NIVEAUX_TAG`, `SEUIL_COMPETENT_TAG`, `ROTATION_TAG`, `TYPES_AGENCE_TAG`).
+  ⚠️ `updateTag` **lève dans une route API** (Next 16, réservé aux Server Actions) : en
+  route, `revalidateTag(TAG, { expire: 0 })` (test `cache-invalidation`).
 - **Socle** : profil + site en une requête ; `getAdminClient()` = client unique (sans
   session) ; `AppHeader` en `Promise.all`, compteur d'alertes en cache 60 s par site.
+  **Socle en cache inter-requêtes** (2026-10-14, coût des journaux Supabase) : profil
+  (`PROFIL_TAG`, clé user_id), surcharges de droits (`PERMISSIONS_TAG`, site + rôle),
+  modules masqués (`MODULES_MASQUES_TAG`), `revalidate` 300 s en filet. Toute écriture
+  d'`app_user`, de `site.statut`, de `role_permission` ou de `site_module` invalide le tag
+  correspondant. Une erreur de lecture LÈVE dans le cache (jamais mémorisée).
 - **Cache navigateur** : `staleTimes.dynamic = 30` + `GardeCacheNavigation` (après toute
   écriture, une page mise en cache avant est rechargée complètement).
 - **React Compiler** en mode opt-in (`"use memo"`, `next.config.ts`) : actif sur
@@ -359,7 +366,9 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   exclus des fragilités.
 - **Affichage TV** (`src/app/affichage/`, public) : rattachement par service d'affectation ;
   sections Matin / Après-midi / Nuit classées par `creneau` ; fenêtre relative ou absolue
-  (`getFenetreAffichage`, `joursDeFenetre`) ; PDF A3 portrait multi-pages.
+  (`getFenetreAffichage`, `joursDeFenetre`) ; PDF A3 portrait multi-pages. **Plus de
+  rechargement automatique** (5 min, 24/7, retiré le 2026-10-14 : ~5 800 appels/jour par
+  écran) — à rétablir de façon économe avant de brancher les écrans (cf. `tasks/todo.md`).
 - **Visites médicales** (`src/app/visites/`, droit `visites`) : deux écrans seulement,
   Suivi et Paramètres — pas de troisième (le « rapport » des retards par régime × visite due
   × professionnel est un panneau du Suivi, filtres dans l'URL). Visite : médecin et/ou

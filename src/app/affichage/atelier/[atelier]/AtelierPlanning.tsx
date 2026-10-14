@@ -37,14 +37,12 @@ export default async function AtelierPlanning({
   quarts,
   days,
   actions,
-  refreshNote = false,
 }: {
   atelierRef: string;
   site: Site;
   quarts: Quart[];
   days: Jour[];
   actions?: ReactNode;
-  refreshNote?: boolean;
 }) {
   const isos = days.map((d) => d.iso);
   const todayIso = isoDate(new Date());
@@ -661,7 +659,7 @@ export default async function AtelierPlanning({
         · <span style={{ background: AUJOURDHUI, padding: "0 6px" }}>Aujourd&apos;hui</span> · horaires en bleu ·{" "}
         <span style={{ color: "#b45309", fontStyle: "italic" }}>(Service X)</span> = prêté ·{" "}
         <span style={{ color: "#b91c1c" }}>Absence</span>{" "}
-        · <span style={{ color: "#3730a3" }}>TP</span> (temps partiel){refreshNote ? " · mise à jour auto toutes les 5 min." : "."}
+        · <span style={{ color: "#3730a3" }}>TP</span> (temps partiel).
       </div>
     </>
   );

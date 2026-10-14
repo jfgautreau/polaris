@@ -1,15 +1,15 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
-import { getCurrentProfile } from "@/lib/current-user";
+import { getCurrentProfile, PROFIL_TAG } from "@/lib/current-user";
 import { getAdminClient } from "@/lib/supabase-server";
 import { setImpersonation, clearImpersonation, getImpersonationPayload } from "@/lib/impersonation";
 import { genererLienMotDePasse, motDePasseAleatoire } from "@/lib/password-link";
 import { messageErreur } from "@/lib/erreurs";
 import { MODULE_KEYS } from "@/lib/permissions";
-import { CLES_MASQUABLES_EXTRA } from "@/lib/site-modules";
+import { CLES_MASQUABLES_EXTRA, MODULES_MASQUES_TAG } from "@/lib/site-modules";
 import { CLES_RAPPORTS_BILAN } from "@/lib/bilans-rapports";
 
 // Server actions du back-office plateforme. Toutes revérifient que
@@ -51,9 +51,10 @@ export async function setModuleMasque(siteId: string, moduleKey: string, masque:
       .eq("module_key", moduleKey);
     if (error) throw new Error(messageErreur(error) ?? error.message);
   }
-  // getModulesMasques n'est pas caché inter-requête : la bascule se reflète
-  // à la navigation suivante des utilisateurs du site. On rafraîchit juste la
-  // page /platform pour un retour visuel immédiat côté super_admin.
+  // Masques en cache (site-modules.ts) : invalidés ici, la bascule se reflète à
+  // la navigation suivante des utilisateurs du site. La page /platform est
+  // rafraîchie pour un retour visuel immédiat côté super_admin.
+  updateTag(MODULES_MASQUES_TAG);
   revalidatePath(`/platform/${siteId}`);
 }
 
@@ -139,6 +140,8 @@ export async function createSite(fd: FormData): Promise<void> {
     if (majErr) {
       redirect(`/platform/nouveau?err=${encodeURIComponent(`Update: ${majErr.message}`)}`);
     }
+    // Profil en cache (current-user.ts) : la ligne vient de passer active.
+    updateTag(PROFIL_TAG);
   }
 
   // 4) Seed : parametre_affichage (fenêtre TV J-1 → J+4).
@@ -363,6 +366,9 @@ export async function changerStatut(fd: FormData): Promise<void> {
     redirect(`/platform/${id}?err=${encodeURIComponent(messageErreur(error) ?? "Erreur")}`);
   }
 
+  // Profil en cache (current-user.ts) : il embarque le statut du site de
+  // rattachement, qui décide de l'accès (suspendu / archivé = refus).
+  updateTag(PROFIL_TAG);
   revalidatePath("/platform");
   revalidatePath(`/platform/${id}`);
   redirect(`/platform/${id}?ok=1`);

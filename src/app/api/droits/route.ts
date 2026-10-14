@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { MODULE_KEYS, moduleWriteGuard, verifierChangementDroit, type Niveau } from "@/lib/permissions";
+import { revalidateTag } from "next/cache";
+import { MODULE_KEYS, PERMISSIONS_TAG, moduleWriteGuard, verifierChangementDroit, type Niveau } from "@/lib/permissions";
 import { getCurrentSite } from "@/lib/current-site";
 import { getAllRoles } from "@/lib/roles-server";
 
@@ -45,5 +46,7 @@ export async function POST(req: NextRequest) {
     .from("role_permission")
     .upsert({ role, module, niveau, site_id: site.id }, { onConflict: "role,module,site_id" });
   if (error) return NextResponse.json({ error: error.message }, { status: 403 });
+  // Droits en cache (permissions.ts) : le changement s'applique dès la requête suivante.
+  revalidateTag(PERMISSIONS_TAG, { expire: 0 });
   return NextResponse.json({ ok: true });
 }

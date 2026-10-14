@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import { parRequete } from "@/lib/par-requete";
 import { getAdminClient } from "@/lib/supabase-server";
 import { getCurrentSite } from "@/lib/current-site";
@@ -15,18 +16,32 @@ export const CLES_MASQUABLES_EXTRA: string[] = MASQUABLES_EXTRA.map((m) => m.key
 // super_admin (cf. migration 0056). Présence d'une ligne site_module =
 // module masqué ; défaut = visible.
 //
-// Lecture NON mise en cache inter-requête (contrairement à refdata) : un
-// changement de menu doit se refléter tout de suite à la navigation suivante,
-// sans attendre l'expiration d'un cache. `parRequete` déduplique quand même
-// l'appel DANS une même requête (requireModule + AppHeader, routes API comprises). La table est
-// minuscule et indexée par site_id : le coût est négligeable.
+// Lecture MISE EN CACHE entre les requêtes depuis le 2026-10-14 (elle partait à
+// chaque page et à chaque appel d'API). Un changement de menu reste visible tout
+// de suite : /platform invalide MODULES_MASQUES_TAG à chaque bascule ;
+// `revalidate` n'est qu'un filet pour une modification hors appli. Une erreur
+// LÈVE dans le cache (rien n'est mémorisé) et l'appelant retombe sur « rien de
+// masqué », comme avant. `parRequete` déduplique DANS une même requête.
+export const MODULES_MASQUES_TAG = "socle-modules-masques";
+const lireMasques = unstable_cache(
+  async (site: string): Promise<string[]> => {
+    const { data, error } = await getAdminClient()
+      .from("site_module")
+      .select("module_key")
+      .eq("site_id", site);
+    if (error) throw new Error(error.message);
+    return (data ?? []).map((r) => r.module_key as string);
+  },
+  ["socle-modules-masques"],
+  { revalidate: 300, tags: [MODULES_MASQUES_TAG] }
+);
 
 const getMasquesBySite = parRequete(async function getMasquesBySite(site: string): Promise<Set<string>> {
-  const { data } = await getAdminClient()
-    .from("site_module")
-    .select("module_key")
-    .eq("site_id", site);
-  return new Set((data ?? []).map((r) => r.module_key as string));
+  try {
+    return new Set(await lireMasques(site));
+  } catch {
+    return new Set();
+  }
 });
 
 // Ensemble des clés de modules masqués pour un site donné.

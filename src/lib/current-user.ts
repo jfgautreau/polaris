@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import { parRequete } from "@/lib/par-requete";
 import { getServerClient, getAdminClient } from "@/lib/supabase-server";
 
@@ -14,6 +15,49 @@ export type CurrentProfile = {
   siteRow?: SiteRow;
 };
 type SiteRow = { id: string; slug: string; nom: string; statut: "actif" | "suspendu" | "archive"; fuseau: string };
+
+type ProfilRow = {
+  email: string;
+  name: string;
+  role: string;
+  is_active: boolean;
+  site_id: string | null;
+  est_super_admin: boolean | null;
+  site?: SiteRow | null;
+};
+
+// Ligne app_user (+ site de rattachement) MISE EN CACHE entre les requêtes.
+// Avant le 2026-10-14, elle était relue à chaque page et à chaque appel d'API :
+// ~11 % des journaux Supabase pour une donnée qui ne change presque jamais.
+// Invalidation IMMÉDIATE par PROFIL_TAG à chaque écriture d'app_user ou de
+// site.statut (routes /api/users/*, /platform) ; `revalidate` ne sert que de
+// filet pour une modification faite hors de l'application (SQL Editor).
+// Une erreur ou une ligne absente LÈVE : unstable_cache ne met pas en cache un
+// échec (un incident passager ne verrouille donc pas le compte 5 minutes).
+// Clé = user_id, globale par construction (c'est la ligne qui DIT le site) :
+// cf. la liste blanche de refdata-cache.test.ts.
+export const PROFIL_TAG = "socle-profil";
+const lireProfil = unstable_cache(
+  async (userId: string): Promise<ProfilRow> => {
+    const admin = getAdminClient();
+    // Profil + site de rattachement en UN aller-retour (embed PostgREST via la FK
+    // app_user.site_id → site.id). Repli sur la lecture simple si l'embed échoue
+    // (ex. relation ambiguë) : le statut du site est alors relu à part, comme avant.
+    const COLS = "email, name, role, is_active, site_id, est_super_admin";
+    let { data, error } = await admin
+      .from("app_user")
+      .select(`${COLS}, site:site_id(id, slug, nom, statut, fuseau)`)
+      .eq("user_id", userId)
+      .single<ProfilRow>();
+    if (error && error.code !== "PGRST116") {
+      ({ data, error } = await admin.from("app_user").select(COLS).eq("user_id", userId).single<ProfilRow>());
+    }
+    if (error || !data) throw new Error(error?.message ?? "ligne absente");
+    return data;
+  },
+  ["socle-profil"],
+  { revalidate: 300, tags: [PROFIL_TAG] }
+);
 
 // Profil applicatif de l'utilisateur connecte (ou null).
 // - `getClaims()` verifie le JWT LOCALEMENT (cles asymetriques) sans appel reseau
@@ -45,33 +89,13 @@ export const getCurrentProfile = parRequete(async function getCurrentProfile(): 
   // le site consulté. current-user.ts est whitelisté (admin-client / isolation).
   const admin = getAdminClient();
 
-  type Row = {
-    email: string;
-    name: string;
-    role: string;
-    is_active: boolean;
-    site_id: string | null;
-    est_super_admin: boolean | null;
-    site?: SiteRow | null;
-  };
-
-  // Profil + site de rattachement en UN aller-retour (embed PostgREST via la FK
-  // app_user.site_id → site.id). Repli sur la lecture simple si l'embed échoue
-  // (ex. relation ambiguë) : le statut du site est alors relu à part, comme avant.
-  const COLS = "email, name, role, is_active, site_id, est_super_admin";
-  let { data, error } = await admin
-    .from("app_user")
-    .select(`${COLS}, site:site_id(id, slug, nom, statut, fuseau)`)
-    .eq("user_id", userId)
-    .single<Row>();
-  if (error && error.code !== "PGRST116") {
-    ({ data, error } = await admin.from("app_user").select(COLS).eq("user_id", userId).single<Row>());
-  }
-  if (error) {
-    console.error(`app_user introuvable pour user_id=${userId}: ${error.message}`);
+  let row: ProfilRow;
+  try {
+    row = await lireProfil(userId);
+  } catch (e) {
+    console.error(`app_user introuvable pour user_id=${userId}: ${e instanceof Error ? e.message : e}`);
     return null;
   }
-  const row = data;
 
   // `is_active` etait lu par la RLS (is_admin / has_role) mais JAMAIS par
   // l'application : un compte desactive directement en base gardait toute sa

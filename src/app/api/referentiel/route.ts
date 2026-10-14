@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { updateTag } from "next/cache";
+import { revalidateTag } from "next/cache";
 import { getAdminClient } from "@/lib/supabase-server";
 import { getCurrentProfile } from "@/lib/current-user";
 import { canWriteModule } from "@/lib/permissions";
@@ -166,7 +166,7 @@ export async function POST(req: NextRequest) {
         if (error) throw error;
         // Cache refdata ateliers invalide (audit P2) : le nouveau apparait
         // immediatement dans les filtres du planning au lieu d'attendre 30 s.
-        updateTag(ATELIERS_TAG);
+        revalidateTag(ATELIERS_TAG, { expire: 0 });
         return NextResponse.json({ ok: true, row: { ...data, ligne: [] } });
       }
       case "create-ligne": {
@@ -217,7 +217,7 @@ export async function POST(req: NextRequest) {
         if (Object.keys(patch).length === 0) return NextResponse.json({ error: "Rien à modifier" }, { status: 400 });
         const { error } = await supabase.from("atelier").update(patch).eq("id", s(body.id)).eq("site_id", site_id);
         if (error) throw error;
-        updateTag(ATELIERS_TAG);
+        revalidateTag(ATELIERS_TAG, { expire: 0 });
         return NextResponse.json({ ok: true });
       }
       case "update-ligne": {
@@ -341,7 +341,7 @@ export async function POST(req: NextRequest) {
           .eq("id", s(body.id))
           .eq("site_id", site_id);
         if (error) throw error;
-        if (entity === "atelier") updateTag(ATELIERS_TAG);
+        if (entity === "atelier") revalidateTag(ATELIERS_TAG, { expire: 0 });
         return NextResponse.json({ ok: true });
       }
       default:

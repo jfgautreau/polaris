@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { revalidateTag } from "next/cache";
 import { userAdminGuard } from "@/lib/permissions";
+import { PROFIL_TAG } from "@/lib/current-user";
 
 // POST /api/users/active { user_id, active }
 // Active / desactive un compte : met a jour app_user.is_active ET banni (ou leve le
@@ -33,6 +35,8 @@ export async function POST(req: NextRequest) {
   }
   const { error: dbErr } = await updateQ;
   if (dbErr) return NextResponse.json({ error: dbErr.message }, { status: 400 });
+  // Profil en cache (current-user.ts) : la désactivation doit couper l'accès tout de suite.
+  revalidateTag(PROFIL_TAG, { expire: 0 });
 
   const { error: authErr } = await admin.auth.admin.updateUserById(user_id, { ban_duration: active ? "none" : BAN_LONG });
   if (authErr) return NextResponse.json({ error: authErr.message }, { status: 400 });

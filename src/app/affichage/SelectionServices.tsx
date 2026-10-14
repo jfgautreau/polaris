@@ -6,8 +6,9 @@ import { PrintIcon, TvIcon } from "@/components/icons";
 
 // Choix des services à afficher / imprimer ensemble (A3 portrait, chaque service
 // sur une nouvelle page, cf. /affichage/impression). Chaque service garde son
-// lien « Écran TV » : un écran de couloir affiche UN service, rafraîchi
-// automatiquement.
+// lien « Écran TV » : un écran de couloir affiche UN service. Rechargement
+// automatique désactivé le 2026-10-14 (coût en journaux Supabase, écrans pas
+// encore déployés) : cf. tasks/todo.md avant de brancher les écrans.
 export default function SelectionServices({ ateliers }: { ateliers: { id: string; nom: string }[] }) {
   const [coches, setCoches] = useState<string[]>([]);
   const [date, setDate] = useState("");
@@ -48,7 +49,7 @@ export default function SelectionServices({ ateliers }: { ateliers: { id: string
             <Link
               href={`/affichage/atelier/${a.id}`}
               prefetch={false}
-              title={`Écran TV du service ${a.nom} (un service, rafraîchi toutes les 5 minutes)`}
+              title={`Écran TV du service ${a.nom} (un service)`}
               style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "#1d4ed8", textDecoration: "none", fontSize: 14 }}
             >
               <TvIcon size={16} /> Écran TV

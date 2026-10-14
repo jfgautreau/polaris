@@ -1,6 +1,6 @@
 # Reste à faire — Polaris
 
-> État au 2026-10-14. Migrations appliquées jusqu'à **0089**. **541** tests Vitest.
+> État au 2026-10-14. Migrations appliquées jusqu'à **0089**. **542** tests Vitest.
 > Ce fichier ne garde que ce qui reste ouvert ; le détail de ce qui est fait est dans
 > `git log` (et l'en-tête de chaque migration).
 
@@ -60,6 +60,27 @@ Spécification : `tasks/planning-par-poste.md`.
       `jour_quart` (EXPLAIN planning + placement), invalidations de cache Next.
       Cf. `tasks/multi-site.md`.
 - [ ] Prochain candidat React Compiler : `PlacementBoard`.
+
+## Consommation Supabase (analyse du 2026-10-14)
+Quota gratuit « Log Ingestion » de 1 Go/mois (0,77 Go au 14/10) : une ligne de journal par
+appel à la base. Fait le 2026-10-14 : socle en cache (profil, droits, modules masqués),
+types de contrat lus seulement par les ops qui en ont besoin (`/api/personnel`),
+rechargement auto de la TV retiré. Reste, par ordre d'impact :
+- [ ] **`fetchAll`** : dès 1 000 lignes, une vague de 8 tranches part d'un coup (9 appels
+      pour 1 300 lignes) ; connaître d'abord le nombre de lignes ou avancer tranche par tranche.
+- [ ] **Listes d'ids dans l'URL** (`.in("personne_id", [200-400 ids])`, 48 lectures :
+      Planning 9, Placement 8, Journal 7, TV 6, Matrice 3) : 8 à 15 Ko par ligne de journal,
+      répétés à chaque tranche. Filtrer par site / service côté base, ou passer par une RPC.
+- [ ] **Planning** : relit toute la matrice du site à chaque affichage
+      (`planning/page.tsx`, `MatRow`), même filtré sur un service.
+- [ ] **Écrans TV** : avant de les brancher, rétablir une mise à jour ÉCONOME (un petit
+      appel qui vérifie si quelque chose a changé, rechargement seulement dans ce cas ; rien
+      la nuit ni le week-end).
+- [ ] Ordonnancement : chaque case cochée relit toute la quinzaine (`router.refresh`).
+- [ ] Personnel : `refresh-statuts` à chaque ouverture de l'écran (une fois par jour suffit).
+- [ ] Taille de la base (500 Mo en gratuit) : `audit_log` stocke la ligne entière avant ET
+      après (~850 o, 80 % de placements, ~30 Mo/mois en septembre) ; ne garder que les
+      champs modifiés, ou raccourcir la conservation du Planning.
 
 ## Décisions ouvertes (arbitrage utilisateur)
 - [ ] **Anonymisation RGPD** — conserve matricule, badge, sexe, pointure, contrats,

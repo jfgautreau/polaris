@@ -210,8 +210,13 @@ export async function POST(req: NextRequest) {
   const supabase = getAdminClient();
   // MULTI-SITE : site_id explicite pour le cas admin client (service_role).
   const site_id = profile.siteId;
-  const CONTRATS = await codesContratAutorises(supabase, site_id);
-  const AGENCE_CODES = await codesAgenceAutorises(supabase, site_id);
+  // Codes de contrat autorisés / pilotés par agence : lus SEULEMENT par les ops
+  // qui écrivent un type de contrat, et une seule fois par requête. Avant le
+  // 2026-10-14, deux lectures de type_contrat partaient à CHAQUE op, consultations
+  // comprises (~20 % des journaux Supabase pendant une saisie au Personnel).
+  let codesP: Promise<[string[], Set<string>]> | null = null;
+  const codesContrat = () =>
+    (codesP ??= Promise.all([codesContratAutorises(supabase, site_id), codesAgenceAutorises(supabase, site_id)]));
 
   try {
     if (op === "create") {
@@ -221,6 +226,7 @@ export async function POST(req: NextRequest) {
       const nom = normaliseNom(s(body.nom));
       const prenom = normalisePrenom(s(body.prenom));
       if (!nom || !prenom) return NextResponse.json({ error: "Nom et prénom requis" }, { status: 400 });
+      const [CONTRATS, AGENCE_CODES] = await codesContrat();
       const type_contrat = CONTRATS.includes(s(body.type_contrat)) ? s(body.type_contrat) : "CDI";
       // Matricule laisse VIDE si non saisi (y compris pour un interimaire) : la
       // generation automatique d'un « INT-… » produisait un identifiant factice
@@ -332,12 +338,14 @@ export async function POST(req: NextRequest) {
           // (0050) : ce sont maintenant MIN/MAX(contrat_periode) et le motif_fin
           // du dernier contrat. Toute ecriture sur ces clefs est ignoree en silence
           // (compat descendante — un ancien client ne casse pas).
-          case "type_contrat":
+          case "type_contrat": {
+            const [CONTRATS, AGENCE_CODES] = await codesContrat();
             if (CONTRATS.includes(s(v))) {
               patch.type_contrat = s(v);
               if (!AGENCE_CODES.has(s(v))) patch.agence_interim = null;
             }
             break;
+          }
         }
       }
       if (Object.keys(patch).length === 0) return NextResponse.json({ error: "Rien à modifier" }, { status: 400 });
@@ -448,6 +456,7 @@ export async function POST(req: NextRequest) {
     if (op === "periode-create") {
       const personne_id = s(body.personne_id);
       if (!personne_id) return NextResponse.json({ error: "personne_id manquant" }, { status: 400 });
+      const [CONTRATS, AGENCE_CODES] = await codesContrat();
       const type_contrat = CONTRATS.includes(s(body.type_contrat)) ? s(body.type_contrat) : "CDI";
       const { data, error } = await supabase
         .from("contrat_periode")
@@ -478,12 +487,14 @@ export async function POST(req: NextRequest) {
       for (const k of Object.keys(patchIn)) {
         const v = patchIn[k];
         switch (k) {
-          case "type_contrat":
+          case "type_contrat": {
+            const [CONTRATS, AGENCE_CODES] = await codesContrat();
             if (CONTRATS.includes(s(v))) {
               patch.type_contrat = s(v);
               if (!AGENCE_CODES.has(s(v))) patch.agence_interim = null;
             }
             break;
+          }
           case "agence_interim":
           case "commentaire":
           case "motif":

@@ -31,7 +31,12 @@ const ARG_SITE = /^\s*(site|siteId|site_id)\b/;
 // la 0053, aucune donnée n'est plus partagée entre sites. Si un
 // besoin réel apparaît (ex : liste des slugs de sites pour /platform),
 // ajouter le nom de la variable ici avec la justification.
-const WHITELIST_GLOBAL = new Set<string>([]);
+const WHITELIST_GLOBAL = new Set<string>([
+  // current-user.ts : ligne app_user de l'utilisateur connecté, clé = user_id
+  // (unique sur toute la plateforme). C'est cette ligne qui DIT le site : elle
+  // ne peut pas être segmentée par un site qu'on ne connaît pas encore.
+  "lireProfil",
+]);
 
 function sansCommentaires(src: string): string {
   return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");

@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { revalidateTag } from "next/cache";
 import { userAdminGuard } from "@/lib/permissions";
+import { PROFIL_TAG } from "@/lib/current-user";
 import { isRole } from "@/lib/roles";
 import { getCustomRoles } from "@/lib/roles-server";
 
@@ -31,5 +33,7 @@ export async function POST(req: NextRequest) {
 
   const { error } = await garde.supabase.from("app_user").update({ role }).eq("user_id", user_id);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  // Profil en cache (current-user.ts) : le nouveau rôle s'applique dès la requête suivante.
+  revalidateTag(PROFIL_TAG, { expire: 0 });
   return NextResponse.json({ ok: true });
 }

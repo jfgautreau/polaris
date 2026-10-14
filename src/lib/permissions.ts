@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import { parRequete } from "@/lib/par-requete";
 import { redirect } from "next/navigation";
 import { getServerClient } from "@/lib/supabase-server";
@@ -182,18 +183,36 @@ export async function canWritePlacementData(role: string): Promise<boolean> {
 // MULTI-SITE : depuis 0053, role_permission.site_id est NOT NULL. La RLS filtre
 // déjà par site_id = current_site_id(), mais on ajoute `.eq('site_id', siteId)`
 // explicite (défense en profondeur + planner Postgres qui touche l'index composite).
+//
+// CACHE (2026-10-14) : les surcharges d'un rôle sont gardées entre les requêtes
+// (elles étaient relues à chaque page et à chaque appel d'API, ~10 % des journaux
+// Supabase). Invalidation immédiate par PERMISSIONS_TAG dans /api/droits et à la
+// création d'un site ; `revalidate` = filet pour une modification hors appli.
+// Lecture service_role (pas de cookies dans un cache) bornée par site_id + role.
+// Une erreur LÈVE (rien n'est mis en cache) et l'appelant retombe sur les défauts.
+export const PERMISSIONS_TAG = "socle-permissions";
+const lireSurcharges = unstable_cache(
+  async (site: string, role: string): Promise<{ module: string; niveau: Niveau }[]> => {
+    const { getAdminClient } = await import("@/lib/supabase-server");
+    const { data, error } = await getAdminClient()
+      .from("role_permission")
+      .select("module, niveau")
+      .eq("role", role)
+      .eq("site_id", site)
+      .returns<{ module: string; niveau: Niveau }[]>();
+    if (error) throw new Error(error.message);
+    return data ?? [];
+  },
+  ["socle-permissions"],
+  { revalidate: 300, tags: [PERMISSIONS_TAG] }
+);
+
 export const getPermissions = parRequete(async function getPermissions(role: string): Promise<Perms> {
   const p = defaultsFor(role);
   try {
     const { getCurrentSite } = await import("@/lib/current-site");
-    const [supabase, site] = await Promise.all([getServerClient(), getCurrentSite()]);
-    const { data } = await supabase
-      .from("role_permission")
-      .select("module, niveau")
-      .eq("role", role)
-      .eq("site_id", site.id)
-      .returns<{ module: string; niveau: Niveau }[]>();
-    for (const r of data ?? []) if (r.module in p) p[r.module] = r.niveau;
+    const site = await getCurrentSite();
+    for (const r of await lireSurcharges(site.id, role)) if (r.module in p) p[r.module] = r.niveau;
   } catch {
     // table absente ou erreur : on garde les defauts
   }
