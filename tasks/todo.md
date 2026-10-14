@@ -1,6 +1,6 @@
 # Reste à faire — Polaris
 
-> État au 2026-10-09. Migrations appliquées jusqu'à **0089**. **451** tests Vitest.
+> État au 2026-10-14. Migrations appliquées jusqu'à **0089**. **451** tests Vitest.
 > Ce fichier ne garde que ce qui reste ouvert ; le détail de ce qui est fait est dans
 > `git log` (et l'en-tête de chaque migration).
 
@@ -15,6 +15,9 @@
       ajouter les numéros de rotation des postes à arrivées décalées, puis comparer la TV
       un jour qui suit une nuit et un jour sans nuit.
 - [ ] Vérifier sur une vraie impression l'Affichage multi-services (2 ou 3 services cochés).
+- [ ] **Matrice — intitulés obliques** (essai du 2026-10-13, bascule « Verticaux /
+      Obliques ») : recueillir l'avis des utilisateurs, puis garder un seul rendu (retirer
+      la bascule) ou abandonner l'essai (cf. `handoff.md`, Matrice).
 - [ ] Retirer les 2 affectations hors contrat restantes (15 et 16/10, Le Bignon) depuis le
       Cycle de vie de la personne concernée.
 

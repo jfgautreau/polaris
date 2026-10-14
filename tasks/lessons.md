@@ -863,3 +863,14 @@ bretelles : poser aussi la page nommée sur la feuille elle-même (`[data-orient
 ne propageant pas toujours `page` depuis `<body>`. À vérifier à l'aperçu : si le
 navigateur ignore la page nommée, la feuille portrait sort réduite dans un coin.
 
+## L53 — En-têtes inclinés dans une grille à `th` collants : incliner la colonne, pas seulement le texte
+**Contexte** : essai d'intitulés obliques dans la Matrice (2026-10-13). Première version :
+seul le libellé tournait (`rotate(-45deg)`), les cases restaient droites — jugé
+**illisible** par l'utilisateur (impossible de relier un nom à sa colonne).
+**Règle** : prolonger chaque colonne par une bande `skewX(-45deg)` (origine bas gauche) qui
+porte fond, séparateur et libellé ; les bandes se juxtaposent sans se chevaucher.
+Piège d'empilement : chaque `th` `position: sticky` + `z-index` est un contexte
+d'empilement peint dans l'ordre du DOM — le fond du `th` suivant recouvre ce qui déborde
+du précédent. Rendre le `th` transparent et mettre le fond sur la bande. Les éléments
+au-dessus (noms de ligne) se décalent de la hauteur de la rangée inclinée, et une colonne
+de marge en bout de tableau évite que les derniers libellés soient rognés.

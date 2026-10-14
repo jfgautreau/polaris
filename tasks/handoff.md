@@ -230,6 +230,18 @@ Priorité d'affichage de l'horaire (TV) : **exception ponctuelle > temps partiel
 - En-têtes de poste verticaux, **sur une seule ligne** ; ils répètent le nom de la ligne
   (« Conducteur Thermo 1 » sous « Thermo 1 »). Retirer ce suffixe a été **écarté** par
   l'utilisateur (la règle naïve ne couvre que 38 des 82 postes).
+- **Essai d'intitulés obliques** (2026-10-13, demande utilisateur, verdict en attente) :
+  2e `SlideSwitch` « Verticaux / Obliques » (état local, non mémorisé, Verticaux par
+  défaut). En oblique : chaque en-tête de poste porte une bande `.obliqueBand`
+  (`skewX(-45deg)` depuis le coin bas gauche) qui prolonge la colonne ; le libellé est
+  posé sur l'axe de la bande. Teintes alternées **par ligne** (`data-alt` = index du
+  groupe ; le nom de ligne prend la teinte de ses bandes), séparateurs fin / épais
+  inclinés aussi, survol et filtre teintent la bande. Les noms de ligne sont décalés vers
+  la droite de `--oblique-h` (hauteur estimée sur le plus long nom : 7,4 px par capitale ×
+  sin 45°, bornée 60-240 px) ; une `<col>` de marge de même largeur en bout de tableau
+  laisse dépasser les derniers libellés. Mode Verticaux inchangé. Si l'essai est
+  abandonné : retirer la bascule, la prop `oblique`, `data-alt`/`data-sel` gardent leur
+  sens, et le bloc « Intitules obliques » de `persongrid.module.css`.
 - Saisie : clic = +1, clic droit = −1, cycle `0→1→…→N→❌ (restriction)→0`, où **N =
   `site.nb_niveaux`** (2..4, réglé dans `/admin/competences`). ⚠️ Non découvrable,
   impossible au tactile (pas de clic droit) — un popover de choix reste à faire si la
