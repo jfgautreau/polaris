@@ -372,9 +372,11 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   exclus des fragilités.
 - **Affichage TV** (`src/app/affichage/`, public) : rattachement par service d'affectation ;
   sections Matin / Après-midi / Nuit classées par `creneau` ; fenêtre relative ou absolue
-  (`getFenetreAffichage`, `joursDeFenetre`) ; PDF A3 portrait multi-pages. **Plus de
-  rechargement automatique** (5 min, 24/7, retiré le 2026-10-14 : ~5 800 appels/jour par
-  écran) — à rétablir de façon économe avant de brancher les écrans (cf. `tasks/todo.md`).
+  (`getFenetreAffichage`, `joursDeFenetre`) ; PDF A3 portrait multi-pages. **Mise à jour
+  économe** (2026-10-14, `MiseAJourEconome`) : toutes les 5 min, la server action
+  `versionDonnees` (`src/app/affichage/actions.ts`, dernier id d'`audit_log` du site) ;
+  `router.refresh()` seulement si la version change, ou au changement de jour (≥ 3 h). L'ancien
+  rechargement complet 24/7 coûtait ~5 800 appels/jour par écran.
 - **Visites médicales** (`src/app/visites/`, droit `visites`) : deux écrans seulement,
   Suivi et Paramètres — pas de troisième (le « rapport » des retards par régime × visite due
   × professionnel est un panneau du Suivi, filtres dans l'URL). Visite : médecin et/ou

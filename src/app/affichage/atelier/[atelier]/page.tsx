@@ -4,6 +4,8 @@ import { parseJour, isoDate, mondayOf } from "@/lib/week";
 import { getFenetreAffichage, joursDeFenetre } from "@/lib/parametres";
 import AffichageBarre from "./AffichageBarre";
 import AtelierPlanning from "./AtelierPlanning";
+import MiseAJourEconome from "./MiseAJourEconome";
+import { versionDonnees } from "../../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -36,12 +38,16 @@ export default async function AffichageAtelier({
   // Liste des quarts du parametrage : sert de repli aux placements historiques
   // sans `quart_code` (cf. src/lib/quarts.ts).
   const quarts = await getQuartsC();
+  // Version des données au moment de l'affichage : l'écran ne se recharge que si
+  // elle change (cf. MiseAJourEconome).
+  const version = await versionDonnees();
 
   return (
     // Deux boites imbriquees pour l'impression : `affichage-feuille` est le cadre,
     // borne a UNE page A3 verticale ; `affichage-contenu` porte la mise a l'echelle
     // mesuree par AffichageBarre. A l'ecran, elles sont transparentes.
     <div id="affichage-feuille" style={{ padding: "18px 24px" }}>
+      <MiseAJourEconome version={version} suitAujourdhui={!sp.date} />
       <div id="affichage-contenu" style={{ transformOrigin: "top left" }}>
         <AtelierPlanning
           atelierRef={param}

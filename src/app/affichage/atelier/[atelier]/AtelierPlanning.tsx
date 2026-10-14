@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { getAdminClient } from "@/lib/supabase-server";
 import { fetchAll } from "@/lib/fetch-all";
-import { getRotationRefsC } from "@/lib/refdata";
+import { getRotationRefsC, getHorairesPosteC, getHorairesPlaceC } from "@/lib/refdata";
 import { rotationForWeek } from "@/lib/rotation";
 import { quartOuDefaut } from "@/lib/quarts";
 import { horaireTxt as horaireTxtShared, type MapsHoraire, type HorairePlace } from "@/lib/horaires";
@@ -169,34 +169,31 @@ export default async function AtelierPlanning({
     const displayIds = [...displayById.keys()];
 
     // Placements des personnes affichées, TOUS postes confondus (y compris ceux
-    // d'un autre atelier — le prêt). Borné aux `displayIds`, donc petit. fetchAll
-    // + `.order("id")` : L8 (troncature silencieuse au-delà de 1000 lignes).
+    // d'un autre atelier — le prêt). Depuis le 2026-10-14 (journaux Supabase), plus
+    // de liste des personnes dans l'URL : placements du site sur la fenêtre, puis
+    // tri en mémoire. fetchAll + `.order("id")` : L8.
+    const displaySet = new Set(displayIds);
     const pl = displayIds.length
-      ? await fetchAll<PlacementRow>(() =>
-          admin
-            .from("placement")
-            .select("poste_id, jour, quart_code, personne_id, numero_rotation")
-            .eq("site_id", site.id)
-            .in("jour", isos)
-            .in("personne_id", displayIds)
-            .not("poste_id", "is", null)
-            .order("id")
-            .returns<PlacementRow[]>()
-        )
+      ? (
+          await fetchAll<PlacementRow>(() =>
+            admin
+              .from("placement")
+              .select("poste_id, jour, quart_code, personne_id, numero_rotation")
+              .eq("site_id", site.id)
+              .in("jour", isos)
+              .not("poste_id", "is", null)
+              .order("id")
+              .returns<PlacementRow[]>()
+          )
+        ).filter((r) => displaySet.has(r.personne_id))
       : [];
     // Postes concernés par les horaires : ceux de l'atelier + ceux où quelqu'un
     // est prêté. On ne charge les horaires standards que pour ceux-là.
     const involved = new Set<string>(posteIds);
     for (const r of pl) if (r.poste_id) involved.add(r.poste_id);
-    const pPlaces = fetchAll<{ poste_id: string; quart_code: string; numero: string; debut: string | null; fin: string | null; debut_apres_nuit: string | null; fin_apres_nuit: string | null }>(() =>
-      admin
-        .from("horaire_place")
-        .select("poste_id, quart_code, numero, debut, fin, debut_apres_nuit, fin_apres_nuit")
-        .eq("site_id", site.id)
-        .in("poste_id", [...involved])
-        .order("poste_id").order("quart_code").order("numero")
-        .returns<{ poste_id: string; quart_code: string; numero: string; debut: string | null; fin: string | null; debut_apres_nuit: string | null; fin_apres_nuit: string | null }[]>()
-    );
+    // Horaires (standard et par place) : référentiel en cache (refdata,
+    // REFERENTIEL_TAG), bornés ici aux postes concernés — plus de liste dans l'URL.
+    const pPlaces = getHorairesPlaceC().then((rows) => rows.filter((h) => involved.has(h.poste_id)));
 
     // Les autres lectures couvrent une SEMAINE ENTIERE, tous quarts confondus, et
     // peuvent dépasser 1000 lignes (cf. L8) → fetchAll avec `.order()` déterministe
@@ -206,15 +203,7 @@ export default async function AtelierPlanning({
     // NB : `ouverture_quart` n'est plus lu ici depuis 2026-09-09 — la TV n'utilise
     // plus la fermeture de ligne (qui pilote seulement le besoin dans Placement).
     const [hor, { data: jq }, { data: exc }, { data: tpH }] = await Promise.all([
-      fetchAll<HoraireRow>(() =>
-        admin
-          .from("horaire_poste")
-          .select("poste_id, quart_code, jour, debut, fin, debut_apres_nuit, fin_apres_nuit")
-          .eq("site_id", site.id)
-          .in("poste_id", [...involved])
-          .order("poste_id").order("quart_code").order("jour")
-          .returns<HoraireRow[]>()
-      ),
+      getHorairesPosteC().then((rows): HoraireRow[] => rows.filter((h) => involved.has(h.poste_id))),
       // MULTI-SITE : jour_quart, horaire_exception et la liste des personnes TP
       // sont bornés par site_id — le service_role bypass la RLS.
       admin
@@ -381,17 +370,21 @@ export default async function AtelierPlanning({
   // (pas de detail du motif). fetchAll : L8 (troncature silencieuse > 1000 lignes).
   const absByPerson = new Map<string, Set<string>>(); // personne_id -> jours (iso) absents
   if (personIds.length) {
-    const absPl = await fetchAll<{ personne_id: string; jour: string }>(() =>
-      admin
-        .from("placement")
-        .select("personne_id, jour")
-        .eq("site_id", site.id)
-        .in("jour", isos)
-        .in("personne_id", personIds)
-        .not("motif_absence_id", "is", null)
-        .order("id")
-        .returns<{ personne_id: string; jour: string }[]>()
-    );
+    // Plus de liste des personnes dans l'URL (2026-10-14) : absences du site sur
+    // la fenêtre, triées en mémoire.
+    const personSet = new Set(personIds);
+    const absPl = (
+      await fetchAll<{ personne_id: string; jour: string }>(() =>
+        admin
+          .from("placement")
+          .select("personne_id, jour")
+          .eq("site_id", site.id)
+          .in("jour", isos)
+          .not("motif_absence_id", "is", null)
+          .order("id")
+          .returns<{ personne_id: string; jour: string }[]>()
+      )
+    ).filter((r) => personSet.has(r.personne_id));
     for (const r of absPl) {
       (absByPerson.get(r.personne_id) ?? absByPerson.set(r.personne_id, new Set()).get(r.personne_id)!).add(r.jour);
     }
@@ -507,13 +500,15 @@ export default async function AtelierPlanning({
   // Lecture d'équipe pour repli. Une seule requête (postée par personne concernée).
   const persEquipe = new Map<string, string | null>();
   if (personList.length) {
+    // Équipes du site (≤ quelques centaines de lignes), gardées pour les seules
+    // personnes affichées — plus de liste d'ids dans l'URL (2026-10-14).
+    const affichees = new Set(personList.map((p) => p.id));
     const { data: pe } = await admin
       .from("personne")
       .select("id, equipe_id")
       .eq("site_id", site.id)
-      .in("id", personList.map((p) => p.id))
       .returns<{ id: string; equipe_id: string | null }[]>();
-    for (const r of pe ?? []) persEquipe.set(r.id, r.equipe_id);
+    for (const r of pe ?? []) if (affichees.has(r.id)) persEquipe.set(r.id, r.equipe_id);
   }
   // Quart d'équipe pour chaque lundi de la fenêtre (repli). Recalcule sur les
   // rotations déjà chargées si le bloc TP n'était pas exécuté (posteIds vide).

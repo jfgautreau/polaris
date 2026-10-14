@@ -351,8 +351,9 @@ pas de troisième** : la fiche d'une personne est une modale du Suivi.
   l'ancienne échelle commune, imposée par le service le plus dense, rétrécissait toutes
   les pages (cf. L50).
   Les ids reçus ne font que **filtrer** la liste des services du site. Chaque service garde
-  son lien **« Écran TV »** (`/affichage/atelier/[id]`, un service). Rechargement automatique (5 min) **retiré**
-  le 2026-10-14 : écrans pas encore déployés, coût en journaux Supabase (cf. todo).
+  son lien **« Écran TV »** (`/affichage/atelier/[id]`, un service). Mise à jour **économe** depuis le 2026-10-14 :
+  version des données vérifiée toutes les 5 min (une lecture), rechargement seulement si
+  elle change ou au changement de jour.
 
 ## Navigation (`AppHeader`)
 - **Menu principal** (`MAIN_ORDER`, pastille + icône) : Référentiel → Personnel →

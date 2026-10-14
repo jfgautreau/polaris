@@ -66,23 +66,20 @@ Quota gratuit « Log Ingestion » de 1 Go/mois (0,77 Go au 14/10) : une ligne de
 appel à la base. Fait le 2026-10-14 : socle en cache (profil, droits, modules masqués),
 types de contrat lus seulement par les ops qui en ont besoin (`/api/personnel`),
 rechargement auto de la TV retiré, `fetchAll` en 1 + 3 + 8 (4 appels au lieu de 9 jusqu'à
-4 000 lignes), référentiel du Placement en cache (~13 appels de moins par affichage).
+4 000 lignes), référentiel du Placement en cache (~13 appels de moins par affichage),
+Ordonnancement sans rechargement à chaque case, TV en mise à jour économe.
 Reste, par ordre d'impact :
 - [ ] **Listes d'ids dans l'URL** (`.in("personne_id", [200-400 ids])`) : 8 à 15 Ko par ligne
       de journal, répétés à chaque tranche. **Planning fait le 2026-10-14** (filtre `site_id` /
       `statut` + tri en mémoire, horaires par place en cache), **Placement et Matrice aussi**
       (listes de postes gardées quand un service est filtré : courtes), **Journal aussi** (noms lus
-      par site, lignes / postes du cache ; la recherche garde sa liste plafonnée à 38 ids). Reste : TV 6.
+      par site, lignes / postes du cache ; la recherche garde sa liste plafonnée à 38 ids). TV faite aussi.
 - [ ] **Planning** : relit toute la matrice du site à chaque affichage
       (`planning/page.tsx`, `MatRow`), même filtré sur un service.
-- [ ] **Écrans TV** : avant de les brancher, rétablir une mise à jour ÉCONOME (un petit
-      appel qui vérifie si quelque chose a changé, rechargement seulement dans ce cas ; rien
-      la nuit ni le week-end).
 - [ ] Placement, encore lus à chaque affichage : `poste_competence_requise` (le nom et la
       durée de l'habilitation y sont joints : invalider aussi depuis les écrans d'habilitations),
       `chargerNuitsAvant` (4 appels, partagé avec Planning et TV).
 - [ ] Planning, Ordonnancement, TV, Bilans : passer eux aussi par le référentiel en cache.
-- [ ] Ordonnancement : chaque case cochée relit toute la quinzaine (`router.refresh`).
 - [ ] Personnel : `refresh-statuts` à chaque ouverture de l'écran (une fois par jour suffit).
 - [ ] Taille de la base (500 Mo en gratuit) : `audit_log` stocke la ligne entière avant ET
       après (~850 o, 80 % de placements, ~30 Mo/mois en septembre) ; ne garder que les
