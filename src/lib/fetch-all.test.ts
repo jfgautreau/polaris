@@ -45,6 +45,26 @@ describe("fetchAll", () => {
     expect(rows).toHaveLength(PAGE_SIZE * 3);
   });
 
+  it("juste au-dessus du plafond : 1 + 3 appels, pas 1 + 8", async () => {
+    const t = fausseTable(1306);
+    expect(await fetchAll(t.makeQuery)).toHaveLength(1306);
+    expect(t.appels).toEqual([0, 1000, 2000, 3000]);
+  });
+
+  it("jusqu'à 4 000 lignes : toujours 4 appels", async () => {
+    const t = fausseTable(3177);
+    expect(await fetchAll(t.makeQuery)).toHaveLength(3177);
+    expect(t.appels).toHaveLength(4);
+  });
+
+  it("au-delà : vagues de 8 après la première de 3", async () => {
+    const t = fausseTable(4500);
+    const rows = await fetchAll(t.makeQuery);
+    expect(rows).toHaveLength(4500);
+    expect(rows.every((v, i) => v === i)).toBe(true);
+    expect(t.appels).toHaveLength(1 + 3 + 8);
+  });
+
   it("propage l'erreur d'une tranche", async () => {
     const t = fausseTable(5000, 2000);
     await expect(fetchAll(t.makeQuery)).rejects.toThrow("boom");
