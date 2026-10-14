@@ -124,20 +124,20 @@ returns uuid
 language plpgsql
 stable
 set search_path = public
-as $
+as $$
 begin
   return nullif(nullif(current_setting('request.headers', true), '')::json->>'x-polaris-auteur', '')::uuid;
 exception when others then
   return null;
 end
-$;
+$$;
 
 create or replace function public.historiser_habilitation()
 returns trigger
 language plpgsql
 security definer
 set search_path = public
-as $
+as $$
 declare
   r      public.personne_competence;
   v_act  text;
@@ -175,7 +175,7 @@ begin
   if tg_op = 'DELETE' then return old; end if;
   return new;
 end
-$;
+$$;
 
 
 -- ---------------------------------------------------------------------

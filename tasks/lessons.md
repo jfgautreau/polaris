@@ -874,3 +874,12 @@ d'empilement peint dans l'ordre du DOM — le fond du `th` suivant recouvre ce q
 du précédent. Rendre le `th` transparent et mettre le fond sur la bande. Les éléments
 au-dessus (noms de ligne) se décalent de la hauteur de la rangée inclinée, et une colonne
 de marge en bout de tableau évite que les derniers libellés soient rognés.
+
+## L54 — Une migration « appliquée » se vérifie en base, pas dans la doc
+**Contexte** : 2026-10-14, import d'absences : `journal_clore_lot` introuvable. La 0086,
+notée appliquée depuis le 2026-10-09, n'était jamais passée : quatre corps de fonction
+délimités par `$` au lieu de `$$` dès le commit, et le SQL Editor rejette tout le script.
+Les appels côté application étant « best effort » (try/catch muet), rien ne l'a signalé.
+**Règle** : après une migration, sonder un de ses objets (colonne, fonction) en lecture
+avant de la déclarer appliquée. Le test `migrations-sql.test.ts` refuse désormais un
+délimiteur réduit à `$` et un nombre impair de `$$`.

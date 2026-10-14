@@ -19,6 +19,30 @@
       Cycle de vie de la personne concernée.
 
 ## Base de données
+- [ ] **Exécuter `0086_journal_refonte.sql`** (corrigée le 2026-10-14) : elle n'avait jamais
+      été appliquée (4 délimiteurs `# Reste à faire — Polaris
+
+> État au 2026-10-14. Migrations appliquées jusqu'à **0089**. **451** tests Vitest.
+> Ce fichier ne garde que ce qui reste ouvert ; le détail de ce qui est fait est dans
+> `git log` (et l'en-tête de chaque migration).
+
+## À vérifier sur le terrain (lot du 2026-10-09)
+- [ ] **Impressions du Placement** : PDF Manager et PDF pour Affich. compacts, en portrait
+      ou paysage selon le plan. Si l'aperçu reste en paysage alors que le plan a été
+      calculé en portrait (feuille réduite dans un coin), passer par un autre réglage
+      d'impression (cf. `lessons.md` L52).
+- [ ] **Journal** : contrôler que les nouvelles entrées ne sont plus signées « Système »
+      (comptage en lecture seule à refaire quelques jours après le 2026-10-09).
+- [ ] **Horaires après une nuit / par place** : saisir les variantes sur le site concerné,
+      ajouter les numéros de rotation des postes à arrivées décalées, puis comparer la TV
+      un jour qui suit une nuit et un jour sans nuit.
+- [ ] Vérifier sur une vraie impression l'Affichage multi-services (2 ou 3 services cochés).
+- [ ] Retirer les 2 affectations hors contrat restantes (15 et 16/10, Le Bignon) depuis le
+      Cycle de vie de la personne concernée.
+
+ au lieu de `$`). Sans elle : pas de regroupement
+      des opérations de masse au Journal, purges (conservation, RGPD) en échec muet.
+      Après exécution, retirer la mention « sauf 0086 » de CLAUDE.md.
 - [ ] **Backfill SQL** des `personne_competence.date_expiration` nulles alors que la
       formation a une durée de validité (aujourd'hui compensé à l'affichage seulement).
 - [ ] RLS `audit_log` : `can_read_audit()` nomme encore admin + codir. L'écran Journal ne
