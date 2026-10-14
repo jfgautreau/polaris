@@ -201,7 +201,9 @@ export default function OrdoGrid({
       if (Array.isArray(j.affectes) && j.affectes.length > 0) {
         setNotice({ affectes: j.affectes, ateliers: j.ateliers ?? [], quart });
       }
-      router.refresh();
+      // Pas de router.refresh() (retiré le 2026-10-14, journaux Supabase) : la case
+      // est déjà à jour (optimiste) et l'état de la grille vient de useState(props),
+      // qu'un refresh ne remplace pas — il relisait toute la quinzaine pour rien.
     } finally {
       setSaving(false);
     }
