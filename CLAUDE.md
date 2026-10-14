@@ -33,42 +33,7 @@ L'historique des décisions est dans git et dans l'en-tête de chaque migration.
    Pour de la *donnée* seulement, un script Node lisant `SUPABASE_SERVICE_ROLE_KEY` de
    `.env.local` est acceptable (simulation d'abord, écriture après accord).
    Projet Supabase : ref `stcxlsmmnplxpirrnefm`, eu-west-3.
-   **Dernière migration appliquée : `0089`** (nettoyage des colonnes dépréciées) — **sauf `0086`**, jamais passée (délimiteurs `# Polaris — brief agent
-
-App web de gestion des plannings d'une usine agroalimentaire, multi-site (Le Bignon,
-La Vraie Croix). **Réponds en français.**
-
-Ce fichier est le seul chargé automatiquement : il doit suffire pour 90 % des tâches.
-Docs plus profondes (à lire **seulement si besoin**) : `ARCHITECTURE.md` (modèle de
-données, RLS), `tasks/handoff.md` (détail écran par écran), `tasks/lessons.md` (pièges
-rencontrés), `tasks/multi-site.md`, `tasks/todo.md`, `INSTALL.md` / `OPERATIONS.md`.
-L'historique des décisions est dans git et dans l'en-tête de chaque migration.
-
-## Stack & emplacements
-- `C:\dev\planning-usine` · remote `github.com/jfgautreau/polaris` · branche **main**.
-- **Next.js 16** (App Router, RSC + server actions) · React 19 · TypeScript · **Supabase**
-  (Postgres + Auth + RLS) · **Vercel** (push `main` → build auto, région `cdg1`).
-- Scripts : `npm run dev` · `npm run build` · `npm test` (Vitest). Sur ce poste (Windows ARM),
-  Turbopack est indisponible : `npx next build --webpack`.
-
-## Règles de travail (non négociables)
-1. **Build avant tout commit.** Pas de config ESLint : le build ne signale PAS le code
-   devenu inutile — nettoie à la main ce que tu retires.
-2. **Commit + push sur `main` après chaque tâche terminée**, sans redemander. Message en
-   français, style conventional commit. Trailer
-   `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`. Pas de branche ni de PR.
-3. **Auteur git = `jf.gautreau@gmail.com`** — jamais d'email no-reply (bloque Vercel Hobby).
-4. **Repo GitHub PUBLIC.** INTERDIT de commit des données sensibles : dumps SQL, `.env`,
-   exports réels (matricules, noms, absences…). Vérifier la staging list avant tout
-   `git add -A`, refuser tout fichier > 100 Ko non légitime. Les scripts jetables
-   (lecture de `SUPABASE_SERVICE_ROLE_KEY`, UUID en dur) vivent **hors du repo**
-   (scratchpad) ; `.gitignore` bloque `_tmp_*`, `scratch_*`, `inject_*`, dumps, `.env*.local`.
-5. **Base de données : jamais de DDL par l'agent.** Écrire la migration dans
-   `supabase/migrations/` et **demander à l'utilisateur de l'exécuter** dans le SQL Editor.
-   Pour de la *donnée* seulement, un script Node lisant `SUPABASE_SERVICE_ROLE_KEY` de
-   `.env.local` est acceptable (simulation d'abord, écriture après accord).
-   Projet Supabase : ref `stcxlsmmnplxpirrnefm`, eu-west-3.
-    corrigés le 2026-10-14, à exécuter). Toute nouvelle policy RLS s'écrit
+   **Dernière migration appliquée : `0089`** (nettoyage des colonnes dépréciées). Toute nouvelle policy RLS s'écrit
    `site_id = (select public.current_site_id())` (forme InitPlan, calculée une fois par
    requête) — idem pour `is_admin()`, `has_role('x')`, `auth.uid()`.
 6. **PowerShell 5.1** : message de commit multi-lignes via here-string `@'…'@` (le `'@`

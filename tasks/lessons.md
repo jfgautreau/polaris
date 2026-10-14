@@ -882,4 +882,15 @@ délimités par `$` au lieu de `$$` dès le commit, et le SQL Editor rejette tou
 Les appels côté application étant « best effort » (try/catch muet), rien ne l'a signalé.
 **Règle** : après une migration, sonder un de ses objets (colonne, fonction) en lecture
 avant de la déclarer appliquée. Le test `migrations-sql.test.ts` refuse désormais un
-délimiteur réduit à `$` et un nombre impair de `$$`.
+délimiteur réduit à `$` et un nombre impair de `$$`. (0086 corrigée et appliquée le
+2026-10-14, objets vérifiés en base.)
+
+## L55 — `String.replace(a, b)` interprète les `$` de la chaîne de remplacement
+**Contexte** : 2026-10-14, mise à jour de CLAUDE.md et todo.md par un script Node
+(`s.replace(ancien, nouveau)`) dont le texte inséré parlait des délimiteurs `` `$` `` et
+`` `$$` `` : `` $` `` a recopié tout le début du fichier au milieu de la ligne, `$$` est
+devenu `$`. Commit poussé abîmé, réparé au commit suivant.
+**Règle** : pour éditer un fichier par script, passer une **fonction** de remplacement
+(`s.replace(a, () => b)`) ou couper / recoller (`split` + `join`) ; ou utiliser l'outil Edit.
+Relire le diff (`git diff --stat` : un +37 pour une ligne modifiée doit alerter) avant de
+committer.
