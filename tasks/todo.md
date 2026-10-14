@@ -1,6 +1,6 @@
 # Reste à faire — Polaris
 
-> État au 2026-10-14. Migrations appliquées jusqu'à **0089**. **542** tests Vitest.
+> État au 2026-10-14. Migrations appliquées jusqu'à **0090**. **542** tests Vitest.
 > Ce fichier ne garde que ce qui reste ouvert ; le détail de ce qui est fait est dans
 > `git log` (et l'en-tête de chaque migration).
 
@@ -81,11 +81,9 @@ Reste, par ordre d'impact :
       `chargerNuitsAvant` (4 appels, partagé avec Planning et TV).
 - [ ] Planning, Ordonnancement, TV, Bilans : passer eux aussi par le référentiel en cache.
 - [ ] Personnel : `refresh-statuts` à chaque ouverture de l'écran (une fois par jour suffit).
-- [ ] **Exécuter `0090_journal_compact.sql`** (écrite le 2026-10-14) : le journal d'audit ne garde
-      plus, pour une modification, que les champs modifiés + le contexte, sans colonnes
-      techniques, et ignore les écritures qui ne changent rien. Lignes futures seulement.
-      Après exécution : vérifier la taille moyenne des nouvelles lignes, mettre CLAUDE.md à
-      jour (dernière migration appliquée). Option non retenue pour l'instant : raccourcir la
+- [ ] **0090 appliquée le 2026-10-14** (journal compact) : vérifier sur les premières lignes
+      écrites après coup (plus de created_at / updated_at / site_id dans old/new_values,
+      taille moyenne en baisse). Option non retenue pour l'instant : raccourcir la
       conservation du Planning (décision utilisateur).
 
 ## Décisions ouvertes (arbitrage utilisateur)

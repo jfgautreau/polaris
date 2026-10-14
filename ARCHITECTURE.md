@@ -161,8 +161,8 @@ Triggers PostgreSQL (`audit_trigger`) sur les tables métier → `audit_log`
   (`journal_purger_personne`). Ces fonctions sont réservées au service_role.
 
 ## Migrations
-Fichiers SQL ordonnés dans `supabase/migrations/` (**0001 → 0089**, dernière appliquée :
-**0089**), **exécutés manuellement** par l'utilisateur dans le SQL Editor Supabase
+Fichiers SQL ordonnés dans `supabase/migrations/` (**0001 → 0090**, dernière appliquée :
+**0090**), **exécutés manuellement** par l'utilisateur dans le SQL Editor Supabase
 (`SUPABASE_DB_URL` est vide ; `npm run db:migrate` ne fonctionne que s'il est défini).
 
 Depuis la **0037**, trois séquences délicates passent par des **fonctions SQL** appelées
@@ -226,7 +226,7 @@ intégrés + `role_custom`).
   du Placement) ; **0078** — un départ libère le poste fixe (trigger
   `liberer_poste_fixe_au_depart` sur la mise à jour du statut, + rattrapage).
 
-**Octobre 2026 (0079 → 0089)** :
+**Octobre 2026 (0079 → 0090)** :
 - **0079 → 0081** — visites : professionnel vu / attendu (médecin, infirmière, cumulables
   en 0081) ; poste à risque avec plusieurs motifs et attestations (0080).
 - **0082** — `ligne.couleur` ; **0083** — `motif_absence.visible_operateurs` ;
@@ -235,6 +235,10 @@ intégrés + `role_custom`).
 - **0087** — horaires « après une nuit » ; **0088** — horaires par place (`horaire_place`).
 - **0089** — suppression des colonnes dépréciées : `poste.suivi_motif`, `poste.anci_usage`,
   `visite.professionnel`, `visite.prochain_professionnel` (`competence.anci_usage` est gardée).
+- **0090** — journal d'audit compact : une modification ne garde que les champs modifiés +
+  le contexte (personne, jour, quart, poste, nom…), créations / suppressions sans colonnes
+  techniques, modifications sans effet non journalisées (lignes futures seulement).
+  ⚠️ La 0086 n'avait jamais été appliquée avant le 2026-10-14 (délimiteurs `$`, cf. L54).
 
 ## Sitemap (principales routes)
 - `/` accueil (logo + titre « planning »), `/planning` (+ vue `?par=poste`), `/placement` (saisie par
