@@ -3,8 +3,7 @@ import { getAdminClient } from "@/lib/supabase-server";
 import AppHeader from "@/components/AppHeader";
 import BandeauErreur from "@/components/BandeauErreur";
 import { requireModule, canWrite } from "@/lib/permissions";
-import { getQuartsC, getLignesPostesC } from "@/lib/refdata";
-import { fetchAll } from "@/lib/fetch-all";
+import { getQuartsC } from "@/lib/refdata";
 import {
   ACTION_FR,
   TABLE_FR,
@@ -141,40 +140,29 @@ export default async function JournalPage({ searchParams }: { searchParams: Prom
   const pageSuivante = entrees.length > PAR_PAGE;
   if (pageSuivante) entrees = entrees.slice(0, PAR_PAGE);
 
-  // Noms (étape 4). Depuis le 2026-10-14 (journaux Supabase), plus de liste des
-  // identifiants cités (100 à 300 UUID, envoyés à 8 tables) : on lit les petits
-  // référentiels du site en entier — lignes et postes viennent du cache du
-  // Référentiel — et on ne garde que ce dont les lignes affichées ont besoin.
-  // Comptes : ceux du site (pAuteurs) + les super_admin, seuls à agir sur un
-  // autre site que le leur (impersonation).
-  const ids = new Set(entrees.flatMap(idsReferences));
+  // Noms (étape 4) : seulement les identifiants des lignes affichées.
+  const ids = [...new Set(entrees.flatMap(idsReferences))];
   const noms: Record<string, string> = {};
-  const [quarts, { data: siteD }, { data: auteursD }, lignesPostes, ...dicos] = await Promise.all([
+  const [quarts, { data: siteD }, { data: auteursD }, ...dicos] = await Promise.all([
     getQuartsC(),
     pSite,
     pAuteurs,
-    ids.size ? getLignesPostesC() : Promise.resolve([]),
-    ...(ids.size
+    ...(ids.length
       ? [
-          fetchAll<{ id: string; nom: string; prenom: string }>(() =>
-            admin.from("personne").select("id, nom, prenom").eq("site_id", site).order("id").returns<{ id: string; nom: string; prenom: string }[]>()
-          ).then((data) => ({ data })),
-          admin.from("atelier").select("id, nom").eq("site_id", site).returns<{ id: string; nom: string }[]>(),
-          admin.from("equipe").select("id, nom").eq("site_id", site).returns<{ id: string; nom: string }[]>(),
-          admin.from("motif_absence").select("id, libelle").eq("site_id", site).returns<{ id: string; libelle: string }[]>(),
-          admin.from("competence").select("id, nom").eq("site_id", site).returns<{ id: string; nom: string }[]>(),
-          admin.from("app_user").select("user_id, name, email").eq("est_super_admin", true).returns<{ user_id: string; name: string | null; email: string | null }[]>(),
+          admin.from("personne").select("id, nom, prenom").eq("site_id", site).in("id", ids).returns<{ id: string; nom: string; prenom: string }[]>(),
+          admin.from("poste").select("id, nom").eq("site_id", site).in("id", ids).returns<{ id: string; nom: string }[]>(),
+          admin.from("ligne").select("id, nom").eq("site_id", site).in("id", ids).returns<{ id: string; nom: string }[]>(),
+          admin.from("atelier").select("id, nom").eq("site_id", site).in("id", ids).returns<{ id: string; nom: string }[]>(),
+          admin.from("equipe").select("id, nom").eq("site_id", site).in("id", ids).returns<{ id: string; nom: string }[]>(),
+          admin.from("motif_absence").select("id, libelle").eq("site_id", site).in("id", ids).returns<{ id: string; libelle: string }[]>(),
+          admin.from("competence").select("id, nom").eq("site_id", site).in("id", ids).returns<{ id: string; nom: string }[]>(),
+          admin.from("app_user").select("user_id, name, email").in("user_id", ids).returns<{ user_id: string; name: string | null; email: string | null }[]>(),
         ]
       : []),
     pPurge,
   ]);
-  for (const l of lignesPostes) {
-    if (ids.has(l.id)) noms[l.id] = l.nom;
-    for (const p of l.poste) if (ids.has(p.id)) noms[p.id] = p.nom;
-  }
   for (const r of dicos) {
     for (const x of ((r as { data: Record<string, string | null>[] | null }).data ?? [])) {
-      if (!ids.has((x.id ?? x.user_id)!)) continue;
       if ("user_id" in x) noms[x.user_id!] = x.name || x.email || "";
       else if ("prenom" in x) noms[x.id!] = `${x.nom} ${x.prenom}`.trim();
       else if ("libelle" in x) noms[x.id!] = x.libelle ?? "";
