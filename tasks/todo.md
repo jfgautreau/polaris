@@ -71,7 +71,8 @@ Reste, par ordre d'impact :
 - [ ] **Listes d'ids dans l'URL** (`.in("personne_id", [200-400 ids])`) : 8 à 15 Ko par ligne
       de journal, répétés à chaque tranche. **Planning fait le 2026-10-14** (filtre `site_id` /
       `statut` + tri en mémoire, horaires par place en cache), **Placement et Matrice aussi**
-      (listes de postes gardées quand un service est filtré : courtes). Reste : Journal 7, TV 6.
+      (listes de postes gardées quand un service est filtré : courtes), **Journal aussi** (noms lus
+      par site, lignes / postes du cache ; la recherche garde sa liste plafonnée à 38 ids). Reste : TV 6.
 - [ ] **Planning** : relit toute la matrice du site à chaque affichage
       (`planning/page.tsx`, `MatRow`), même filtré sur un service.
 - [ ] **Écrans TV** : avant de les brancher, rétablir une mise à jour ÉCONOME (un petit

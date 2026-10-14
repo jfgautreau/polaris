@@ -904,3 +904,15 @@ l'écriture — réponse 500 pour une modification enregistrée.
 `updateTag` seulement dans un fichier `"use server"`. Test `cache-invalidation`.
 Corollaire pour tout cache inter-requêtes (`unstable_cache`) : une lecture en échec doit
 LEVER dans la fonction cachée, sinon l'échec est mémorisé jusqu'à l'expiration.
+
+## L57 — Un appel « best effort » change de type le jour où sa migration passe
+**Contexte** : 2026-10-14, Journal hors service (« number 0 is not iterable ») juste après
+l'application de la 0086. La page lançait `journal_purger` dans le même `Promise.all`
+que les dictionnaires de noms, en DERNIÈRE position : son résultat tombait dans
+`...dicos`. Tant que la fonction n'existait pas, `data` valait `null` (→ `[]`) ; une fois
+créée, elle renvoie un nombre et `for (… of 0)` plante. Bug présent depuis le 9 octobre,
+invisible tant que la migration n'était pas passée (cf. L54).
+**Règle** : dans un `Promise.all` destructuré avec un reste (`...xs`), tout ce qui n'est
+pas homogène au reste prend une place FIXE avant lui. Et un code écrit pour une
+migration se teste avec la migration appliquée — sinon son chemin nominal n'a jamais
+tourné.
