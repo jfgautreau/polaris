@@ -26,7 +26,7 @@ import PlanningGrid from "./PlanningGrid";
 import PlanningParPoste from "./PlanningParPoste";
 import VueBascule from "./VueBascule";
 import { parseNumeros } from "@/lib/numeros-rotation";
-import { getRotationRefsC, getTypesAgenceC } from "@/lib/refdata";
+import { getRotationRefsC, getTypesAgenceC, getHorairesPlaceC } from "@/lib/refdata";
 import { rotationForWeek } from "@/lib/rotation";
 import { chargerNuitsAvant } from "@/lib/nuit-avant-data";
 import { horaireDuPoste, type HM, type HorairePlace, type MapsHoraire } from "@/lib/horaires";
@@ -298,6 +298,14 @@ export default async function PlanningPage({
   // temps que l'ouverture, et chaque bloc plus bas attend la sienne au lieu de les
   // enchaîner. Les blocs de traitement sont inchangés.
   const idsEffectif = (allActiveD ?? []).map((p) => p.id);
+  // Lectures « de l'effectif » (2026-10-14, journaux Supabase) : plus de liste de
+  // 200 à 400 ids dans l'URL (8 à 15 Ko par ligne de journal, répétés à chaque
+  // tranche). La RLS borne déjà au site ; on y ajoute `site_id` (index, défense en
+  // profondeur) et on écarte en mémoire les personnes hors effectif (parties),
+  // seules lignes que la liste excluait. Résultat identique.
+  const effectifSet = new Set(idsEffectif);
+  const STATUTS_EFFECTIF = ["ACTIF", "A_VENIR"];
+  const siteId = profile.siteId;
   // Habilitations exigées : lues pour TOUS les postes du site, pas seulement ceux
   // du service filtré. Une personne listée peut être placée sur un poste d'un autre
   // service : sans son exigence, sa case perdait le rouge selon le filtre (bug du
@@ -306,7 +314,7 @@ export default async function PlanningPage({
   type TpRow = { id: string; personne_id: string; date_debut: string; date_fin: string | null; tp_config: { off?: Record<string, string[]> } | null };
   const pPersAtelier = enAvance<{ data: { id: string; atelier_id: string | null }[] | null; error: { message: string } | null }>(
     atelier && idsEffectif.length
-      ? supabase.from("personne").select("id, atelier_id").in("id", idsEffectif).returns<{ id: string; atelier_id: string | null }[]>()
+      ? supabase.from("personne").select("id, atelier_id").eq("site_id", siteId).in("statut", STATUTS_EFFECTIF).returns<{ id: string; atelier_id: string | null }[]>()
       : Promise.resolve({ data: [] as { id: string; atelier_id: string | null }[], error: null })
   );
   const pConducteurs = enAvance(
@@ -339,7 +347,8 @@ export default async function PlanningPage({
       .from("personne")
       .select("id, tp_config")
       .eq("temps_partiel", true)
-      .in("id", idsEffectif)
+      .eq("site_id", siteId)
+      .in("statut", STATUTS_EFFECTIF)
       .returns<{ id: string; tp_config: { off?: Record<string, string[]> } | null }[]>()
   );
   const pContrats = enAvance(
@@ -347,10 +356,10 @@ export default async function PlanningPage({
       supabase
         .from("contrat_periode")
         .select("personne_id, date_debut, date_fin")
-        .in("personne_id", idsEffectif)
+        .eq("site_id", siteId)
         .order("id")
         .returns<{ personne_id: string; date_debut: string | null; date_fin: string | null }[]>()
-    )
+    ).then((rows) => rows.filter((r) => effectifSet.has(r.personne_id)))
   );
   // Habilitations exigées par les postes du site, puis — dès qu'on les connaît —
   // celles que les gens détiennent (chaîné, sans attendre le reste de la page).
@@ -376,10 +385,10 @@ export default async function PlanningPage({
           .from("personne_competence")
           .select("personne_id, competence_id, date_obtention, date_expiration")
           .in("competence_id", compIds)
-          .in("personne_id", idsEffectif)
+          .eq("site_id", siteId)
           .order("id")
           .returns<PcDetRow[]>()
-      );
+      ).then((rows) => rows.filter((r) => effectifSet.has(r.personne_id)));
     })
   );
 
@@ -497,28 +506,29 @@ export default async function PlanningPage({
               .from("placement")
               .select("personne_id, jour, poste_id, motif_absence_id, non_travaille, quart_code, numero_rotation")
               .in("jour", visIsos)
-              .in("personne_id", idsEffectif)
+              .eq("site_id", siteId)
               .order("id")
               .returns<Placement[]>()
-          )
+          ).then((rows) => rows.filter((r) => effectifSet.has(r.personne_id)))
         : Promise.resolve([] as Placement[]),
       avecCases
         ? fetchAll<MatRow>(() =>
             supabase
               .from("matrice")
               .select("personne_id, poste_id, niveau_actuel")
-              .in("personne_id", idsEffectif)
+              .eq("site_id", siteId)
               .order("id")
               .returns<MatRow[]>()
-          )
+          ).then((rows) => rows.filter((r) => effectifSet.has(r.personne_id)))
         : Promise.resolve([] as MatRow[]),
       avecCases
         ? supabase
             .from("horaire_exception")
             .select("personne_id, jour, debut, fin, motif")
             .in("jour", visIsos)
-            .in("personne_id", idsEffectif)
+            .eq("site_id", siteId)
             .returns<{ personne_id: string; jour: string; debut: string | null; fin: string | null; motif: string | null }[]>()
+            .then((r) => ({ ...r, data: (r.data ?? []).filter((x) => effectifSet.has(x.personne_id)) }))
         : Promise.resolve({ data: [] as { personne_id: string; jour: string; debut: string | null; fin: string | null; motif: string | null }[], error: null }),
       avecCases
         ? supabase
@@ -534,8 +544,9 @@ export default async function PlanningPage({
             .select("personne_id, jour")
             .eq("tp", true)
             .in("jour", visIsos)
-            .in("personne_id", idsEffectif)
+            .eq("site_id", siteId)
             .returns<{ personne_id: string; jour: string }[]>()
+            .then((r) => ({ ...r, data: (r.data ?? []).filter((x) => effectifSet.has(x.personne_id)) }))
         : Promise.resolve({ data: [] as { personne_id: string; jour: string }[], error: null }),
     ] as const)
   );
@@ -648,16 +659,12 @@ export default async function PlanningPage({
     const variantes = (horStd ?? []).filter((h) => h.debut_apres_nuit || h.fin_apres_nuit);
     // Places occupées sur la période affichée, et leurs horaires (0088).
     const postesNumerotes = [...new Set(pl.filter((r) => r.poste_id && r.numero_rotation).map((r) => r.poste_id!))];
-    const { data: hpD } = postesNumerotes.length
-      ? await supabase
-          .from("horaire_place")
-          .select("poste_id, quart_code, numero, debut, fin, debut_apres_nuit, fin_apres_nuit")
-          .in("poste_id", postesNumerotes)
-          .returns<{ poste_id: string; quart_code: string; numero: string; debut: string | null; fin: string | null; debut_apres_nuit: string | null; fin_apres_nuit: string | null }[]>()
-      : { data: [] };
+    // Horaires par place en cache (refdata, REFERENTIEL_TAG), bornés aux postes numérotés.
+    const numerotesSet = new Set(postesNumerotes);
+    const hpD = postesNumerotes.length ? (await getHorairesPlaceC()).filter((h) => numerotesSet.has(h.poste_id)) : [];
     const placeMap = new Map<string, HorairePlace>();
-    for (const h of hpD ?? []) placeMap.set(`${h.poste_id}:${h.quart_code}:${h.numero}`, { debut: h.debut, fin: h.fin, debutN: h.debut_apres_nuit, finN: h.fin_apres_nuit });
-    const avecNuitPossible = variantes.length > 0 || (hpD ?? []).some((h) => h.debut_apres_nuit || h.fin_apres_nuit);
+    for (const h of hpD) placeMap.set(`${h.poste_id}:${h.quart_code}:${h.numero}`, { debut: h.debut, fin: h.fin, debutN: h.debut_apres_nuit, finN: h.fin_apres_nuit });
+    const avecNuitPossible = variantes.length > 0 || hpD.some((h) => h.debut_apres_nuit || h.fin_apres_nuit);
     const nuits = avecNuitPossible ? await chargerNuitsAvant(supabase, profile.siteId, visIsos) : null;
     if (placeMap.size) {
       const horMap = new Map<string, HM>();

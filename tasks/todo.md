@@ -68,9 +68,10 @@ types de contrat lus seulement par les ops qui en ont besoin (`/api/personnel`),
 rechargement auto de la TV retiré, `fetchAll` en 1 + 3 + 8 (4 appels au lieu de 9 jusqu'à
 4 000 lignes), référentiel du Placement en cache (~13 appels de moins par affichage).
 Reste, par ordre d'impact :
-- [ ] **Listes d'ids dans l'URL** (`.in("personne_id", [200-400 ids])`, 48 lectures :
-      Planning 9, Placement 8, Journal 7, TV 6, Matrice 3) : 8 à 15 Ko par ligne de journal,
-      répétés à chaque tranche. Filtrer par site / service côté base, ou passer par une RPC.
+- [ ] **Listes d'ids dans l'URL** (`.in("personne_id", [200-400 ids])`) : 8 à 15 Ko par ligne
+      de journal, répétés à chaque tranche. **Planning fait le 2026-10-14** (filtre `site_id` /
+      `statut` + tri en mémoire, horaires par place en cache). Reste : Placement 8, Journal 7,
+      TV 6, Matrice 3 — même recette (la RLS borne déjà au site).
 - [ ] **Planning** : relit toute la matrice du site à chaque affichage
       (`planning/page.tsx`, `MatRow`), même filtré sur un service.
 - [ ] **Écrans TV** : avant de les brancher, rétablir une mise à jour ÉCONOME (un petit
