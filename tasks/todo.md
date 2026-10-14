@@ -81,9 +81,12 @@ Reste, par ordre d'impact :
       `chargerNuitsAvant` (4 appels, partagé avec Planning et TV).
 - [ ] Planning, Ordonnancement, TV, Bilans : passer eux aussi par le référentiel en cache.
 - [ ] Personnel : `refresh-statuts` à chaque ouverture de l'écran (une fois par jour suffit).
-- [ ] Taille de la base (500 Mo en gratuit) : `audit_log` stocke la ligne entière avant ET
-      après (~850 o, 80 % de placements, ~30 Mo/mois en septembre) ; ne garder que les
-      champs modifiés, ou raccourcir la conservation du Planning.
+- [ ] **Exécuter `0090_journal_compact.sql`** (écrite le 2026-10-14) : le journal d'audit ne garde
+      plus, pour une modification, que les champs modifiés + le contexte, sans colonnes
+      techniques, et ignore les écritures qui ne changent rien. Lignes futures seulement.
+      Après exécution : vérifier la taille moyenne des nouvelles lignes, mettre CLAUDE.md à
+      jour (dernière migration appliquée). Option non retenue pour l'instant : raccourcir la
+      conservation du Planning (décision utilisateur).
 
 ## Décisions ouvertes (arbitrage utilisateur)
 - [ ] **Anonymisation RGPD** — conserve matricule, badge, sexe, pointure, contrats,
