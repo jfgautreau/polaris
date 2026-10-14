@@ -285,6 +285,14 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   modules masqués (`MODULES_MASQUES_TAG`), `revalidate` 300 s en filet. Toute écriture
   d'`app_user`, de `site.statut`, de `role_permission` ou de `site_module` invalide le tag
   correspondant. Une erreur de lecture LÈVE dans le cache (jamais mémorisée).
+- **Pas de longue liste d'ids dans une URL PostgREST** (2026-10-14) : `.in("personne_id",
+  [200-400 ids])` = 8 à 15 Ko par appel, répétés à chaque tranche de `fetchAll` et journalisés
+  par Supabase (quota « Log Ingestion » 1 Go/mois en gratuit). Recette appliquée à Planning,
+  Placement, Matrice, Journal, TV : filtrer par `site_id` (ou `statut`) et trier en mémoire
+  avec un `Set` ; une liste COURTE (postes d'un service, quelques dizaines) reste admise.
+- **Pas de `router.refresh()` après une écriture déjà appliquée à l'écran** quand l'état
+  vient de `useState(props)` (un refresh ne le remplace pas, il relit tout pour rien) —
+  retiré de l'Ordonnancement le 2026-10-14.
 - **Cache navigateur** : `staleTimes.dynamic = 30` + `GardeCacheNavigation` (après toute
   écriture, une page mise en cache avant est rechargée complètement).
 - **React Compiler** en mode opt-in (`"use memo"`, `next.config.ts`) : actif sur
@@ -405,7 +413,10 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   **Opérations de masse** (copie, pré-remplissage, réinitialisation, imports, absence) :
   `avecLotJournal()` → une ligne de synthèse `LOT`, détail à la demande. Conservation
   `site.journal_conservation_mois` (purge à l'ouverture) ; RGPD : anonymiser / supprimer
-  une personne purge ses traces (`journal_purger_personne`).
+  une personne purge ses traces (`journal_purger_personne`). **Format compact** (0090) : une
+  modification ne garde que les champs modifiés + le contexte (personne, jour, quart, poste,
+  nom…) ; créations / suppressions sans colonnes techniques ; une écriture sans effet n'est
+  plus journalisée. Noms des éléments résolus par dictionnaires du site (pas de liste d'ids).
 - **Plateforme** (super_admin, `src/app/platform/`) : sites, impersonation, masquage par
   site (`site_module` : menus, `guide`, rapports `bilan:<slug>`).
 
@@ -430,6 +441,8 @@ Règles pures (`src/lib/*.test.ts`) + tests statiques de garde : `routes-gardees
 API a une garde, aucun rôle en dur), `routes-multi-site` (INSERT/UPSERT site-scopé avec
 `site_id`), `refdata-cache` (`unstable_cache` avec argument `site`), `admin-client` et
 `isolation-site` (en service_role, chaque lecture/écriture site-scopée bornée par
-`.eq("site_id", …)`), `ecritures-verifiees` (erreurs d'écriture lues), tests interdisant
+`.eq("site_id", …)`), `ecritures-verifiees` (erreurs d'écriture lues), `migrations-sql`
+(délimiteurs `$$` des migrations, cf. L54), `cache-invalidation` (pas d'`updateTag` dans une
+route API), tests interdisant
 codes de quart en dur, `est_conducteur` et `equipe_quart_semaine`. `vitest.config.ts`
 résout l'alias `@/`.

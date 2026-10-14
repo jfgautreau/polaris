@@ -1,6 +1,6 @@
 # Reste à faire — Polaris
 
-> État au 2026-10-14. Migrations appliquées jusqu'à **0090**. **542** tests Vitest.
+> État au 2026-10-14. Migrations appliquées jusqu'à **0090**. **545** tests Vitest.
 > Ce fichier ne garde que ce qui reste ouvert ; le détail de ce qui est fait est dans
 > `git log` (et l'en-tête de chaque migration).
 

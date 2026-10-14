@@ -13,6 +13,9 @@
 - L'exécuter dans le **SQL Editor** Supabase (ou `npm run db:migrate`).
 - Après un DDL, le cache de schéma PostgREST peut mettre ~1 min à se rafraîchir
   (*Project Settings > API > Reload schema* pour forcer).
+- **Vérifier qu'elle est passée** : sonder un de ses objets (colonne, fonction) plutôt que
+  se fier à la doc. Une erreur de syntaxe fait rejeter TOUT le script (la 0086, écrite avec
+  `$` au lieu de `$$`, n'a été appliquée que cinq jours après « son » déploiement).
 
 ## Sauvegardes
 - Supabase réalise des **sauvegardes automatiques** (selon le plan). Vérifier la
@@ -95,7 +98,9 @@
 
 ## Affichage couloir
 - `/affichage` liste les services ; `/affichage/atelier/{id}` = écran TV
-  (**fenêtre glissante** autour d'aujourd'hui, refresh **5 min**, bouton Imprimer/PDF).
+  (**fenêtre glissante** autour d'aujourd'hui, bouton Imprimer/PDF). **Mise à jour
+  économe** : toutes les 5 min l'écran vérifie si une donnée du site a changé et ne se
+  recharge que dans ce cas (ou au changement de jour, à partir de 3 h) ; onglet caché = rien.
 - **Fenêtre paramétrable** dans `/admin/motifs` (section « Fenêtre d'affichage du
   planning ») : nombre de jours avant J et après J, auto-sauvegardés (défaut J-1 / J+4).
   Table `parametre_affichage`, une ligne **par site** depuis la migration `0051`.
@@ -111,7 +116,21 @@
   totalement indépendant.
 - Détail complet : `tasks/multi-site.md`.
 
+## Consommation Supabase (offre gratuite)
+- Quotas mensuels à surveiller (*Organization > Usage*) : **Log Ingestion 1 Go** (une ligne
+  de journal par appel à la base ; la facturation n'est pas encore appliquée, période de
+  grâce annoncée jusqu'au début de 2027), **Egress 5 Go**, **taille de base 500 Mo** (le
+  journal d'audit en est le premier poste, d'où le format compact de la 0090).
+- **Comprendre ce qui consomme** : *Logs* → exporter les dernières 24 h en CSV (l'offre
+  gratuite garde un jour et l'export s'arrête à 1 000 lignes), ou *SQL Editor* en mode
+  « Logs » (table `logs`, colonne `log_attributes['request.pathname']`).
+- Analyse et pistes restantes : `tasks/todo.md` § Consommation Supabase.
+
 ## Dépannage
+- « This page couldn't load » : erreur côté serveur. Le message utile est dans **Vercel →
+  projet Polaris → Logs** (filtrer sur la route, ligne en rouge).
+- « Warp server error: Thread killed by timeout manager » dans les journaux Supabase :
+  fermeture d'une connexion inactive par PostgREST, sans conséquence pour les utilisateurs.
 - « Could not find the table ... in the schema cache » : cache PostgREST pas à jour
   après une migration → attendre ~1 min ou recharger le schéma.
 - Page qui redirige vers /login : session expirée (8 h) → se reconnecter.

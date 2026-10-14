@@ -16,15 +16,21 @@ placement journalier, habilitations, visites médicales, affichage couloir, bila
 - `src/lib/supabase-server.ts` — `getServerClient()` (session utilisateur, RLS) et
   `getAdminClient()` (service_role, **bypass RLS**, usage serveur contrôlé : invitations,
   affichage couloir public, export RGPD, écritures « module » validées).
-- `src/lib/current-user.ts` — `getCurrentProfile()`, `requireAdmin()`.
+- `src/lib/current-user.ts` — `getCurrentProfile()`, `requireAdmin()`. Ligne `app_user` en
+  cache inter-requêtes (`PROFIL_TAG`, invalidé par `/api/users/*` et `/platform`).
 - `src/lib/permissions.ts` — matrice de droits par module (`MODULES`, `defaultsFor`,
-  `getPermissions`, `canRead`/`canWrite`, `canWriteModule`, `requireModule`).
-- `src/lib/refdata.ts` — cache des données de référence (`unstable_cache`, 30 s).
+  `getPermissions`, `canRead`/`canWrite`, `canWriteModule`, `requireModule`). Surcharges
+  `role_permission` en cache (`PERMISSIONS_TAG`, invalidé par `/api/droits`).
+- `src/lib/refdata.ts` — cache des données de référence (`unstable_cache`, 30 s, segmenté
+  par site, invalidé par tag à chaque écriture) : services, équipes, quarts, motifs,
+  niveaux, rotation, types d'agence, et depuis le 2026-10-14 le **référentiel des postes**
+  (`REFERENTIEL_TAG` : lignes + postes, `poste_quart`, dates d'ouverture, horaires).
+  ⚠️ En route API, invalider par `revalidateTag(tag, { expire: 0 })` (`updateTag` lève).
 - `src/lib/fetch-all.ts` — `fetchAll()`. PostgREST plafonne **chaque réponse à 1000 lignes**
   (`db-max-rows`) sans lever d'erreur. Toute lecture d'une table qui peut dépasser ce
   seuil (`matrice`, `personne_competence`, `placement`, `ouverture_quart`,
   `contrat_periode`, `visite`) doit passer par cet utilitaire, avec un `.order()`
-  déterministe.
+  déterministe. Lecture par 1re tranche, puis vague de 3, puis vagues de 8.
 - `src/proxy.ts` — protège les routes (redirige vers /login). Public : `/login`, `/forgot`,
   `/reset`, `/auth/*`, `/affichage/*`.
 - `src/components/AppHeader.tsx` — navigation par rôle + cloche d'alerte habilitations.
@@ -145,6 +151,11 @@ Rôles : `admin`, `chef_equipe`, `ordo`, `rh`, `codir`, `planning`.
 ## Audit
 Triggers PostgreSQL (`audit_trigger`) sur les tables métier → `audit_log`
 (qui, action, table, ancienne/nouvelle valeur en JSON, site, lot).
+- **Format compact** (0090) : une modification ne garde, avant comme après, que les champs
+  modifiés + des champs de contexte (personne, jour, quart, poste, motif, nom, rôle…) ; les
+  colonnes techniques (`id`, `created_at`, `updated_at`, `created_by`, `site_id`…) sont
+  retirées (l'identifiant reste dans `record_id`, le site dans `site_id`) ; une écriture
+  sans changement utile ne laisse plus de ligne. Lignes antérieures au 2026-10-14 : complètes.
 - **Auteur** (refonte 0086) : `auth.uid()` ; sinon l'en-tête `x-polaris-auteur` que le
   serveur joint à chaque écriture service_role (fetch des clients Supabase,
   `src/lib/journal-contexte.ts`) ; sinon les colonnes d'auteur de la ligne. Avant 0086,

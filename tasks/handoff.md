@@ -221,6 +221,10 @@ Priorité d'affichage de l'horaire (TV) : **exception ponctuelle > temps partiel
 - **Semaine type** (`/ordonnancement/semaine-type`) : **même trame** sur **7 jours** (Lun→Dim,
   dimanche en rouge), ligne « Activation » (tournants), lignes par atelier, **journée
   dérivée** à part. Gabarit appliqué par « Initialiser ». Gestion des profils inchangée.
+- **Bascules optimistes, sans rechargement** (2026-10-14) : une case cochée (quart du jour,
+  ouverture d'une ligne) est appliquée tout de suite à l'écran ; plus de `router.refresh()`
+  ensuite (il relisait toute la quinzaine sans rien changer : l'état vient de
+  `useState(props)`). Gardé après « Initialiser la semaine ». En cas de refus, la case revient.
 
 ## Matrice de polyvalence (`/matrice`)
 - Bilan **plié par défaut** (« + Bilan / − Bilan »), alimenté en **une seule passe**
@@ -340,6 +344,15 @@ pas de troisième** : la fiche d'une personne est une modale du Suivi.
   module ; filtres dans l'URL ; 100 lignes par page ; Planning + Polyvalence masqués par
   défaut ; opérations groupées en une ligne `LOT` (« voir le détail » = `?lot=`) ;
   conservation réglable (droit `journal` en écriture).
+- **0086 réellement appliquée le 2026-10-14** seulement (délimiteurs `$`, cf. L54) : jusque-là
+  l'écran montrait « Lecture du journal impossible ». Le même jour, panne « number 0 is not
+  iterable » : le résultat de `journal_purger` tombait dans les dictionnaires de noms
+  (corrigé, place fixe dans le `Promise.all`, L57).
+- **Noms** : dictionnaires du site lus en entier (personnes, services, équipes, motifs,
+  habilitations, comptes du site + super_admin), lignes / postes du cache du Référentiel ;
+  plus de liste des ids cités. La recherche garde sa liste plafonnée (38 ids).
+- **0090** : lignes compactes (champs modifiés + contexte, sans colonnes techniques ; rien
+  pour une écriture sans effet). `champsMontres` / `decrireElement` fonctionnent tels quels.
 
 ## Affichage TV (`/affichage`)
 - Index : liste des services avec **cases à cocher** (« Tous les services », date de
@@ -400,6 +413,14 @@ en une passe.
 Grandes grilles (`/matrice`, `/habilitations`, ~22 000 cellules sans filtre) : lignes
 **virtualisées** depuis 2026-08-26 (`usePersonGrid`) ; la récupération serveur reste le
 facteur limitant.
+
+**Consommation Supabase (2026-10-14)** — quota gratuit « Log Ingestion » 1 Go/mois atteint aux
+3/4 à mi-mois (une ligne de journal par appel à la base). Corrigé : profil / droits / menus
+masqués en cache inter-requêtes (tags invalidés à l'écriture) ; `/api/personnel` ne relit plus
+les types de contrat à chaque op ; `fetchAll` en 1 + 3 + 8 ; référentiel du Placement en cache
+(`REFERENTIEL_TAG`) ; plus de listes d'ids dans les URL (Planning, Placement, Matrice, Journal,
+TV) ; Ordonnancement sans refresh ; TV en mise à jour économe ; journal compact (0090). Analyse
+et reste à faire : `tasks/todo.md` § Consommation Supabase.
 
 Redéployer sans changement de code : `git commit --allow-empty`.
 

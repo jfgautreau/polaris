@@ -916,3 +916,13 @@ invisible tant que la migration n'était pas passée (cf. L54).
 pas homogène au reste prend une place FIXE avant lui. Et un code écrit pour une
 migration se teste avec la migration appliquée — sinon son chemin nominal n'a jamais
 tourné.
+
+## L58 — Une liste d'ids dans l'URL se paie à chaque appel… et dans les journaux
+**Contexte** : 2026-10-14, quota Supabase « Log Ingestion » (1 Go/mois en gratuit) aux 3/4 à
+mi-mois. Supabase journalise CHAQUE appel avec son URL complète : un `.in("personne_id",
+[326 ids])` pèse ~13 Ko, répété à chaque tranche de `fetchAll` (qui en lançait 9 dès 1 000
+lignes) ; s'y ajoutaient le profil et les droits relus à chaque requête (~40 % des appels).
+**Règle** : borner par `site_id` / `statut` côté base et trier en mémoire avec un `Set` ;
+mettre en cache (tag invalidé à l'écriture) ce qui change rarement ; ne garder une liste
+d'ids que si elle est courte. Pour diagnostiquer : export CSV des journaux, regrouper les
+appels par rafale (= un affichage d'écran) et compter tables et listes.
