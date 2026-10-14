@@ -129,6 +129,10 @@ export default async function PlacementPage({
   // contrats (0050), plus stockees sur personne.
   const personnesActives = persD ?? [];
   const idsPourContrat = personnesActives.map((p) => p.id);
+  // Plus de liste d'ids dans l'URL (2026-10-14, journaux Supabase) : la RLS borne
+  // déjà au site, on y ajoute `site_id` et on écarte en mémoire les personnes hors
+  // de la liste chargée — seules lignes que la liste excluait. Résultat identique.
+  const pourContratSet = new Set(idsPourContrat);
   const contratsMap = new Map<string, { date_debut: string | null; date_fin: string | null }[]>();
   if (idsPourContrat.length) {
     // fetchAll (L8) : plusieurs contrats par personne, le volume peut dépasser 1000.
@@ -136,10 +140,10 @@ export default async function PlacementPage({
       supabase
         .from("contrat_periode")
         .select("personne_id, date_debut, date_fin")
-        .in("personne_id", idsPourContrat)
+        .eq("site_id", profile.siteId)
         .order("id")
         .returns<{ personne_id: string; date_debut: string | null; date_fin: string | null }[]>()
-    );
+    ).then((rows) => rows.filter((r) => pourContratSet.has(r.personne_id)));
     for (const r of cpD) {
       const arr = contratsMap.get(r.personne_id) ?? [];
       arr.push({ date_debut: r.date_debut, date_fin: r.date_fin });
@@ -289,12 +293,16 @@ export default async function PlacementPage({
   // Le manque est recalcule a l'affichage : un placement force redevient normal des
   // que l'habilitation est regularisee, et repasse en rouge si elle expire.
   const posteIdsAffiches = groups.flatMap((g) => g.postes.map((p) => p.id));
+  // Petite table : lue pour le site entier, bornée ici aux postes du plan (pas de
+  // liste de postes dans l'URL, comme au Planning).
+  const posteAfficheSet = new Set(posteIdsAffiches);
   const { data: pcrD } = posteIdsAffiches.length
     ? await supabase
         .from("poste_competence_requise")
         .select("poste_id, competence_id, competence:competence_id(nom, duree_validite_mois)")
-        .in("poste_id", posteIdsAffiches)
+        .eq("site_id", profile.siteId)
         .returns<PcrRow[]>()
+        .then((r) => ({ ...r, data: (r.data ?? []).filter((x) => posteAfficheSet.has(x.poste_id)) }))
     : { data: [] as PcrRow[] };
 
   const habPoste: Record<string, string[]> = {};
@@ -416,13 +424,18 @@ export default async function PlacementPage({
   const postesAffiches = new Set(posteIdsAffiches);
   const [horPoste, { data: tpD }, nuits, horPlace] = await Promise.all([
     pHorairesPoste,
+    // Temps partiels du site (peu nombreux), bornés ici aux personnes placées.
     idsPlaces.length
       ? supabase
           .from("personne")
           .select("id, tp_config")
-          .in("id", idsPlaces)
+          .eq("site_id", profile.siteId)
           .eq("temps_partiel", true)
           .returns<{ id: string; tp_config: TpCfg | null }[]>()
+          .then((r) => {
+            const places = new Set(idsPlaces);
+            return { ...r, data: (r.data ?? []).filter((x) => places.has(x.id)) };
+          })
       : { data: [] },
     // Horaires « après une nuit » (0087) : la ligne a-t-elle tourné de nuit la veille ?
     chargerNuitsAvant(supabase, profile.siteId, [jour]),

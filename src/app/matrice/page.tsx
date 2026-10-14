@@ -135,18 +135,22 @@ export default async function MatricePage({
   //  Les deux derniers ignorent les postes « en attente » (zone_attente), absents
   //  de la matrice.
   const filtreConducteurs = sp.cond === "1";
-  const persIds = personnes.map((p) => p.id);
+  // Plus de liste d'ids de personnes dans l'URL (2026-10-14, journaux Supabase :
+  // 326 ids ≈ 13 Ko, répétés à chaque tranche). La RLS borne déjà au site ; on y
+  // ajoute `site_id` et on garde en mémoire les seules personnes chargées. La liste
+  // des POSTES reste quand un service est filtré : courte, elle évite de lire toute
+  // la matrice du site ; sans filtre, elle couvrait le site entier → filtre mémoire.
+  const persSet = new Set(personnes.map((p) => p.id));
+  const posteSet = new Set(posteIds);
   const [m, avecRows, condRows, typesAgence] = await Promise.all([
     posteIds.length && personnes.length
-      ? fetchAll<MatriceRow>(() =>
-          supabase
+      ? fetchAll<MatriceRow>(() => {
+          const q = supabase
             .from("matrice")
             .select("personne_id, poste_id, niveau_actuel, niveau_cible")
-            .in("personne_id", persIds)
-            .in("poste_id", posteIds)
-            .order("id")
-            .returns<MatriceRow[]>()
-        )
+            .eq("site_id", profile.siteId);
+          return (sp.atelier ? q.in("poste_id", posteIds) : q).order("id").returns<MatriceRow[]>();
+        }).then((rows) => rows.filter((r) => persSet.has(r.personne_id) && posteSet.has(r.poste_id)))
       : Promise.resolve([] as MatriceRow[]),
     personnes.length
       ? fetchAll<{ personne_id: string }>(() =>
@@ -156,10 +160,10 @@ export default async function MatricePage({
             .eq("poste.actif", true)
             .eq("poste.zone_attente", false)
             .gte("niveau_actuel", 1)
-            .in("personne_id", persIds)
+            .eq("site_id", profile.siteId)
             .order("id")
             .returns<{ personne_id: string }[]>()
-        )
+        ).then((rows) => rows.filter((r) => persSet.has(r.personne_id)))
       : Promise.resolve([] as { personne_id: string }[]),
     filtreConducteurs
       ? fetchAll<{ personne_id: string }>(() =>
