@@ -2,6 +2,9 @@ import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import { getAdminClient } from "@/lib/supabase-server";
 import { getCurrentSite } from "@/lib/current-site";
+import { fetchAll } from "@/lib/fetch-all";
+import type { PosteQuartRow } from "@/lib/poste-quart";
+import type { ValiditeRow } from "@/lib/referentiel-validite";
 
 // Donnees de reference (rarement modifiees, identiques pour tous les users) mises
 // en cache pour ne pas etre rechargees a chaque clic de filtre / navigation.
@@ -88,10 +91,10 @@ const getQuartsBySite = unstable_cache(
     // tout le monde le matin (créneau toujours null → repli par défaut).
     const { data } = await getAdminClient()
       .from("quart")
-      .select("code, libelle, ordre, creneau")
+      .select("code, libelle, ordre, creneau, couleur")
       .eq("site_id", site)
       .order("ordre");
-    return (data ?? []) as { code: string; libelle: string; ordre: number; creneau: string | null }[];
+    return (data ?? []) as { code: string; libelle: string; ordre: number; creneau: string | null; couleur: string | null }[];
   },
   ["refdata-quarts"],
   { ...OPTS, tags: [QUARTS_TAG] }
@@ -109,13 +112,14 @@ type MotifRow = {
   code_court: string;
   libelle: string;
   couleur: string;
+  visible_operateurs: boolean;
 };
 
 const getMotifsBySite = unstable_cache(
   async (site: string) => {
     const { data } = await getAdminClient()
       .from("motif_absence")
-      .select("id, code_court, libelle, couleur")
+      .select("id, code_court, libelle, couleur, visible_operateurs")
       .eq("actif", true)
       .eq("site_id", site)
       .order("libelle");
@@ -325,3 +329,145 @@ const getAlertesHabilitationsBySite = unstable_cache(
 export const getAlertesHabilitationsC = cache(async function getAlertesHabilitationsC(): Promise<number> {
   return getAlertesHabilitationsBySite(await siteId());
 });
+
+// -------- Référentiel des postes (lignes, postes, cycles, dates, horaires) ----
+// 2026-10-14 (journaux Supabase) : le Placement relisait tout cela à chaque
+// affichage (~13 appels sur ~32). Mis en cache par site ; toute écriture passe
+// par /api/referentiel ou /api/horaires, qui invalident REFERENTIEL_TAG après
+// chaque requête. Une lecture en échec LÈVE (rien n'est mémorisé).
+export const REFERENTIEL_TAG = "refdata-referentiel";
+
+export type PosteRef = {
+  id: string;
+  nom: string;
+  nom_court: string | null;
+  actif: boolean;
+  effectif_requis: number;
+  niveau_min_requis: number;
+  ordre_affichage: number;
+  numero_rotation: string | null;
+  categorie: string | null;
+  imprimable: boolean;
+  zone_attente: boolean;
+};
+// TOUTES les lignes du site (actives ou non) avec TOUS leurs postes : à
+// l'appelant de filtrer (service, actif), comme le faisaient ses requêtes.
+export type LigneRef = {
+  id: string;
+  nom: string;
+  actif: boolean;
+  ordre_affichage: number;
+  atelier_id: string;
+  couleur: string | null;
+  poste: PosteRef[];
+};
+const getLignesPostesBySite = unstable_cache(
+  async (site: string): Promise<LigneRef[]> => {
+    const { data, error } = await getAdminClient()
+      .from("ligne")
+      .select(
+        "id, nom, actif, ordre_affichage, atelier_id, couleur, poste(id, nom, nom_court, actif, effectif_requis, niveau_min_requis, ordre_affichage, numero_rotation, categorie, imprimable, zone_attente)"
+      )
+      .eq("site_id", site)
+      .order("nom")
+      .returns<LigneRef[]>();
+    if (error) throw new Error(error.message);
+    return data ?? [];
+  },
+  ["refdata-lignes-postes"],
+  { ...OPTS, tags: [REFERENTIEL_TAG] }
+);
+export async function getLignesPostesC(): Promise<LigneRef[]> {
+  return getLignesPostesBySite(await siteId());
+}
+
+const getPosteQuartBySite = unstable_cache(
+  async (site: string): Promise<PosteQuartRow[]> =>
+    fetchAll<PosteQuartRow>(() =>
+      getAdminClient()
+        .from("poste_quart")
+        .select("poste_id, quart_code, actif, effectif_requis")
+        .eq("site_id", site)
+        .order("poste_id")
+        .order("quart_code")
+        .returns<PosteQuartRow[]>()
+    ),
+  ["refdata-poste-quart"],
+  { ...OPTS, tags: [REFERENTIEL_TAG] }
+);
+export async function getPosteQuartC(): Promise<PosteQuartRow[]> {
+  return getPosteQuartBySite(await siteId());
+}
+
+const getValiditesBySite = unstable_cache(
+  async (site: string, table: "ligne" | "poste"): Promise<ValiditeRow[]> => {
+    const { data, error } = await getAdminClient()
+      .from(table)
+      .select("id, date_ouverture, date_fermeture")
+      .eq("site_id", site)
+      .returns<ValiditeRow[]>();
+    if (error) throw new Error(error.message);
+    return data ?? [];
+  },
+  ["refdata-validites"],
+  { ...OPTS, tags: [REFERENTIEL_TAG] }
+);
+export async function getValiditesC(table: "ligne" | "poste"): Promise<ValiditeRow[]> {
+  return getValiditesBySite(await siteId(), table);
+}
+
+export type HorairePosteRow = {
+  poste_id: string;
+  quart_code: string;
+  jour: number;
+  debut: string | null;
+  fin: string | null;
+  debut_apres_nuit: string | null;
+  fin_apres_nuit: string | null;
+};
+const getHorairesPosteBySite = unstable_cache(
+  async (site: string): Promise<HorairePosteRow[]> =>
+    fetchAll<HorairePosteRow>(() =>
+      getAdminClient()
+        .from("horaire_poste")
+        .select("poste_id, quart_code, jour, debut, fin, debut_apres_nuit, fin_apres_nuit")
+        .eq("site_id", site)
+        .order("poste_id")
+        .order("quart_code")
+        .order("jour")
+        .returns<HorairePosteRow[]>()
+    ),
+  ["refdata-horaires-poste"],
+  { ...OPTS, tags: [REFERENTIEL_TAG] }
+);
+export async function getHorairesPosteC(): Promise<HorairePosteRow[]> {
+  return getHorairesPosteBySite(await siteId());
+}
+
+export type HorairePlaceRow = {
+  poste_id: string;
+  quart_code: string;
+  numero: string;
+  debut: string | null;
+  fin: string | null;
+  debut_apres_nuit: string | null;
+  fin_apres_nuit: string | null;
+};
+const getHorairesPlaceBySite = unstable_cache(
+  async (site: string): Promise<HorairePlaceRow[]> =>
+    fetchAll<HorairePlaceRow>(() =>
+      getAdminClient()
+        .from("horaire_place")
+        .select("poste_id, quart_code, numero, debut, fin, debut_apres_nuit, fin_apres_nuit")
+        .eq("site_id", site)
+        .order("poste_id")
+        .order("quart_code")
+        .order("numero")
+        .returns<HorairePlaceRow[]>()
+    ),
+  ["refdata-horaires-place"],
+  { ...OPTS, tags: [REFERENTIEL_TAG] }
+);
+export async function getHorairesPlaceC(): Promise<HorairePlaceRow[]> {
+  return getHorairesPlaceBySite(await siteId());
+}

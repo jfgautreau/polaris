@@ -8,10 +8,22 @@ import { requireModule, canWritePlacementData } from "@/lib/permissions";
 import { fetchAll } from "@/lib/fetch-all";
 import { enAvance } from "@/lib/en-avance";
 import { quartParDefaut, quartOuDefaut, memeQuart } from "@/lib/quarts";
-import { chargerPosteQuart, tourneSurQuart, effectifSurQuart } from "@/lib/poste-quart";
-import { chargerValidites, actifLe } from "@/lib/referentiel-validite";
+import { pqDepuisLignes, tourneSurQuart, effectifSurQuart } from "@/lib/poste-quart";
+import { validitesDepuisLignes, actifLe } from "@/lib/referentiel-validite";
 import { isoDate, mondayOf, addDays } from "@/lib/week";
-import { getRotationRefsC, getTypesAgenceC } from "@/lib/refdata";
+import {
+  getRotationRefsC,
+  getTypesAgenceC,
+  getAteliersC,
+  getEquipesC,
+  getQuartsC,
+  getMotifsC,
+  getLignesPostesC,
+  getPosteQuartC,
+  getValiditesC,
+  getHorairesPosteC,
+  getHorairesPlaceC,
+} from "@/lib/refdata";
 import { rotationForWeek, equipesParQuart } from "@/lib/rotation";
 import { addMonthsIso } from "@/lib/habilitations";
 import { estAuTravailLe, deriverArriveeDepart } from "@/lib/personne-statut";
@@ -24,8 +36,6 @@ type Atelier = { id: string; nom: string };
 type Equipe = { id: string; nom: string; couleur: string | null; quart_fixe?: string | null };
 type Quart = { code: string; libelle: string; ordre: number; creneau: string | null; couleur?: string | null };
 type Personne = { id: string; nom: string; prenom: string; equipe_id: string | null; atelier_id: string | null; type_contrat: string };
-type PosteRow = { id: string; nom: string; nom_court: string | null; actif: boolean; effectif_requis: number; niveau_min_requis: number; ordre_affichage: number; numero_rotation: string | null; categorie: string | null; imprimable?: boolean; zone_attente?: boolean };
-type LigneRow = { id: string; nom: string; ordre_affichage: number; atelier_id: string; couleur: string | null; poste: PosteRow[] };
 type Placement = { personne_id: string; poste_id: string | null; motif_absence_id: string | null; non_travaille: boolean; quart_code: string | null; numero_rotation: string | null };
 type MatRow = { personne_id: string; poste_id: string; niveau_actuel: number };
 type Motif = { id: string; code_court: string; libelle: string; couleur: string; visible_operateurs?: boolean };
@@ -78,6 +88,14 @@ export default async function PlacementPage({
     supabase.from("equipe_chef").select("equipe_id").eq("app_user_id", profile.authId).returns<{ equipe_id: string }[]>()
   );
   const pRotRefs = enAvance(getRotationRefsC());
+  // Référentiel en cache (refdata.ts, invalidé à chaque écriture du Référentiel et
+  // des horaires) : ~13 appels de moins par affichage depuis le 2026-10-14.
+  const pLignesSite = enAvance(getLignesPostesC());
+  const pPosteQuart = enAvance(getPosteQuartC());
+  const pValLignes = enAvance(getValiditesC("ligne"));
+  const pValPostes = enAvance(getValiditesC("poste"));
+  const pHorairesPoste = enAvance(getHorairesPosteC());
+  const pHorairesPlace = enAvance(getHorairesPlaceC());
   const pTypesAgence = enAvance(getTypesAgenceC());
   const pTpPeriodes = enAvance(
     supabase
@@ -91,24 +109,17 @@ export default async function PlacementPage({
     supabase.from("personne").select("id, tp_config").eq("temps_partiel", true).returns<{ id: string; tp_config: TpConf }[]>()
   );
 
-  const [{ data: ateliersD }, { data: equipesD }, { data: quartsD, error: quartsErr }, { data: persD }, { data: motifsD }] = await Promise.all([
-    supabase.from("atelier").select("id, nom").eq("actif", true).order("ordre_affichage").order("nom").returns<Atelier[]>(),
-    supabase.from("equipe").select("id, nom, couleur, quart_fixe").eq("actif", true).order("nom").returns<Equipe[]>(),
-    // Migration 0068 : la colonne `couleur` peut ne pas encore exister — repli
-    // silencieux plus bas (relecture sans `couleur`) pour ne pas planter la page.
-    supabase.from("quart").select("code, libelle, ordre, creneau, couleur").order("ordre").returns<Quart[]>(),
+  const [ateliersD, equipesD, quartsD, { data: persD }, motifsD] = await Promise.all([
+    getAteliersC(),
+    getEquipesC(),
+    getQuartsC(),
     supabase.from("personne").select("id, nom, prenom, equipe_id, atelier_id, type_contrat").in("statut", ["ACTIF", "A_VENIR"]).order("nom").returns<Personne[]>(),
-    supabase.from("motif_absence").select("id, code_court, libelle, couleur, visible_operateurs").eq("actif", true).order("libelle").returns<Motif[]>(),
+    getMotifsC(),
   ]);
 
-  const ateliers = ateliersD ?? [];
-  const equipes = equipesD ?? [];
-  // Repli si migration 0068 (colonne `couleur`) non appliquée : on relit sans.
-  let quarts: Quart[] = quartsD ?? [];
-  if (quartsErr && (quartsErr.code === "42703" || quartsErr.code === "PGRST204")) {
-    const { data: q2 } = await supabase.from("quart").select("code, libelle, ordre, creneau").order("ordre").returns<Omit<Quart, "couleur">[]>();
-    quarts = (q2 ?? []).map((q) => ({ ...q, couleur: null }));
-  }
+  const ateliers: Atelier[] = ateliersD;
+  const equipes: Equipe[] = equipesD;
+  const quarts: Quart[] = quartsD;
   const quartCodes = quarts.map((q) => q.code);
   // Cycle de vie (0049 + 0050) : on masque du placement les personnes qui ne
   // sont pas effectivement au travail le jour choisi — hors fenetre d'activite
@@ -139,7 +150,7 @@ export default async function PlacementPage({
     const contrats = contratsMap.get(p.id) ?? [];
     return estAuTravailLe(deriverArriveeDepart(contrats), contrats, jour);
   });
-  const motifs = motifsD ?? [];
+  const motifs: Motif[] = motifsD;
 
   // Set des personnes « Conducteur » : au moins une compétence (niveau ≥ 1) sur
   // au moins un poste `categorie = 'conducteur'` actif. Utilisé par le filtre
@@ -201,41 +212,26 @@ export default async function PlacementPage({
   );
 
   // Postes de l'atelier + desactivations poste x quart + placements du jour + matrice.
-  const [{ data: lignesD }, pq, { data: plD }, mat, ligneVal, posteVal] = await Promise.all([
-    atelierId
-      ? (async () => {
-          // Lecture tolérante à l'absence de `poste.zone_attente` (0077) puis de
-          // `poste.imprimable` (0073) : une colonne absente ferait échouer TOUTE la
-          // requête imbriquée (L19) et viderait le plan. Replis successifs, défauts
-          // false / true.
-          const embed = (extra: string) =>
-            `id, nom, ordre_affichage, atelier_id, couleur, poste(id, nom, nom_court, actif, effectif_requis, niveau_min_requis, ordre_affichage, numero_rotation, categorie${extra})`;
-          const q = (extra: string) =>
-            supabase.from("ligne").select(embed(extra)).eq("atelier_id", atelierId).eq("actif", true).order("nom").returns<LigneRow[]>();
-          const colonneAbsente = (e: { code?: string } | null) => !!e && (e.code === "42703" || e.code === "PGRST204");
-          const avec = await q(", imprimable, zone_attente");
-          if (!colonneAbsente(avec.error)) return avec;
-          const sans0077 = await q(", imprimable");
-          if (!colonneAbsente(sans0077.error)) return sans0077;
-          return q("");
-        })()
-      : Promise.resolve({ data: [] as LigneRow[] }),
-    chargerPosteQuart(supabase),
+  const lignesSite = await pLignesSite;
+  // Lignes du service affiché : toutes pour la matrice (comme avant), les actives pour le plan.
+  const lignesAtelier = atelierId ? lignesSite.filter((l) => l.atelier_id === atelierId) : [];
+  const lignesD = lignesAtelier.filter((l) => l.actif);
+  const [{ data: plD }, mat, pqRows, valLignes, valPostes] = await Promise.all([
     pPlacementsJour,
     (async () => {
-      const posteIds = ((await supabase
-        .from("ligne")
-        .select("poste(id)")
-        .eq("atelier_id", atelierId)
-        .returns<{ poste: { id: string }[] }[]>()).data ?? []).flatMap((l) => l.poste.map((p) => p.id));
+      const posteIds = lignesAtelier.flatMap((l) => l.poste.map((p) => p.id));
       if (!posteIds.length) return [] as MatRow[];
       return fetchAll<MatRow>(() =>
         supabase.from("matrice").select("personne_id, poste_id, niveau_actuel").in("poste_id", posteIds).order("id").returns<MatRow[]>()
       );
     })(),
-    chargerValidites(supabase, "ligne"),
-    chargerValidites(supabase, "poste"),
+    pPosteQuart,
+    pValLignes,
+    pValPostes,
   ]);
+  const pq = pqDepuisLignes(pqRows);
+  const ligneVal = validitesDepuisLignes(valLignes);
+  const posteVal = validitesDepuisLignes(valPostes);
   // Validité datée (0071) à AUJOURD'HUI : ligne / poste dont la fermeture est
   // atteinte (ou l'ouverture pas encore) est masqué.
   const todayIsoRef = new Date().toISOString().slice(0, 10);
@@ -261,7 +257,7 @@ export default async function PlacementPage({
   // relayé à `PlacementBoard`, qui pilote l'affichage du dénominateur et la couverture.
   // Effectif par quart (trois états, cf. src/lib/poste-quart.ts) : un poste qui ne
   // tourne pas sur le quart (« – ») est masqué ; sinon son besoin = effectif du quart.
-  const groups = (lignesD ?? [])
+  const groups = lignesD
     .filter((l) => actifLe(ligneVal.get(l.id), todayIsoRef)) // fermeture datée atteinte -> ligne masquée
     .map((l) => ({
       ligneId: l.id,
@@ -269,7 +265,7 @@ export default async function PlacementPage({
       ligneOrdre: l.ordre_affichage ?? 0,
       couleur: l.couleur, // couleur des PDF (0082)
       fermee: !ligneOuverte(l.id), // ordonnancement : ligne fermée -> besoin 0
-      postes: [...(l.poste ?? [])]
+      postes: [...l.poste]
         .filter((p) => p.actif && actifLe(posteVal.get(p.id), todayIsoRef) && tourneSurQuart(pq, p.id, quart, p.effectif_requis))
         .sort(ordreThenNom)
         .map((p) => ({
@@ -279,8 +275,7 @@ export default async function PlacementPage({
           effectifRequis: effectifSurQuart(pq, p.id, quart, p.effectif_requis),
           niveauMin: p.niveau_min_requis,
           numeroRotation: p.numero_rotation,
-          // Défaut true si la migration 0073 (colonne imprimable) n'est pas passée.
-          imprimable: p.imprimable ?? true,
+          imprimable: p.imprimable,
           // Zone d'attente (0077) : affichée dans la colonne « À répartir », hors du plan.
           attente: p.zone_attente === true,
           // Poste d'encadrement : jamais « à l'arrêt » sur les feuilles imprimées.
@@ -353,12 +348,12 @@ export default async function PlacementPage({
     const placesQuart = (plD ?? []).filter((r) => r.poste_id && memeQuart(r.quart_code, quart, quarts));
     const idsPostes = [...new Set(placesQuart.map((r) => r.poste_id as string))];
     if (idsPostes.length) {
-      const { data: postesD } = await supabase
-        .from("poste")
-        .select("id, nom, actif, ligne_id, ligne:ligne_id(actif, atelier_id)")
-        .in("id", idsPostes)
-        .returns<{ id: string; nom: string; actif: boolean; ligne_id: string; ligne: { actif: boolean; atelier_id: string | null } | null }[]>();
-      const posteInfo = new Map((postesD ?? []).map((p) => [p.id, p]));
+      // Depuis le référentiel en cache (tous les postes du site, avec leur ligne).
+      const posteInfo = new Map(
+        lignesSite.flatMap((l) =>
+          l.poste.map((p) => [p.id, { id: p.id, nom: p.nom, actif: p.actif, ligne_id: l.id, ligne: { actif: l.actif, atelier_id: l.atelier_id } }] as const)
+        )
+      );
       const ateliersActifs = new Set(ateliers.map((a) => a.id));
       for (const r of placesQuart) {
         const p = posteInfo.get(r.poste_id as string);
@@ -418,15 +413,9 @@ export default async function PlacementPage({
   // aux postes du plan et aux personnes placées ce jour-là : petites lectures.
   const placesPoste = (plD ?? []).filter((r) => r.poste_id && posteIdsAffiches.includes(r.poste_id));
   const idsPlaces = [...new Set(placesPoste.map((r) => r.personne_id))];
-  const [{ data: horD }, { data: tpD }, nuits, { data: hpD }] = await Promise.all([
-    posteIdsAffiches.length
-      ? supabase
-          .from("horaire_poste")
-          .select("poste_id, quart_code, jour, debut, fin, debut_apres_nuit, fin_apres_nuit")
-          .in("poste_id", posteIdsAffiches)
-          .eq("jour", dowLundi(jour))
-          .returns<{ poste_id: string; quart_code: string; jour: number; debut: string | null; fin: string | null; debut_apres_nuit: string | null; fin_apres_nuit: string | null }[]>()
-      : { data: [] },
+  const postesAffiches = new Set(posteIdsAffiches);
+  const [horPoste, { data: tpD }, nuits, horPlace] = await Promise.all([
+    pHorairesPoste,
     idsPlaces.length
       ? supabase
           .from("personne")
@@ -438,19 +427,18 @@ export default async function PlacementPage({
     // Horaires « après une nuit » (0087) : la ligne a-t-elle tourné de nuit la veille ?
     chargerNuitsAvant(supabase, profile.siteId, [jour]),
     // Horaires par place (0088).
-    posteIdsAffiches.length
-      ? supabase
-          .from("horaire_place")
-          .select("poste_id, quart_code, numero, debut, fin, debut_apres_nuit, fin_apres_nuit")
-          .in("poste_id", posteIdsAffiches)
-          .returns<{ poste_id: string; quart_code: string; numero: string; debut: string | null; fin: string | null; debut_apres_nuit: string | null; fin_apres_nuit: string | null }[]>()
-      : { data: [] },
+    pHorairesPlace,
   ]);
+  // Horaires en cache pour tout le site : bornés ici aux postes du plan (et au jour
+  // de la semaine pour l'horaire standard), comme le faisaient les requêtes.
+  const dow = dowLundi(jour);
+  const horD = horPoste.filter((h) => postesAffiches.has(h.poste_id) && h.jour === dow);
+  const hpD = horPlace.filter((h) => postesAffiches.has(h.poste_id));
   const placeMap = new Map<string, HorairePlace>();
-  for (const h of hpD ?? []) placeMap.set(`${h.poste_id}:${h.quart_code}:${h.numero}`, { debut: h.debut, fin: h.fin, debutN: h.debut_apres_nuit, finN: h.fin_apres_nuit });
+  for (const h of hpD) placeMap.set(`${h.poste_id}:${h.quart_code}:${h.numero}`, { debut: h.debut, fin: h.fin, debutN: h.debut_apres_nuit, finN: h.fin_apres_nuit });
   const horMap = new Map<string, HM>();
   const apresNuitMap = new Map<string, HM>();
-  for (const h of horD ?? []) {
+  for (const h of horD) {
     horMap.set(`${h.poste_id}:${h.quart_code}:${h.jour}`, { debut: h.debut, fin: h.fin });
     if (h.debut_apres_nuit || h.fin_apres_nuit)
       apresNuitMap.set(`${h.poste_id}:${h.quart_code}:${h.jour}`, { debut: h.debut_apres_nuit, fin: h.fin_apres_nuit });

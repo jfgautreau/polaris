@@ -3,7 +3,7 @@ import { revalidateTag } from "next/cache";
 import { getAdminClient } from "@/lib/supabase-server";
 import { getCurrentProfile } from "@/lib/current-user";
 import { canWriteModule } from "@/lib/permissions";
-import { ATELIERS_TAG } from "@/lib/refdata";
+import { ATELIERS_TAG, REFERENTIEL_TAG } from "@/lib/refdata";
 import { couleurLibre, estCouleurLigne } from "@/lib/ligne-couleurs";
 
 // POST /api/referentiel  { op, ... }
@@ -118,7 +118,19 @@ async function verifierUniciteNom(
   return `Ce ${libChamp} (« ${valeur.trim()} ») est déjà utilisé sur ce site.`;
 }
 
+// Toute requête de cette route peut écrire lignes, postes, cycles par quart ou habilitations requises : le référentiel en cache
+// (refdata.ts, REFERENTIEL_TAG — Placement) est invalidé APRÈS chaque requête, même
+// en erreur (une écriture partielle a pu passer). Invalidation sans requête sur
+// la base : elle ne coûte rien.
 export async function POST(req: NextRequest) {
+  try {
+    return await traiter(req);
+  } finally {
+    revalidateTag(REFERENTIEL_TAG, { expire: 0 });
+  }
+}
+
+async function traiter(req: NextRequest) {
   const profile = await getCurrentProfile();
   if (!profile) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   // Droit de module, et non « admin » en dur : la matrice accorde ce module a

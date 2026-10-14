@@ -270,7 +270,12 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
 - **Données de référence** : `src/lib/refdata.ts` (`unstable_cache` par site, argument
   `site` obligatoire). Toute écriture dans une table référencée appelle
   `updateTag(TAG)` (`ATELIERS_TAG`, `EQUIPES_TAG`, `QUARTS_TAG`, `MOTIFS_TAG`, `NIVEAUX_TAG`,
-  `NB_NIVEAUX_TAG`, `SEUIL_COMPETENT_TAG`, `ROTATION_TAG`, `TYPES_AGENCE_TAG`).
+  `NB_NIVEAUX_TAG`, `SEUIL_COMPETENT_TAG`, `ROTATION_TAG`, `TYPES_AGENCE_TAG`, `REFERENTIEL_TAG`).
+  **`REFERENTIEL_TAG`** (2026-10-14) : lignes + postes, cycles `poste_quart`, dates d'ouverture,
+  horaires standard et par place (`getLignesPostesC`, `getPosteQuartC`, `getValiditesC`,
+  `getHorairesPosteC`, `getHorairesPlaceC`) — lus par le **Placement** ; `/api/referentiel` et
+  `/api/horaires` l'invalident après CHAQUE requête (wrapper `POST` → `traiter`). Toute nouvelle
+  route qui écrit ces tables doit en faire autant.
   ⚠️ `updateTag` **lève dans une route API** (Next 16, réservé aux Server Actions) : en
   route, `revalidateTag(TAG, { expire: 0 })` (test `cache-invalidation`).
 - **Socle** : profil + site en une requête ; `getAdminClient()` = client unique (sans

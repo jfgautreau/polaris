@@ -1,4 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { revalidateTag } from "next/cache";
+import { REFERENTIEL_TAG } from "@/lib/refdata";
 import { getAdminClient } from "@/lib/supabase-server";
 import { getCurrentProfile } from "@/lib/current-user";
 import { canWriteModule } from "@/lib/permissions";
@@ -13,7 +15,18 @@ type Cell = { poste_id?: string; quart_code?: string; jour?: number; debut?: str
 // Horaire d'une PLACE (0088) : numéro de rotation du poste, toute la semaine.
 type Place = { poste_id?: string; quart_code?: string; numero?: string; debut?: string; fin?: string; debutN?: string; finN?: string };
 
+// Horaires standard et par place mis en cache (refdata.ts, REFERENTIEL_TAG —
+// Placement) : invalidés APRÈS chaque requête, même en erreur (une écriture
+// partielle a pu passer). Invalidation sans requête sur la base.
 export async function POST(req: NextRequest) {
+  try {
+    return await traiter(req);
+  } finally {
+    revalidateTag(REFERENTIEL_TAG, { expire: 0 });
+  }
+}
+
+async function traiter(req: NextRequest) {
   const profile = await getCurrentProfile();
   const ok = profile && (await canWriteModule(profile.role, "horaires"));
   if (!ok) return NextResponse.json({ error: "Accès refusé" }, { status: 403 });

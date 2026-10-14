@@ -34,13 +34,21 @@ export function actifLe(
 // Charge les dates d'ouverture/fermeture d'une table (`ligne` ou `poste`) dans
 // une Map indexée par id. Tolère l'absence des colonnes (migration 0071 non
 // passée) → Map vide.
-export async function chargerValidites(supabase: SupabaseClient, table: "ligne" | "poste"): Promise<ValiditeMap> {
+export type ValiditeRow = { id: string; date_ouverture: string | null; date_fermeture: string | null };
+
+// Construit la carte à partir des lignes lues (ici, ou en cache : getValiditesC
+// de refdata.ts, utilisé par le Placement).
+export function validitesDepuisLignes(rows: ValiditeRow[]): ValiditeMap {
   const m: ValiditeMap = new Map();
+  for (const r of rows) m.set(r.id, { date_ouverture: r.date_ouverture, date_fermeture: r.date_fermeture });
+  return m;
+}
+
+export async function chargerValidites(supabase: SupabaseClient, table: "ligne" | "poste"): Promise<ValiditeMap> {
   const { data, error } = await supabase
     .from(table)
     .select("id, date_ouverture, date_fermeture")
-    .returns<{ id: string; date_ouverture: string | null; date_fermeture: string | null }[]>();
-  if (error) return m; // colonnes absentes → repli sur `actif` seul
-  for (const r of data ?? []) m.set(r.id, { date_ouverture: r.date_ouverture, date_fermeture: r.date_fermeture });
-  return m;
+    .returns<ValiditeRow[]>();
+  if (error) return new Map(); // colonnes absentes → repli sur `actif` seul
+  return validitesDepuisLignes(data ?? []);
 }

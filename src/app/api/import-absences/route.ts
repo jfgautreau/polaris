@@ -1,4 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { revalidateTag } from "next/cache";
+import { MOTIFS_TAG } from "@/lib/refdata";
 import { avecLotJournal } from "@/lib/journal-contexte";
 import { getCurrentProfile } from "@/lib/current-user";
 import { moduleWriteGuard } from "@/lib/permissions";
@@ -194,6 +196,8 @@ async function traiterPOST(req: NextRequest) {
           if (c.code_gt) parCodeGt.set(c.code_gt, c.id);
         }
         motifsCrees = crees?.length ?? 0;
+        // Motifs en cache (refdata.ts) : les nouveaux codes apparaissent tout de suite.
+        if (motifsCrees) revalidateTag(MOTIFS_TAG, { expire: 0 });
       }
 
       // 2) Mémoriser les équivalences (matricule RH -> personne / ignorer) pour

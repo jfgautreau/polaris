@@ -29,16 +29,23 @@ const cle = (posteId: string, quart: string) => `${posteId}:${quart}`;
 // Charge toutes les lignes poste_quart du site courant dans une Map indexée
 // `${poste_id}:${quart_code}`. fetchAll + ordre déterministe (la table peut
 // dépasser 1000 lignes une fois l'effectif matérialisé par quart, cf. règle 7).
-export async function chargerPosteQuart(supabase: SupabaseClient): Promise<PqMap> {
+export type PosteQuartRow = { poste_id: string; quart_code: string; actif: boolean; effectif_requis: number | null };
+
+// Construit la carte à partir des lignes lues (ici, ou en cache : getPosteQuartC
+// de refdata.ts, utilisé par le Placement).
+export function pqDepuisLignes(rows: PosteQuartRow[]): PqMap {
   const m: PqMap = new Map();
-  // Sonde : la colonne effectif_requis existe-t-elle ? (migration 0070)
-  const probe = await supabase.from("poste_quart").select("effectif_requis").limit(1);
-  const cols = probe.error ? "poste_id, quart_code, actif" : "poste_id, quart_code, actif, effectif_requis";
-  const rows = await fetchAll<{ poste_id: string; quart_code: string; actif: boolean; effectif_requis?: number | null }>(() =>
-    supabase.from("poste_quart").select(cols).order("poste_id").order("quart_code").returns<{ poste_id: string; quart_code: string; actif: boolean; effectif_requis?: number | null }[]>()
-  );
   for (const r of rows) m.set(cle(r.poste_id, r.quart_code), { actif: r.actif, effectif: r.effectif_requis ?? null });
   return m;
+}
+
+// La sonde de la colonne effectif_requis (migration 0070, appliquée) a été retirée
+// le 2026-10-14 : un appel de plus à chaque chargement, sur chaque écran.
+export async function chargerPosteQuart(supabase: SupabaseClient): Promise<PqMap> {
+  const rows = await fetchAll<PosteQuartRow>(() =>
+    supabase.from("poste_quart").select("poste_id, quart_code, actif, effectif_requis").order("poste_id").order("quart_code").returns<PosteQuartRow[]>()
+  );
+  return pqDepuisLignes(rows);
 }
 
 // Les trois états résolus pour un (poste, quart). `posteEff` = poste.effectif_requis,
