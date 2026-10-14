@@ -26,7 +26,7 @@ Détails : **[INSTALL.md](INSTALL.md)**.
 - **Référentiel** — services / lignes / postes (effectif par quart, catégorie, habilitations requises, numéros de rotation, couleur de ligne, ordre d'affichage), équipes & chefs.
 - **Personnel** — fiche, cycle de vie (contrats = source de vérité), temps partiel, RGPD.
 - **Absences** — périodes reconstruites depuis les jours posés, filtres service / équipe / motif.
-- **Matrice de polyvalence** — niveaux actuel / cible par personne × poste, objectifs, bilan. Échelle du carré magique paramétrable par site (nombre de niveaux, seuil « compétent », couleur par niveau) dans l'écran Compétences.
+- **Matrice de polyvalence** — niveaux actuel / cible par personne × poste, objectifs, bilan. Échelle du carré magique paramétrable par site (nombre de niveaux, seuil « compétent », couleur par niveau) dans l'écran Compétences. Intitulés de poste verticaux ou obliques (essai, bascule à l'écran).
 - **Habilitations** — échéances de recyclage, alertes couleur, cloche d'alerte, historique (suppressions comprises).
 - **Visites médicales** (RH) — dates et types de visites de médecine du travail, sans aucune donnée de santé. Le régime de suivi (simple / adapté / renforcé) est calculé à partir des quarts de nuit, des postes tenus et des habilitations ; les déclencheurs se règlent dans Param. Visites.
 - **Ordonnancement** — ouverture des lignes par quart, semaines types, rotation des équipes.

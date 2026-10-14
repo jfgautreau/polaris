@@ -241,7 +241,8 @@ Priorité d'affichage de l'horaire (TV) : **exception ponctuelle > temps partiel
   sin 45°, bornée 60-240 px) ; une `<col>` de marge de même largeur en bout de tableau
   laisse dépasser les derniers libellés. Mode Verticaux inchangé. Si l'essai est
   abandonné : retirer la bascule, la prop `oblique`, `data-alt`/`data-sel` gardent leur
-  sens, et le bloc « Intitules obliques » de `persongrid.module.css`.
+  sens, le bloc « Intitules obliques » de `persongrid.module.css`, et la sous-section
+  « Intitulés verticaux ou obliques » du guide (`public/guide.html`, § 6) et du README.
 - Saisie : clic = +1, clic droit = −1, cycle `0→1→…→N→❌ (restriction)→0`, où **N =
   `site.nb_niveaux`** (2..4, réglé dans `/admin/competences`). ⚠️ Non découvrable,
   impossible au tactile (pas de clic droit) — un popover de choix reste à faire si la

@@ -17,7 +17,8 @@
 - [ ] Vérifier sur une vraie impression l'Affichage multi-services (2 ou 3 services cochés).
 - [ ] **Matrice — intitulés obliques** (essai du 2026-10-13, bascule « Verticaux /
       Obliques ») : recueillir l'avis des utilisateurs, puis garder un seul rendu (retirer
-      la bascule) ou abandonner l'essai (cf. `handoff.md`, Matrice).
+      la bascule) ou abandonner l'essai (cf. `handoff.md`, Matrice) ; mettre le guide (§ 6) et le README
+      à jour dans les deux cas.
 - [ ] Retirer les 2 affectations hors contrat restantes (15 et 16/10, Le Bignon) depuis le
       Cycle de vie de la personne concernée.
 
