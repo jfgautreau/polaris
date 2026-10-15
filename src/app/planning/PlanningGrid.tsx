@@ -148,6 +148,7 @@ type ActionsPlanning = {
   majBrouillon: (patch: Partial<Brouillon>) => void;
   enregistrerHoraire: (pid: string, iso: string) => void;
   effacerHoraire: (pid: string, iso: string) => void;
+  recopierHoraire: (pid: string, iso: string) => void;
 };
 
 const key = (pid: string, iso: string) => `${pid}:${iso}`;
@@ -449,6 +450,7 @@ const LignePlanning = memo(function LignePlanning({
                 : stdTxt
                   ? `Horaire par défaut : ${stdTxt} · Définir un horaire spécifique`
                   : "Définir un horaire spécifique";
+              const brouillonVide = !brouillon.debut && !brouillon.fin && !brouillon.motif;
               return (
                 <>
                   {canEditExc ? (
@@ -475,7 +477,25 @@ const LignePlanning = memo(function LignePlanning({
                       >
                         ✕
                       </button>
-                      <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 4, paddingRight: 16 }}>Horaire spécifique</div>
+                      {/* » : recopie l'horaire saisi sur les jours suivants (mêmes
+                          jours cibles que le » de la case). */}
+                      <button
+                        type="button"
+                        onClick={() => actions.recopierHoraire(pers.id, d.iso)}
+                        disabled={brouillonVide}
+                        title={
+                          brouillonVide
+                            ? "Saisir un horaire ou un commentaire pour le recopier"
+                            : dowMon(d.iso) < 4
+                              ? "Enregistrer et recopier jusqu'à la fin de cette semaine"
+                              : "Enregistrer et recopier sur la semaine suivante"
+                        }
+                        aria-label="Recopier sur la semaine"
+                        style={{ position: "absolute", top: 4, right: 24, width: 18, height: 18, boxSizing: "border-box", margin: 0, padding: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", lineHeight: 1, fontSize: 14, fontWeight: 700, border: "none", background: "transparent", color: "#4f46e5", opacity: brouillonVide ? 0.35 : 1, cursor: brouillonVide ? "default" : "pointer" }}
+                      >
+                        &raquo;
+                      </button>
+                      <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 4, paddingRight: 36 }}>Horaire spécifique</div>
                       {stdTxt && (
                         <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>Par défaut : {stdTxt}</div>
                       )}
@@ -1161,6 +1181,60 @@ ${ecritures.length} case(s) vide(s) seront remplies (postes et NT). Les cases d�
     annoncer(`Copie du ${nomJour} : ${compteRendu(ecritures.length - refus, laissees, horsCycle, refus)}`);
   }
 
+  // » de la pendule : enregistre l'horaire / le commentaire saisis sur ce jour et
+  // les recopie sur les jours suivants de la personne (mêmes jours cibles que »).
+  // Seulement les jours de même nature : un jour posté vers les jours postés, une
+  // Formation vers les Formations. Cases bloquées (autre quart, TP, hors contrat)
+  // jamais touchées. Un horaire spécifique déjà saisi est remplacé, après confirmation.
+  async function recopierExc(pid: string, iso: string) {
+    const dayIndex = days.findIndex((d) => d.iso === iso);
+    if (dayIndex < 0 || (!draft.debut && !draft.fin && !draft.motif)) return;
+    const formation = isFormation(vals[key(pid, iso)] ?? "");
+    const cibles = joursCibles(dayIndex).filter((t) => {
+      const k = key(pid, t.iso);
+      const v = vals[k] ?? "";
+      if (otherByCell[k] || horsEffectif[k] || (tpBlocked[k] && !v.startsWith("m:"))) return false;
+      return formation ? isFormation(v) : isPoste(v);
+    });
+    if (cibles.length === 0) {
+      annoncer(formation ? "Aucune autre Formation à suivre : rien à recopier." : "Aucun autre jour posté à suivre : rien à recopier.");
+      return;
+    }
+    const remplaces = cibles.filter((t) => {
+      const e = exc[excKey(pid, t.iso)];
+      return e && (e.debut !== draft.debut || e.fin !== draft.fin || e.motif !== draft.motif);
+    }).length;
+    const txt = [draft.debut || draft.fin ? `${draft.debut || "?"}-${draft.fin || "?"}` : "", draft.motif ? `« ${draft.motif} »` : ""].filter(Boolean).join(" ");
+    if (
+      !window.confirm(
+        `Appliquer ${txt} à ${cibles.length} autre(s) jour(s) (${cibles[0].nom} ${cibles[0].num}${cibles.length > 1 ? ` → ${cibles[cibles.length - 1].nom} ${cibles[cibles.length - 1].num}` : ""}) ?` +
+          (remplaces ? `\n\n${remplaces} horaire(s) spécifique(s) déjà saisi(s) seront remplacé(s).` : ""),
+      )
+    )
+      return;
+    const jours = [iso, ...cibles.map((t) => t.iso)];
+    setSaving("saving");
+    const res = await fetch("/api/horaire-exception", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ op: "save-many", personne_id: pid, jour: iso, jours, ...draft }),
+    });
+    if (!res.ok) {
+      const j = (await res.json().catch(() => null)) as { error?: string } | null;
+      setSaving("idle");
+      annoncer(`Recopie de l'horaire refusée : ${j?.error ?? `erreur ${res.status}`}`);
+      return;
+    }
+    setExc((s) => {
+      const n = { ...s };
+      for (const j of jours) n[excKey(pid, j)] = { ...draft };
+      return n;
+    });
+    setExcAt(null);
+    setSaving("idle");
+    annoncer(`Horaire recopié sur ${cibles.length} jour(s)${remplaces ? ` (${remplaces} remplacé(s))` : ""}`);
+  }
+
   // Clavier : Suppr/Retour efface la case selectionnee ; Echap ferme.
   // `change` passe par une référence « dernière version » (mise à jour après
   // chaque rendu) au lieu d'un eslint-disable, qui empêchait le React Compiler de
@@ -1279,6 +1353,7 @@ ${ecritures.length} case(s) vide(s) seront remplies (postes et NT). Les cases d�
       majBrouillon: (patch) => setDraft((d) => ({ ...d, ...patch })),
       enregistrerHoraire: (pid, iso) => saveExc(pid, iso),
       effacerHoraire: (pid, iso) => clearExc(pid, iso),
+      recopierHoraire: (pid, iso) => recopierExc(pid, iso),
     };
   });
   const [actionsLigne] = useState<ActionsPlanning>(() => ({
@@ -1294,6 +1369,7 @@ ${ecritures.length} case(s) vide(s) seront remplies (postes et NT). Les cases d�
     majBrouillon: (patch) => implRef.current?.majBrouillon(patch),
     enregistrerHoraire: (pid, iso) => implRef.current?.enregistrerHoraire(pid, iso),
     effacerHoraire: (pid, iso) => implRef.current?.effacerHoraire(pid, iso),
+    recopierHoraire: (pid, iso) => implRef.current?.recopierHoraire(pid, iso),
   }));
 
   return (

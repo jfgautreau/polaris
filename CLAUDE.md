@@ -318,7 +318,9 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   et effectifs **par semaine** dans la grille) ; bande de quart colorée par semaine en tête (dans les deux vues, même quart sur les 3 semaines en « Suivre le quart »,
   `BANDE_H` décale tous les en-têtes figés) ; `»` écrit chaque jour sur son quart et
   saute un poste hors cycle. Jours de semaine toujours affichés (jour fermé = message fusionné). Bascule
-  Conducteurs (`?cond=1`). Pendule 🕐 (horaire + commentaire, `horaire_exception`),
+  Conducteurs (`?cond=1`). Pendule 🕐 (horaire + commentaire, `horaire_exception` ; son `»`
+  recopie l'horaire sur les mêmes jours cibles que `»`, jours postés → postés, Formation →
+  Formation, remplace après confirmation, op `save-many`),
   recopie `»` (règles `src/lib/planning-recopie.ts` : postes et NT seulement, cases vides seulement ;
   `»` sur case vide = vider la suite sauf absences / TP ; `»` du jour en en-tête = membres affichés de l'équipe choisie, masqué en AUTO / Toutes), glisser-déposer, croix de survol. Le bouton de pré-remplissage recharge la vue.
   Bascule **Par nom / Par poste** (`?par=poste`, `PlanningParPoste.tsx`, règles pures
