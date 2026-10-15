@@ -288,6 +288,10 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   route qui écrit ces tables doit en faire autant.
   ⚠️ `updateTag` **lève dans une route API** (Next 16, réservé aux Server Actions) : en
   route, `revalidateTag(TAG, { expire: 0 })` (test `cache-invalidation`).
+  **Planning** (2026-10-15) : lit le même référentiel en cache que le Placement (équipes,
+  lignes + postes, services `getAteliersTousC`, motifs, quarts, cycles, validités, horaires
+  standard, exigences `getExigencesPostesC`) ; `atelier_id` / `tp_config` viennent de la
+  lecture de l'effectif. Ne pas y remettre de lecture directe de ces tables.
 - **Socle** : profil + site en une requête ; `getAdminClient()` = client unique (sans
   session) ; `AppHeader` en `Promise.all`, compteur d'alertes en cache 60 s par site.
   **Socle en cache inter-requêtes** (2026-10-14, coût des journaux Supabase) : profil
