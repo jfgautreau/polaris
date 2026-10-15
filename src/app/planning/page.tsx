@@ -26,14 +26,27 @@ import PlanningGrid from "./PlanningGrid";
 import PlanningParPoste from "./PlanningParPoste";
 import VueBascule from "./VueBascule";
 import { parseNumeros } from "@/lib/numeros-rotation";
-import { getRotationRefsC, getTypesAgenceC, getHorairesPlaceC } from "@/lib/refdata";
+import {
+  getRotationRefsC,
+  getTypesAgenceC,
+  getHorairesPlaceC,
+  getHorairesPosteC,
+  getEquipesC,
+  getLignesPostesC,
+  getAteliersTousC,
+  getMotifsC,
+  getQuartsC,
+  getPosteQuartC,
+  getValiditesC,
+  getExigencesPostesC,
+} from "@/lib/refdata";
 import { rotationForWeek } from "@/lib/rotation";
 import { chargerNuitsAvant } from "@/lib/nuit-avant-data";
 import { horaireDuPoste, type HM, type HorairePlace, type MapsHoraire } from "@/lib/horaires";
 import { addMonthsIso } from "@/lib/habilitations";
 import { quartParDefaut, quartOuDefaut, memeQuart } from "@/lib/quarts";
-import { chargerPosteQuart, tourneSurQuart, effectifSurQuart } from "@/lib/poste-quart";
-import { chargerValidites, actifLe } from "@/lib/referentiel-validite";
+import { pqDepuisLignes, tourneSurQuart, effectifSurQuart } from "@/lib/poste-quart";
+import { validitesDepuisLignes, actifLe } from "@/lib/referentiel-validite";
 import { estAuTravailLe, deriverArriveeDepart } from "@/lib/personne-statut";
 import { enAvance } from "@/lib/en-avance";
 
@@ -58,6 +71,9 @@ type Personne = {
   equipe_id: string | null;
   type_contrat: string;
   poste_fixe_id: string | null;
+  atelier_id: string | null;
+  temps_partiel: boolean | null;
+  tp_config: { off?: Record<string, string[]> } | null;
 };
 type Placement = {
   personne_id: string;
@@ -121,11 +137,17 @@ export default async function PlanningPage({
   // Pas de raccourci « role === admin » : c'est la matrice qui accorde le droit.
   // Vague 1 : referentiel + personnes + perimetre chef, tout independant du calcul
   // d'ouverture qui suit. allActive sert aux indicateurs (tout le quart, toutes equipes).
+  //
+  // Référentiel EN CACHE par site (2026-10-15, journaux Supabase : ~10 appels
+  // relus à chaque chargement et à chaque changement de filtre) : mêmes lectures
+  // que le Placement (refdata.ts), invalidées par les écrans qui les modifient.
+  // Ces tables se lisent en entier sur le site, sous RLS comme en service_role.
   const [
-    { data: equipesD },
-    { data: lignesD },
-    { data: motifsD },
-    { data: quartsD, error: quartsErr },
+    equipesD,
+    lignesRef,
+    ateliersRef,
+    motifsD,
+    quartsD,
     { data: allActiveD },
     { data: chefData },
     pq,
@@ -135,29 +157,25 @@ export default async function PlanningPage({
     typesAgence,
     { data: tcD, error: tcErr },
   ] = await Promise.all([
-    supabase.from("equipe").select("id, nom, couleur, quart_fixe").eq("actif", true).order("nom").returns<Equipe[]>(),
+    getEquipesC() as Promise<Equipe[]>,
+    getLignesPostesC(),
+    getAteliersTousC(),
+    getMotifsC() as Promise<Motif[]>,
+    getQuartsC() as Promise<Quart[]>,
+    // `atelier_id` et `tp_config` lus ici (filtre service, repli TP) plutôt que
+    // par deux requêtes de plus sur la même table.
     supabase
-      .from("ligne")
-      .select("id, nom, ordre_affichage, atelier:atelier_id(id, nom, ordre_affichage), poste(id, nom, nom_court, actif, effectif_requis, niveau_min_requis, categorie, ordre_affichage)")
-      .eq("actif", true)
+      .from("personne")
+      .select("id, nom, prenom, equipe_id, type_contrat, poste_fixe_id, atelier_id, temps_partiel, tp_config")
+      .in("statut", ["ACTIF", "A_VENIR"])
       .order("nom")
-      .returns<LigneRow[]>(),
-    supabase
-      .from("motif_absence")
-      .select("id, code_court, libelle, couleur")
-      .eq("actif", true)
-      .order("libelle")
-      .returns<Motif[]>(),
-    // Migration 0068 : la colonne `couleur` peut ne pas encore exister — repli
-    // silencieux plus bas (relecture sans `couleur`) pour ne pas planter la page.
-    supabase.from("quart").select("code, libelle, ordre, creneau, couleur").order("ordre").returns<Quart[]>(),
-    supabase.from("personne").select("id, nom, prenom, equipe_id, type_contrat, poste_fixe_id").in("statut", ["ACTIF", "A_VENIR"]).order("nom").returns<Personne[]>(),
+      .returns<Personne[]>(),
     canEditPlanningFull
       ? Promise.resolve({ data: [] as { equipe_id: string }[] })
       : supabase.from("equipe_chef").select("equipe_id").eq("app_user_id", profile.authId).returns<{ equipe_id: string }[]>(),
-    chargerPosteQuart(supabase),
-    chargerValidites(supabase, "ligne"),
-    chargerValidites(supabase, "poste"),
+    getPosteQuartC().then(pqDepuisLignes),
+    getValiditesC("ligne").then(validitesDepuisLignes),
+    getValiditesC("poste").then(validitesDepuisLignes),
     // Perf P5 : trois lectures indépendantes, jusqu'ici attendues en série plus bas.
     getRotationRefsC(),
     getTypesAgenceC(),
@@ -173,14 +191,24 @@ export default async function PlanningPage({
   const todayIsoRef = isoDate(new Date());
   const ligneOuverteDate = (lid: string) => actifLe(ligneVal.get(lid), todayIsoRef);
   const posteOuvertDate = (pid: string) => actifLe(posteVal.get(pid), todayIsoRef);
-  const motifs = motifsD ?? [];
-  // Repli si migration 0068 (colonne `couleur`) non appliquée : on relit sans.
-  let quarts: Quart[] = quartsD ?? [];
-  if (quartsErr && (quartsErr.code === "42703" || quartsErr.code === "PGRST204")) {
-    const { data: q2 } = await supabase.from("quart").select("code, libelle, ordre, creneau").order("ordre").returns<Omit<Quart, "couleur">[]>();
-    quarts = (q2 ?? []).map((q) => ({ ...q, couleur: null }));
-  }
+  const motifs = motifsD;
+  const quarts: Quart[] = quartsD;
   const quartCodes = quarts.map((q) => q.code);
+  // Lignes actives du site avec leur service (ex-requête imbriquée `atelier:atelier_id(…)`).
+  const atelierParId = new Map(ateliersRef.map((a) => [a.id, a]));
+  const lignesD: LigneRow[] = lignesRef
+    .filter((l) => l.actif)
+    .map((l) => {
+      const a = atelierParId.get(l.atelier_id);
+      return {
+        id: l.id,
+        nom: l.nom,
+        ordre_affichage: l.ordre_affichage,
+        atelier: a ? { id: a.id, nom: a.nom, ordre_affichage: a.ordre_affichage } : null,
+        // `categorie` est NOT NULL en base : le type du cache, plus large, est resserré.
+        poste: l.poste as PosteRow[],
+      };
+    });
 
   // Rotation calculee (reference datee) : { equipe -> quart }. `rotWeek` pour la
   // semaine centrale (auto-selection du quart) ; `rotByWeek` pour CHACUNE des 3
@@ -304,7 +332,6 @@ export default async function PlanningPage({
   // profondeur) et on écarte en mémoire les personnes hors effectif (parties),
   // seules lignes que la liste excluait. Résultat identique.
   const effectifSet = new Set(idsEffectif);
-  const STATUTS_EFFECTIF = ["ACTIF", "A_VENIR"];
   const siteId = profile.siteId;
   // Habilitations exigées : lues pour TOUS les postes du site, pas seulement ceux
   // du service filtré. Une personne listée peut être placée sur un poste d'un autre
@@ -312,11 +339,6 @@ export default async function PlanningPage({
   // 2026-10-09, case rouge filtre service 1, neutre filtre service 2).
   const postesHabIds = [...new Set(groupsAll.flatMap((g) => g.postes.map((p) => p.id)))];
   type TpRow = { id: string; personne_id: string; date_debut: string; date_fin: string | null; tp_config: { off?: Record<string, string[]> } | null };
-  const pPersAtelier = enAvance<{ data: { id: string; atelier_id: string | null }[] | null; error: { message: string } | null }>(
-    atelier && idsEffectif.length
-      ? supabase.from("personne").select("id, atelier_id").eq("site_id", siteId).in("statut", STATUTS_EFFECTIF).returns<{ id: string; atelier_id: string | null }[]>()
-      : Promise.resolve({ data: [] as { id: string; atelier_id: string | null }[], error: null })
-  );
   const pConducteurs = enAvance(
     filtreConducteurs
       ? fetchAll<{ personne_id: string }>(() =>
@@ -342,15 +364,6 @@ export default async function PlanningPage({
       .order("date_debut")
       .returns<TpRow[]>()
   );
-  const pTpFallback = enAvance(
-    supabase
-      .from("personne")
-      .select("id, tp_config")
-      .eq("temps_partiel", true)
-      .eq("site_id", siteId)
-      .in("statut", STATUTS_EFFECTIF)
-      .returns<{ id: string; tp_config: { off?: Record<string, string[]> } | null }[]>()
-  );
   const pContrats = enAvance(
     fetchAll<{ personne_id: string; date_debut: string | null; date_fin: string | null }>(() =>
       supabase
@@ -363,16 +376,12 @@ export default async function PlanningPage({
   );
   // Habilitations exigées par les postes du site, puis — dès qu'on les connaît —
   // celles que les gens détiennent (chaîné, sans attendre le reste de la page).
-  // Pas de `.in(poste_id, …)` : des centaines d'UUID allongeraient l'URL ; la
-  // table est petite et bornée au site par la RLS, on filtre ici.
+  // Table entière du site, EN CACHE (refdata, REFERENTIEL_TAG) ; on filtre ici sur
+  // les postes affichables (pas de `.in(poste_id, …)` : URL trop longue).
   const postesHabSet = new Set(postesHabIds);
   const pPcr = enAvance<{ data: PcrRow[] | null; error: { message: string } | null }>(
     postesHabIds.length
-      ? supabase
-          .from("poste_competence_requise")
-          .select("poste_id, competence_id, competence:competence_id(nom, duree_validite_mois)")
-          .returns<PcrRow[]>()
-          .then((r) => ({ data: (r.data ?? []).filter((x) => postesHabSet.has(x.poste_id)), error: r.error }))
+      ? getExigencesPostesC().then((rows) => ({ data: rows.filter((x) => postesHabSet.has(x.poste_id)), error: null }))
       : Promise.resolve({ data: [] as PcrRow[], error: null })
   );
   const pHabDet = enAvance(
@@ -392,20 +401,9 @@ export default async function PlanningPage({
     })
   );
 
-  // Vue Par poste : numéros de rotation et zone d'attente (0077) des postes. Lecture
-  // à part, tolérante à l'absence de `zone_attente` (migration non passée) : la
-  // mettre dans la requête imbriquée des lignes ferait échouer tout l'écran (L19).
-  type PosteExtra = { id: string; numero_rotation: string | null; zone_attente?: boolean };
-  const pPosteExtra = enAvance<PosteExtra[]>(
-    vuePoste
-      ? (async () => {
-          const avec = await supabase.from("poste").select("id, numero_rotation, zone_attente").returns<PosteExtra[]>();
-          if (!avec.error) return avec.data ?? [];
-          const sans = await supabase.from("poste").select("id, numero_rotation").returns<PosteExtra[]>();
-          return sans.data ?? [];
-        })()
-      : Promise.resolve([] as PosteExtra[])
-  );
+  // Vue Par poste : numéros de rotation et zone d'attente (0077) des postes, déjà
+  // dans le référentiel en cache (plus de lecture à part depuis le 2026-10-15).
+  const postesExtra = lignesRef.flatMap((l) => l.poste.map((p) => ({ id: p.id, numero_rotation: p.numero_rotation, zone_attente: p.zone_attente })));
 
   // Ouverture par quart selectionne.
   // `ouverture_quart` passe par fetchAll : 3 semaines x 1 quart x N lignes, soit
@@ -530,12 +528,9 @@ export default async function PlanningPage({
             .returns<{ personne_id: string; jour: string; debut: string | null; fin: string | null; motif: string | null }[]>()
             .then((r) => ({ ...r, data: (r.data ?? []).filter((x) => effectifSet.has(x.personne_id)) }))
         : Promise.resolve({ data: [] as { personne_id: string; jour: string; debut: string | null; fin: string | null; motif: string | null }[], error: null }),
+      // Horaires standard : référentiel EN CACHE (REFERENTIEL_TAG), filtré sur les quarts affichés.
       avecCases
-        ? supabase
-            .from("horaire_poste")
-            .select("poste_id, jour, debut, fin, quart_code, debut_apres_nuit, fin_apres_nuit")
-            .in("quart_code", quartsDistincts)
-            .returns<HorStdRow[]>()
+        ? getHorairesPosteC().then((rows) => ({ data: rows.filter((h) => quartsDistincts.includes(h.quart_code)) as HorStdRow[], error: null }))
         : Promise.resolve({ data: [] as HorStdRow[], error: null }),
       // TP MATÉRIALISÉS (0064) — best-effort, cf. plus bas.
       avecCases
@@ -583,10 +578,7 @@ export default async function PlanningPage({
   // choisi (best-effort : colonne atelier_id ajoutee en 0020 ; si absente -> map vide).
   // Non bloquant : une personne reste placable sur n'importe quel poste.
   const persAtelier = new Map<string, string | null>();
-  if (atelier && allIds.length) {
-    const { data: paData, error: paErr } = await pPersAtelier; // lancée en vague 2
-    if (!paErr) for (const r of paData ?? []) persAtelier.set(r.id, r.atelier_id);
-  }
+  if (atelier && allIds.length) for (const r of allActive) persAtelier.set(r.id, r.atelier_id); // lu en vague 1
 
   // Filtre Conducteurs : personnes ayant au moins une compétence (niveau_actuel ≥ 1)
   // sur au moins un poste `categorie = 'conducteur'` actif. Requête indépendante du
@@ -753,9 +745,8 @@ export default async function PlanningPage({
     }
     // Repli : personnes avec temps_partiel=true mais sans ligne dans tp_periode
     // (cas de transition, avant que l'utilisateur ait ouvert la modale).
-    const { data: tpFallback } = await pTpFallback; // lancée en vague 2
     const fallbackMap = new Map<string, { off?: Record<string, string[]> } | null>();
-    for (const r of tpFallback ?? []) {
+    for (const r of allActive.filter((p) => p.temps_partiel === true)) { // lu en vague 1
       if (!periodesByPers.has(r.id)) fallbackMap.set(r.id, r.tp_config);
     }
 
@@ -923,7 +914,7 @@ export default async function PlanningPage({
   // (src/app/planning/PlanningParPoste.tsx). Un seul quart : `quart`.
   let parPoste: Omit<React.ComponentProps<typeof PlanningParPoste>, "weekNav" | "actions" | "gauche" | "quartBandeau"> | null = null;
   if (vuePoste) {
-    const extraPoste = new Map((await pPosteExtra).map((p) => [p.id, p]));
+    const extraPoste = new Map(postesExtra.map((p) => [p.id, p]));
     const titulaires = new Map<string, string[]>();
     for (const p of allActive) {
       if (!p.poste_fixe_id) continue;

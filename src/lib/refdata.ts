@@ -496,3 +496,49 @@ const getVisiteReglagesBySite = unstable_cache(
 export async function getVisiteReglagesC(site: string): Promise<{ cle: string; valeur: string }[]> {
   return getVisiteReglagesBySite(site);
 }
+
+// -------- Services avec ordre d'affichage, actifs ou non (Planning) -------------
+// Le Planning classe les lignes par service (N° aff., 0085) et garde le nom d'un
+// service inactif : getAteliersC (actifs, {id, nom}) ne suffit pas.
+export type AtelierRef = { id: string; nom: string; ordre_affichage: number | null; actif: boolean };
+const getAteliersTousBySite = unstable_cache(
+  async (site: string): Promise<AtelierRef[]> => {
+    const { data, error } = await getAdminClient()
+      .from("atelier")
+      .select("id, nom, ordre_affichage, actif")
+      .eq("site_id", site)
+      .returns<AtelierRef[]>();
+    if (error) throw new Error(`atelier: ${error.message}`);
+    return data ?? [];
+  },
+  ["refdata-ateliers-tous"],
+  { ...OPTS, tags: [ATELIERS_TAG] }
+);
+export async function getAteliersTousC(): Promise<AtelierRef[]> {
+  return getAteliersTousBySite(await siteId());
+}
+
+// -------- Habilitations exigées par les postes (Planning) ----------------------
+// Écrites par /api/referentiel, qui invalide REFERENTIEL_TAG après chaque requête.
+export type ExigencePosteRow = {
+  poste_id: string;
+  competence_id: string;
+  competence: { nom: string; duree_validite_mois: number | null } | null;
+};
+const getExigencesPostesBySite = unstable_cache(
+  async (site: string): Promise<ExigencePosteRow[]> =>
+    fetchAll<ExigencePosteRow>(() =>
+      getAdminClient()
+        .from("poste_competence_requise")
+        .select("poste_id, competence_id, competence:competence_id(nom, duree_validite_mois)")
+        .eq("site_id", site)
+        .order("poste_id")
+        .order("competence_id")
+        .returns<ExigencePosteRow[]>()
+    ),
+  ["refdata-exigences-postes"],
+  { ...OPTS, tags: [REFERENTIEL_TAG] }
+);
+export async function getExigencesPostesC(): Promise<ExigencePosteRow[]> {
+  return getExigencesPostesBySite(await siteId());
+}
