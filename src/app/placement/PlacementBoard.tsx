@@ -777,9 +777,14 @@ export default function PlacementBoard({
   }, [motifs, personnes, place, atelierId, tpSetPourListe]);
   // PDF pour Affich. (avec ou sans heures) : seulement les motifs cochés par
   // les RH dans Param. RH (0083) ; ni « Non travaillé », ni temps partiel.
+  // Formation (même repérage par libellé qu'au Planning, où la pendule reste
+  // active pour en saisir le sujet) : le commentaire du jour s'imprime sous le
+  // nom. Les autres motifs n'impriment jamais de commentaire (il peut être
+  // personnel).
   const absPrintOp = useMemo(() => {
     const visibles = new Set(motifs.filter((mo) => mo.operateurs).map((mo) => mo.id));
-    return absPrint.filter((c) => visibles.has(c.key));
+    const formation = new Set(motifs.filter((mo) => mo.libelle.toLowerCase().includes("formation")).map((mo) => mo.id));
+    return absPrint.filter((c) => visibles.has(c.key)).map((c) => ({ ...c, avecCommentaire: formation.has(c.key) }));
   }, [absPrint, motifs]);
 
   const absCartes = useMemo(() => {
@@ -1464,6 +1469,7 @@ export default function PlacementBoard({
                 {c.gens.map((p) => (
                   <div key={p.id} className={s.printAbsNom}>
                     {p.nom} {p.prenom.charAt(0).toUpperCase()}.
+                    {c.avecCommentaire && commentaires[p.id] && <div className={s.printCommentBloc}>{commentaires[p.id]}</div>}
                   </div>
                 ))}
               </div>
