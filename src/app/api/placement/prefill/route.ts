@@ -4,12 +4,16 @@ import { getAdminClient } from "@/lib/supabase-server";
 import { getCurrentProfile } from "@/lib/current-user";
 import { canWritePlacementData } from "@/lib/permissions";
 import { getQuartsC, getRotationRefsC } from "@/lib/refdata";
-import { quartParDefaut, quartJournee } from "@/lib/quarts";
+import { quartParDefaut, quartJournee, quartOuDefaut } from "@/lib/quarts";
 import { quartsDuPoste, quartPourPosteFixe, type PqMap } from "@/lib/poste-quart";
 import { rotationForWeek } from "@/lib/rotation";
 import { parseMonday, weekDays, dowMon } from "@/lib/week";
 import { motifInactivite, type Periode } from "@/lib/personne-statut";
 import { addMonthsIso, habValable } from "@/lib/habilitations";
+import { parseNumeros } from "@/lib/numeros-rotation";
+import { numerosPourSemaine } from "@/lib/numeros-prefill";
+import { fetchAll } from "@/lib/fetch-all";
+import { isoDate, addDays } from "@/lib/week";
 
 // POST /api/placement/prefill { semaines?: string[], semaine?: string }
 // Pré-remplit une (ou plusieurs) semaine(s) affichée(s). Deux passes, dans cet
@@ -30,6 +34,11 @@ import { addMonthsIso, habValable } from "@/lib/habilitations";
 //      l'équipe comptait : un titulaire de RA Fab (poste de Journée) en équipe
 //      tournante était posé en Matin / Après-midi, où le poste n'existe pas —
 //      invisible au Placement.
+//   3. NUMÉROS DE ROTATION (2026-10-15) : sur un poste numéroté, le titulaire
+//      reçoit une place (même numéro toute la semaine si possible, son dernier
+//      numéro d'abord) au lieu de tomber en « sans numéro » ; les titulaires déjà
+//      posés sans numéro sont complétés (seul le numéro est écrit). Surnombre
+//      signalé (`sansNumero`).
 //
 // Les deux passes insèrent en `ignoreDuplicates` (onConflict personne,jour) :
 // jamais d'écrasement. Faire le TP D'ABORD garantit qu'un jour de TP d'une
@@ -163,11 +172,11 @@ async function traiterPOST(req: NextRequest) {
   // ---------- Passe 2 : POSTES FIXES (personnes + poste actif) ----------
   const { data: persFixe } = await supabase
     .from("personne")
-    .select("id, nom, prenom, equipe_id, poste_fixe_id, poste:poste_fixe_id(actif, nom)")
+    .select("id, nom, prenom, equipe_id, poste_fixe_id, poste:poste_fixe_id(actif, nom, numero_rotation)")
     .eq("site_id", siteId)
     .not("poste_fixe_id", "is", null)
     .neq("statut", "PARTI")
-    .returns<{ id: string; nom: string; prenom: string; equipe_id: string | null; poste_fixe_id: string; poste: { actif: boolean; nom: string } | null }[]>();
+    .returns<{ id: string; nom: string; prenom: string; equipe_id: string | null; poste_fixe_id: string; poste: { actif: boolean; nom: string; numero_rotation: string | null } | null }[]>();
   const cibles = (persFixe ?? []).filter((p) => p.poste?.actif !== false);
 
   // Cycle des postes fixes (quarts où ils tournent), borné au site.
@@ -332,9 +341,121 @@ async function traiterPOST(req: NextRequest) {
           // lignes postes fixes (mêlées aux lignes TP qui portent tp:true) violaient
           // la contrainte NOT NULL de placement.tp.
           tp: false,
+          // Place numérotée : posée plus bas (numéros de rotation), null sinon.
+          numero_rotation: null,
           created_by: profile.authId,
           site_id: siteId,
         });
+      }
+    }
+  }
+
+  // ---------- Numéros de rotation (2026-10-15, src/lib/numeros-prefill.ts) ----------
+  // Un titulaire d'un poste numéroté reçoit une place, la même toute la semaine si
+  // possible (celle qu'il tient déjà, sinon son dernier numéro, sinon la 1re libre).
+  // Les titulaires DÉJÀ posés sur leur poste fixe sans numéro (pré-remplissages
+  // antérieurs) sont complétés : seul `numero_rotation` est écrit.
+  const numerosDuPoste = new Map<string, string[]>();
+  for (const p of cibles) {
+    const n = parseNumeros(p.poste?.numero_rotation);
+    if (n.length) numerosDuPoste.set(p.poste_fixe_id, n);
+  }
+  const postesNumerotes = [...numerosDuPoste.keys()];
+  const majNumeros: { personne_id: string; poste_id: string; numero: string; jours: string[] }[] = [];
+  const sansNumero: { personne: string; poste: string; semaine: string; raison: string }[] = [];
+  let numerotes = 0;
+  if (postesNumerotes.length) {
+    type Existant = { personne_id: string; jour: string; poste_id: string; quart_code: string | null; numero_rotation: string | null };
+    // Placements de ces postes (liste courte d'ids) : semaines traitées + 12
+    // semaines avant, pour retrouver le dernier numéro de chacun.
+    const debutHist = isoDate(addDays(parseMonday(minIso), -84));
+    const existants = await fetchAll<Existant>(() =>
+      supabase
+        .from("placement")
+        .select("personne_id, jour, poste_id, quart_code, numero_rotation")
+        .eq("site_id", siteId)
+        .in("poste_id", postesNumerotes)
+        .gte("jour", debutHist)
+        .lte("jour", maxIso)
+        .order("jour")
+        .order("personne_id"),
+    );
+    // Places tenues : « poste:quart:jour » -> numéro -> personne.
+    const pris = new Map<string, Map<string, string>>();
+    const tenir = (poste: string, quart: string, iso: string, numero: string, pid: string) => {
+      const k = `${poste}:${quart}:${iso}`;
+      (pris.get(k) ?? pris.set(k, new Map()).get(k)!).set(numero, pid);
+    };
+    const dernier = new Map<string, string>(); // « pid:poste » -> dernier numéro avant la période
+    const aCompleter = new Map<string, Existant[]>(); // « pid:poste » -> lignes sans numéro
+    const tenuSemaine = new Map<string, string>(); // « pid:poste:lundi » -> numéro déjà tenu
+    const lundiDe = new Map(semaines.flatMap((s) => s.isosTous.map((iso) => [iso, s.monday] as const)));
+    const ouvres = new Set(semaines.flatMap((s) => s.isosOuvres));
+    for (const r of existants) {
+      const k = `${r.personne_id}:${r.poste_id}`;
+      if (r.jour < minIso) {
+        if (r.numero_rotation) dernier.set(k, r.numero_rotation); // trié par jour : le plus récent gagne
+        continue;
+      }
+      if (r.numero_rotation) {
+        tenir(r.poste_id, quartOuDefaut(r.quart_code, quarts), r.jour, r.numero_rotation, r.personne_id);
+        tenuSemaine.set(`${k}:${lundiDe.get(r.jour)}`, r.numero_rotation);
+      } else if (ouvres.has(r.jour)) {
+        (aCompleter.get(k) ?? aCompleter.set(k, []).get(k)!).push(r);
+      }
+    }
+    const nouvelle = new Map(posteRows.map((r) => [`${r.personne_id}:${r.jour}`, r]));
+    // La continuité d'abord : qui tient déjà une place cette semaine, puis qui a un
+    // dernier numéro, puis les autres (ordre alphabétique, stable).
+    const titulaires = cibles
+      .filter((p) => numerosDuPoste.has(p.poste_fixe_id))
+      .sort((a, b) => `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`, "fr"));
+    for (const sem of semaines) {
+      const rang = (p: (typeof titulaires)[number]) =>
+        tenuSemaine.has(`${p.id}:${p.poste_fixe_id}:${sem.monday}`) ? 0 : dernier.has(`${p.id}:${p.poste_fixe_id}`) ? 1 : 2;
+      for (const p of [...titulaires].sort((a, b) => rang(a) - rang(b))) {
+        const k = `${p.id}:${p.poste_fixe_id}`;
+        // Jours à numéroter : lignes créées maintenant + lignes existantes sans numéro.
+        const quartLe = new Map<string, string>();
+        for (const iso of sem.isosOuvres) {
+          const r = nouvelle.get(`${p.id}:${iso}`);
+          if (r) quartLe.set(iso, String(r.quart_code));
+        }
+        const anciennes = (aCompleter.get(k) ?? []).filter((r) => lundiDe.get(r.jour) === sem.monday);
+        for (const r of anciennes) quartLe.set(r.jour, quartOuDefaut(r.quart_code, quarts));
+        if (!quartLe.size) continue;
+        const jours = [...quartLe.keys()].sort();
+        const choix = numerosPourSemaine(
+          numerosDuPoste.get(p.poste_fixe_id)!,
+          jours,
+          (iso) => {
+            const m = pris.get(`${p.poste_fixe_id}:${quartLe.get(iso)}:${iso}`);
+            return new Set([...(m ?? new Map<string, string>())].filter(([, pid]) => pid !== p.id).map(([n]) => n));
+          },
+          [tenuSemaine.get(`${k}:${sem.monday}`), dernier.get(k)],
+        );
+        const parNumero = new Map<string, string[]>();
+        let manque = 0;
+        for (const iso of jours) {
+          const n = choix[iso];
+          if (!n) {
+            manque++;
+            continue;
+          }
+          tenir(p.poste_fixe_id, quartLe.get(iso)!, iso, n, p.id);
+          numerotes++;
+          const r = nouvelle.get(`${p.id}:${iso}`);
+          if (r) r.numero_rotation = n;
+          else (parNumero.get(n) ?? parNumero.set(n, []).get(n)!).push(iso);
+        }
+        for (const [numero, js] of parNumero) majNumeros.push({ personne_id: p.id, poste_id: p.poste_fixe_id, numero, jours: js });
+        if (manque)
+          sansNumero.push({
+            personne: `${p.nom} ${p.prenom}`,
+            poste: p.poste?.nom ?? "?",
+            semaine: sem.monday,
+            raison: `${manque} jour(s) sans place numérotée libre`,
+          });
       }
     }
   }
@@ -346,6 +467,24 @@ async function traiterPOST(req: NextRequest) {
       .from("placement")
       .upsert(rows, { onConflict: "personne_id,jour", ignoreDuplicates: true });
     if (error) return NextResponse.json({ error: error.message }, { status: 403 });
+  }
+  // Numéros des titulaires déjà posés : seul le numéro est écrit, et seulement là
+  // où il manque encore (`is null` : une place choisie entre-temps reste).
+  if (majNumeros.length) {
+    const res = await Promise.all(
+      majNumeros.map((m) =>
+        supabase
+          .from("placement")
+          .update({ numero_rotation: m.numero })
+          .eq("site_id", siteId)
+          .eq("personne_id", m.personne_id)
+          .eq("poste_id", m.poste_id)
+          .is("numero_rotation", null)
+          .in("jour", m.jours),
+      ),
+    );
+    const err = res.find((r) => r.error)?.error;
+    if (err) return NextResponse.json({ error: `numéros de rotation : ${err.message}` }, { status: 403 });
   }
 
   // Marqueur « TP chargés » de chaque semaine : coupe le calcul virtuel, ce qui
@@ -371,6 +510,9 @@ async function traiterPOST(req: NextRequest) {
     tp: tpRows.length,
     fixe: posteRows.length,
     nonPlaces,
+    numerotes,
+    completes: majNumeros.reduce((n, m) => n + m.jours.length, 0),
+    sansNumero,
     site: siteId,
     marqueur: mErr ? `ignoré (${mErr.message})` : "posé",
   });

@@ -193,7 +193,11 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   jamais écraser (`ignoreDuplicates`). Quart d'un titulaire = `quartPourPosteFixe` :
   quart de l'équipe s'il fait partie du cycle du poste ; Journée pour un poste de Journée
   seule ; sinon **non placé et signalé** (`nonPlaces`, affiché dans l'alerte). Affectation
-  automatique : ne force jamais une habilitation manquante (non placé).
+  automatique : ne force jamais une habilitation manquante (non placé). **Poste numéroté**
+  (2026-10-15, `src/lib/numeros-prefill.ts`) : le titulaire reçoit une place, la même toute la
+  semaine si possible (numéro déjà tenu > dernier numéro sur 12 semaines > 1er libre) ; les
+  titulaires déjà posés sans numéro sont complétés (seul `numero_rotation` écrit) ; surnombre
+  signalé (`sansNumero`).
 - **Numéro de rotation** : `/cell` prend la 1ʳᵉ place libre **seulement si `numero` est
   absent** de la requête (Planning) ; le Placement envoie toujours `numero` (`null` =
   volontairement hors numéro).
