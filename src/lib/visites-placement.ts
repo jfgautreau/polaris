@@ -37,15 +37,29 @@ const MSG_GENERIQUE = "Point à vérifier avec les RH avant de placer cette pers
  */
 export async function alertesVisite(
   supabase: SupabaseClient,
-  opts: { personne_id: string; poste_id: string; quart: string | null; jour: string; siteId: string },
+  opts: {
+    personne_id: string;
+    poste_id: string;
+    quart: string | null;
+    jour: string;
+    siteId: string;
+    /** Réglages déjà lus (cache `getVisiteReglagesC`, routes en service_role
+     *  seulement) ; sinon relus avec `supabase`, donc sous la même RLS. */
+    reglages?: Promise<{ cle: string; valeur: string }[]>;
+  },
 ): Promise<string[]> {
   const { personne_id, poste_id, quart, jour, siteId } = opts;
 
-  const { data: reglages } = await supabase
-    .from("visite_parametre")
-    .select("cle, valeur")
-    .eq("site_id", siteId)
-    .returns<{ cle: string; valeur: string }[]>();
+  const reglages =
+    opts.reglages !== undefined
+      ? await opts.reglages.catch(() => null) // erreur de lecture : comme avant, rien d'allumé
+      : (
+          await supabase
+            .from("visite_parametre")
+            .select("cle, valeur")
+            .eq("site_id", siteId)
+            .returns<{ cle: string; valeur: string }[]>()
+        ).data;
   const params = lireParametres(reglages);
   if (
     !params.alertePlacementContrainte &&

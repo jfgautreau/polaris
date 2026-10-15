@@ -2,9 +2,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getServerClient, getAdminClient } from "@/lib/supabase-server";
 import { getCurrentProfile } from "@/lib/current-user";
 import { canWritePlacementData } from "@/lib/permissions";
-import { getQuartsC } from "@/lib/refdata";
+import { getQuartsC, getVisiteReglagesC } from "@/lib/refdata";
 import { quartOuDefaut } from "@/lib/quarts";
-import { habManquantes, premierNumeroLibre, posteNeTournePas, MSG_HORS_CYCLE, refusInactivite } from "@/lib/placement-helpers";
+import { controlesPlacement, premierNumeroLibre, MSG_HORS_CYCLE } from "@/lib/placement-helpers";
 import { verifierIdSite } from "@/lib/verifier-site";
 import { alertesVisite } from "@/lib/visites-placement";
 
@@ -43,7 +43,8 @@ export async function POST(req: NextRequest) {
 
   // Ecriture complete (droit Planning OU Placement) -> client admin ; sinon RLS
   // (admin ou chef de l'équipe de la personne). Cette route sert les DEUX ecrans.
-  const supabase = (await canWritePlacementData(profile.role)) ? getAdminClient() : await getServerClient();
+  const ecritureComplete = await canWritePlacementData(profile.role);
+  const supabase = ecritureComplete ? getAdminClient() : await getServerClient();
   // Repli des placements historiques sans `quart_code` (cf. src/lib/quarts.ts).
   const quarts = await getQuartsC();
 
@@ -88,10 +89,12 @@ export async function POST(req: NextRequest) {
   // verrait attribuer une place automatiquement.
   const numeroAuto = !!poste_id && body?.numero === undefined;
 
-  // Perf (2026-09-28) : toutes les LECTURES de controle sont independantes — elles
-  // partent ENSEMBLE (un aller-retour au lieu de sept a neuf en serie). Les
-  // verdicts sont ensuite examines dans le MEME ORDRE qu'avant : meme reponse,
-  // memes codes d'erreur. Aucune ecriture n'a lieu avant ces verdicts.
+  // Perf : les LECTURES de controle partent ENSEMBLE (2026-09-28), et depuis le
+  // 2026-10-15 (journaux Supabase : ~11 appels par depot) elles sont REGROUPEES
+  // — personne + contrats + habilitations, poste + exigences + cycle : deux
+  // lectures au lieu de neuf (`controlesPlacement`). Les verdicts sont examines
+  // dans le MEME ORDRE qu'avant : meme reponse, memes codes d'erreur. Aucune
+  // ecriture n'a lieu avant ces verdicts.
   //
   // Validation cross-site (audit S2) : les UUID injectes par le client doivent
   // appartenir au site de l'appelant. Sans ca, le service_role ecrirait un
@@ -101,12 +104,10 @@ export async function POST(req: NextRequest) {
   // meme si un identifiant est refuse ensuite.
   const siteId = profile.siteId;
   const quartVise = poste_id ? quartOuDefaut(quart_code, quarts) : null;
-  const [errPers, errPo, errEq, errMo, numeroLibre, existingRes, manquantes, cycleRes, inactif, alertesRh] = await Promise.all([
-    verifierIdSite(supabase, "personne", personne_id, siteId, "Personne"),
-    poste_id ? verifierIdSite(supabase, "poste", poste_id, siteId, "Poste") : null,
-    body?.equipe_id ? verifierIdSite(supabase, "equipe", body.equipe_id, siteId, "Equipe") : null,
+  const [ctrl, errMo, existingRes, alertesRh] = await Promise.all([
+    // Personne / poste du site, hors effectif, cycle du poste, habilitations.
+    controlesPlacement(supabase, { personne_id, poste_id, quart: quartVise, jour, siteId }),
     motif_absence_id ? verifierIdSite(supabase, "motif_absence", motif_absence_id, siteId, "Motif") : null,
-    numeroAuto && poste_id ? premierNumeroLibre(supabase, poste_id, jour, quart_code, personne_id, quarts, siteId) : null,
     poste_id
       ? supabase
           .from("placement")
@@ -116,27 +117,36 @@ export async function POST(req: NextRequest) {
           .eq("site_id", siteId)
           .maybeSingle<{ poste_id: string | null; quart_code: string | null; motif_absence_id: string | null; non_travaille: boolean; tp: boolean | null }>()
       : null,
-    poste_id ? habManquantes(supabase, personne_id, poste_id, siteId) : ([] as string[]),
-    poste_id && quartVise ? posteNeTournePas(supabase, poste_id, quartVise, siteId) : false,
-    // Personne partie / hors effectif ce jour : aucune affectation (le retrait,
-    // value === "", est traité plus haut et reste toujours permis).
-    refusInactivite(supabase, personne_id, jour, siteId),
     // Visites medicales : avertissement SANS detail, si les RH l'ont active.
+    // Reglages en cache seulement en service_role (sous RLS, relus comme avant).
     poste_id
-      ? alertesVisite(supabase, { personne_id, poste_id, quart: quart_code, jour, siteId })
+      ? alertesVisite(supabase, {
+          personne_id,
+          poste_id,
+          quart: quart_code,
+          jour,
+          siteId,
+          reglages: ecritureComplete ? getVisiteReglagesC(siteId) : undefined,
+        })
       : ([] as string[]),
   ]);
-  if (errPers) return NextResponse.json({ error: errPers }, { status: 400 });
-  if (errPo) return NextResponse.json({ error: errPo }, { status: 400 });
-  if (errEq) return NextResponse.json({ error: errEq }, { status: 400 });
+  if (ctrl.errPers) return NextResponse.json({ error: ctrl.errPers }, { status: 400 });
+  if (ctrl.errPo) return NextResponse.json({ error: ctrl.errPo }, { status: 400 });
+  // Equipe : celle de la personne (deja lue, donc du site) n'est pas revérifiée.
+  if (body?.equipe_id && body.equipe_id !== ctrl.equipePersonne) {
+    const errEq = await verifierIdSite(supabase, "equipe", body.equipe_id, siteId, "Equipe");
+    if (errEq) return NextResponse.json({ error: errEq }, { status: 400 });
+  }
   if (errMo) return NextResponse.json({ error: errMo }, { status: 400 });
-  if (inactif) return NextResponse.json({ error: inactif }, { status: 422 });
+  // Personne partie / hors effectif ce jour : aucune affectation (le retrait,
+  // value === "", est traité plus haut et reste toujours permis).
+  if (ctrl.inactif) return NextResponse.json({ error: ctrl.inactif }, { status: 422 });
   // Cycle du poste (2026-09-28) : un poste marqué « – » sur ce quart au Référentiel
   // n'existe pas sur ce quart. L'écran ne le propose pas ; le serveur le refuse
   // aussi — sinon la personne devient invisible au Placement (poste non dessiné).
   // 422 et non 409 : au Placement, 409 signifie « déjà placé sur un autre quart ».
-  if (cycleRes) return NextResponse.json({ error: MSG_HORS_CYCLE }, { status: 422 });
-  const numero_rotation = numeroAuto ? numeroLibre : numeroSaisi;
+  if (ctrl.horsCycle) return NextResponse.json({ error: MSG_HORS_CYCLE }, { status: 422 });
+  const manquantes = ctrl.manquantes;
 
   // Vue « Par poste » : une absence / un NT / un TP du jour n'est jamais
   // remplace par un poste (cf. `proteger` en tete).
@@ -176,6 +186,13 @@ export async function POST(req: NextRequest) {
       { status: 428 },
     );
   }
+
+  // Premier numero libre (Planning, `numero` absent) : lu une fois les verdicts
+  // rendus, et seulement pour un poste numerote (aucune lecture sinon).
+  const numero_rotation =
+    numeroAuto && poste_id
+      ? await premierNumeroLibre(supabase, ctrl.numeros, poste_id, jour, quart_code, personne_id, quarts, siteId)
+      : numeroSaisi;
 
   // MULTI-SITE : site_id explicite pour le cas admin client (service_role).
   const { error } = await supabase.from("placement").upsert(

@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { revalidateTag } from "next/cache";
 import { moduleWriteGuard } from "@/lib/permissions";
+import { VISITE_PARAM_TAG } from "@/lib/refdata";
 import { verifierIdSite } from "@/lib/verifier-site";
 import { CATEGORIES, DESC_PARAMS, MAX_LEGAL, MOTIFS_SIR, estRegime, type CategorieVisite } from "@/lib/visites";
 
@@ -49,6 +51,8 @@ export async function POST(req: NextRequest) {
     }
     const { error } = await supabase.from("visite_parametre").upsert({ site_id, cle, valeur }, { onConflict: "site_id,cle" });
     if (error) return NextResponse.json({ error: error.message }, { status: 403 });
+    // Réglages mis en cache pour les alertes du Placement (refdata).
+    revalidateTag(VISITE_PARAM_TAG, { expire: 0 });
     return NextResponse.json({ ok: true, valeur });
   }
 

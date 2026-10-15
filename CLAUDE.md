@@ -174,6 +174,12 @@ L'historique des décisions est dans git et dans l'en-tête de chaque migration.
 ## Écritures de placement (Planning, Placement, pré-remplissage)
 Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés dans
 `src/lib/placement-helpers.ts` pour que saisie et déplacement ne divergent pas.
+- **Contrôles groupés** (2026-10-15, coût des journaux) : `controlesPlacement()` lit la personne
+  (+ contrats, habilitations) et le poste (+ exigences, cycle du quart) en **deux** requêtes à
+  jointures ; l'équipe n'est revérifiée que si elle diffère de celle de la personne ; le n° libre
+  n'est lu qu'après les verdicts et pour un poste numéroté ; réglages des visites en cache
+  (`getVisiteReglagesC`, `VISITE_PARAM_TAG`) **seulement en service_role**. Un dépôt : ~4 appels
+  au lieu de ~11. Ne pas revenir à une lecture par contrôle.
 - **Unicité `(personne_id, jour)`** : `/cell` fait un upsert qui remplace poste, absence, NT ou TP.
   Un écran qui ne montre pas la case de la personne (vue Par poste) envoie **`proteger: true`** :
   refus 422 si la ligne existante est une absence / NT / TP, et un retrait ne supprime que le

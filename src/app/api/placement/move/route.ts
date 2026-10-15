@@ -2,8 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getServerClient, getAdminClient } from "@/lib/supabase-server";
 import { getCurrentProfile } from "@/lib/current-user";
 import { canWritePlacementData } from "@/lib/permissions";
-import { getQuartsC } from "@/lib/refdata";
-import { habManquantes, premierNumeroLibre, posteNeTournePas, MSG_HORS_CYCLE, refusInactivite } from "@/lib/placement-helpers";
+import { getQuartsC, getVisiteReglagesC } from "@/lib/refdata";
+import { controlesPlacement, premierNumeroLibre, MSG_HORS_CYCLE } from "@/lib/placement-helpers";
 import { quartOuDefaut } from "@/lib/quarts";
 import { alertesVisite } from "@/lib/visites-placement";
 
@@ -44,7 +44,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true }); // no-op
   }
 
-  const supabase = (await canWritePlacementData(profile.role)) ? getAdminClient() : await getServerClient();
+  const ecritureComplete = await canWritePlacementData(profile.role);
+  const supabase = ecritureComplete ? getAdminClient() : await getServerClient();
   const quarts = await getQuartsC();
 
   // Perf (2026-09-28) : ligne source et case cible lues ENSEMBLE ; verdicts
@@ -79,22 +80,36 @@ export async function POST(req: NextRequest) {
   // comme pour la saisie — le déplacement conserve la vue courante.
   const quart_code = poste_id ? (body?.quart ?? src.quart_code ?? null) : null;
 
-  // Habilitations : un poste déplacé sur une autre personne re-vérifie ses droits.
-  // Numéro libre lu en même temps (perf) ; il n'est utilisé qu'après le verdict.
-  const [manquantes, numero_rotation, horsCycle, inactif, alertesRh] = await Promise.all([
-    poste_id ? habManquantes(supabase, toPid, poste_id, profile.siteId) : ([] as string[]),
-    poste_id ? premierNumeroLibre(supabase, poste_id, toJour, quart_code, toPid, quarts, profile.siteId) : null,
-    // Cycle du poste (2026-09-28) : jamais de poste sur un quart où il ne tourne pas.
-    poste_id ? posteNeTournePas(supabase, poste_id, quartOuDefaut(quart_code, quarts), profile.siteId) : false,
-    // Personne d'arrivée partie / hors effectif ce jour : pas de déplacement vers elle.
-    refusInactivite(supabase, toPid, toJour, profile.siteId),
+  // Contrôles de la personne d'arrivée, regroupés (2026-10-15, cf. /cell) :
+  // personne du site, hors effectif ce jour, cycle du poste, habilitations (un
+  // poste déplacé sur une autre personne re-vérifie ses droits).
+  const [ctrl, alertesRh] = await Promise.all([
+    controlesPlacement(supabase, {
+      personne_id: toPid,
+      poste_id,
+      quart: poste_id ? quartOuDefaut(quart_code, quarts) : null,
+      jour: toJour,
+      siteId: profile.siteId,
+    }),
     // Visites médicales : avertissement SANS détail, si les RH l'ont activé.
     poste_id
-      ? alertesVisite(supabase, { personne_id: toPid, poste_id, quart: quart_code, jour: toJour, siteId: profile.siteId })
+      ? alertesVisite(supabase, {
+          personne_id: toPid,
+          poste_id,
+          quart: quart_code,
+          jour: toJour,
+          siteId: profile.siteId,
+          reglages: ecritureComplete ? getVisiteReglagesC(profile.siteId) : undefined,
+        })
       : ([] as string[]),
   ]);
-  if (inactif) return NextResponse.json({ error: inactif }, { status: 422 });
-  if (horsCycle) return NextResponse.json({ error: MSG_HORS_CYCLE }, { status: 422 });
+  if (ctrl.errPers) return NextResponse.json({ error: ctrl.errPers }, { status: 400 });
+  if (ctrl.errPo) return NextResponse.json({ error: ctrl.errPo }, { status: 400 });
+  // Personne d'arrivée partie / hors effectif ce jour : pas de déplacement vers elle.
+  if (ctrl.inactif) return NextResponse.json({ error: ctrl.inactif }, { status: 422 });
+  // Cycle du poste (2026-09-28) : jamais de poste sur un quart où il ne tourne pas.
+  if (ctrl.horsCycle) return NextResponse.json({ error: MSG_HORS_CYCLE }, { status: 422 });
+  const manquantes = ctrl.manquantes;
   const forcer = body?.forcer === true;
   if ((manquantes.length || alertesRh.length) && !forcer) {
     return NextResponse.json(
@@ -102,6 +117,12 @@ export async function POST(req: NextRequest) {
       { status: 428 },
     );
   }
+
+  // Premier numéro de rotation libre : lu après les verdicts, et seulement pour
+  // un poste numéroté.
+  const numero_rotation = poste_id
+    ? await premierNumeroLibre(supabase, ctrl.numeros, poste_id, toJour, quart_code, toPid, quarts, profile.siteId)
+    : null;
 
   // 1. Insertion de la cible.
   const { error: insErr } = await supabase.from("placement").upsert(

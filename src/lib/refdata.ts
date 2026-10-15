@@ -471,3 +471,28 @@ const getHorairesPlaceBySite = unstable_cache(
 export async function getHorairesPlaceC(): Promise<HorairePlaceRow[]> {
   return getHorairesPlaceBySite(await siteId());
 }
+
+// -------- Réglages des Visites médicales (alertes du Placement) ----------------
+// Relus à CHAQUE affectation avant le 2026-10-15 (41 lectures en 50 min dans les
+// journaux Supabase). Réservé aux routes qui écrivent en service_role : sous RLS,
+// un chef d'équipe ne lit pas ces réglages, et la mise en cache ne doit rien
+// changer à ce qu'il voit. Écrits par /api/visites-param, qui invalide le tag.
+export const VISITE_PARAM_TAG = "refdata-visite-param";
+const getVisiteReglagesBySite = unstable_cache(
+  async (site: string): Promise<{ cle: string; valeur: string }[]> => {
+    const { data, error } = await getAdminClient()
+      .from("visite_parametre")
+      .select("cle, valeur")
+      .eq("site_id", site)
+      .returns<{ cle: string; valeur: string }[]>();
+    // Une erreur LÈVE (jamais mise en cache), comme le socle.
+    if (error) throw new Error(`visite_parametre: ${error.message}`);
+    return data ?? [];
+  },
+  ["refdata-visite-param"],
+  { ...OPTS, tags: [VISITE_PARAM_TAG] }
+);
+/** `site` explicite : les routes API connaissent le site du profil (impersonation comprise). */
+export async function getVisiteReglagesC(site: string): Promise<{ cle: string; valeur: string }[]> {
+  return getVisiteReglagesBySite(site);
+}
