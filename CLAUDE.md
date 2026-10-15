@@ -321,7 +321,7 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   Conducteurs (`?cond=1`). Pendule 🕐 (horaire + commentaire, `horaire_exception` ; son `»`
   recopie l'horaire sur les mêmes jours cibles que `»`, jours postés → postés, Formation →
   Formation, remplace après confirmation, op `save-many`),
-  recopie `»` (règles `src/lib/planning-recopie.ts` : postes et NT seulement, cases vides seulement ;
+  recopie `»` (règles `src/lib/planning-recopie.ts` : postes et NT seulement, écrasent les affectations (poste, NT) mais jamais une absence ni un TP ;
   `»` sur case vide = vider la suite sauf absences / TP ; `»` du jour en en-tête = membres affichés de l'équipe choisie, masqué en AUTO / Toutes), glisser-déposer, croix de survol. Le bouton de pré-remplissage recharge la vue.
   Bascule **Par nom / Par poste** (`?par=poste`, `PlanningParPoste.tsx`, règles pures
   `src/lib/planning-par-poste.ts`, spec `tasks/planning-par-poste.md`) : une rangée par place

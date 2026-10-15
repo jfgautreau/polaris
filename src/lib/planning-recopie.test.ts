@@ -4,10 +4,25 @@ import { planRecopie, compteRendu, type CaseCible } from "./planning-recopie";
 const c = (iso: string, valeur = "", o: Partial<CaseCible> = {}): CaseCible => ({ iso, valeur, bloquee: false, horsCycle: false, ...o });
 
 describe("recopie du Planning", () => {
-  it("un poste ne remplit que les cases vides", () => {
-    const p = planRecopie("poste1", [c("mar"), c("mer", "m:cp"), c("jeu", "poste2"), c("ven", "TP")], true);
-    expect(p.ecrire).toEqual([{ iso: "mar", valeur: "poste1" }]);
-    expect(p.laissees).toBe(3);
+  it("un poste écrase les affectations (poste, NT), jamais une absence ni un TP", () => {
+    const p = planRecopie("poste1", [c("mar"), c("mer", "m:cp"), c("jeu", "poste2"), c("ven", "TP"), c("sam", "X"), c("dim", "poste1")], true);
+    expect(p.ecrire).toEqual([
+      { iso: "mar", valeur: "poste1" },
+      { iso: "jeu", valeur: "poste1" },
+      { iso: "sam", valeur: "poste1" },
+    ]);
+    expect(p.remplacees).toBe(2);
+    expect(p.laissees).toBe(2);
+  });
+  it("un NT écrase un poste", () => {
+    const p = planRecopie("X", [c("mar", "poste1")], false);
+    expect(p.ecrire).toEqual([{ iso: "mar", valeur: "X" }]);
+    expect(p.remplacees).toBe(1);
+  });
+  it("poste hors cycle : la case garde son affectation", () => {
+    const p = planRecopie("poste1", [c("mar", "poste2", { horsCycle: true })], true);
+    expect(p.ecrire).toEqual([]);
+    expect(p.horsCycle).toBe(1);
   });
   it("le non travaillé se recopie aussi", () => {
     expect(planRecopie("X", [c("mar"), c("mer")], true).ecrire.map((e) => e.valeur)).toEqual(["X", "X"]);
@@ -30,7 +45,9 @@ describe("recopie du Planning", () => {
     expect(planRecopie("", [c("mar", "poste1")], false).ecrire).toEqual([]);
   });
   it("compte rendu bref", () => {
-    expect(compteRendu(12, 5, 1, 0)).toBe("12 case(s) recopiée(s) · 5 déjà remplie(s) laissée(s) · 1 poste(s) hors cycle ce jour-là");
+    expect(compteRendu(12, 5, 1, 0, false, 3)).toBe(
+      "12 case(s) recopiée(s) · dont 3 affectation(s) remplacée(s) · 5 absence(s) ou TP conservé(s) · 1 poste(s) hors cycle ce jour-là",
+    );
     expect(compteRendu(2, 1, 0, 0, true)).toBe("2 case(s) vidée(s) · 1 absence(s) ou TP conservé(s)");
   });
 });

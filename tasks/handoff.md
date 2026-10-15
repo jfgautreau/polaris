@@ -173,12 +173,13 @@ Priorité d'affichage de l'horaire (TV) : **exception ponctuelle > temps partiel
   défaut (`horaire_poste`).
 - **Recopie `»`** (règles `src/lib/planning-recopie.ts`, testées, 2026-10-09) : lundi→jeudi =
   fin de semaine en cours ; à partir du vendredi = semaine suivante affichée. Seuls un
-  **poste** et le **NT** se recopient, et **sur les cases vides seulement** (absence, TP,
-  autre poste jamais écrasés). Sur une case vide, `»` **vide la suite** après confirmation
+  **poste** et le **NT** se recopient ; depuis le 2026-10-15 ils **écrasent les affectations**
+  déjà posées (poste, NT — confirmation si une est remplacée), **jamais une absence ni un TP**.
+  Un poste hors cycle ce jour-là laisse la case telle quelle. Sur une case vide, `»` **vide la suite** après confirmation
   (postes et NT ; absences et TP conservés). Pas de `»` sur une absence ni un TP.
 - **`»` d'un jour** (petite flèche à côté de la date, en-tête) : copie ce jour pour les
-  membres affichés de l'**équipe choisie** (masqué en AUTO / Toutes), postes et NT, cases
-  vides seulement, sans propagation du vide. Compte rendu bref à la place de « Enregistré ».
+  membres affichés de l'**équipe choisie** (masqué en AUTO / Toutes), postes et NT, même
+  règle d'écrasement (absences et TP gardés), sans propagation du vide. Compte rendu bref à la place de « Enregistré ».
 - **Bande de quart** colorée (MATIN / APRÈS-MIDI / NUIT) au-dessus de chaque semaine, dans
   les deux vues (même quart sur les trois semaines en « Suivre le quart »).
 - **Alertes indépendantes du filtre** : habilitations exigées et niveau minimum sont lus pour

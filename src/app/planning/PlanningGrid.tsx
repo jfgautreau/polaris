@@ -414,8 +414,8 @@ const LignePlanning = memo(function LignePlanning({
                       ? "Vider la fin de cette semaine (absences et TP conservés)"
                       : "Vider la semaine suivante (absences et TP conservés)"
                     : dowMon(d.iso) < 4
-                      ? "Recopier sur les cases vides jusqu'à la fin de cette semaine"
-                      : "Recopier sur les cases vides de la semaine suivante"
+                      ? "Recopier jusqu'à la fin de cette semaine (remplace les affectations, garde absences et TP)"
+                      : "Recopier sur la semaine suivante (remplace les affectations, garde absences et TP)"
                 }
                 onClick={() => actions.recopier(pers, i)}
               >
@@ -1127,8 +1127,9 @@ export default function PlanningGrid({
     setTimeout(() => setRecopieTxt((x) => (x === txt ? "" : x)), 5000);
   }
 
-  // » d'une personne : recopie un poste ou un NT sur les cases VIDES ; une case
-  // vide recopiée vide la suite (postes et NT seulement, après confirmation).
+  // » d'une personne : recopie un poste ou un NT en écrasant les affectations
+  // (postes, NT — confirmation si une est remplacée), jamais une absence ni un
+  // TP ; une case vide recopiée vide la suite (postes et NT, après confirmation).
   async function fillWeek(pers: Personne, dayIndex: number) {
     const source = vals[key(pers.id, days[dayIndex].iso)] ?? "";
     const vider = source === "";
@@ -1139,19 +1140,24 @@ export default function PlanningGrid({
     }
     if (vider && !window.confirm(`Vider ${plan.ecrire.length} case(s) de ${pers.label} sur la suite ?
 Les absences et les temps partiels sont conservés.`)) return;
+    const libSource = source === "X" ? "NT" : (posteLabel[source] ?? posteLabelAll[source] ?? "le poste");
+    if (!vider && plan.remplacees > 0 && !window.confirm(`Recopier ${libSource} sur ${plan.ecrire.length} case(s) de ${pers.label} ?
+${plan.remplacees} affectation(s) déjà posée(s) seront remplacée(s). Les absences et les temps partiels sont conservés.`)) return;
     const refus = await appliquerRecopie(plan.ecrire.map((e) => ({ pid: pers.id, equipe: pers.equipe_id, ...e })));
-    annoncer(compteRendu(plan.ecrire.length - refus, plan.laissees, plan.horsCycle, refus, vider));
+    annoncer(compteRendu(plan.ecrire.length - refus, plan.laissees, plan.horsCycle, refus, vider, plan.remplacees));
   }
 
   // » d'un jour (en-tête) : recopie ce jour, pour les membres affichés et
   // modifiables de l'ÉQUIPE CHOISIE, sur les jours suivants (même règle que ») —
-  // postes et NT seulement, cases vides seulement, jamais de propagation du vide.
+  // postes et NT seulement, écrase les affectations, jamais une absence ni un TP,
+  // jamais de propagation du vide.
   async function fillDay(dayIndex: number) {
     const jours = joursCibles(dayIndex);
     if (jours.length === 0) return;
     const iso = days[dayIndex].iso;
     let laissees = 0;
     let horsCycle = 0;
+    let remplacees = 0;
     const ecritures: { pid: string; equipe: string | null; iso: string; valeur: string }[] = [];
     for (const p of membresEquipe) {
       if (!p.editable || otherByCell[key(p.id, iso)]) continue;
@@ -1160,6 +1166,7 @@ Les absences et les temps partiels sont conservés.`)) return;
       const plan = planRecopie(source, ciblesDe(p.id, source, jours), false);
       laissees += plan.laissees;
       horsCycle += plan.horsCycle;
+      remplacees += plan.remplacees;
       for (const e of plan.ecrire) ecritures.push({ pid: p.id, equipe: p.equipe_id, ...e });
     }
     const nomEquipe = equipeSelectionneeNom || "choisie";
@@ -1173,12 +1180,12 @@ Les absences et les temps partiels sont conservés.`)) return;
       !window.confirm(
         `Copier le ${nomJour} sur ${jusqua} pour l'équipe ${nomEquipe} ?
 
-${ecritures.length} case(s) vide(s) seront remplies (postes et NT). Les cases déjà remplies — absences, TP, autres affectations — ne sont pas touchées.`,
+${ecritures.length} case(s) seront écrites (postes et NT)${remplacees ? `, dont ${remplacees} affectation(s) déjà posée(s) remplacée(s)` : ""}. Les absences et les TP ne sont pas touchés.`,
       )
     )
       return;
     const refus = await appliquerRecopie(ecritures);
-    annoncer(`Copie du ${nomJour} : ${compteRendu(ecritures.length - refus, laissees, horsCycle, refus)}`);
+    annoncer(`Copie du ${nomJour} : ${compteRendu(ecritures.length - refus, laissees, horsCycle, refus, false, remplacees)}`);
   }
 
   // » de la pendule : enregistre l'horaire / le commentaire saisis sur ce jour et
@@ -1502,7 +1509,7 @@ ${ecritures.length} case(s) vide(s) seront remplies (postes et NT). Les cases d�
                     type="button"
                     className="noprint"
                     onClick={() => void fillDay(days.indexOf(d))}
-                    title={`Équipe ${equipeSelectionneeNom} : ${dowMon(d.iso) < 4 ? "copier ce jour sur les jours suivants de la semaine" : "copier ce jour sur la semaine suivante"} (cases vides seulement, postes et NT)`}
+                    title={`Équipe ${equipeSelectionneeNom} : ${dowMon(d.iso) < 4 ? "copier ce jour sur les jours suivants de la semaine" : "copier ce jour sur la semaine suivante"} (postes et NT, remplace les affectations, garde absences et TP)`}
                     aria-label="Copier ce jour sur les jours suivants"
                     style={{ display: "inline-block", verticalAlign: "middle", margin: "0 0 0 2px", width: 14, height: 13, padding: 0, lineHeight: "11px", fontSize: 10, fontWeight: 700, color: "#4f46e5", background: "#eef2ff", border: "1px solid #c7d2fe", borderRadius: 3, cursor: "pointer" }}
                   >
@@ -1654,7 +1661,8 @@ ${ecritures.length} case(s) vide(s) seront remplies (postes et NT). Les cases d�
 
       <p className="muted" style={{ margin: "6px 12px 0", fontSize: 11 }}>
         Survolez une case et cliquez sur &raquo; pour recopier sa valeur (y compris « non-affecté ») :
-        du lundi au jeudi sur la fin de la semaine en cours, à partir du vendredi sur la semaine suivante.{" "}
+        du lundi au jeudi sur la fin de la semaine en cours, à partir du vendredi sur la semaine suivante ;
+        elle remplace les affectations déjà posées, jamais une absence ni un TP.{" "}
         <span style={{ display: "inline-block", width: 12, height: 12, verticalAlign: "-2px", background: "#fef2f2", border: "1px solid #fca5a5" }} />{" "}
         fond rouge = hors compétence ·{" "}
         <span style={{ display: "inline-block", width: 12, height: 12, verticalAlign: "-2px", background: "#fffbeb", border: "1px solid #f59e0b" }} />{" "}

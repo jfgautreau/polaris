@@ -1,16 +1,19 @@
-// Règles de recopie du Planning (décision du 2026-10-09), pures et testées.
+// Règles de recopie du Planning (décisions du 2026-10-09 et du 2026-10-15),
+// pures et testées.
 //
 // Valeurs d'une case : "" vide · "X" non travaillé · "TP" temps partiel posé ·
 // "m:<id>" absence · sinon l'identifiant d'un poste.
 //
 //  - Seuls un POSTE et le NON TRAVAILLÉ se recopient. Une absence ou un TP sont
 //    des périodes, gérées ailleurs : on ne les prolonge jamais par recopie.
-//  - Une recopie ne touche JAMAIS une case déjà remplie (poste, NT, absence, TP).
+//  - Une recopie ÉCRASE les affectations déjà posées (poste, NT) — 2026-10-15 —
+//    mais ne touche JAMAIS une absence ni un TP.
 //  - Recopier une case VIDE (bouton » d'une personne seulement) vide la suite :
 //    elle efface les postes et les NT, jamais une absence ni un TP.
 //  - Case bloquée (jour fermé, TP calculé, hors contrat, placé sur un autre
 //    quart) : jamais touchée.
-//  - Poste qui ne tourne pas sur le quart du jour cible : non recopié, signalé.
+//  - Poste qui ne tourne pas sur le quart du jour cible : non recopié (la case
+//    garde sa valeur), signalé.
 
 export type CaseCible = {
   iso: string;
@@ -22,8 +25,10 @@ export type CaseCible = {
 
 export type PlanRecopie = {
   ecrire: { iso: string; valeur: string }[];
-  /** Cases laissées telles quelles parce que déjà remplies (ou protégées). */
+  /** Cases laissées telles quelles parce que protégées (absence, TP). */
   laissees: number;
+  /** Écritures qui remplacent une affectation existante (poste ou NT différent). */
+  remplacees: number;
   horsCycle: number;
 };
 
@@ -32,7 +37,7 @@ export const estPoste = (v: string) => v !== "" && v !== "X" && v !== "TP" && !v
 export const estRecopiable = (v: string) => estPoste(v) || v === "X";
 
 export function planRecopie(source: string, cibles: CaseCible[], viderPermis: boolean): PlanRecopie {
-  const plan: PlanRecopie = { ecrire: [], laissees: 0, horsCycle: 0 };
+  const plan: PlanRecopie = { ecrire: [], laissees: 0, remplacees: 0, horsCycle: 0 };
   const vider = source === "";
   if (vider && !viderPermis) return plan;
   if (!vider && !estRecopiable(source)) return plan;
@@ -43,24 +48,27 @@ export function planRecopie(source: string, cibles: CaseCible[], viderPermis: bo
       else if (c.valeur !== "") plan.laissees++; // absence ou TP : protégés
       continue;
     }
-    if (c.valeur !== "") {
-      plan.laissees++;
+    if (c.valeur !== "" && !estRecopiable(c.valeur)) {
+      plan.laissees++; // absence ou TP : protégés
       continue;
     }
+    if (c.valeur === source) continue; // déjà la bonne valeur
     if (estPoste(source) && c.horsCycle) {
       plan.horsCycle++;
       continue;
     }
+    if (c.valeur !== "") plan.remplacees++;
     plan.ecrire.push({ iso: c.iso, valeur: source });
   }
   return plan;
 }
 
 /** Compte rendu bref d'une recopie. */
-export function compteRendu(ecrites: number, laissees: number, horsCycle: number, refus: number, vider = false): string {
+export function compteRendu(ecrites: number, laissees: number, horsCycle: number, refus: number, vider = false, remplacees = 0): string {
   const parts = [
     vider ? `${ecrites} case(s) vidée(s)` : `${ecrites} case(s) recopiée(s)`,
-    laissees ? (vider ? `${laissees} absence(s) ou TP conservé(s)` : `${laissees} déjà remplie(s) laissée(s)`) : "",
+    remplacees ? `dont ${remplacees} affectation(s) remplacée(s)` : "",
+    laissees ? `${laissees} absence(s) ou TP conservé(s)` : "",
     horsCycle ? `${horsCycle} poste(s) hors cycle ce jour-là` : "",
     refus ? `${refus} refus (hors contrat…) : case(s) remise(s) à leur valeur` : "",
   ];
