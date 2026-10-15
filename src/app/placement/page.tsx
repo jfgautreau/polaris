@@ -36,7 +36,7 @@ type Atelier = { id: string; nom: string };
 type Equipe = { id: string; nom: string; couleur: string | null; quart_fixe?: string | null };
 type Quart = { code: string; libelle: string; ordre: number; creneau: string | null; couleur?: string | null };
 type Personne = { id: string; nom: string; prenom: string; equipe_id: string | null; atelier_id: string | null; type_contrat: string };
-type Placement = { personne_id: string; poste_id: string | null; motif_absence_id: string | null; non_travaille: boolean; quart_code: string | null; numero_rotation: string | null };
+type Placement = { personne_id: string; poste_id: string | null; motif_absence_id: string | null; absence_id: string | null; non_travaille: boolean; quart_code: string | null; numero_rotation: string | null };
 type MatRow = { personne_id: string; poste_id: string; niveau_actuel: number };
 type Motif = { id: string; code_court: string; libelle: string; couleur: string; visible_operateurs?: boolean };
 type PcrRow = { poste_id: string; competence_id: string; competence: { nom: string; duree_validite_mois: number | null } | null };
@@ -74,7 +74,7 @@ export default async function PlacementPage({
     )
   );
   const pPlacementsJour = enAvance(
-    supabase.from("placement").select("personne_id, poste_id, motif_absence_id, non_travaille, quart_code, numero_rotation").eq("jour", jour).returns<Placement[]>()
+    supabase.from("placement").select("personne_id, poste_id, motif_absence_id, absence_id, non_travaille, quart_code, numero_rotation").eq("jour", jour).returns<Placement[]>()
   );
   const pCommentaires = enAvance(
     supabase
@@ -413,6 +413,30 @@ export default async function PlacementPage({
   for (const r of hexD ?? []) {
     const m = (r.motif ?? "").trim();
     if (m) commentaires[r.personne_id] = m;
+  }
+  // Formation : le sujet se saisit aussi dans l'écran Absences (commentaire de la
+  // période, absence.commentaire). Lu SEULEMENT pour les absences de Formation du
+  // jour (liste courte) : le commentaire d'un autre motif, qui peut être
+  // personnel, ne part jamais vers le navigateur. Pendule d'abord, puis période.
+  const formationIds = new Set(motifs.filter((m) => m.libelle.toLowerCase().includes("formation")).map((m) => m.id));
+  const absFormation = [
+    ...new Set(
+      (plD ?? [])
+        .filter((r) => r.absence_id && r.motif_absence_id && formationIds.has(r.motif_absence_id))
+        .map((r) => r.absence_id as string)
+    ),
+  ];
+  if (absFormation.length) {
+    const { data: absD } = await supabase
+      .from("absence")
+      .select("personne_id, commentaire")
+      .in("id", absFormation)
+      .returns<{ personne_id: string; commentaire: string | null }[]>();
+    for (const a of absD ?? []) {
+      const c = (a.commentaire ?? "").trim();
+      const deja = commentaires[a.personne_id];
+      if (c && c !== deja) commentaires[a.personne_id] = deja ? `${deja} · ${c}` : c;
+    }
   }
 
   // Heures de chacun au poste, pour le « PDF heures » : même résolution que la
