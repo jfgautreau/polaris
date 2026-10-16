@@ -4,6 +4,7 @@ import { requireModule, canWrite } from "@/lib/permissions";
 import { fetchAll } from "@/lib/fetch-all";
 import { getEquipesC } from "@/lib/refdata";
 import { grouperAbsences, type JourAbsence } from "@/lib/absences-periodes";
+import { isoDate, addDays } from "@/lib/week";
 import AbsencesEditor, { type PeriodeVue } from "./AbsencesEditor";
 
 type Personne = { id: string; nom: string; prenom: string; atelier_id: string | null; equipe_id: string | null };
@@ -23,7 +24,7 @@ type Atelier = { id: string; nom: string };
 export default async function AbsencesSpecifiquesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ atelier?: string; search?: string; motif?: string; equipe?: string }>;
+  searchParams: Promise<{ atelier?: string; search?: string; motif?: string; equipe?: string; historique?: string }>;
 }) {
   const { profile, perms } = await requireModule("absences", "read");
   const canEdit = canWrite(perms, "absences");
@@ -33,29 +34,63 @@ export default async function AbsencesSpecifiquesPage({
   // Motifs filtrés (?motif=id1,id2), revalidés côté client contre la liste.
   const motifInit = (sp.motif ?? "").split(",").filter(Boolean);
   const equipeInit = sp.equipe ?? "";
+  // Historique (2026-10-16, journaux Supabase : ~24 000 jours relus à chaque
+  // ouverture, 24 appels). Par défaut, seules les périodes qui se terminent
+  // depuis moins de 12 mois (ou à venir) ; `?historique=tout` charge tout.
+  const toutHistorique = sp.historique === "tout";
+  const d = new Date();
+  d.setMonth(d.getMonth() - 12);
+  const limite = toutHistorique ? null : isoDate(d);
 
   const supabase = await getServerClient();
-  const [{ data: persData }, { data: motifData }, { data: ateliersData }, joursAll, { data: absData }, equipes] = await Promise.all([
+  const [{ data: persData }, { data: motifData }, { data: ateliersData }, joursRecents, { data: absData }, equipes] = await Promise.all([
     // Map des libellés : toutes les personnes (y compris parties) pour ne jamais
     // afficher « ? » sur une absence dont la personne a changé de statut.
     supabase.from("personne").select("id, nom, prenom, atelier_id, equipe_id").order("nom").returns<Personne[]>(),
     supabase.from("motif_absence").select("id, code_court, libelle, couleur").eq("actif", true).order("libelle").returns<Motif[]>(),
     supabase.from("atelier").select("id, nom").eq("actif", true).order("ordre_affichage").order("nom").returns<Atelier[]>(),
-    // Tous les jours d'absence, dédoublonnés par (personne, jour). fetchAll : la
-    // table grandit et dépassera 1000 lignes (cf. CLAUDE.md L8).
-    fetchAll<JourAbsence & { personne_id: string }>(() =>
-      supabase
+    // Jours d'absence (depuis la limite, ou tous), dédoublonnés par (personne,
+    // jour). fetchAll : la table dépasse 1000 lignes (cf. CLAUDE.md L8).
+    fetchAll<JourAbsence & { personne_id: string }>(() => {
+      const q = supabase
         .from("placement")
         .select("personne_id, jour, motif_absence_id, absence_id")
-        .not("motif_absence_id", "is", null)
+        .eq("site_id", profile.siteId)
+        .not("motif_absence_id", "is", null);
+      return (limite ? q.gte("jour", limite) : q)
         .order("personne_id")
         .order("jour")
-        .returns<(JourAbsence & { personne_id: string })[]>()
-    ),
+        .returns<(JourAbsence & { personne_id: string })[]>();
+    }),
     // Commentaires des absences déclarées, indexés par id.
     supabase.from("absence").select("id, commentaire").returns<{ id: string; commentaire: string | null }[]>(),
     getEquipesC(),
   ]);
+
+  // Une absence en cours à la limite (jour posé dans ses premiers jours) a pu
+  // commencer avant : on relit le passé de CES seules personnes (liste courte)
+  // pour la reconstituer en entier, au lieu de l'afficher coupée à la limite.
+  // Marge = écart toléré entre deux jours d'une même période (grouperAbsences).
+  let joursAll = joursRecents;
+  if (limite) {
+    const seuil = isoDate(addDays(new Date(`${limite}T00:00`), 3));
+    const aCompleter = [...new Set(joursRecents.filter((j) => j.jour <= seuil).map((j) => j.personne_id))];
+    if (aCompleter.length) {
+      const anciens = await fetchAll<JourAbsence & { personne_id: string }>(() =>
+        supabase
+          .from("placement")
+          .select("personne_id, jour, motif_absence_id, absence_id")
+          .eq("site_id", profile.siteId)
+          .not("motif_absence_id", "is", null)
+          .lt("jour", limite)
+          .in("personne_id", aCompleter)
+          .order("personne_id")
+          .order("jour")
+          .returns<(JourAbsence & { personne_id: string })[]>()
+      );
+      joursAll = [...anciens, ...joursRecents];
+    }
+  }
 
   const personnes = persData ?? [];
   const motifs = motifData ?? [];
@@ -74,6 +109,9 @@ export default async function AbsencesSpecifiquesPage({
     const p = persById.get(pid);
     const label = p ? `${p.nom} ${p.prenom}` : "?";
     for (const per of grouperAbsences(jours)) {
+      // Passé relu pour compléter une période : ses autres périodes, terminées
+      // avant la limite, ne s'affichent pas.
+      if (limite && per.fin < limite) continue;
       periodes.push({
         key: `${pid}:${per.debut}:${per.motif_absence_id ?? "?"}`,
         personne_id: pid,
@@ -103,7 +141,7 @@ export default async function AbsencesSpecifiquesPage({
               LIVE, pas ceux d'arrivée — cf. AbsencesEditor.tsx. */}
         </div>
         <p className="muted" style={{ marginBottom: 16 }}>
-          Toutes les absences de l&apos;effectif, reconstruites à partir des jours posés au planning
+          Les absences de l&apos;effectif, reconstruites à partir des jours posés au planning
           (une période déclarée <strong>ou</strong> des jours saisis un à un). Filtrez par nom,
           service, équipe, motif ou période. Le crayon modifie, la corbeille libère les jours.
         </p>
@@ -117,6 +155,7 @@ export default async function AbsencesSpecifiquesPage({
           motifInit={motifInit}
           equipes={equipes.map((e) => ({ id: e.id, nom: e.nom }))}
           equipeInit={equipeInit}
+          limite={limite}
           canEdit={canEdit}
         />
       </div>

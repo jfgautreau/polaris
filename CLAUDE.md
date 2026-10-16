@@ -178,7 +178,8 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   (+ contrats, habilitations) et le poste (+ exigences, cycle du quart) en **deux** requêtes à
   jointures ; l'équipe n'est revérifiée que si elle diffère de celle de la personne ; le n° libre
   n'est lu qu'après les verdicts et pour un poste numéroté ; réglages des visites en cache
-  (`getVisiteReglagesC`, `VISITE_PARAM_TAG`) **seulement en service_role**. Un dépôt : ~4 appels
+  (`getVisiteReglagesC`, `VISITE_PARAM_TAG`) ; sous RLS (chef), le cache ne vaut que pour « tout
+  éteint », sinon relecture avec ses droits (`reglagesFiables`). Un dépôt : ~4 appels
   au lieu de ~11. Ne pas revenir à une lecture par contrôle.
 - **Unicité `(personne_id, jour)`** : `/cell` fait un upsert qui remplace poste, absence, NT ou TP.
   Un écran qui ne montre pas la case de la personne (vue Par poste) envoie **`proteger: true`** :
@@ -278,7 +279,7 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
 - **`fetchAll`** : 1re tranche, puis une vague de **3** tranches parallèles, puis des vagues de 8
   (testé ; 4 appels jusqu'à 4 000 lignes au lieu de 9, mesuré plus rapide — 2026-10-14).
 - **Données de référence** : `src/lib/refdata.ts` (`unstable_cache` par site, argument
-  `site` obligatoire). Toute écriture dans une table référencée appelle
+  `site` obligatoire, `revalidate` 300 s depuis le 2026-10-16 : l'invalidation par tag fait foi). Toute écriture dans une table référencée appelle
   `updateTag(TAG)` (`ATELIERS_TAG`, `EQUIPES_TAG`, `QUARTS_TAG`, `MOTIFS_TAG`, `NIVEAUX_TAG`,
   `NB_NIVEAUX_TAG`, `SEUIL_COMPETENT_TAG`, `ROTATION_TAG`, `TYPES_AGENCE_TAG`, `REFERENTIEL_TAG`).
   **`REFERENTIEL_TAG`** (2026-10-14) : lignes + postes, cycles `poste_quart`, dates d'ouverture,
@@ -385,7 +386,9 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
 - **Absences** (module `absences`, `src/app/absences-specifiques/`) : périodes reconstruites
   depuis les jours ; édition inline ; filtres synchronisés à l'URL — nom, période, **Service**
   et **Équipe** en boutons avec compteurs, **Motif** en pastilles (plusieurs, `motif=a,b`) ;
-  chaque compteur tient compte des autres filtres.
+  chaque compteur tient compte des autres filtres. **Historique** (2026-10-16) : par défaut les
+  périodes terminées depuis < 12 mois ou à venir (`?historique=tout` pour tout) ; une absence en
+  cours à la limite est reconstituée en entier (passé relu pour ces seules personnes).
 - **Bilans** (`src/app/bilans/`, liste `src/lib/bilans-rapports.ts`) : Cockpit + rapports
   imprimables (bouton « PDF »). Feuille de route (24 semaines × service × catégorie ;
   besoin = somme simple des quarts, **journée comprise** ; besoin actualisé par

@@ -64,6 +64,7 @@ export default function AbsencesEditor({
   motifInit = [],
   equipes = [],
   equipeInit = "",
+  limite = null,
   canEdit,
 }: {
   personnes: Personne[];
@@ -77,6 +78,9 @@ export default function AbsencesEditor({
   motifInit?: string[];
   equipes?: { id: string; nom: string }[];
   equipeInit?: string;
+  // Historique chargé (2026-10-16) : date limite des périodes affichées (celles
+  // qui se terminent à partir de cette date), ou null = tout l'historique.
+  limite?: string | null;
   // Droit « absences: write » (calculé serveur). En lecture seule, on masque
   // toute la saisie : « + Déclarer », crayon et corbeille. Sans ce garde, un
   // titulaire de `absences: read` (ordo, rh, codir…) voyait les boutons et
@@ -129,6 +133,14 @@ export default function AbsencesEditor({
     if (fAtelier) p.set("atelier", fAtelier);
     const qs = p.toString();
     return qs ? `/planning?${qs}` : "/planning";
+  })();
+  // Bascule 12 mois / tout l'historique : garde les filtres LIVE de l'URL.
+  const historiqueHref = (() => {
+    const p = new URLSearchParams(searchParams?.toString() ?? "");
+    if (limite) p.set("historique", "tout");
+    else p.delete("historique");
+    const qs = p.toString();
+    return qs ? `/absences-specifiques?${qs}` : "/absences-specifiques";
   })();
 
   const popRef = useRef<HTMLDivElement>(null);
@@ -450,6 +462,15 @@ export default function AbsencesEditor({
               client component : un lien côté serveur serait figé à l'arrivée. */}
           <Link href={retourHref} className="navlink" style={{ marginLeft: 12 }}>
             &larr; Planning
+          </Link>
+        </div>
+
+        <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+          {limite
+            ? `Périodes terminées depuis le ${limite.split("-").reverse().join("/")} ou à venir (12 derniers mois).`
+            : "Tout l'historique des absences."}{" "}
+          <Link href={historiqueHref} prefetch={false}>
+            {limite ? "Afficher tout l'historique" : "Revenir aux 12 derniers mois"}
           </Link>
         </div>
 
