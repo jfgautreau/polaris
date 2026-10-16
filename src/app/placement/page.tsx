@@ -222,11 +222,20 @@ export default async function PlacementPage({
   const lignesD = lignesAtelier.filter((l) => l.actif);
   const [{ data: plD }, mat, pqRows, valLignes, valPostes] = await Promise.all([
     pPlacementsJour,
+    // Matrice des postes du service, filtrée PAR SERVICE (jointure poste -> ligne)
+    // et non par la liste de leurs ids : ~1,5 Ko d'URL par appel pour le grand
+    // service, répétés à chaque tranche et journalisés (2026-10-16). Mêmes lignes
+    // (toutes les lignes du service, actives ou non, et tous leurs postes).
     (async () => {
-      const posteIds = lignesAtelier.flatMap((l) => l.poste.map((p) => p.id));
-      if (!posteIds.length) return [] as MatRow[];
+      if (!atelierId || !lignesAtelier.some((l) => l.poste.length)) return [] as MatRow[];
       return fetchAll<MatRow>(() =>
-        supabase.from("matrice").select("personne_id, poste_id, niveau_actuel").in("poste_id", posteIds).order("id").returns<MatRow[]>()
+        supabase
+          .from("matrice")
+          .select("personne_id, poste_id, niveau_actuel, poste!inner(ligne!inner(atelier_id))")
+          .eq("site_id", profile.siteId)
+          .eq("poste.ligne.atelier_id", atelierId)
+          .order("id")
+          .returns<MatRow[]>()
       );
     })(),
     pPosteQuart,
