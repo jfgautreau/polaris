@@ -596,7 +596,7 @@ export default function PersonnelEditor({
   // 2e ligne de filtres : Service (atelier) et Équipe. "" = tous. Combines en ET
   // avec la recherche et les autres filtres. ⚠️ PORTÉS PAR L'URL (?service= /
   // ?equipe=) pour survivre à un rafraîchissement : état local pour la réactivité,
-  // `router.replace` (sans nouvelle entrée d'historique) à chaque changement. Le
+  // `history.replaceState` (sans nouvelle entrée d'historique) à chaque changement. Le
   // server component ne lit PAS ces params (il charge tout l'effectif, le filtrage
   // est client) — donc un router.refresh() après écriture ne les réinitialise pas.
   const [atelierFilter, setAtelierFilter] = useState(() => searchParams.get("service") ?? "");
@@ -618,14 +618,17 @@ export default function PersonnelEditor({
     if (statut) p.set("statut", statut);
     if (fiche) p.set("fiche", "incompletes");
     const qs = p.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    // `history.replaceState` et non `router.replace` (2026-10-16, journaux
+    // Supabase) : le serveur ne lit pas ces filtres ; `router.replace` relisait
+    // tout l'effectif à chaque changement. Next.js suit l'historique natif.
+    window.history.replaceState(null, "", qs ? `${pathname}?${qs}` : pathname);
   }
   const chooseAtelier = (v: string) => { setAtelierFilter(v); pushUrl({ service: v }); };
   const chooseEquipe = (v: string) => { setEquipeFilter(v); pushUrl({ equipe: v }); };
   const chooseStatut = (v: "" | "A_VENIR" | "ACTIF" | "PARTI") => { setStatutFilter(v); pushUrl({ statut: v }); };
   const chooseFiche = (v: boolean) => { setIncompletFilter(v); pushUrl({ fiche: v }); };
   // Recherche : état instantané pour le filtrage client, écriture débouncée dans
-  // l'URL (500 ms) pour ne pas spammer router.replace à chaque touche.
+  // l'URL (500 ms) pour ne pas réécrire l'URL à chaque touche.
   const chooseSearch = (v: string) => {
     setGq(v);
     if (searchTimer.current) clearTimeout(searchTimer.current);

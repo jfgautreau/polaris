@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import AtelierEquipeFiltres from "@/components/AtelierEquipeFiltres";
 import ConducteurFiltre from "@/components/ConducteurFiltre";
 import CompteurResultats from "@/components/CompteurResultats";
@@ -62,7 +62,6 @@ export default function MatricePanel({
   // L'URL (?search=) : survit au rafraîchissement et VOYAGE entre Planning /
   // Personnel / Matrice / Habilitations (cf. MainNav). État local pour la
   // réactivité, écriture débouncée.
-  const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
   const [search, setSearch] = useState(() => sp.get("search") ?? "");
@@ -71,10 +70,12 @@ export default function MatricePanel({
     setSearch(v);
     if (searchTimer.current) clearTimeout(searchTimer.current);
     searchTimer.current = setTimeout(() => {
-      const p = new URLSearchParams(sp.toString());
+      const p = new URLSearchParams(window.location.search);
       if (v.trim()) p.set("search", v.trim()); else p.delete("search");
+      // `history.replaceState` et non `router.replace` (2026-10-16) : la recherche
+      // filtre côté client, le serveur ne la lit pas ; inutile de tout relire.
       const qs = p.toString();
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+      window.history.replaceState(null, "", qs ? `${pathname}?${qs}` : pathname);
     }, 500);
   };
 

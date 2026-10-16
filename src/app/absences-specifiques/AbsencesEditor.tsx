@@ -98,7 +98,7 @@ export default function AbsencesEditor({
 
   // Filtres nom + atelier : SYNCHRONISÉS À L'URL (?search= / ?atelier=). État
   // local pour la réactivité de la frappe ; à chaque modif, on répercute dans
-  // l'URL via `router.replace()` (sans historique). Sans ça, un `router.refresh()`
+  // l'URL (sans historique, cf. `syncUrl`). Sans ça, un `router.refresh()`
   // ultérieur (déclenché par une écriture ailleurs, ou par un router.push interne)
   // ré-appelait le server component qui relisait `?search=` inchangé → le nom
   // effacé localement « revenait » à l'écran. Le lien « ← Planning » lit ces
@@ -110,14 +110,20 @@ export default function AbsencesEditor({
   const [fDu, setFDu] = useState("");
   const [fAu, setFAu] = useState("");
   const [fEquipe, _setFEquipe] = useState(equipeInit);
+  // 2026-10-16 (journaux Supabase) : `window.history.replaceState` et non plus
+  // `router.replace`, qui relançait TOUT le chargement serveur à chaque frappe
+  // (7 rechargements en 5 s pour un nom tapé) alors que les filtres s'appliquent
+  // ici, dans le navigateur. Next.js synchronise son routeur sur l'historique
+  // natif : `useSearchParams` suit, et un `router.refresh()` ultérieur repart
+  // bien de l'URL à jour (même garantie qu'avant, sans aller-retour).
   const syncUrl = (patch: Partial<{ search: string; atelier: string; motif: string; equipe: string }>) => {
-    const p = new URLSearchParams(searchParams?.toString() ?? "");
+    const p = new URLSearchParams(window.location.search);
     for (const [k, v] of Object.entries(patch)) {
       if (v) p.set(k, v);
       else p.delete(k);
     }
     const qs = p.toString();
-    router.replace(qs ? `/absences-specifiques?${qs}` : "/absences-specifiques", { scroll: false });
+    window.history.replaceState(null, "", qs ? `/absences-specifiques?${qs}` : "/absences-specifiques");
   };
   const setFNom = (v: string) => { _setFNom(v); syncUrl({ search: v }); };
   const setFAtelier = (v: string) => { _setFAtelier(v); syncUrl({ atelier: v }); };
