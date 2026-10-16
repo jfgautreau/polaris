@@ -9,7 +9,7 @@ import type { ValiditeRow } from "@/lib/referentiel-validite";
 // Donnees de reference (rarement modifiees, identiques pour tous les users) mises
 // en cache pour ne pas etre rechargees a chaque clic de filtre / navigation.
 // Lecture via le client service (hors cookies) -> cacheable. Invalidation par
-// expiration courte (les edits de reference se refletent en <= 30 s).
+// tag a chaque modification (expiration 300 s en filet).
 //
 // ⚠️ MULTI-SITE : le cache est SEGMENTÉ PAR SITE. Le siteId passe en argument
 // des fonctions cachées ; Next.js l'inclut dans la clé de cache, donc deux sites
@@ -20,14 +20,19 @@ import type { ValiditeRow } from "@/lib/referentiel-validite";
 // nouveau site part d'un référentiel copié depuis un site source (voir
 // /platform). L'ancien fallback `siteFilteredOrLegacy` et la clause
 // `.or(site_id.is.null,…)` ont donc été retirés.
-const OPTS = { revalidate: 30 };
+// 300 s (2026-10-16, journaux Supabase : à 30 s, les quarts étaient relus toutes
+// les 30 s pendant une saisie au Placement) : chaque écran qui modifie une table
+// en cache invalide son tag aussitôt (vérifié : la copie de référentiels de la
+// Plateforme ne vise qu'un site neuf, sans cache) ; l'expiration n'est qu'un filet
+// pour une modification faite hors de l'application (SQL Editor).
+const OPTS = { revalidate: 300 };
 
 async function siteId(): Promise<string> {
   return (await getCurrentSite()).id;
 }
 
 // Tags exposes pour permettre l'invalidation IMMEDIATE (revalidateTag /
-// updateTag) apres une mutation, plutot que d'attendre l'expiration a 30 s.
+// updateTag) apres une mutation, plutot que d'attendre l'expiration.
 // Cf. audit P2 (2026-09-10).
 export const ATELIERS_TAG = "refdata-ateliers";
 export const EQUIPES_TAG = "refdata-equipes";
@@ -474,9 +479,10 @@ export async function getHorairesPlaceC(): Promise<HorairePlaceRow[]> {
 
 // -------- Réglages des Visites médicales (alertes du Placement) ----------------
 // Relus à CHAQUE affectation avant le 2026-10-15 (41 lectures en 50 min dans les
-// journaux Supabase). Réservé aux routes qui écrivent en service_role : sous RLS,
-// un chef d'équipe ne lit pas ces réglages, et la mise en cache ne doit rien
-// changer à ce qu'il voit. Écrits par /api/visites-param, qui invalide le tag.
+// journaux Supabase). Lu en service_role : pour un compte sous RLS (chef
+// d'équipe), alertesVisite ne s'en fie qu'à « tout éteint » et relit sinon avec
+// ses droits (cf. visites-placement.ts). Écrits par /api/visites-param, qui
+// invalide le tag.
 export const VISITE_PARAM_TAG = "refdata-visite-param";
 const getVisiteReglagesBySite = unstable_cache(
   async (site: string): Promise<{ cle: string; valeur: string }[]> => {

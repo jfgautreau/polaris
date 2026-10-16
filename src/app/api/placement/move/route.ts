@@ -99,7 +99,8 @@ export async function POST(req: NextRequest) {
           quart: quart_code,
           jour: toJour,
           siteId: profile.siteId,
-          reglages: ecritureComplete ? getVisiteReglagesC(profile.siteId) : undefined,
+          reglages: getVisiteReglagesC(profile.siteId),
+          reglagesFiables: ecritureComplete,
         })
       : ([] as string[]),
   ]);

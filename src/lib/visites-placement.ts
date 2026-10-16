@@ -43,32 +43,35 @@ export async function alertesVisite(
     quart: string | null;
     jour: string;
     siteId: string;
-    /** Réglages déjà lus (cache `getVisiteReglagesC`, routes en service_role
-     *  seulement) ; sinon relus avec `supabase`, donc sous la même RLS. */
+    /** Réglages du site déjà lus en service_role (cache `getVisiteReglagesC`). */
     reglages?: Promise<{ cle: string; valeur: string }[]>;
+    /** `supabase` est le client service_role : les réglages en cache valent tels
+     *  quels. Sinon (RLS, chef d'équipe), seul « tout éteint » est repris du
+     *  cache — résultat identique pour tous — et une alerte allumée fait relire
+     *  les réglages avec les droits de l'appelant, comme avant. */
+    reglagesFiables?: boolean;
   },
 ): Promise<string[]> {
   const { personne_id, poste_id, quart, jour, siteId } = opts;
 
-  const reglages =
-    opts.reglages !== undefined
-      ? await opts.reglages.catch(() => null) // erreur de lecture : comme avant, rien d'allumé
-      : (
-          await supabase
-            .from("visite_parametre")
-            .select("cle, valeur")
-            .eq("site_id", siteId)
-            .returns<{ cle: string; valeur: string }[]>()
-        ).data;
-  const params = lireParametres(reglages);
-  if (
-    !params.alertePlacementContrainte &&
-    !params.alertePlacementAnci &&
-    !params.alertePlacementSir &&
-    !params.alertePlacementReprise
-  ) {
-    return [];
-  }
+  const relire = async () =>
+    lireParametres(
+      (
+        await supabase
+          .from("visite_parametre")
+          .select("cle, valeur")
+          .eq("site_id", siteId)
+          .returns<{ cle: string; valeur: string }[]>()
+      ).data,
+    );
+  const allume = (p: ReturnType<typeof lireParametres>) =>
+    p.alertePlacementContrainte || p.alertePlacementAnci || p.alertePlacementSir || p.alertePlacementReprise;
+
+  // Erreur de lecture du cache : on relit directement, comme avant.
+  const enCache = opts.reglages ? await opts.reglages.catch(() => null) : null;
+  let params = enCache ? lireParametres(enCache) : await relire();
+  if (enCache && !opts.reglagesFiables && allume(params)) params = await relire();
+  if (!allume(params)) return [];
 
   const besoinPoste = params.alertePlacementAnci || params.alertePlacementSir;
   const besoinVisites = params.alertePlacementAnci || params.alertePlacementSir || params.alertePlacementReprise;
