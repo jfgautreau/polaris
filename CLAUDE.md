@@ -310,6 +310,14 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
 - **Pas de `router.refresh()` après une écriture déjà appliquée à l'écran** quand l'état
   vient de `useState(props)` (un refresh ne le remplace pas, il relit tout pour rien) —
   retiré de l'Ordonnancement le 2026-10-14.
+- **Filtre appliqué côté client = `window.history.replaceState`, jamais `router.replace`**
+  (2026-10-16) : `router.replace` relance TOUT le chargement serveur (Absences : 7 rechargements
+  en 5 s pour un nom tapé). Next.js suit l'historique natif (`useSearchParams`, `router.refresh`).
+  Appliqué à Absences, Personnel, recherche de Matrice / Habilitations. Le Planning garde
+  `router.replace` débouncé : son serveur lit `search` pour ses liens de filtres.
+- **Clés JWKS partagées** (`src/lib/jwks.ts`, 2026-10-16) : `getClaims(undefined, await
+  optionsClaims())` (proxy, `getCurrentProfile`, auteur du journal) — mémoire 10 min + cache de
+  données 1 h, repli sur la lecture de la bibliothèque. Tout nouvel appel à `getClaims` fait de même.
 - **Cache navigateur** : `staleTimes.dynamic = 30` + `GardeCacheNavigation` (après toute
   écriture, une page mise en cache avant est rechargée complètement).
 - **React Compiler** en mode opt-in (`"use memo"`, `next.config.ts`) : actif sur

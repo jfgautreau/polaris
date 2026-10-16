@@ -37,7 +37,8 @@ const auteurDeRequete = parRequete(async function auteurDeRequete(): Promise<str
   try {
     const { getServerClient } = await import("@/lib/supabase-server");
     const sb = await getServerClient();
-    const { data } = await sb.auth.getClaims();
+    const { optionsClaims } = await import("@/lib/jwks");
+    const { data } = await sb.auth.getClaims(undefined, await optionsClaims());
     const sub = data?.claims?.sub;
     return typeof sub === "string" ? sub : null;
   } catch {

@@ -36,6 +36,9 @@ const WHITELIST_GLOBAL = new Set<string>([
   // (unique sur toute la plateforme). C'est cette ligne qui DIT le site : elle
   // ne peut pas être segmentée par un site qu'on ne connaît pas encore.
   "lireProfil",
+  // jwks.ts : clés PUBLIQUES de signature des jetons, une seule paire pour tout
+  // le projet Supabase (tous sites confondus) ; clé = URL du projet.
+  "lireJwks",
 ]);
 
 function sansCommentaires(src: string): string {

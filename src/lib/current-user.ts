@@ -1,6 +1,7 @@
 import { unstable_cache } from "next/cache";
 import { parRequete } from "@/lib/par-requete";
 import { getServerClient, getAdminClient } from "@/lib/supabase-server";
+import { optionsClaims } from "@/lib/jwks";
 
 export type CurrentProfile = {
   authId: string;
@@ -74,7 +75,8 @@ const lireProfil = unstable_cache(
 // avec un log d'erreur plutot que de rattacher silencieusement a Lebignon.
 export const getCurrentProfile = parRequete(async function getCurrentProfile(): Promise<CurrentProfile | null> {
   const supabase = await getServerClient();
-  const { data: claimsData } = await supabase.auth.getClaims();
+  // Clés de signature partagées entre instances (src/lib/jwks.ts, 2026-10-16).
+  const { data: claimsData } = await supabase.auth.getClaims(undefined, await optionsClaims());
   const userId = claimsData?.claims?.sub as string | undefined;
   if (!userId) return null;
 

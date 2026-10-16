@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { decodeImpersonation, IMPERSONATE_COOKIE, IMPERSONATE_HEADER } from "@/lib/impersonation";
+import { optionsClaims } from "@/lib/jwks";
 
 // Convention Next.js 16 : "proxy" (ex-"middleware").
 // Rafraichit la session Supabase, resout le site (multi-tenant) et protege
@@ -68,7 +69,9 @@ export async function proxy(req: NextRequest) {
   // retombe automatiquement sur getUser() tant que le projet signe en HS256.
   // Sécurité inchangée : un compte désactivé est refusé par getCurrentProfile()
   // (relecture de app_user.is_active à chaque requête), pas par ce proxy.
-  const { data: claimsData } = await supabase.auth.getClaims();
+  // Clés de signature partagées entre instances (src/lib/jwks.ts, 2026-10-16) :
+  // repli sur la lecture habituelle de la bibliothèque si le cache est indisponible.
+  const { data: claimsData } = await supabase.auth.getClaims(undefined, await optionsClaims());
   const userId = (claimsData?.claims?.sub as string | undefined) ?? null;
   const user = userId ? { id: userId } : null;
 
