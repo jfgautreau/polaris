@@ -276,8 +276,10 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
 - **Pas d'`await` en série sur des lectures indépendantes** : `Promise.all`, ou `enAvance()`
   (`src/lib/en-avance.ts`) pour lancer tôt et attendre plus tard. Dans les routes, les
   contrôles partent ensemble et les verdicts sont examinés dans l'ordre.
-- **`fetchAll`** : 1re tranche, puis une vague de **3** tranches parallèles, puis des vagues de 8
-  (testé ; 4 appels jusqu'à 4 000 lignes au lieu de 9, mesuré plus rapide — 2026-10-14).
+- **`fetchAll`** (2026-10-16) : la 1re tranche demande le total (`Prefer: count=exact`, même
+  réponse) puis lance **exactement** les tranches restantes par vagues de 8 — aucune tranche vide
+  (5 646 lignes : 6 appels au lieu de 12). Sans total (fausse requête) : découverte par vagues
+  3 puis 8 (2026-10-14). Testé (`fetch-all.test.ts`).
 - **Données de référence** : `src/lib/refdata.ts` (`unstable_cache` par site, argument
   `site` obligatoire, `revalidate` 300 s depuis le 2026-10-16 : l'invalidation par tag fait foi). Toute écriture dans une table référencée appelle
   `updateTag(TAG)` (`ATELIERS_TAG`, `EQUIPES_TAG`, `QUARTS_TAG`, `MOTIFS_TAG`, `NIVEAUX_TAG`,
