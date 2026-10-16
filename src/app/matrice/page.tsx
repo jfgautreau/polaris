@@ -137,19 +137,27 @@ export default async function MatricePage({
   const filtreConducteurs = sp.cond === "1";
   // Plus de liste d'ids de personnes dans l'URL (2026-10-14, journaux Supabase :
   // 326 ids ≈ 13 Ko, répétés à chaque tranche). La RLS borne déjà au site ; on y
-  // ajoute `site_id` et on garde en mémoire les seules personnes chargées. La liste
-  // des POSTES reste quand un service est filtré : courte, elle évite de lire toute
-  // la matrice du site ; sans filtre, elle couvrait le site entier → filtre mémoire.
+  // ajoute `site_id` et on garde en mémoire les seules personnes chargées. Service
+  // filtré : jointure poste -> ligne filtrée sur le service (2026-10-16) au lieu de
+  // la liste de ses postes (~1,5 Ko d'URL par tranche pour le grand service), ce
+  // qui évite toujours de lire toute la matrice du site ; le filtre mémoire sur
+  // `posteSet` ne garde ensuite que les postes affichés (actifs, hors attente).
   const persSet = new Set(personnes.map((p) => p.id));
   const posteSet = new Set(posteIds);
   const [m, avecRows, condRows, typesAgence] = await Promise.all([
     posteIds.length && personnes.length
       ? fetchAll<MatriceRow>(() => {
-          const q = supabase
-            .from("matrice")
-            .select("personne_id, poste_id, niveau_actuel, niveau_cible")
-            .eq("site_id", profile.siteId);
-          return (sp.atelier ? q.in("poste_id", posteIds) : q).order("id").returns<MatriceRow[]>();
+          const q = sp.atelier
+            ? supabase
+                .from("matrice")
+                .select("personne_id, poste_id, niveau_actuel, niveau_cible, poste!inner(ligne!inner(atelier_id))")
+                .eq("site_id", profile.siteId)
+                .eq("poste.ligne.atelier_id", sp.atelier)
+            : supabase
+                .from("matrice")
+                .select("personne_id, poste_id, niveau_actuel, niveau_cible")
+                .eq("site_id", profile.siteId);
+          return q.order("id").returns<MatriceRow[]>();
         }).then((rows) => rows.filter((r) => persSet.has(r.personne_id) && posteSet.has(r.poste_id)))
       : Promise.resolve([] as MatriceRow[]),
     personnes.length
