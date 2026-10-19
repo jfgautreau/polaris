@@ -2,7 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAdminClient } from "@/lib/supabase-server";
 import { getCurrentProfile } from "@/lib/current-user";
-import { canWriteModule, canWritePlacementData } from "@/lib/permissions";
+import { canWriteModule } from "@/lib/permissions";
+import { avecLotJournal } from "@/lib/journal-contexte";
 import { motifInactivite } from "@/lib/personne-statut";
 import { normaliseNom, normalisePrenom } from "@/lib/noms";
 import { messageErreur } from "@/lib/erreurs";
@@ -530,11 +531,14 @@ export async function POST(req: NextRequest) {
     // place les affectations déjà posées au-delà. Cycle de vie les liste et
     // propose de les retirer, sur confirmation. Absences conservées (donnée RH) :
     // seules les lignes poste / NT / TP sont concernées.
+    // Depuis le 2026-10-19, le droit d'écriture Personnel (garde de la route)
+    // suffit au retrait : c'est la suite du geste RH, bornée aux jours qu'aucun
+    // contrat ne couvre (avant : droit Planning ou Placement exigé).
     if (op === "hors-contrat-list" || op === "hors-contrat-retirer") {
       const personne_id = s(body.personne_id);
       if (!personne_id) return NextResponse.json({ error: "personne_id manquant" }, { status: 400 });
       const today = new Date().toISOString().slice(0, 10);
-      const [{ data: pers, error: pErr }, { data: contrats, error: cErr }, { data: pls, error: plErr }, peutRetirer] = await Promise.all([
+      const [{ data: pers, error: pErr }, { data: contrats, error: cErr }, { data: pls, error: plErr }] = await Promise.all([
         supabase.from("personne").select("statut").eq("id", personne_id).eq("site_id", site_id).maybeSingle<{ statut: string }>(),
         supabase
           .from("contrat_periode")
@@ -552,7 +556,6 @@ export async function POST(req: NextRequest) {
           .is("absence_id", null)
           .order("jour")
           .returns<{ jour: string; tp: boolean; non_travaille: boolean; poste: { nom: string } | null }[]>(),
-        canWritePlacementData(profile.role),
       ]);
       if (pErr) throw pErr;
       if (cErr) throw cErr;
@@ -561,19 +564,23 @@ export async function POST(req: NextRequest) {
       const lignes = (pls ?? [])
         .filter((p) => motifInactivite(pers.statut, contrats ?? [], p.jour) !== null)
         .map((p) => ({ jour: p.jour, quoi: p.tp ? "TP" : p.non_travaille ? "NT" : p.poste?.nom ?? "poste" }));
-      if (op === "hors-contrat-list") return NextResponse.json({ ok: true, lignes, peutRetirer });
+      if (op === "hors-contrat-list") return NextResponse.json({ ok: true, lignes });
 
-      if (!peutRetirer) return NextResponse.json({ error: "Retrait réservé aux droits Planning ou Placement." }, { status: 403 });
       if (!lignes.length) return NextResponse.json({ ok: true, retires: 0 });
-      const { data: suppr, error: dErr } = await supabase
-        .from("placement")
-        .delete()
-        .eq("personne_id", personne_id)
-        .eq("site_id", site_id)
-        .in("jour", lignes.map((l) => l.jour))
-        .is("motif_absence_id", null)
-        .is("absence_id", null)
-        .select("jour");
+      const { data: suppr, error: dErr } = await avecLotJournal(
+        site_id,
+        `Fin de contrat — retrait de ${lignes.length} affectation(s) hors contrat à partir du ${lignes[0].jour.split("-").reverse().join("/")}`,
+        async () =>
+          supabase
+            .from("placement")
+            .delete()
+            .eq("personne_id", personne_id)
+            .eq("site_id", site_id)
+            .in("jour", lignes.map((l) => l.jour))
+            .is("motif_absence_id", null)
+            .is("absence_id", null)
+            .select("jour"),
+      );
       if (dErr) throw dErr;
       return NextResponse.json({ ok: true, retires: suppr?.length ?? 0 });
     }

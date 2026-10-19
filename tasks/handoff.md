@@ -98,8 +98,14 @@ menu suit l'écriture, pas la lecture.
   bandeau rouge « N affectations hors contrat déjà posées : jj/mm (poste)… » et un bouton
   **Retirer…** avec confirmation en deux temps. `/api/personnel` ops `hors-contrat-list` /
   `hors-contrat-retirer` : lignes à venir (jour ≥ aujourd'hui) poste / NT / TP dont le jour
-  n'est couvert par aucun contrat (`motifInactivite`) ; absences conservées. Le retrait exige
-  `canWritePlacementData` ; sans lui, le bandeau dit « À retirer au Planning ».
+  n'est couvert par aucun contrat (`motifInactivite`) ; absences conservées.
+  **Validation à la saisie** (2026-10-19) : à la sortie d'un champ date (ou après suppression
+  d'une période), si de **nouveaux** jours hors contrat apparaissent, une fenêtre propose
+  « Retirer ces N affectations » / « Les garder » (`onSaisieTerminee` de `PeriodesEditor`,
+  qui attend les enregistrements en vol ; jamais au changement : une date s'enregistre à
+  chaque frappe). Fermer la modale juste après la saisie attend la vérification. Jours déjà
+  présents à l'ouverture ou gardés : bandeau seulement. Le retrait ne demande plus que le
+  droit d'écriture Personnel (garde de la route) et s'inscrit en un lot du Journal.
 
 ## Temps partiel (`personne.tp_config`, jsonb, options cumulables)
 Modale `TempsPartielModal`, API `/api/personnel` op `tp`. Périodes datées dans

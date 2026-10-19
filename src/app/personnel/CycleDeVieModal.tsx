@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import PeriodesEditor, { type RefletContrat } from "./PeriodesEditor";
 import ModaleDeplacable from "@/components/ModaleDeplacable";
 import {
@@ -63,22 +63,59 @@ export default function CycleDeVieModal({
   >([]);
 
   // Affectations à venir qu'aucun contrat ne couvre plus (fin de contrat saisie
-  // ou avancée après le pré-remplissage) : signalées, retirées sur confirmation.
-  const [horsContrat, setHorsContrat] = useState<{ lignes: { jour: string; quoi: string }[]; peutRetirer: boolean }>({ lignes: [], peutRetirer: false });
+  // ou avancée après le pré-remplissage) : signalées par un bandeau, retirées
+  // sur confirmation. Depuis le 2026-10-19, la question est POSÉE dès que la
+  // saisie d'une date fait apparaître de nouveaux jours (`proposition`).
+  const [horsContrat, setHorsContrat] = useState<LigneHC[]>([]);
   const [confirmerRetrait, setConfirmerRetrait] = useState(false);
+  const [proposition, setProposition] = useState<LigneHC[] | null>(null);
   const [retraitMsg, setRetraitMsg] = useState<string | null>(null);
+  // Jours déjà connus (à l'ouverture, ou gardés volontairement) : ne
+  // redéclenchent pas la question.
+  const connus = useRef<Set<string> | null>(null);
+  // Vérification lancée à la fin d'une saisie ; la fermeture l'attend
+  // (résout `true` si la question s'est ouverte).
+  const verification = useRef<Promise<boolean> | null>(null);
+
   const chargerHorsContrat = () =>
-    fetch("/api/personnel", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ op: "hors-contrat-list", personne_id: personne.id }),
-    })
-      .then((r) => r.json())
-      .then((j) => { if (j.ok) setHorsContrat({ lignes: j.lignes ?? [], peutRetirer: !!j.peutRetirer }); })
-      .catch(() => {});
+    listerHorsContrat(personne.id).then((l) => {
+      if (!l) return;
+      setHorsContrat(l);
+      connus.current ??= new Set(l.map((x) => x.jour));
+    });
+
+  function verifierApresSaisie(enregistre: Promise<void>) {
+    verification.current = (async () => {
+      await enregistre;
+      const l = await listerHorsContrat(personne.id);
+      if (!l) return false;
+      setHorsContrat(l);
+      const deja = (connus.current ??= new Set());
+      if (!l.some((x) => !deja.has(x.jour))) return false;
+      setConfirmerRetrait(false);
+      setRetraitMsg(null);
+      setProposition(l);
+      return true;
+    })();
+  }
+
+  async function fermer() {
+    const v = verification.current;
+    verification.current = null;
+    if (v && (await v)) return; // la question s'affiche : on ne ferme pas
+    onClose();
+  }
+
+  function garder() {
+    for (const l of proposition ?? []) connus.current?.add(l.jour);
+    verification.current = null;
+    setProposition(null);
+  }
 
   async function retirerHorsContrat() {
     setConfirmerRetrait(false);
+    setProposition(null);
+    verification.current = null;
     const r = await fetch("/api/personnel", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -114,14 +151,11 @@ export default function CycleDeVieModal({
       .then((r) => r.json())
       .then((j) => { if (!cancelled) setPeriodes(j.rows ?? []); })
       .catch(() => {});
-    fetch("/api/personnel", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ op: "hors-contrat-list", personne_id: personne.id }),
-    })
-      .then((r) => r.json())
-      .then((j) => { if (!cancelled && j.ok) setHorsContrat({ lignes: j.lignes ?? [], peutRetirer: !!j.peutRetirer }); })
-      .catch(() => {});
+    listerHorsContrat(personne.id).then((l) => {
+      if (cancelled || !l) return;
+      setHorsContrat(l);
+      connus.current ??= new Set(l.map((x) => x.jour));
+    });
     return () => { cancelled = true; };
   }, [personne.id]);
 
@@ -149,7 +183,7 @@ export default function CycleDeVieModal({
   }
 
   return (
-    <ModaleDeplacable onClose={onClose} largeur={1100}>
+    <ModaleDeplacable onClose={fermer} largeur={1100}>
       {/* En-tete : nom + statut resultant */}
       <div className="mdd-drag" style={{ cursor: "move" }}>
         <div className="toolbar" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
@@ -169,7 +203,7 @@ export default function CycleDeVieModal({
               {libelleStatut(statutCalc)}
             </span>
           </div>
-          <button type="button" className="btn-sm btn-ghost" onClick={onClose} style={{ width: "auto" }}>✕</button>
+          <button type="button" className="btn-sm btn-ghost" onClick={fermer} style={{ width: "auto" }}>✕</button>
         </div>
       </div>
 
@@ -224,36 +258,80 @@ export default function CycleDeVieModal({
           . La personne ne sera pas visible au planning ces jours-là.
         </div>
       )}
-      {horsContrat.lignes.length > 0 && (
+      {horsContrat.length > 0 && (
         <div style={{ background: "#fee2e2", color: "#7f1d1d", border: "1px solid #fecaca", borderRadius: 6, padding: "6px 10px", fontSize: 13, marginBottom: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <span>
-            ⚠ <strong>{horsContrat.lignes.length} affectation{horsContrat.lignes.length > 1 ? "s" : ""} hors contrat</strong> déjà posée{horsContrat.lignes.length > 1 ? "s" : ""} :{" "}
-            {horsContrat.lignes.map((l) => `${fmt(l.jour)} (${l.quoi})`).join(", ")}.
+            ⚠ <strong>{horsContrat.length} affectation{horsContrat.length > 1 ? "s" : ""} hors contrat</strong> déjà posée{horsContrat.length > 1 ? "s" : ""} :{" "}
+            {horsContrat.map((l) => `${fmt(l.jour)} (${l.quoi})`).join(", ")}.
           </span>
-          {horsContrat.peutRetirer && !confirmerRetrait && (
+          {!confirmerRetrait && (
             <button type="button" className="btn-sm" style={{ width: "auto", margin: 0 }} onClick={() => { setRetraitMsg(null); setConfirmerRetrait(true); }}>
               Retirer…
             </button>
           )}
-          {horsContrat.peutRetirer && confirmerRetrait && (
+          {confirmerRetrait && (
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              Retirer {horsContrat.lignes.length > 1 ? `ces ${horsContrat.lignes.length} affectations` : "cette affectation"} du planning ?
+              Retirer {horsContrat.length > 1 ? `ces ${horsContrat.length} affectations` : "cette affectation"} du planning ?
               <button type="button" className="btn-sm" style={{ width: "auto", margin: 0, background: "#b91c1c" }} onClick={retirerHorsContrat}>Oui, retirer</button>
               <button type="button" className="btn-sm btn-ghost" style={{ width: "auto", margin: 0, color: "#7f1d1d" }} onClick={() => setConfirmerRetrait(false)}>Annuler</button>
             </span>
           )}
-          {!horsContrat.peutRetirer && <span style={{ fontSize: 12 }}>À retirer au Planning (droit Planning ou Placement).</span>}
         </div>
       )}
       {retraitMsg && (
         <div style={{ fontSize: 13, marginBottom: 10, color: "var(--muted)" }}>{retraitMsg}</div>
       )}
-      <PeriodesEditor personneId={personne.id} bare onSync={onSyncPeriode} />
+      <PeriodesEditor personneId={personne.id} bare onSync={onSyncPeriode} onSaisieTerminee={verifierApresSaisie} />
+
+      {proposition && (
+        <ModaleDeplacable onClose={garder} largeur={560} zIndex={110}>
+          <div className="mdd-drag" style={{ cursor: "move" }}>
+            <h3 style={{ margin: "0 0 8px" }}>Affectations hors contrat</h3>
+          </div>
+          <p style={{ margin: "0 0 8px", fontSize: 13.5 }}>
+            Avec ces contrats, <strong>{personne.label}</strong> n&apos;est plus sous contrat
+            {proposition.length > 1 ? " ces jours-là" : " ce jour-là"} mais y reste affecté·e :
+          </p>
+          <ul style={{ margin: "0 0 8px", paddingLeft: 20, fontSize: 13.5, maxHeight: 220, overflow: "auto" }}>
+            {proposition.map((l) => (
+              <li key={l.jour}>
+                {fmt(l.jour)} — {l.quoi}
+                {!connus.current?.has(l.jour) && <span style={{ color: "#b91c1c", fontSize: 12 }}> (nouveau)</span>}
+              </li>
+            ))}
+          </ul>
+          <p className="muted" style={{ margin: "0 0 12px", fontSize: 12 }}>
+            Seuls les postes, NT et TP sont retirés ; les absences sont conservées.
+          </p>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button type="button" className="btn-sm btn-ghost" style={{ width: "auto", margin: 0, color: "var(--text)" }} onClick={garder}>
+              Les garder
+            </button>
+            <button type="button" className="btn-sm" style={{ width: "auto", margin: 0, background: "#b91c1c" }} onClick={retirerHorsContrat}>
+              Retirer {proposition.length > 1 ? `ces ${proposition.length} affectations` : "cette affectation"}
+            </button>
+          </div>
+        </ModaleDeplacable>
+      )}
     </ModaleDeplacable>
   );
 }
 
 // ---------- Utilitaires locaux ----------
+
+type LigneHC = { jour: string; quoi: string };
+
+/** Affectations à venir hors contrat ; `null` si la lecture échoue. */
+function listerHorsContrat(personneId: string): Promise<LigneHC[] | null> {
+  return fetch("/api/personnel", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ op: "hors-contrat-list", personne_id: personneId }),
+  })
+    .then((r) => r.json())
+    .then((j) => (j.ok ? ((j.lignes ?? []) as LigneHC[]) : null))
+    .catch(() => null);
+}
 
 function motifDuDernierContrat(periodes: { date_debut: string | null; motif_fin?: string | null }[]): string | null {
   if (!periodes.length) return null;

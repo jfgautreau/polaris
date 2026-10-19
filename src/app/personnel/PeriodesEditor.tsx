@@ -36,10 +36,16 @@ export default function PeriodesEditor({
   personneId,
   bare = false,
   onSync,
+  onSaisieTerminee,
 }: {
   personneId: string;
   bare?: boolean;
   onSync?: (reflet: RefletContrat) => void;
+  /** Saisie de dates terminée (sortie du champ, période supprimée) : reçoit la
+   *  promesse des enregistrements en cours. Une date s'enregistre à chaque
+   *  frappe (09/10 → 19/10 passe par 01/10) : on ne réagit qu'ici, jamais au
+   *  changement. */
+  onSaisieTerminee?: (enregistre: Promise<void>) => void;
 }) {
   const [rows, setRows] = useState<Periode[]>([]);
   // Agences parametrees dans Param. RH. Vide = migration 0034 non appliquee :
@@ -50,8 +56,30 @@ export default function PeriodesEditor({
   const [save, setSave] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const enVol = useRef(new Set<Promise<unknown>>());
+  const dateTouchee = useRef(false);
 
-  async function post(op: string, payload: Record<string, unknown>) {
+  // Laisse partir l'enregistrement « instantané » (setTimeout 0) puis attend
+  // tous ceux en vol.
+  async function enregistrementsTermines() {
+    await new Promise((r) => setTimeout(r, 0));
+    await Promise.all([...enVol.current]);
+  }
+
+  function finSaisieDate() {
+    if (!dateTouchee.current) return;
+    dateTouchee.current = false;
+    onSaisieTerminee?.(enregistrementsTermines());
+  }
+
+  function post(op: string, payload: Record<string, unknown>) {
+    const p = envoyer(op, payload);
+    enVol.current.add(p);
+    p.finally(() => enVol.current.delete(p));
+    return p;
+  }
+
+  async function envoyer(op: string, payload: Record<string, unknown>) {
     setSave("saving");
     try {
       const res = await fetch("/api/personnel", {
@@ -117,6 +145,7 @@ export default function PeriodesEditor({
 
   function edit(id: string, key: keyof Periode, value: string, instant = false) {
     patchLocal(id, { [key]: value } as Partial<Periode>);
+    if (key === "date_debut" || key === "date_fin") dateTouchee.current = true;
     const k = `${id}:${key}`;
     if (timers.current[k]) clearTimeout(timers.current[k]);
     timers.current[k] = setTimeout(
@@ -136,6 +165,8 @@ export default function PeriodesEditor({
   async function remove(id: string) {
     if (!window.confirm("Supprimer cette période de contrat ?")) return;
     setRows((rs) => rs.filter((r) => r.id !== id));
+    dateTouchee.current = true;
+    finSaisieDate();
     await post("periode-delete", { id, personne_id: personneId });
   }
 
@@ -220,8 +251,8 @@ export default function PeriodesEditor({
                     </select>
                   )}
                 </td>
-                <td><input type="date" min="1900-01-01" max="2200-12-31" value={r.date_debut ?? ""} onChange={(e) => edit(r.id, "date_debut", e.target.value, true)} style={inp} /></td>
-                <td><input type="date" min="1900-01-01" max="2200-12-31" value={r.date_fin ?? ""} onChange={(e) => edit(r.id, "date_fin", e.target.value, true)} style={inp} /></td>
+                <td><input type="date" min="1900-01-01" max="2200-12-31" value={r.date_debut ?? ""} onChange={(e) => edit(r.id, "date_debut", e.target.value, true)} onBlur={finSaisieDate} style={inp} /></td>
+                <td><input type="date" min="1900-01-01" max="2200-12-31" value={r.date_fin ?? ""} onChange={(e) => edit(r.id, "date_fin", e.target.value, true)} onBlur={finSaisieDate} style={inp} /></td>
                 <td><input value={r.motif ?? ""} onChange={(e) => edit(r.id, "motif", e.target.value)} placeholder="ex. remplacement, surcroît…" style={inp} /></td>
                 <td><input value={r.motif_fin ?? ""} onChange={(e) => edit(r.id, "motif_fin", e.target.value)} placeholder="ex. retraite, démission, fin de mission" style={inp} title="Motif de fin de ce contrat. Le motif_fin du dernier contrat vaut motif de départ de la personne." /></td>
                 <td><input value={r.commentaire ?? ""} onChange={(e) => edit(r.id, "commentaire", e.target.value)} style={inp} /></td>
