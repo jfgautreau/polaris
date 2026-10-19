@@ -4,6 +4,15 @@ import { useEffect, useRef, useState } from "react";
 import ModaleDeplacable from "@/components/ModaleDeplacable";
 import ToggleSwitch from "@/components/ToggleSwitch";
 import CouleurLigne from "./CouleurLigne";
+import { parseNumeros, NUMERO_ROTATION_MAX } from "@/lib/numeros-rotation";
+
+// Info-bulle du N° rot : montre le découpage réel en places, pour qu'un nom
+// mal séparé (« Aide palettisation » attendu, deux places obtenues) se voie.
+function titreNumeros(v: string | null): string {
+  const places = parseNumeros(v);
+  const aide = "Un numéro ou un nom de place par position tenue, séparés par des virgules (ex. « 12, 13 », « Ailes, Aide palettisation »). Un nom de place se garde stable : le renommer détache les affectations déjà posées.";
+  return places.length ? `${places.length} place${places.length > 1 ? "s" : ""} : ${places.join(" · ")}\n\n${aide}` : aide;
+}
 
 type Poste = {
   id: string;
@@ -541,7 +550,7 @@ export default function ReferentielEditor({
                   <col style={{ width: 62 }} />{/* Diff. */}
                   <col style={{ width: 74 }} />{/* Niv. min */}
                   <col style={{ width: 72 }} />{/* N° aff. */}
-                  <col style={{ width: 86 }} />{/* N° Rot */}
+                  <col style={{ width: 150 }} />{/* N° Rot (noms de place admis) */}
                   <col style={{ width: 200 }} />{/* Habil. requises */}
                   <col style={{ width: 150 }} />{/* Titulaire */}
                   <col style={{ width: 132 }} />{/* Ferme le */}
@@ -665,10 +674,10 @@ export default function ReferentielEditor({
                         <input
                           value={p.numero_rotation ?? ""}
                           placeholder="12, 13"
-                          maxLength={20}
+                          maxLength={NUMERO_ROTATION_MAX}
                           onChange={(e) => posteField(a.id, l.id, p.id, "numero_rotation", e.target.value)}
-                          style={{ width: 72 }}
-                          title="Un numéro par position tenue (ex. « 12, 13 » si l'effectif est 2)"
+                          style={{ width: "100%" }}
+                          title={titreNumeros(p.numero_rotation)}
                         />
                       </td>
                       <td>

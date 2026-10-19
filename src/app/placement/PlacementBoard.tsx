@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNod
 import { useRouter, useSearchParams } from "next/navigation";
 import { isoDate, addDays } from "@/lib/week";
 import { habValable, habManqueTxt } from "@/lib/habilitations";
-import { parseNumeros } from "@/lib/numeros-rotation";
+import { parseNumeros, libellePlace } from "@/lib/numeros-rotation";
 import { styleInterim, estAvecAgence } from "@/lib/interim";
 import SlideSwitch from "@/components/SlideSwitch";
 import { PrintIcon, OperateurIcon } from "@/components/icons";
@@ -1134,7 +1134,7 @@ export default function PlacementBoard({
                               className={`${s.slot} ${over === `po:${po.id}#${n}` ? s.over : ""}`}
                               {...overProps(`po:${po.id}#${n}`, po.id, n)}
                               onClick={(e) => { e.stopPropagation(); clickTarget(po.id, n); }}
-                              title={`N° ${n} — ${po.nom}`}
+                              title={`${libellePlace(n)} — ${po.nom}`}
                             >
                               <span className={s.slotNum}>{n}</span>
                               <span className={s.slotBody}>

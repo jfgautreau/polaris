@@ -5,6 +5,7 @@ import { getCurrentProfile } from "@/lib/current-user";
 import { canWriteModule } from "@/lib/permissions";
 import { ATELIERS_TAG, REFERENTIEL_TAG } from "@/lib/refdata";
 import { couleurLibre, estCouleurLigne } from "@/lib/ligne-couleurs";
+import { NUMERO_ROTATION_MAX } from "@/lib/numeros-rotation";
 
 // POST /api/referentiel  { op, ... }
 // Saisie inline du referentiel (ateliers / lignes / postes). Ecriture admin (RLS).
@@ -36,9 +37,10 @@ function posteValue(key: string, value: unknown) {
       return Math.max(0, Math.min(4, Math.floor(Number(value) || 0)));
     case "ordre_affichage":
       return Math.max(0, Math.floor(Number(value) || 0));
-    // Texte libre : un poste a plusieurs positions porte plusieurs numeros (« 12, 13 »).
+    // Texte libre : un poste a plusieurs positions porte plusieurs numeros / noms
+    // de place (« 12, 13 », « Ailes, Aide palettisation »).
     case "numero_rotation":
-      return s(value).slice(0, 20) || null;
+      return s(value).slice(0, NUMERO_ROTATION_MAX) || null;
     // PTR (remplacable=true) / PTNR (false). Accepte booleen ou "true"/"false".
     case "remplacable":
       return value === true || value === "true";

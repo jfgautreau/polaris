@@ -34,7 +34,9 @@ menu suit l'écriture, pas la lecture.
   Planning (asymétrie des défauts dans CLAUDE.md). Semaine non initialisée → plan vide
   + message renvoyant vers l'Ordonnancement.
 - **Cases numérotées** : `poste.numero_rotation` développé par `parseNumeros()` ; au-delà
-  des numéros saisis (et postes non numérotés) → zone « sans numéro ».
+  des numéros saisis (et postes non numérotés) → zone « sans numéro ». Depuis le 2026-10-19,
+  un numéro peut être un nom de place avec espaces (« Aide palettisation », séparateurs `,` `;`,
+  150 car. au total) ; la pastille passe à la ligne au-delà de 45 % de la case, jamais rognée.
 - **Alertes couleur** : sureffectif → tuile orange ; niveau sous le minimum du poste →
   pastille rouge ; habilitation manquante/périmée → rouge **encadré** (distinct du niveau).
 - **Vue Absences** : `SlideSwitch` Plan / Absences (`?vue=absences`), une carte par motif,

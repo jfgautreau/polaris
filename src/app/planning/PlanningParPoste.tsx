@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import ModaleDeplacable from "@/components/ModaleDeplacable";
 import { habValable } from "@/lib/habilitations";
 import { INTERIM_BG } from "@/lib/interim";
+import { libellePlace } from "@/lib/numeros-rotation";
 import {
   attribuerRangees,
   classerCandidat,
@@ -968,7 +969,7 @@ export default function PlanningParPoste({
             </strong>
             <span>
               {quartLibelle[quart] ?? quart} ·{" "}
-              {choix.ri === "nouvelle" ? "en surnombre" : choix.numero ? `place n° ${choix.numero}` : `place ${choix.ri + 1}`}
+              {choix.ri === "nouvelle" ? "en surnombre" : choix.numero ? `place ${libellePlace(choix.numero)}` : `place ${choix.ri + 1}`}
               {choix.remplace ? ` · remplace ${court(choix.remplace)}` : ""}
             </span>
           </div>

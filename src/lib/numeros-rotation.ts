@@ -5,16 +5,29 @@
 // Garde-fou : « 1-9999 » ne doit pas fabriquer des milliers de cases.
 const MAX_NUMEROS = 30;
 
-// « 12, 15-17 » -> ["12", "15", "16", "17"]. Separateurs : virgule, point-virgule,
-// espace. Un tiret entre deux nombres est une plage ; ailleurs le libelle est garde
-// tel quel (un numero peut ne pas etre un nombre : « 12b », « A-3 »).
+// Longueur maximale du champ entier (toutes les places). Referentiel et API.
+export const NUMERO_ROTATION_MAX = 150;
+
+// « n° 12 » pour un numero, « « Ailes » » pour un nom de place.
+export function libellePlace(n: string): string {
+  return /^\d/.test(n) ? `n° ${n}` : `« ${n} »`;
+}
+
+// « 12, 15-17 » -> ["12", "15", "16", "17"]. Separateurs : virgule, point-virgule.
+// Un tiret entre deux nombres est une plage ; ailleurs le libelle est garde tel
+// quel : un numero est en fait un NOM DE PLACE (« 12b », « A-3 », « Aide
+// palettisation »). Depuis le 2026-10-19, l'espace ne separe plus — sauf entre
+// nombres seuls (« 12 13 » reste deux places, ancienne saisie).
 export function parseNumeros(txt: string | null | undefined): string[] {
   if (!txt) return [];
   const out: string[] = [];
-  // Les espaces autour d'un tiret sont resserres d'abord : sans cela « 15 - 17 »
-  // serait coupe en trois avant meme d'etre reconnu comme une plage.
-  for (const part of txt.replace(/\s*-\s*/g, "-").split(/[,;\s]+/)) {
-    const t = part.trim();
+  // Les espaces autour d'un tiret sont resserres d'abord : « 15 - 17 » est une plage.
+  const parts = txt
+    .replace(/\s*-\s*/g, "-")
+    .split(/[,;]+/)
+    .flatMap((p) => (/^\s*\d+(\s+\d+)+\s*$/.test(p) ? p.trim().split(/\s+/) : [p]));
+  for (const part of parts) {
+    const t = part.trim().replace(/\s+/g, " ");
     if (!t) continue;
     const plage = /^(\d+)\s*-\s*(\d+)$/.exec(t);
     if (plage) {

@@ -8,11 +8,21 @@ describe("parseNumeros", () => {
     expect(parseNumeros("   ")).toEqual([]);
   });
 
-  it("decoupe sur les virgules, les points-virgules et les espaces", () => {
+  it("decoupe sur les virgules et les points-virgules", () => {
     expect(parseNumeros("12, 13")).toEqual(["12", "13"]);
     expect(parseNumeros("12;13")).toEqual(["12", "13"]);
-    expect(parseNumeros("12 13")).toEqual(["12", "13"]);
     expect(parseNumeros("  12 ,  13  ")).toEqual(["12", "13"]);
+  });
+
+  it("decoupe encore sur l'espace entre nombres seuls (ancienne saisie)", () => {
+    expect(parseNumeros("12 13")).toEqual(["12", "13"]);
+    expect(parseNumeros("12 13, 15-16")).toEqual(["12", "13", "15", "16"]);
+  });
+
+  it("garde l'espace dans un nom de place", () => {
+    expect(parseNumeros("Ailes, Panés, Aide palettisation")).toEqual(["Ailes", "Panés", "Aide palettisation"]);
+    expect(parseNumeros("Quai  A ; Quai B")).toEqual(["Quai A", "Quai B"]);
+    expect(parseNumeros("12 bis, 13")).toEqual(["12 bis", "13"]);
   });
 
   it("developpe une plage de nombres", () => {

@@ -150,6 +150,10 @@
 .slotNum {
   flex: 0 0 auto;
   min-width: 20px;
+  /* Un nom de place (« Aide palettisation ») passe à la ligne au lieu de
+     pousser les noms hors de la tuile ; jamais rogné. */
+  max-width: 45%;
+  overflow-wrap: anywhere;
   padding: 0 4px;
   border-radius: 4px;
   background: #eef2ff;

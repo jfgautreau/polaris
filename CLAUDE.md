@@ -148,7 +148,10 @@ L'historique des décisions est dans git et dans l'en-tête de chaque migration.
   par conception : exclu des fragilités, isolé dans les rapports, sans effet sur le
   planning) ; `imprimable=false` = masqué des PDF de placement seulement ;
   `numero_rotation` = texte « 12, 15-17 » (`parseNumeros()`), place mémorisée dans
-  `placement.numero_rotation`.
+  `placement.numero_rotation`. Un « numéro » est un **nom de place** (2026-10-19 : « Ailes, Aide
+  palettisation ») : séparateurs `,` `;` seulement (espace entre nombres seuls = ancienne saisie),
+  150 car. (`NUMERO_ROTATION_MAX`), affichage `libellePlace()`. Renommer une place détache les
+  affectations et horaires de place déjà posés.
 - **Poste fixe** (`personne.poste_fixe_id`) : même donnée que la colonne « Titulaire » du
   Référentiel (plusieurs titulaires par poste, un seul poste fixe par personne).
   **Libéré automatiquement au départ** (trigger 0078 : statut → PARTI ⇒ `poste_fixe_id = null`).
