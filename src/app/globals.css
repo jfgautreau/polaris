@@ -148,20 +148,12 @@ body {
     display: block;
     padding: 0;
   }
-  /* Synthese interim : une agence par page a l'impression complete, et
-     `.print-hidden` (pose en JS par « PDF agence ») retire les autres. */
+  /* Synthese interim : une agence par page a l'impression. */
   .agence-print {
     break-inside: avoid;
   }
-  /* Saut de page seulement entre deux agences REELLEMENT visibles : sinon, a
-     l'export « PDF agence » d'une agence qui n'est pas la premiere, le saut se
-     posait avant elle (son predecesseur etant seulement `display:none`, pas
-     retire du DOM) et sortait une premiere page blanche. */
-  .agence-print:not(.print-hidden) + .agence-print:not(.print-hidden) {
+  .agence-print + .agence-print {
     break-before: page;
-  }
-  .print-hidden {
-    display: none !important;
   }
 }
 

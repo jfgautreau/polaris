@@ -14,6 +14,7 @@ import { fetchAll } from "@/lib/fetch-all";
 import { horaireTxt, type MapsHoraire, type HM, type TpCfg, type HorairePlace } from "@/lib/horaires";
 import { chargerNuitsAvant } from "@/lib/nuit-avant-data";
 import { estAvecAgence } from "@/lib/interim";
+import { contratCouvreLe, type Periode } from "@/lib/personne-statut";
 import type { QuartRef } from "@/lib/quarts";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -175,7 +176,20 @@ export type LigneInterim = {
   cells: Record<string, CelluleInterim[]>; // cle = iso
 };
 export type InterimDispo = { personneId: string; nom: string; prenom: string };
-export type GroupeAgence = { agence: string; lignes: LigneInterim[]; sansBesoin: InterimDispo[] };
+export type GroupeAgence = { agence: string; lignes: LigneInterim[]; sansAffectation: InterimDispo[] };
+
+// Où figure un intérimaire dans la synthèse de la semaine (2026-10-20) :
+//  - « tableau » : au moins un poste dans la semaine ;
+//  - « sans-affectation » : AUCUNE ligne au Planning de la semaine (ni poste, ni
+//    JNT, ni NT, ni absence, ni TP) ET un contrat qui couvre au moins un jour de
+//    la semaine — ceux dont l'agence doit savoir qu'ils ne sont pas appelés ;
+//  - « aucune part » : JNT / absence / NT / TP seuls (la semaine est réglée au
+//    Planning), ou aucun contrat sur la semaine (arrivée plus tard, mission finie).
+export function placeInterimaire(o: { postes: number; lignesSemaine: number; contrats: Periode[]; jours: string[] }): "tableau" | "sans-affectation" | "aucune" {
+  if (o.postes > 0) return "tableau";
+  if (o.lignesSemaine > 0) return "aucune";
+  return o.jours.some((iso) => contratCouvreLe(o.contrats, iso)) ? "sans-affectation" : "aucune";
+}
 
 export async function chargerHorairesInterim(
   supabase: DB,
@@ -199,17 +213,26 @@ export async function chargerHorairesInterim(
   if (!interims.length) return [];
   const interimIds = interims.map((p) => p.id);
 
-  // 2) Leurs placements de la semaine (sur poste), + tables de resolution.
-  const [placements, { data: lignesSiteD }, { data: atD }, hor, { data: exc }, { data: tpH }] = await Promise.all([
+  // 2) Leurs lignes de la semaine — TOUTES (poste, JNT, NT, absence, TP) : seules
+  //    celles sur poste s'affichent, les autres disent « déjà réglé au Planning ».
+  //    Filtre par jour puis Set en mémoire (pas de longue liste d'ids dans l'URL).
+  //    + contrats (personne sans contrat sur la semaine) et tables de resolution.
+  const interimSet = new Set(interimIds);
+  const [lignesSemaine, contratsD, { data: lignesSiteD }, { data: atD }, hor, { data: exc }, { data: tpH }] = await Promise.all([
     fetchAll<{ personne_id: string; poste_id: string | null; jour: string; quart_code: string | null; numero_rotation: string | null }>(() =>
       supabase
         .from("placement")
         .select("personne_id, poste_id, jour, quart_code, numero_rotation")
         .in("jour", weekIsos)
-        .in("personne_id", interimIds)
-        .not("poste_id", "is", null)
         .order("id")
         .returns<{ personne_id: string; poste_id: string | null; jour: string; quart_code: string | null; numero_rotation: string | null }[]>()
+    ),
+    fetchAll<{ personne_id: string; date_debut: string | null; date_fin: string | null }>(() =>
+      supabase
+        .from("contrat_periode")
+        .select("personne_id, date_debut, date_fin")
+        .order("id")
+        .returns<{ personne_id: string; date_debut: string | null; date_fin: string | null }[]>()
     ),
     supabase.from("ligne").select("id, atelier_id, poste(id, nom)").returns<{ id: string; atelier_id: string | null; poste: { id: string; nom: string }[] }[]>(),
     supabase.from("atelier").select("id, nom").returns<{ id: string; nom: string }[]>(),
@@ -235,6 +258,13 @@ export async function chargerHorairesInterim(
       .eq("temps_partiel", true)
       .returns<{ id: string; tp_config: TpCfg | null }[]>(),
   ]);
+
+  const lignesInterim = lignesSemaine.filter((r) => interimSet.has(r.personne_id));
+  const placements = lignesInterim.filter((r) => r.poste_id);
+  const nbLignes = new Map<string, number>();
+  for (const r of lignesInterim) nbLignes.set(r.personne_id, (nbLignes.get(r.personne_id) ?? 0) + 1);
+  const contratsPar = new Map<string, Periode[]>();
+  for (const c of contratsD) if (interimSet.has(c.personne_id)) (contratsPar.get(c.personne_id) ?? contratsPar.set(c.personne_id, []).get(c.personne_id)!).push(c);
 
   // Poste -> { nom, atelierId } sur tout le site (pret possible vers un autre atelier).
   const posteInfo = new Map<string, { nom: string; atelierId: string | null }>();
@@ -289,16 +319,22 @@ export async function chargerHorairesInterim(
     });
   }
 
-  // 4) Groupe par agence. On garde TOUTES les agences ayant au moins un
-  //    interimaire (non parti) : celles sans aucun placement reapparaissent avec
-  //    leur seule liste « sans besoin », pour communiquer a l'agence qu'aucun de
-  //    ses interimaires n'est requis cette semaine.
-  const parAgence = new Map<string, { lignes: LigneInterim[]; sansBesoin: InterimDispo[] }>();
+  // 4) Groupe par agence (cf. placeInterimaire). Une agence n'apparaît que si
+  //    l'un de ses intérimaires est au tableau ou « sans affectation » : sa liste
+  //    dit alors à l'agence lesquels ne sont pas appelés cette semaine.
+  const parAgence = new Map<string, { lignes: LigneInterim[]; sansAffectation: InterimDispo[] }>();
   for (const p of interims) {
-    const agence = (p.agence_interim ?? "").trim() || "Agence non renseignée";
-    const g = parAgence.get(agence) ?? parAgence.set(agence, { lignes: [], sansBesoin: [] }).get(agence)!;
     const cells = cellsByPerson.get(p.id);
-    if (cells && Object.keys(cells).length > 0) {
+    const place = placeInterimaire({
+      postes: cells ? Object.keys(cells).length : 0,
+      lignesSemaine: nbLignes.get(p.id) ?? 0,
+      contrats: contratsPar.get(p.id) ?? [],
+      jours: weekIsos,
+    });
+    if (place === "aucune") continue;
+    const agence = (p.agence_interim ?? "").trim() || "Agence non renseignée";
+    const g = parAgence.get(agence) ?? parAgence.set(agence, { lignes: [], sansAffectation: [] }).get(agence)!;
+    if (place === "tableau" && cells) {
       g.lignes.push({
         personneId: p.id,
         nom: p.nom,
@@ -307,7 +343,7 @@ export async function chargerHorairesInterim(
         cells,
       });
     } else {
-      g.sansBesoin.push({ personneId: p.id, nom: p.nom, prenom: p.prenom });
+      g.sansAffectation.push({ personneId: p.id, nom: p.nom, prenom: p.prenom });
     }
   }
 
@@ -315,7 +351,7 @@ export async function chargerHorairesInterim(
     .map(([agence, g]) => ({
       agence,
       lignes: g.lignes.sort((a, b) => (a.nom + a.prenom).localeCompare(b.nom + b.prenom)),
-      sansBesoin: g.sansBesoin.sort((a, b) => (a.nom + a.prenom).localeCompare(b.nom + b.prenom)),
+      sansAffectation: g.sansAffectation.sort((a, b) => (a.nom + a.prenom).localeCompare(b.nom + b.prenom)),
     }))
     .sort((a, b) => a.agence.localeCompare(b.agence));
   return groupes;

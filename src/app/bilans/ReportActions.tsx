@@ -27,7 +27,10 @@ const boite: React.CSSProperties = {
   whiteSpace: "nowrap",
 };
 
-export default function ReportActions({ children, showPrint = true }: { children?: React.ReactNode; showPrint?: boolean }) {
+// `showPdf={false}` : le rapport fournit son propre bouton PDF (vrai fichier
+// téléchargé, cf. BoutonsExport) à la place de celui-ci, qui ouvre le dialogue
+// d'impression ; l'imprimante reste.
+export default function ReportActions({ children, showPrint = true, showPdf = true }: { children?: React.ReactNode; showPrint?: boolean; showPdf?: boolean }) {
   return (
     <div className="noprint" style={{ display: "flex", alignItems: "center", gap: 8 }}>
       {children}
@@ -47,6 +50,7 @@ export default function ReportActions({ children, showPrint = true }: { children
               propose « Enregistrer au format PDF » comme destination). Beaucoup
               d'utilisateurs ne reconnaissent pas l'icône imprimante comme un export
               PDF — le libellé lève l'ambiguïté. */}
+          {showPdf && (
           <button
             type="button"
             onClick={() => window.print()}
@@ -59,6 +63,7 @@ export default function ReportActions({ children, showPrint = true }: { children
             </svg>
             PDF
           </button>
+          )}
 
           <button
             type="button"

@@ -409,7 +409,14 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   l'ordonnancement ; Total = titulaires tenant ≥ 1 poste de la catégorie, intérim à part).
   Assez de compétences ? (affectation optimale par jour, besoin additif). Polyvalence &
   compétences (couverture opérationnelle niveau_min + habilitation ; verdict de fragilité
-  sur la relève globale). Synthèses (absences sur 4 semaines, intérim par agence). PTNR
+  sur la relève globale). Synthèses (absences sur 4 semaines, intérim par agence ; liste
+  « Sans affectation cette semaine » = aucune ligne `placement` de la semaine ET un contrat qui
+  couvre au moins un jour, `placeInterimaire()` ; JNT / absence seuls = nulle part ; exports
+  PDF / Excel par `src/lib/syntheses-export.ts`, global et par agence). **PDF = vrai fichier**
+  (2026-10-20, `src/lib/pdf.ts`, générateur maison sans dépendance : titres, textes, tableaux
+  paginés, Helvetica WinAnsi) via `BoutonPdf` / `BoutonExcel` (`src/app/bilans/BoutonsExport.tsx`,
+  `telechargerFichier`) ; `ReportActions showPdf={false}` masque l'ancien bouton qui ouvrait
+  l'impression (les autres rapports l'ont encore). PTNR
   exclus des fragilités. **Recyclages à prévoir** (2026-10-20, garde `habilitations`, règles
   `src/lib/recyclages.ts`) : personne active × formation `a_recycler` détenue, échéance dans
   l'horizon (expirées comprises), type = `competence.categorie` (réglementaire / interne / non

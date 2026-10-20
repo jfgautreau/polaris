@@ -8,7 +8,8 @@ import { parseMonday, weekDays, isoWeekNumber, isoDate } from "@/lib/week";
 import { chargerAbsences4Semaines, chargerHorairesInterim, type Absences4 } from "@/lib/synthese-data";
 import { INTERIM_BG } from "@/lib/interim";
 import SyntheseFilters from "./SyntheseFilters";
-import AgencePrintButton from "./AgencePrintButton";
+import ExportSyntheses, { ExportAgence } from "./ExportSyntheses";
+import { LIBELLE_SANS_AFFECTATION, PRECISION_SANS_AFFECTATION } from "@/lib/syntheses-export";
 
 export const dynamic = "force-dynamic";
 
@@ -67,9 +68,17 @@ export default async function SynthesesPage({
   }
 
   const nbPlaces = groupes.reduce((s, g) => s + g.lignes.length, 0);
-  const nbSansBesoin = groupes.reduce((s, g) => s + g.sansBesoin.length, 0);
+  const nbSansAffectation = groupes.reduce((s, g) => s + g.sansAffectation.length, 0);
 
   const sepStyle = { borderLeft: "2px solid var(--border)" } as const;
+
+  // Données des exports PDF / Excel (construits dans le navigateur, cf. ExportSyntheses).
+  const joursExport = joursSem.map((j) => ({ iso: j.iso, nom: j.nom, num: j.num }));
+  const colonnesExport = colonnes.map((c) => ({ iso: c.iso, nom: c.nom, num: c.num, premierDeSemaine: c.premierDeSemaine, weekNo: semaines[c.si].weekNo }));
+  const filtresTxt = [
+    atelier ? (atD ?? []).find((a) => a.id === atelier)?.nom ?? "" : "",
+    motif ? (motifD ?? []).find((m) => m.id === motif)?.libelle ?? "" : "",
+  ].filter(Boolean).join(" · ");
 
   return (
     <>
@@ -81,10 +90,16 @@ export default async function SynthesesPage({
             <div className="sub">
               {vue === "absences"
                 ? "Absences à venir sur 4 semaines (hors intérim) — vue calendaire."
-                : "Planning prévisionnel des intérimaires, par agence — export PDF."}
+                : "Planning prévisionnel des intérimaires, par agence — exports PDF et Excel."}
             </div>
           </div>
-          <ReportActions />
+          <ReportActions showPdf={false}>
+            {vue === "interim" ? (
+              <ExportSyntheses vue="interim" groupes={groupes} jours={joursExport} semaineLabel={semaineLabel} />
+            ) : (
+              <ExportSyntheses vue="absences" abs={abs} colonnes={colonnesExport} rangeLabel={rangeLabel} filtres={filtresTxt} />
+            )}
+          </ReportActions>
         </div>
 
         <SyntheseFilters
@@ -209,21 +224,20 @@ export default async function SynthesesPage({
             ) : (
               <>
                 <p className="muted noprint" style={{ marginTop: -4, marginBottom: 14 }}>
-                  {nbPlaces} placé{nbPlaces > 1 ? "s" : ""} · {nbSansBesoin} sans besoin · {groupes.length} agence{groupes.length > 1 ? "s" : ""}. Chaque bloc est imprimable séparément (bouton « PDF agence »).
+                  {nbPlaces} placé{nbPlaces > 1 ? "s" : ""} · {nbSansAffectation} sans affectation · {groupes.length} agence{groupes.length > 1 ? "s" : ""}. Chaque agence s'exporte séparément (boutons « PDF agence » et « Excel agence »).
                 </p>
-                {groupes.map((g, gi) => {
-                  const secId = `agence-${gi}`;
+                {groupes.map((g) => {
                   return (
-                    <section key={g.agence} id={secId} data-agence-section className="agence-print report-section print-flow">
+                    <section key={g.agence} className="agence-print report-section print-flow">
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 8 }}>
                         <h2 style={{ margin: 0 }}>
                           {g.agence}{" "}
                           <span className="muted" style={{ fontWeight: 400, fontSize: 14 }}>
                             · {g.lignes.length} placé{g.lignes.length > 1 ? "s" : ""}
-                            {g.sansBesoin.length > 0 ? ` · ${g.sansBesoin.length} sans besoin` : ""} · semaine {semaineLabel}
+                            {g.sansAffectation.length > 0 ? ` · ${g.sansAffectation.length} sans affectation` : ""} · semaine {semaineLabel}
                           </span>
                         </h2>
-                        <AgencePrintButton targetId={secId} />
+                        <ExportAgence groupe={g} jours={joursExport} semaineLabel={semaineLabel} />
                       </div>
 
                       {g.lignes.length > 0 && (
@@ -270,13 +284,14 @@ export default async function SynthesesPage({
                         </div>
                       )}
 
-                      {g.sansBesoin.length > 0 && (
+                      {g.sansAffectation.length > 0 && (
                         <div className="card" style={{ marginTop: g.lignes.length > 0 ? 8 : 0, background: "#f8fafc" }}>
                           <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: ".03em", marginBottom: 6 }}>
-                            Pas de besoin cette semaine
+                            {LIBELLE_SANS_AFFECTATION}
+                            <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, marginLeft: 6 }}>· {PRECISION_SANS_AFFECTATION}</span>
                           </div>
                           <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 10px" }}>
-                            {g.sansBesoin.map((p) => (
+                            {g.sansAffectation.map((p) => (
                               <span key={p.personneId} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 12, padding: "1px 10px", fontSize: 13 }}>
                                 {p.nom} {p.prenom}
                               </span>
