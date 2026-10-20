@@ -7,6 +7,7 @@ import { habValable, habManqueTxt } from "@/lib/habilitations";
 import { parseNumeros, libellePlace } from "@/lib/numeros-rotation";
 import { styleInterim, estAvecAgence } from "@/lib/interim";
 import SlideSwitch from "@/components/SlideSwitch";
+import ModaleDeplacable from "@/components/ModaleDeplacable";
 import { PrintIcon, OperateurIcon } from "@/components/icons";
 import { couleurDeLigne } from "@/lib/ligne-couleurs";
 import JourNav from "./JourNav";
@@ -227,6 +228,9 @@ export default function PlacementBoard({
   // Visites medicales : le serveur demande une confirmation SANS dire pourquoi
   // (cf. src/lib/visites-placement.ts). Le chef confirme, ou renonce et voit les RH.
   const [askRh, setAskRh] = useState<{ persId: string; value: string; num: string | null; alertes: string[] } | null>(null);
+  // Personne ABSENTE ce jour (motif d'absence ou non travaillé) posée sur un poste :
+  // le poste remplacerait l'absence de la journée, on demande d'abord (2026-10-20).
+  const [askAbsence, setAskAbsence] = useState<{ persId: string; value: string; num: string | null; absence: string } | null>(null);
 
   const printRef = useRef<HTMLDivElement>(null);
   // En-tête de la feuille (service, équipe, quart, date) : HORS de printInner,
@@ -360,13 +364,23 @@ export default function PlacementBoard({
     }, 3000);
   };
 
-  async function assign(persId: string, value: string, forcer = false, num: string | null = null) {
+  async function assign(persId: string, value: string, forcer = false, num: string | null = null, absenceOk = false) {
     const p = persById.get(persId);
     if (!p?.editable) {
       flash("Vous ne pouvez pas modifier cette personne (hors de votre équipe).");
       return;
     }
     const isPoste = value !== "" && value !== "X" && !value.startsWith("m:");
+    // Absente ce jour-là : confirmer avant que le poste ne remplace l'absence. Passé
+    // en premier ; les confirmations suivantes (habilitation, RH) rappellent assign
+    // avec `forcer`, qui ne redemande donc pas. Changer de motif ou désaffecter ne
+    // demande rien : seul un poste efface l'absence.
+    const actuel = place[persId] ?? "";
+    if (isPoste && !forcer && !absenceOk && (actuel === "X" || actuel.startsWith("m:"))) {
+      const absence = actuel === "X" ? "Non travaillé" : motifById.get(actuel.slice(2))?.libelle ?? "absence";
+      setAskAbsence({ persId, value, num, absence });
+      return;
+    }
     // Habilitation manquante : on demande confirmation avant d'ecrire quoi que ce soit.
     if (isPoste && !forcer) {
       const manque = habManque(persId, value);
@@ -1633,6 +1647,39 @@ export default function PlacementBoard({
             </div>
           </div>
         </div>
+      )}
+
+      {askAbsence && (
+        <ModaleDeplacable onClose={() => setAskAbsence(null)} largeur={460}>
+          <h2 className="mdd-drag" style={{ margin: "0 0 8px", fontSize: 18, color: "#b45309", cursor: "grab" }}>⚠ Absence ce jour-là</h2>
+          <p style={{ margin: "0 0 10px", fontSize: 14 }}>
+            Attention : <strong>{(() => { const p = persById.get(askAbsence.persId); return p ? `${p.nom} ${p.prenom}` : ""; })()}</strong>{" "}
+            a un motif d&apos;absence sur cette journée (<strong>{askAbsence.absence}</strong>).
+          </p>
+          <p style={{ margin: "0 0 10px", fontSize: 14 }}>
+            Êtes-vous sûr de vouloir la placer sur le poste <strong>{posteNom.get(askAbsence.value) ?? "?"}</strong> ?
+          </p>
+          <p className="muted" style={{ margin: "0 0 14px", fontSize: 12 }}>
+            Le poste remplace l&apos;absence pour cette journée seulement.
+          </p>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <button type="button" className={s.cancelSel} style={{ padding: "7px 16px", fontSize: 13 }} onClick={() => setAskAbsence(null)}>
+              Non
+            </button>
+            <button
+              type="button"
+              style={{ width: "auto", margin: 0, padding: "7px 16px", fontSize: 13, fontWeight: 700, background: "#b45309", border: "1px solid #b45309", borderRadius: 8, cursor: "pointer" }}
+              onClick={() => {
+                const a = askAbsence;
+                setAskAbsence(null);
+                setSel(null);
+                void assign(a.persId, a.value, false, a.num, true);
+              }}
+            >
+              Oui, placer
+            </button>
+          </div>
+        </ModaleDeplacable>
       )}
 
       {askRh && (

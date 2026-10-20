@@ -113,7 +113,7 @@ async function envoyerPrefill(monday: string): Promise<{ reseau: true } | { rese
     return { reseau: true };
   }
 }
-type Motif = { id: string; code: string; couleur: string };
+type Motif = { id: string; code: string; couleur: string; libelle?: string };
 type Personne = { id: string; label: string; equipe_id: string | null; editable: boolean; color?: string; interim?: boolean };
 
 const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
@@ -150,6 +150,7 @@ type ContexteGrille = {
   formationMotifId: string | null;
   posteLabel: Record<string, string>;
   posteLabelAll: Record<string, string>;
+  posteTitreAll: Record<string, string>;
 };
 type ActionsPlanning = {
   survol: (k: string) => void;
@@ -208,6 +209,14 @@ const valueLabel = (ctx: ContexteGrille, v: string) =>
   : v === "TP" ? "TP"
   : v.startsWith("m:") ? (ctx.motifs.find((mo) => `m:${mo.id}` === v)?.code ?? "?")
   : (ctx.posteLabel[v] ?? ctx.posteLabelAll[v] ?? "?");
+// Libellé COMPLET de la valeur d'une case, pour l'info-bulle : le code de 6
+// caractères (poste) ou le code court (motif) ne parle pas à tout le monde.
+const valueTitre = (ctx: ContexteGrille, v: string) =>
+  v === "" ? ""
+  : v === "X" ? "Non travaillé"
+  : v === "TP" ? "Temps partiel"
+  : v.startsWith("m:") ? (ctx.motifs.find((mo) => `m:${mo.id}` === v)?.libelle ?? "")
+  : (ctx.posteTitreAll[v] ?? "");
 const BROUILLON_VIDE: Brouillon = { debut: "", fin: "", motif: "" };
 
 const LignePlanning = memo(function LignePlanning({
@@ -337,6 +346,7 @@ const LignePlanning = memo(function LignePlanning({
         // (encore) analyser une expression « [ternaires…].join() || undefined ».
         const infoCompetence = restricted ? "⛔ Restriction médicale/physique sur ce poste" : alert ? "Hors compétence" : "";
         const titreCase = [
+          hors ? "" : valueTitre(ctx, v),
           hors ? "Hors effectif ce jour-là (avant arrivée, après départ ou entre deux contrats)" : "",
           infoCompetence,
           manque.length ? `⚠ Placement forcé — habilitation manquante : ${manque.join(", ")}` : "",
@@ -414,7 +424,6 @@ const LignePlanning = memo(function LignePlanning({
                 actions.demarrerGlisser(kCell);
               } : undefined}
               onDragEnd={() => actions.finGlisser()}
-              title={excInfo.length ? excInfo.join(" · ") : undefined}
               onClick={(e) => actions.clicCase(pers, d.iso, e.currentTarget.getBoundingClientRect())}
             >
               {valueLabel(ctx, v)}
@@ -580,6 +589,7 @@ export default function PlanningGrid({
   horsEffectif = {},
   quartLabel = {},
   posteLabelAll = {},
+  posteTitreAll = {},
   exceptions = {},
   horaireStd = {},
   horaireApresNuit = {},
@@ -632,6 +642,7 @@ export default function PlanningGrid({
   horsEffectif?: Record<string, boolean>;
   quartLabel?: Record<string, string>;
   posteLabelAll?: Record<string, string>;
+  posteTitreAll?: Record<string, string>; // poste -> « nom complet — ligne » (info-bulle des cases)
   exceptions?: Record<string, { debut: string; fin: string; motif: string }>;
   horaireStd?: Record<string, { debut: string; fin: string }>; // `${quart}:${poste}:${dow}` -> horaire par defaut
   horaireApresNuit?: Record<string, { debut: string; fin: string }>; // `${quart}:${poste}:${iso}` -> après une nuit (0087)
@@ -1335,11 +1346,11 @@ ${ecritures.length} case(s) seront écrites (postes et NT)${remplacees ? `, dont
     () => ({
       matrice, niveauMin, effectif, habPoste, habComp, habPers, motifColor, motifs,
       tpBlocked, horsEffectif, otherByCell, otherPosteByCell, quartLabel, horaireStd, horaireApresNuit, horaireCase,
-      formationMotifId, posteLabel, posteLabelAll,
+      formationMotifId, posteLabel, posteLabelAll, posteTitreAll,
     }),
     [matrice, niveauMin, effectif, habPoste, habComp, habPers, motifColor, motifs,
      tpBlocked, horsEffectif, otherByCell, otherPosteByCell, quartLabel, horaireStd, horaireApresNuit, horaireCase,
-     formationMotifId, posteLabel, posteLabelAll],
+     formationMotifId, posteLabel, posteLabelAll, posteTitreAll],
   );
 
   // Gestionnaires passés aux lignes (`actionsLigne` — `actions` est déjà la prop

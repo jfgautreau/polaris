@@ -296,10 +296,14 @@ export default async function PlanningPage({
   // Nom complet, non tronque : sert aux infobulles (ex. « placee sur un autre quart »),
   // ou l'etiquette de 6 caracteres ne suffit pas a identifier le poste.
   const posteNomAll: Record<string, string> = {};
+  // Info-bulle des cases (2026-10-20) : les codes de 6 caractères ne parlent pas à
+  // tout le monde, le survol d'une case donne le nom complet du poste et sa ligne.
+  const posteTitreAll: Record<string, string> = {};
   for (const g of groupsAll)
     for (const p of g.postes) {
       posteLabelAll[p.id] = (p.nom_court || p.nom).slice(0, 6);
       posteNomAll[p.id] = p.nom;
+      posteTitreAll[p.id] = `${p.nom} — ${g.ligneNom}`;
     }
 
   // Filtre poste x quart : un poste qui ne tourne pas sur le quart affiché (« – »)
@@ -1127,7 +1131,7 @@ export default async function PlanningPage({
           allGroups={allGridGroups}
           openByIso={openByIso}
           openAllByIso={openAllByIso}
-          motifs={motifs.map((m) => ({ id: m.id, code: m.code_court, couleur: m.couleur }))}
+          motifs={motifs.map((m) => ({ id: m.id, code: m.code_court, couleur: m.couleur, libelle: m.libelle }))}
           formationMotifId={motifs.find((m) => m.libelle.toLowerCase().includes("formation"))?.id ?? null}
           besoin={besoin}
           initial={initial}
@@ -1141,6 +1145,7 @@ export default async function PlanningPage({
           horsEffectif={horsEffectif}
           quartLabel={quartLabel}
           posteLabelAll={posteLabelAll}
+          posteTitreAll={posteTitreAll}
           exceptions={exceptions}
           horaireStd={horaireStd}
           horaireApresNuit={horaireApresNuit}

@@ -217,6 +217,7 @@ const AUCUN_REGROUPEMENT: Record<string, string[]> = {};
 const inp: React.CSSProperties = { width: "100%", fontSize: 13, padding: "3px 4px" };
 const C = (k: ColKey): React.CSSProperties => (CENTER.has(k) ? { textAlign: "center", textAlignLast: "center" } : {});
 const champId = (id: string, key: string) => `pers-${id}-${key}`;
+const ligneId = (id: string) => `pers-ligne-${id}`;
 // Fiche incomplète = aucune période de contrat OU contrat courant piloté par
 // agence sans agence renseignée (agenceManquante, dérivé serveur — 0072).
 const ficheIncomplete = (r: Row): boolean => !r.hasContrat || r.agenceManquante;
@@ -274,6 +275,7 @@ const LignePersonne = memo(function LignePersonne({
   agenceSet,
   types,
   actions,
+  nouveau,
 }: {
   r: Row;
   today: string;
@@ -287,6 +289,8 @@ const LignePersonne = memo(function LignePersonne({
   agenceSet: Set<string>;
   types: TypeContrat[];
   actions: ActionsLigne;
+  // Fiche tout juste créée : surlignée quelques secondes (cf. `nouveauId`).
+  nouveau: boolean;
 }) {
   "use memo"; // React Compiler (mode opt-in, cf. next.config.ts)
   const a18 = alerte18(r, today);
@@ -380,7 +384,7 @@ const LignePersonne = memo(function LignePersonne({
   };
 
   return (
-    <tr style={{ opacity: statutALaDate(r, today) === "ACTIF" ? 1 : 0.55 }}>
+    <tr id={ligneId(r.id)} className={nouveau ? "pers-new" : undefined} style={{ opacity: statutALaDate(r, today) === "ACTIF" ? 1 : 0.55 }}>
       {canEdit ? (
         <>
           <td style={{ textAlign: "center" }}>{contratChip(r)}</td>
@@ -580,6 +584,8 @@ export default function PersonnelEditor({
   const [merging, setMerging] = useState(false);
   const [save, setSave] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [showCreate, setShowCreate] = useState(false);
+  // Id de la fiche tout juste créée (surlignée, amenée à l'écran).
+  const [nouveauId, setNouveauId] = useState<string | null>(null);
   // Defaut ACTIF a l'ouverture : la liste montre l'effectif au travail au lieu
   // de tout melanger. Un clic sur « Tous », « A venir » ou « Parti » reste
   // possible, sans persister d'une visite a l'autre.
@@ -766,6 +772,8 @@ export default function PersonnelEditor({
       date_livret_accueil: livret, pointure,
     });
     if (j?.row) {
+      // Fiche COMPLÈTE : l'API ne renvoie qu'une partie des colonnes, les autres
+      // valent leur défaut de création (pas de TP, pas de poste fixe, pas de départ).
       const created: Row = {
         ...(j.row as Row), atelier_id: at || null, regroupement: null, sexe: sexe || null, numero_badge: badge || null,
         agence_interim: agenceSaisie || null,
@@ -774,15 +782,22 @@ export default function PersonnelEditor({
         date_debut: dateDebutContrat, contrat_debut: dateDebutContrat,
         hasContrat: true,
         agenceManquante: agenceSet.has(contrat) && !agenceSaisie,
+        commentaire: null, temps_partiel: false, tp_type: null, tp_config: null,
+        date_depart_prevu: null, motif_depart: null, poste_fixe_id: null,
       };
       setRows((rs) => [...rs, created].sort(sortRows));
       setNom(""); setPrenom(""); setSexe(""); setMatricule(""); setBadge("");
       setEq(""); setAt(""); setContrat(codeDefautContrat); setAgence(""); setLivret(""); setPointure(""); setDateArrivee(todayStr());
       setShowCreate(false);
-      // Purge du cache RSC : sans ca, une navigation puis un retour sur
-      // /personnel repartait des donnees serveur mises en cache et le nouveau
-      // profil n'apparaissait qu'apres un F5 explicite.
-      router.refresh();
+      // La fiche créée doit se VOIR (2026-10-20) : rangée par ordre alphabétique
+      // au milieu de ~400 lignes, ou écartée par un filtre actif (service, équipe,
+      // recherche, statut « Actif » pour une arrivée future…), elle passait pour
+      // absente jusqu'au F5. Effet sur `nouveauId` : lever les filtres qui la
+      // masquent, la faire défiler jusqu'à l'écran et la surligner.
+      setNouveauId(created.id);
+      // Plus de router.refresh() : la ligne est déjà dans l'état (useState(initial)
+      // ne serait pas remplacé) et le retour sur /personnel après une écriture est
+      // rechargé par GardeCacheNavigation — le refresh relisait tout pour rien.
     }
   }
 
@@ -817,7 +832,7 @@ export default function PersonnelEditor({
   const gTerms = gq.trim().toLowerCase().split(/\s+/).filter(Boolean);
   // `ficheIncomplete` est définie au niveau du module (partagée avec LignePersonne) :
   // plus de piège d'ordre de déclaration (TDZ) pour le filtre « Incomplètes ».
-  const filtered = rows.filter((r) => {
+  function passeFiltres(r: Row): boolean {
     // On compare au statut CALCULE (source de verite), pas au cache : evite
     // toute divergence quand la bascule quotidienne n'a pas encore ete faite.
     if (statutFilter && statutALaDate(r, today) !== statutFilter) return false;
@@ -831,7 +846,25 @@ export default function PersonnelEditor({
       if (!gTerms.every((t) => hay.includes(t))) return false;
     }
     return true;
-  });
+  }
+  const filtered = rows.filter(passeFiltres);
+
+  // Fiche tout juste créée (cf. doCreate) : si un filtre la masque, on les lève
+  // tous (une seule fois, à la création) ; puis défilement jusqu'à elle, une fois
+  // la liste redessinée, et surlignage 4 s.
+  const nouveauMasque = nouveauId !== null && !filtered.some((r) => r.id === nouveauId);
+  useEffect(() => {
+    if (!nouveauId) return;
+    if (nouveauMasque) {
+      setStatutFilter(""); setContratFilter(""); setAtelierFilter(""); setEquipeFilter(""); setIncompletFilter(false); setGq("");
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+      window.history.replaceState(null, "", pathname);
+    }
+    const id = nouveauId;
+    const tDefil = setTimeout(() => document.getElementById(ligneId(id))?.scrollIntoView({ block: "center", behavior: "smooth" }), 80);
+    const tFin = setTimeout(() => setNouveauId(null), 4000);
+    return () => { clearTimeout(tDefil); clearTimeout(tFin); };
+  }, [nouveauId]);
 
   // Services / équipes RÉELLEMENT présents dans l'effectif : on n'offre pas un
   // filtre qui ne remonterait personne. (ateliers déjà bornés aux actifs côté page.)
@@ -1049,6 +1082,7 @@ export default function PersonnelEditor({
                 agenceSet={agenceSet}
                 types={types}
                 actions={actions}
+                nouveau={r.id === nouveauId}
               />
             ))}
             {filtered.length === 0 && (
