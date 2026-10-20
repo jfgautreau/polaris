@@ -7,7 +7,8 @@
 // dédiées préfixées `bilan:` pour ne pas collisionner avec `MODULE_KEYS`.
 //
 // `garde` = le module de permission que la page du rapport exige en lecture
-// (la plupart `bilans`, deux exceptions historiques sur `matrice`). Le
+// (la plupart `bilans`, deux exceptions historiques sur `matrice`, les
+// recyclages sur `habilitations` : qui consulte les habilitations voit leurs échéances). Le
 // masquage par rapport est une couche AU-DESSUS de ce droit et du masquage
 // du menu Bilans lui-même : indépendant, jamais un contournement.
 
@@ -18,7 +19,7 @@ export type RapportBilan = {
   ic: string;
   t: string;
   d: string;
-  garde: "bilans" | "matrice";
+  garde: "bilans" | "matrice" | "habilitations";
 };
 
 export const RAPPORTS_BILAN: RapportBilan[] = [
@@ -28,6 +29,7 @@ export const RAPPORTS_BILAN: RapportBilan[] = [
   { key: "bilan:polyvalence", slug: "polyvalence", href: "/bilans/polyvalence", ic: "🎯", t: "Polyvalence & compétences", d: "Constat → risque → action : polyvalence par service, postes critiques/fragiles (relève opérationnelle), départs & habilitations à échéance, plan de formation prioritaire.", garde: "matrice" },
   { key: "bilan:couverture", slug: "couverture", href: "/bilans/couverture", ic: "🛡️", t: "Adéquation Charge / capacité", d: "Besoin d'après l'ordonnancement vs présents, par quart et par service.", garde: "bilans" },
   { key: "bilan:assez-competences", slug: "assez-competences", href: "/bilans/assez-competences", ic: "🧑‍🏭", t: "Assez de compétences ?", d: "Aide à la validation des congés : par service et par jour sur 2 semaines, les postes tenables une fois les absences, temps partiels et fins de contrat déduits — sans compter deux fois un polyvalent.", garde: "bilans" },
+  { key: "bilan:recyclages", slug: "recyclages", href: "/bilans/recyclages", ic: "🔁", t: "Recyclages à prévoir", d: "Par formation, les personnes actives dont l'habilitation expire (ou a expiré) : dernier passage, date d'expiration, jours restants. Réglementaires ou internes, horizon au choix, fins de contrat signalées — extraction Excel.", garde: "habilitations" },
   { key: "bilan:feuille-route", slug: "feuille-route", href: "/bilans/feuille-route", ic: "🗺️", t: "Projection de compétences — feuille de route", d: "Sur 24 semaines : par service et catégorie, nombre de personnes au niveau MAX (Niv 1..N) et Total opérationnel titulaires / intérim (tiennent ≥ 1 poste : niveau ≥ min). Besoin actualisé par l'ordonnancement (semaine initialisée), Total titulaires vert/rouge selon le besoin. Absences pleine semaine, expirations d'habilitation et fins de contrat déduites. Navigation temporelle ; bascule habilitations strictes / ignorées.", garde: "matrice" },
 ];
 

@@ -410,7 +410,11 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   Assez de compétences ? (affectation optimale par jour, besoin additif). Polyvalence &
   compétences (couverture opérationnelle niveau_min + habilitation ; verdict de fragilité
   sur la relève globale). Synthèses (absences sur 4 semaines, intérim par agence). PTNR
-  exclus des fragilités.
+  exclus des fragilités. **Recyclages à prévoir** (2026-10-20, garde `habilitations`, règles
+  `src/lib/recyclages.ts`) : personne active × formation `a_recycler` détenue, échéance dans
+  l'horizon (expirées comprises), type = `competence.categorie` (réglementaire / interne / non
+  classée) ; extraction Excel par `src/lib/xlsx.ts` (générateur .xlsx maison, sans dépendance —
+  réutiliser pour toute autre extraction).
 - **Affichage TV** (`src/app/affichage/`, public) : rattachement par service d'affectation ;
   sections Matin / Après-midi / Nuit classées par `creneau` ; fenêtre relative ou absolue
   (`getFenetreAffichage`, `joursDeFenetre`) ; PDF A3 portrait multi-pages. **Mise à jour
