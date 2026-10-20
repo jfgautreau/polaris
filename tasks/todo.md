@@ -1,6 +1,6 @@
 # Reste à faire — Polaris
 
-> État au 2026-10-14. Migrations appliquées jusqu'à **0090**. **545** tests Vitest.
+> État au 2026-10-20. Migrations appliquées jusqu'à **0090**. **567** tests Vitest.
 > Ce fichier ne garde que ce qui reste ouvert ; le détail de ce qui est fait est dans
 > `git log` (et l'en-tête de chaque migration).
 
@@ -15,8 +15,14 @@
       ajouter les numéros de rotation des postes à arrivées décalées, puis comparer la TV
       un jour qui suit une nuit et un jour sans nuit.
 - [ ] Vérifier sur une vraie impression l'Affichage multi-services (2 ou 3 services cochés).
-- [ ] Retirer les 2 affectations hors contrat restantes (15 et 16/10, Le Bignon) depuis le
-      Cycle de vie de la personne concernée.
+
+## À vérifier sur le terrain (lot du 2026-10-19)
+- [ ] **Fin de contrat** : saisir une date de fin au Cycle de vie sur une personne déjà placée
+      au-delà → la fenêtre « Retirer / Garder » s'ouvre à la sortie du champ (pas pendant la
+      frappe), et aussi si l'on ferme la modale aussitôt. Retrait = une ligne LOT au Journal.
+- [ ] **Noms de place** (Le Bignon, Palettisation) : saisir « Ailes, Panés, Aide
+      palettisation » au Référentiel, puis contrôler les cases du Placement, le PDF pour
+      Affich. et la vue Par poste du Planning.
 
 ## Base de données
 - [ ] **Backfill SQL** des `personne_competence.date_expiration` nulles alors que la

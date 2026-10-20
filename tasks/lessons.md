@@ -926,3 +926,22 @@ lignes) ; s'y ajoutaient le profil et les droits relus à chaque requête (~40 %
 mettre en cache (tag invalidé à l'écriture) ce qui change rarement ; ne garder une liste
 d'ids que si elle est courte. Pour diagnostiquer : export CSV des journaux, regrouper les
 appels par rafale (= un affichage d'écran) et compter tables et listes.
+
+## L59 — Un `<input type="date">` enregistré au changement passe par des dates transitoires
+**Contexte** : 2026-10-19, validation du retrait des affectations hors contrat au Cycle de
+vie. Les dates de contrat s'enregistrent à chaque `onChange` : taper 19/10 sur 09/10 écrit
+d'abord 01/10, et une année en cours de frappe (0002…) arrive comme une date valide (rejetée
+en `null` côté API, donc « contrat ouvert » le temps d'une frappe).
+**Règle** : ne jamais déclencher d'effet de bord sur le changement d'un champ date (retrait,
+recalcul coûteux, alerte). Réagir à la **sortie du champ** (`onBlur`) après avoir attendu les
+enregistrements en vol (`PeriodesEditor.onSaisieTerminee`), et faire attendre la fermeture de
+la modale si une vérification est en cours.
+
+## L60 — Un séparateur qui sert aussi dans les valeurs finit par couper les libellés
+**Contexte** : 2026-10-19, `poste.numero_rotation`. L'espace séparait les places au même titre
+que la virgule : « Aide palettisation » devenait deux places, et l'utilisateur abrégeait
+(« AideP ») sans comprendre pourquoi, en plus de la limite de 20 caractères.
+**Règle** : un champ « liste de libellés » ne sépare que par `,` / `;`. Avant de changer un
+séparateur, vérifier en base qu'aucune saisie n'en dépend (ici aucune) et garder un repli
+étroit pour l'ancien usage (nombres seuls séparés par des espaces). Montrer le découpage
+réel à la saisie (info-bulle du Référentiel).
