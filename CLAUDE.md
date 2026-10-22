@@ -40,6 +40,8 @@ L'historique des décisions est dans git et dans l'en-tête de chaque migration.
    migration `grant select, insert, update, delete on public.<t> to authenticated, service_role;`
    (+ `grant usage on sequence …` si `serial`/`identity`) : depuis le 2026-10-30, Supabase ne
    l'ouvre plus d'office à l'API → « permission denied ». Test `migrations-sql` (échoue sinon).
+   **0091** (`grants_api_explicites`, à faire exécuter) réaffirme les droits existants et pose les
+   privilèges PAR DÉFAUT de `postgres` sur `public` (tables + séquences → authenticated, service_role).
 6. **PowerShell 5.1** : message de commit multi-lignes via here-string `@'…'@` (le `'@`
    en colonne 0) ou `git commit -F`. **Jamais** `Get-Content`/`Set-Content`/`Out-File`
    pour éditer un fichier source accentué (mojibake + BOM) : outil Edit ou Node.
