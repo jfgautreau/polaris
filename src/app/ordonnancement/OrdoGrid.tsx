@@ -480,7 +480,7 @@ export default function OrdoGrid({
       {notice && (
         <ModaleDeplacable onClose={() => setNotice(null)} largeur={500}>
           <div className="toolbar mdd-drag" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 6, cursor: "grab" }}>
-            <h2 style={{ margin: 0, color: "#b45309" }}>ℹ Prévenir l&apos;atelier</h2>
+            <h2 style={{ margin: 0, color: "#b45309" }}>ℹ Prévenir le service</h2>
             <button type="button" className="btn-sm btn-ghost" onClick={() => setNotice(null)} style={{ width: "auto" }}>✕</button>
           </div>
           <p style={{ margin: "0 0 8px", fontSize: 14 }}>
@@ -490,7 +490,7 @@ export default function OrdoGrid({
           </p>
           {notice.ateliers.length > 0 && (
             <p style={{ margin: "0 0 10px", fontSize: 14, fontWeight: 700 }}>
-              Prévenir {notice.ateliers.length === 1 ? "l'atelier" : "les ateliers"}{" "}
+              Prévenir {notice.ateliers.length === 1 ? "le service" : "les services"}{" "}
               <span style={{ color: "#b45309" }}>{notice.ateliers.join(" et ")}</span>{" "}
               de modifier leur planning en conséquence.
             </p>
