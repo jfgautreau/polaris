@@ -36,6 +36,10 @@ L'historique des décisions est dans git et dans l'en-tête de chaque migration.
    **Dernière migration appliquée : `0090`** (journal d'audit compact : champs modifiés + contexte). Toute nouvelle policy RLS s'écrit
    `site_id = (select public.current_site_id())` (forme InitPlan, calculée une fois par
    requête) — idem pour `is_admin()`, `has_role('x')`, `auth.uid()`.
+   **Toute nouvelle table** (`create table` dans `public`, migration 0091+) porte dans la même
+   migration `grant select, insert, update, delete on public.<t> to authenticated, service_role;`
+   (+ `grant usage on sequence …` si `serial`/`identity`) : depuis le 2026-10-30, Supabase ne
+   l'ouvre plus d'office à l'API → « permission denied ». Test `migrations-sql` (échoue sinon).
 6. **PowerShell 5.1** : message de commit multi-lignes via here-string `@'…'@` (le `'@`
    en colonne 0) ou `git commit -F`. **Jamais** `Get-Content`/`Set-Content`/`Out-File`
    pour éditer un fichier source accentué (mojibake + BOM) : outil Edit ou Node.
