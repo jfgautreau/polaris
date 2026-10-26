@@ -710,15 +710,15 @@
 
         <div class="table-scroll">
           <table class="data">
-            <thead><tr><th style="width:36px">#</th><th style="width:190px">Étape</th><th>La question à laquelle elle répond</th><th style="width:170px">Qui la tient à jour</th></tr></thead>
+            <thead><tr><th style="width:36px">#</th><th style="width:190px">Étape</th><th>La question à laquelle elle répond</th></tr></thead>
             <tbody>
-              <tr><td class="c">1</td><td><a href="#referentiel"><strong>Référentiel</strong></a></td><td>Quels services, lignes et postes existent ? Combien de personnes faut-il par poste et par quart, avec quelles habilitations ? Qui en est titulaire ?</td><td>Responsables de service, administrateur</td></tr>
-              <tr><td class="c">2</td><td><a href="#personnel"><strong>Personnel</strong></a> &amp; <a href="#absences"><strong>Absences</strong></a></td><td>Qui travaille ici, avec quel contrat, dans quelle équipe ? Qui est absent, quand, pourquoi ?</td><td>RH (et chefs d'équipe pour les absences de leur équipe)</td></tr>
-              <tr><td class="c">3</td><td><a href="#matrice"><strong>Matrice</strong></a> &amp; <a href="#habilitations"><strong>Habilitations</strong></a></td><td>Qui sait tenir quel poste, à quel niveau ? Qui a quelle formation, jusqu'à quand ?</td><td>Managers (matrice) ; qualité, sécurité, RH (habilitations)</td></tr>
-              <tr><td class="c">4</td><td><a href="#ordonnancement"><strong>Ordonnancement</strong></a></td><td>Quels jours, sur quels quarts, quelles lignes tournent ?</td><td>Ordonnancement</td></tr>
-              <tr><td class="c">5</td><td><a href="#planning"><strong>Planning</strong></a></td><td>Qui est sur quel poste, jour par jour, sur les trois semaines à venir ?</td><td>Responsables de service, chefs d'équipe</td></tr>
-              <tr><td class="c">6</td><td><a href="#placement"><strong>Placement</strong></a></td><td>Le jour J, sur ce quart, qui est à quel poste et à quel numéro de rotation ? La feuille affichée dans le couloir.</td><td>Chefs d'équipe</td></tr>
-              <tr><td class="c">7</td><td><a href="#tv"><strong>Affichage</strong></a> &amp; <a href="#bilans"><strong>Bilans</strong></a></td><td>Ce que voient les opérateurs ; ce qu'en tire la direction (fragilités, recyclages, absentéisme…).</td><td>Lecture seule, calculés automatiquement</td></tr>
+              <tr><td class="c">1</td><td><a href="#referentiel"><strong>Référentiel</strong></a></td><td>Quels services, lignes et postes existent ? Combien de personnes faut-il par poste et par quart, avec quelles habilitations ? Qui en est titulaire ?</td></tr>
+              <tr><td class="c">2</td><td><a href="#personnel"><strong>Personnel</strong></a> &amp; <a href="#absences"><strong>Absences</strong></a></td><td>Qui travaille ici, avec quel contrat, dans quelle équipe ? Qui est absent, quand, pourquoi ?</td></tr>
+              <tr><td class="c">3</td><td><a href="#matrice"><strong>Matrice</strong></a> &amp; <a href="#habilitations"><strong>Habilitations</strong></a></td><td>Qui sait tenir quel poste, à quel niveau ? Qui a quelle formation, jusqu'à quand ?</td></tr>
+              <tr><td class="c">4</td><td><a href="#ordonnancement"><strong>Ordonnancement</strong></a></td><td>Quels jours, sur quels quarts, quelles lignes tournent ?</td></tr>
+              <tr><td class="c">5</td><td><a href="#planning"><strong>Planning</strong></a></td><td>Qui est sur quel poste, jour par jour, sur les trois semaines à venir ?</td></tr>
+              <tr><td class="c">6</td><td><a href="#placement"><strong>Placement</strong></a></td><td>Le jour J, sur ce quart, qui est à quel poste et à quel numéro de rotation ? La feuille affichée dans le couloir.</td></tr>
+              <tr><td class="c">7</td><td><a href="#tv"><strong>Affichage</strong></a> &amp; <a href="#bilans"><strong>Bilans</strong></a></td><td>Ce que voient les opérateurs ; ce qu'en tire la direction (fragilités, recyclages, absentéisme…).</td></tr>
             </tbody>
           </table>
         </div>
@@ -821,47 +821,24 @@
       <section id="roles">
         <h2>4. Qui fait quoi</h2>
         <p>
-          C'est l'intérêt d'un outil par rapport à un fichier Excel : chacun ne modifie que ce qui relève de
-          lui. Chaque compte a un <strong>rôle</strong>, et chaque rôle a, module par module, l'un de trois droits :
-          <strong>Aucun</strong> (le menu n'apparaît pas), <strong>Lecture</strong> (consultation seule) ou
-          <strong>Modification</strong>. L'administrateur règle cette grille dans
-          <a href="#reglages">Réglages · Utilisateurs</a> ; le tableau ci-dessous montre les réglages d'origine.
+          Chacun ne modifie que ce qui relève de lui. Chaque compte a un <strong>rôle</strong> (chef d'équipe, RH,
+          ordonnancement…, ou un rôle propre au site), et chaque rôle a, module par module, l'un de trois droits :
         </p>
-        <div class="table-scroll">
-          <table class="data" style="min-width:760px">
-            <thead>
-              <tr><th>Module</th><th class="c">Chef d'équipe</th><th class="c">Ordo</th><th class="c">RH</th><th class="c">Codir</th><th class="c">Planning</th></tr>
-            </thead>
-            <tbody>
-              <tr><td>Personnel</td><td class="c">Lecture</td><td class="c">Lecture</td><td class="c">Lecture</td><td class="c">Lecture</td><td class="c">Lecture</td></tr>
-              <tr><td>Absences</td><td class="c yes">Modif.*</td><td class="c">Lecture</td><td class="c">Lecture</td><td class="c">Lecture</td><td class="c">Lecture</td></tr>
-              <tr><td>Matrice</td><td class="c yes">Modif.*</td><td class="c">Lecture</td><td class="c">Lecture</td><td class="c">Lecture</td><td class="c">Lecture</td></tr>
-              <tr><td>Habilitations</td><td class="c yes">Modif.*</td><td class="c">Lecture</td><td class="c">Lecture</td><td class="c">Lecture</td><td class="c">Lecture</td></tr>
-              <tr><td>Ordonnancement</td><td class="c no">—</td><td class="c yes">Modif.</td><td class="c no">—</td><td class="c">Lecture</td><td class="c">Lecture</td></tr>
-              <tr><td>Planning</td><td class="c yes">Modif.*</td><td class="c">Lecture</td><td class="c">Lecture</td><td class="c">Lecture</td><td class="c">Lecture</td></tr>
-              <tr><td>Placement</td><td class="c yes">Modif.*</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td></tr>
-              <tr><td>Bilans</td><td class="c">Lecture</td><td class="c">Lecture</td><td class="c">Lecture</td><td class="c">Lecture</td><td class="c">Lecture</td></tr>
-              <tr><td>Visites médicales</td><td class="c no">—</td><td class="c no">—</td><td class="c yes">Modif.</td><td class="c no">—</td><td class="c no">—</td></tr>
-              <tr><td>Journal</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td><td class="c">Lecture</td><td class="c no">—</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <p style="font-size:.93rem;color:var(--ink-2)">
-          * Le chef d'équipe ne modifie que les personnes <strong>de son équipe</strong> : les autres restent visibles
-          (utile pour repérer un renfort) mais grisées. L'administrateur a tous les droits. D'autres rôles
-          peuvent être créés (par exemple un profil « Qualité » qui saisit les habilitations) : ils naissent
-          sans aucun droit, on leur ouvre ensuite les modules utiles.
+        <ul>
+          <li><strong>Aucun</strong> — le menu n'apparaît pas ;</li>
+          <li><strong>Lecture</strong> — consultation seule : les champs sont grisés, rien ne peut être modifié par erreur ;</li>
+          <li><strong>Modification</strong> — saisie complète.</li>
+        </ul>
+        <p>
+          La grille de votre site (rôle × module) est dans <a href="#reglages">Réglages · Utilisateurs</a>, pour qui y a
+          accès : c'est elle qui fait foi. Deux règles s'ajoutent à cette grille :
         </p>
-        <div class="note">
-          <span class="label">À décider ensemble</span>
-          <p>
-            Qui saisit les dates de formation, qui ouvre les lignes, qui modifie le Référentiel : ce sont des
-            choix d'organisation, que la grille des droits permet d'appliquer. Par exemple, retirer aux chefs
-            d'équipe le droit de modifier les Habilitations réserve la saisie des formations au service qui les
-            organise. Le <strong>forçage</strong> d'un placement sans habilitation est aujourd'hui permis à quiconque peut
-            placer ; le verrouiller est prévu une fois les données d'habilitation vérifiées.
-          </p>
-        </div>
+        <ul>
+          <li>un compte au rôle <strong>chef d'équipe</strong> ne modifie que les personnes <strong>de son équipe</strong> (équipes
+            rattachées dans Réglages · Équipes) : les autres restent visibles, utile pour repérer un renfort, mais grisées ;</li>
+          <li>le <strong>forçage</strong> d'un placement sans habilitation est possible pour tout compte qui peut placer ; il est
+            tracé (qui, quand) et reste visible en rouge.</li>
+        </ul>
       </section>
 
 
@@ -952,7 +929,7 @@
       <!-- ================= 6. PERSONNEL ================= -->
       <section id="personnel">
         <h2>6. Personnel</h2>
-        <div class="who"><span>Menu · droit</span><span class="role">personnel</span><span>— modification réservée aux RH en général</span></div>
+        <div class="who"><span>Menu · droit</span><span class="role">personnel</span></div>
         <p>
           L'annuaire de l'usine : <strong>une ligne par personne</strong> qui travaille ou a travaillé sur le site.
           On ne supprime pas quelqu'un qui part : il passe « Parti » et reste dans l'historique. Ainsi le
@@ -1099,7 +1076,7 @@
       <!-- ================= 7. ABSENCES ================= -->
       <section id="absences">
         <h2>7. Absences</h2>
-        <div class="who"><span>Menu · droit</span><span class="role">absences</span><span>— le chef d'équipe saisit pour son équipe</span></div>
+        <div class="who"><span>Menu · droit</span><span class="role">absences</span></div>
         <p>
           Toutes les absences de l'effectif, regroupées en <strong>périodes</strong> lisibles (« CP du 04/09 au 12/09 »),
           même quand elles ont été saisies jour par jour au Planning. Saisir les absences tôt, c'est déjà
@@ -1191,7 +1168,7 @@
       <!-- ================= 8. MATRICE ================= -->
       <section id="matrice">
         <h2>8. Matrice de polyvalence</h2>
-        <div class="who"><span>Menu · droit</span><span class="role">matrice</span><span>— un acte managérial : c'est le manager qui juge</span></div>
+        <div class="who"><span>Menu · droit</span><span class="role">matrice</span></div>
         <p>
           La matrice croise <strong>les personnes</strong> (en lignes) et <strong>les postes</strong> (en colonnes, groupés par
           ligne de production) : chaque case dit à quel niveau la personne maîtrise le poste. Elle remplace les
@@ -1221,19 +1198,18 @@
           <table class="data">
             <thead><tr><th style="width:56px">Pastille</th><th style="width:120px">Niveau</th><th>Ce que cela veut dire</th></tr></thead>
             <tbody>
-              <tr><td class="c"><svg class="mark" width="28" height="28"><use href="#lvl0"/></svg></td><td>0</td><td>Jamais allé sur le poste : non formé, non compétent.</td></tr>
-              <tr><td class="c"><svg class="mark" width="28" height="28"><use href="#n3-1"/></svg></td><td>1 · Junior</td><td>Réalise les opérations de base ; a besoin d'être accompagné ou supervisé (en doublon, ou suivi par le chef d'équipe).</td></tr>
-              <tr><td class="c"><svg class="mark" width="28" height="28"><use href="#n3-2"/></svg></td><td>2 · Confirmé</td><td>Tient le poste en autonomie et gère les aléas courants.</td></tr>
-              <tr><td class="c"><svg class="mark" width="28" height="28"><use href="#n3-3"/></svg></td><td>3 · Expert</td><td>Référent technique et formateur : connaît le poste à fond, accompagne les nouveaux.</td></tr>
+              <tr><td class="c"><svg class="mark" width="28" height="28"><use href="#lvl0"/></svg></td><td>0</td><td>Non formé / non compétent.</td></tr>
+              <tr><td class="c"><svg class="mark" width="28" height="28"><use href="#n3-1"/></svg></td><td>1 · Junior</td><td>Réalise les opérations courantes sur ligne avec supervision.</td></tr>
+              <tr><td class="c"><svg class="mark" width="28" height="28"><use href="#n3-2"/></svg></td><td>2 · Confirmé</td><td>Maîtrise la conduite de ligne en autonomie et gère les aléas courants.</td></tr>
+              <tr><td class="c"><svg class="mark" width="28" height="28"><use href="#n3-3"/></svg></td><td>3 · Expert</td><td>Référence technique, optimise les performances et accompagne la montée en compétences des équipes.</td></tr>
               <tr><td class="c"><svg class="mark" width="28" height="28"><use href="#lvlrx"/></svg></td><td>Restriction</td><td>La personne ne doit pas tenir ce poste (restriction médicale ou physique). <strong>On n'écrit jamais pourquoi.</strong> Elle est exclue des bilans et signalée au Planning.</td></tr>
             </tbody>
           </table>
         </div>
         <p>
-          Les libellés et les couleurs des niveaux se règlent dans <a href="#reglages">Compétences</a> ; ceux ci-dessus
-          sont des exemples. Le bouton <strong>📖 Légende</strong> rappelle ceux en vigueur. Pour que la matrice soit
-          juste, il faut s'accorder sur ce que veut dire chaque niveau (critères observables) : un niveau ne
-          s'attribue pas « à la tête du client ».
+          Les libellés ci-dessus sont ceux du Bignon. Ils se règlent dans <a href="#reglages">Compétences</a> et peuvent
+          différer d'un site à l'autre : le bouton <strong>📖 Légende</strong> de la Matrice affiche ceux de votre site,
+          qui font foi.
         </p>
 
         <h3>Saisir un niveau</h3>
@@ -1277,13 +1253,6 @@
             Les postes en zone d'attente (CDT…) n'y figurent pas : on n'y mesure pas de compétence. Sans filtre
             de service, la matrice affiche plusieurs milliers de cases : filtrez sur votre service, c'est plus
             rapide et plus lisible.
-          </p>
-        </div>
-        <div class="note tip">
-          <span class="label">Après une longue absence</span>
-          <p>
-            La matrice ne baisse rien toute seule. Après un an d'arrêt ou un changement de procédure, c'est au
-            manager de juger s'il faut redescendre la personne d'un niveau le temps de la remise à niveau.
           </p>
         </div>
       </section>
@@ -1376,11 +1345,10 @@
       <!-- ================= 10. ORDONNANCEMENT ================= -->
       <section id="ordonnancement">
         <h2>10. Ordonnancement</h2>
-        <div class="who"><span>Menu · droit</span><span class="role">ordonnancement</span><span>— modification réservée à l'ordonnancement, les autres consultent</span></div>
+        <div class="who"><span>Menu · droit</span><span class="role">ordonnancement</span></div>
         <p>
           L'Ordonnancement dit, jour par jour, <strong>quels quarts travaillent et quelles lignes tournent</strong>. C'est de
-          là que viennent le besoin en personnes et les jours ouverts du Planning. L'ordonnancement donne une
-          visibilité à plusieurs semaines puis affine la semaine suivante ; toute mise à jour se voit aussitôt
+          là que viennent le besoin en personnes et les jours ouverts du Planning. Toute mise à jour se voit aussitôt
           au Planning et au Placement. En consultation, c'est le moyen de savoir si une ligne sera disponible demain.
         </p>
 
@@ -1461,7 +1429,7 @@
       <!-- ================= 11. PLANNING ================= -->
       <section id="planning">
         <h2>11. Planning</h2>
-        <div class="who"><span>Menu · droit</span><span class="role">planning</span><span>— le chef d'équipe modifie son équipe</span></div>
+        <div class="who"><span>Menu · droit</span><span class="role">planning</span></div>
         <p>
           Le Planning montre <strong>trois semaines d'un coup</strong> : la semaine choisie à gauche, puis les deux
           suivantes. Une ligne par personne, une colonne par jour, et dans chaque case le code du poste tenu, un
@@ -1632,7 +1600,7 @@
       <!-- ================= 12. PLACEMENT ================= -->
       <section id="placement">
         <h2>12. Placement</h2>
-        <div class="who"><span>Menu · droit</span><span class="role">placement</span><span>— l'écran des chefs d'équipe</span></div>
+        <div class="who"><span>Menu · droit</span><span class="role">placement</span></div>
         <p>
           Le Placement prépare <strong>une journée, un quart, un service</strong> : le plan des lignes et des postes à gauche,
           la liste des personnes à droite, les motifs d'absence en bas. Les conducteurs et les titulaires sont
@@ -1756,8 +1724,7 @@
           </div>
         </div>
         <ul>
-          <li><strong>Habilitation manquante</strong> — le poste exige une formation absente ou expirée. Pour un nouveau qui
-            apprend, préférez le placer en doublon ou avec le motif « Formation » plutôt que de forcer.</li>
+          <li><strong>Habilitation manquante</strong> — le poste exige une formation absente ou expirée.</li>
           <li><strong>Absence ce jour-là</strong> — la personne a un motif d'absence (ou un « Non travaillé ») ce jour : la placer
             remplace l'absence de cette journée.</li>
           <li><strong>Déjà placé sur un autre quart</strong> — proposé de la retirer de l'autre quart et de la placer ici.</li>
@@ -1826,7 +1793,7 @@
           Les bilans <strong>se lisent</strong>, ils ne se saisissent pas : ils agrègent ce que contiennent les autres modules
           à l'instant où on les ouvre. Une donnée corrigée dans la Matrice ou les Habilitations s'y répercute aussitôt.
           Ils sont conçus pour être imprimés (bouton <strong>PDF</strong>) ou projetés en réunion, et la plupart se
-          filtrent par service et par équipe. De nouveaux rapports peuvent être construits à la demande.
+          filtrent par service et par équipe.
         </p>
 
         <h3>Le Cockpit — pilotage d'équipe</h3>
@@ -1899,10 +1866,10 @@
       <!-- ================= 15. VISITES ================= -->
       <section id="visites">
         <h2>15. Visites médicales</h2>
-        <div class="who"><span>Menu · droits</span><span class="role">visites</span><span class="role">visites_param</span><span>— réservé aux RH</span></div>
+        <div class="who"><span>Menu · droits</span><span class="role">visites</span><span class="role">visites_param</span></div>
         <p>
           Le suivi des visites médicales du travail : <strong>des dates et des types de visite, jamais d'information
-          médicale</strong>. Le module n'apparaît que pour les comptes qui y ont droit (les RH par défaut) ; il peut aussi
+          médicale</strong>. Le module n'apparaît que pour les comptes qui y ont droit ; il peut aussi
           être masqué pour tout un site.
         </p>
         <ul>
@@ -2011,8 +1978,7 @@
           <li><strong>Formation</strong> (libellé), <strong>Groupe</strong> (Sécurité, Qualité, Conduite…), catégorie
             <strong>réglementaire</strong> ou <strong>interne</strong>, <strong>N° aff.</strong> (ordre des colonnes) ;</li>
           <li><strong>Validité (mois)</strong> : la durée avant recyclage. Vide = la formation n'expire jamais (elle n'apparaîtra
-            jamais « à recycler »). Choisissez une durée un peu plus courte que l'obligation si vous voulez de la
-            marge : l'alerte orange arrive 90 jours avant l'échéance ;</li>
+            jamais « à recycler »). L'alerte orange arrive 90 jours avant l'échéance ;</li>
           <li><strong>Autorisation</strong> : la formation est suivie d'une autorisation du site (conduite d'engins, habilitation
             électrique…), à cocher comme « remise » sur chaque personne ;</li>
           <li><strong>Actif</strong> : décocher retire la formation des écrans sans effacer l'historique.</li>
@@ -2156,19 +2122,9 @@
           <li><a href="#bilans">Bilans</a> → <strong>Recyclages à prévoir</strong>.</li>
           <li>Choisissez <strong>Réglementaires</strong> ou <strong>Internes</strong> (chacun voit ses formations), l'échéance (par
             exemple ≤ 90 j) et au besoin une formation précise.</li>
-          <li><strong>Excel</strong> : le fichier part aux chefs d'équipe pour qu'ils libèrent les personnes concernées.</li>
+          <li><strong>Excel</strong> : télécharge la liste affichée, filtres compris.</li>
         </ol>
 
-        <h3>Former un nouveau conducteur sans forcer</h3>
-        <p>
-          Un nouveau n'a pas encore ses CCP : le placer seul en conducteur demanderait un forçage. Deux façons propres :
-        </p>
-        <ul>
-          <li>le placer avec le motif <strong>« Formation »</strong> ce jour-là, le sujet en commentaire (il s'imprime sous son nom
-            sur la feuille du couloir) ;</li>
-          <li>ou le placer <strong>en plus</strong> du conducteur habilité sur le même poste : le doublon se voit (sur-effectif
-            jaune), c'est voulu.</li>
-        </ul>
 
         <h3>Retrouver qui était sur un poste un jour donné</h3>
         <ol>
@@ -2254,7 +2210,7 @@
         <p>
           Guide utilisateur Polaris — application de gestion des plannings de l'usine. Les schémas sont des
           reproductions simplifiées des écrans : les couleurs et les repères y sont fidèles, les noms et les chiffres
-          sont des exemples. Une option manque ? Un bilan serait utile ? Demandez-le : l'outil évolue avec l'usage.
+          sont des exemples.
         </p>
       </footer>
 
