@@ -125,7 +125,7 @@ export default async function RecyclagesReport({
 
         {r.sansEcheance.length > 0 && (
           <div className="card noprint" style={{ background: "#fffbeb", borderColor: "#fde68a", fontSize: 13, color: "#78350f" }}>
-            <strong>{r.sansEcheance.length} formation{r.sansEcheance.length > 1 ? "s" : ""} sans durée de validité</strong> : elle{r.sansEcheance.length > 1 ? "s" : ""} n&apos;expire{r.sansEcheance.length > 1 ? "nt" : ""} jamais
+            <strong>{r.sansEcheance.length} formation{r.sansEcheance.length > 1 ? "s" : ""} sans durée de validité</strong> : elle{r.sansEcheance.length > 1 ? "s" : ""} n&apos;expire{r.sansEcheance.length > 1 ? "nt" : ""}{" "}jamais{" "}
             et n&apos;apparai{r.sansEcheance.length > 1 ? "ssent" : "t"} donc pas ici — {r.sansEcheance.map((f) => f.nom).join(", ")}.
             {" "}Si un recyclage est attendu, renseigner la durée dans le paramétrage des habilitations.
           </div>

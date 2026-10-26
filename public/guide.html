@@ -536,6 +536,11 @@
   }
   .backbar a:hover { color: var(--accent); }
   @media print { .backbar { display: none; } }
+  /* Captures réelles de l'application (noms remplacés par des noms fictifs). */
+  .shot img { display: block; width: 100%; height: auto; border: 1px solid var(--rule-2); border-radius: 10px; box-shadow: var(--shadow); background: #fff; }
+  .shot.etroite img { max-width: 720px; }
+  .annot2 { margin: 14px 0 0; padding-left: 20px; max-width: 76ch; }
+  .annot2 li { margin-bottom: 6px; font-size: .95rem; text-align: left; }
 </style>
 </head>
 <body>
@@ -553,9 +558,9 @@
     <symbol id="lvl3" viewBox="0 0 28 28"><use href="#mk-base"/><path d="M14,14 L14,3 A11,11 0 1 1 3,14 Z" fill="#84cc16"/></symbol>
     <symbol id="lvl4" viewBox="0 0 28 28"><use href="#mk-base"/><circle cx="14" cy="14" r="11" fill="#16a34a"/></symbol>
     <!-- Échelle à 3 niveaux : le camembert se remplit par tiers (1/3, 2/3, plein). -->
-    <symbol id="n3-1" viewBox="0 0 28 28"><use href="#mk-base"/><path d="M14,14 L14,3 A11,11 0 0 1 23.526,19.5 Z" fill="#dc2626"/></symbol>
-    <symbol id="n3-2" viewBox="0 0 28 28"><use href="#mk-base"/><path d="M14,14 L14,3 A11,11 0 1 1 4.474,19.5 Z" fill="#f59e0b"/></symbol>
-    <symbol id="n3-3" viewBox="0 0 28 28"><use href="#mk-base"/><circle cx="14" cy="14" r="11" fill="#16a34a"/></symbol>
+    <symbol id="n3-1" viewBox="0 0 28 28"><use href="#mk-base"/><path d="M14,14 L14,3 A11,11 0 0 1 23.526,19.5 Z" fill="#efc94c"/></symbol>
+    <symbol id="n3-2" viewBox="0 0 28 28"><use href="#mk-base"/><path d="M14,14 L14,3 A11,11 0 1 1 4.474,19.5 Z" fill="#d4ea4f"/></symbol>
+    <symbol id="n3-3" viewBox="0 0 28 28"><use href="#mk-base"/><circle cx="14" cy="14" r="11" fill="#5cbf4f"/></symbol>
     <symbol id="lvlrx" viewBox="0 0 28 28">
       <circle cx="14" cy="14" r="11" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
       <path d="M9,9 L19,19 M19,9 L9,19" stroke="#dc2626" stroke-width="2.4" stroke-linecap="round"/>
@@ -574,8 +579,9 @@
     <h1>Polaris</h1>
     <p class="lede">
       Le guide complet de l'application : comment elle est construite, ce que fait chaque écran,
-      chaque bouton et chaque couleur, et les gestes du quotidien expliqués pas à pas. Les schémas
-      reproduisent les écrans ; les noms et les chiffres sont des exemples.
+      chaque bouton et chaque couleur, et les gestes du quotidien expliqués pas à pas. Les images sont
+      de vraies captures de Polaris au Bignon (octobre 2026) ; <strong>tous les noms de personnes y ont été
+      remplacés par des noms fictifs</strong>.
     </p>
   </header>
 
@@ -638,41 +644,16 @@
         </div>
 
         <h3>La barre du haut</h3>
-        <figure>
-          <div class="m-scroll">
-            <div class="m">
-              <div class="m-bar">
-                <b class="cal">1</b>
-                <span class="m-brand"><span class="m-logo">&#10022;</span>Polaris</span>
-                <b class="cal">2</b>
-                <span class="m-link"><span class="m-tile" style="background:#2563eb"></span>Personnel</span>
-                <span class="m-link"><span class="m-tile" style="background:#db2777"></span>Absences</span>
-                <span class="m-link"><span class="m-tile" style="background:#7c3aed"></span>Matrice</span>
-                <span class="m-link"><span class="m-tile" style="background:#ca8a04"></span>Habilitations</span>
-                <span class="m-link"><span class="m-tile" style="background:#ea580c"></span>Ordonnancement</span>
-                <span class="m-link on"><span class="m-tile" style="background:#0d9488"></span>Planning</span>
-                <span class="m-link"><span class="m-tile" style="background:#4f46e5"></span>Placement</span>
-                <span class="m-link"><span class="m-tile" style="background:#e11d48"></span>Bilans</span>
-                <b class="cal" style="margin-left:auto">3</b>
-                <span>⚙️</span>
-                <b class="cal">4</b>
-                <span>🔔</span>
-                <b class="cal">5</b>
-                <span>👤</span>
-              </div>
-              <div class="m-body" style="min-height:60px">
-                <p style="color:var(--ink-3);margin:0">L'écran du module choisi s'affiche ici.</p>
-              </div>
-            </div>
-          </div>
-          <ul class="annot">
-            <li><b class="num">1</b><span>Le <strong>logo</strong> ramène à l'accueil ; un clic sur le grand logo de l'accueil ouvre le Planning.</span></li>
-            <li><b class="num">2</b><span>Les <strong>modules</strong>, chacun avec sa couleur, que l'on retrouve sur le titre de l'écran. Vous ne voyez que ceux auxquels votre compte donne accès : deux collègues n'ont pas forcément le même menu.</span></li>
-            <li><b class="num">3</b><span>L'<strong>engrenage</strong> ouvre les écrans de réglage (Référentiel, Équipes, Horaires, Utilisateurs…), seulement si vous y avez droit.</span></li>
-            <li><b class="num">4</b><span>La <strong>cloche</strong> compte les habilitations qui arrivent à échéance dans les 90 jours (ou déjà dépassées) et mène à l'écran Habilitations.</span></li>
-            <li><b class="num">5</b><span>Votre <strong>compte</strong> : changer de mot de passe, ouvrir ce guide, se déconnecter.</span></li>
+        <figure class="shot">
+          <a href="guide/barre.jpg" target="_blank" rel="noopener" title="Ouvrir la capture en taille réelle"><img src="guide/barre.jpg" alt="Barre de navigation de Polaris" loading="lazy"></a>
+          <ul class="annot2">
+            <li><strong>Polaris</strong> et le nom du site (« Le Bignon ») : un clic sur le logo ramène à l'accueil, dont le grand logo ouvre le Planning.</li>
+            <li><strong>Les modules</strong>, chacun avec sa pastille de couleur, que l'on retrouve sur le titre de l'écran. Vous ne voyez que ceux auxquels votre compte donne accès : deux collègues n'ont pas forcément le même menu.</li>
+            <li><strong>⚙</strong> ouvre les écrans de réglage (Référentiel… Utilisateurs), seulement si vous y avez droit.</li>
+            <li><strong>🔔</strong> compte les habilitations qui arrivent à échéance dans les 90 jours ou sont déjà dépassées, et mène à l'écran Habilitations.</li>
+            <li><strong>Le rond à votre initiale</strong> : changer de mot de passe, ouvrir ce guide, se déconnecter.</li>
           </ul>
-          <figcaption>La barre de navigation, présente en haut de tous les écrans.</figcaption>
+          <figcaption>La barre de navigation, en haut de tous les écrans.</figcaption>
         </figure>
 
         <h3>Ce qui marche pareil partout</h3>
@@ -859,6 +840,10 @@
           s'enregistre dès qu'on la quitte. Un service, une ligne ou un poste se <strong>désactive</strong>
           (case « Actif ») plutôt qu'il ne se supprime : son historique est conservé.
         </p>
+        <figure class="shot">
+          <a href="guide/referentiel.jpg" target="_blank" rel="noopener" title="Ouvrir la capture en taille réelle"><img src="guide/referentiel.jpg" alt="Écran Référentiel" loading="lazy"></a>
+          <figcaption>Le Référentiel : en tête de chaque ligne, ses réglages (N° aff., Regroup., Ouvre le / Ferme le, Couleur, Actif, + Ajouter un poste), puis le tableau de ses postes.</figcaption>
+        </figure>
 
         <h3>Réglages d'un service et d'une ligne</h3>
         <ul>
@@ -937,43 +922,16 @@
           l'année suivante retrouve sa fiche, ses compétences et ses habilitations.
         </p>
 
-        <figure>
-          <div class="m-scroll">
-            <div class="m">
-              <div class="m-bar" style="background:var(--paper-2);color:var(--ink);border-bottom:1px solid var(--rule)">
-                <span class="m-search" style="min-width:220px">🔍 Rechercher : nom, matricule, badge, équipe…</span>
-                <span class="m-lab">54 / 412</span>
-                <b class="cal" style="margin-left:auto">1</b>
-                <span class="m-btn">＋ Ajouter</span>
-                <b class="cal">2</b>
-                <span class="m-lab">Statut</span>
-                <span class="m-seg"><span>Tous</span><span>À venir</span><span class="on">Actif</span><span>Parti</span></span>
-              </div>
-              <div class="m-body" style="padding:0">
-                <table class="m-grid">
-                  <thead>
-                    <tr>
-                      <th>Contrat</th><th style="text-align:left">Nom</th><th>Équipe</th><th>Service</th><th>Abs.</th><th>⚠ 18m</th><th>TP</th><th>Statut</th><th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr><td class="c"><b class="cal">3</b> CDI</td><td class="nm">DUBOIS Anna</td><td class="c">B</td><td class="c">Condi</td><td class="c"><b class="cal">4</b>📅</td><td></td><td class="c">—</td><td class="c" style="color:var(--ok)">Actif</td><td class="c"><b class="cal">5</b>⚙︎ ☐</td></tr>
-                    <tr><td class="c" style="background:#fde68a;color:#92400e;font-weight:600">Intérim</td><td class="nm"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#f59e0b;color:#fff;font-size:10px;text-align:center;line-height:14px;font-weight:700">!</span> MARTIN Luc</td><td class="c">A</td><td class="c">Condi</td><td class="c">📅</td><td class="c" style="background:#fed7aa;color:#7c2d12;font-weight:600">12/11/2026</td><td class="c">—</td><td class="c" style="color:var(--ok)">Actif</td><td class="c">⚙︎ ☐</td></tr>
-                    <tr><td class="c">CDI</td><td class="nm">ROUX Sofia</td><td class="c">B</td><td class="c">Fab.</td><td class="c">📅</td><td></td><td class="c" style="color:var(--accent-2);font-weight:700">TP</td><td class="c" style="color:var(--ok)">Actif</td><td class="c">⚙︎ ☐</td></tr>
-                    <tr style="opacity:.55"><td class="c">CDD</td><td class="nm">PETIT Karim</td><td class="c">A</td><td class="c">Condi</td><td class="c">📅</td><td></td><td class="c">—</td><td class="c">Parti</td><td class="c">⚙︎ ☐</td></tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-          <ul class="annot">
-            <li><b class="num">1</b><span><strong>＋ Ajouter</strong> ouvre la fiche de création (voir plus bas).</span></li>
-            <li><b class="num">2</b><span><strong>Les filtres</strong> : Statut (Tous, À venir, Actif, Parti), Fiche (Toutes, ⚠ Incomplètes), Contrat, puis Service et Équipe (seuls ceux qui comptent au moins une personne sont proposés).</span></li>
-            <li><b class="num">3</b><span><strong>Contrat et Statut</strong> sont des résultats : un clic ouvre le <strong>Cycle de vie</strong>, où l'on gère les contrats.</span></li>
-            <li><b class="num">4</b><span><strong>Abs.</strong> ouvre les absences de la personne.</span></li>
-            <li><b class="num">5</b><span><strong>L'engrenage</strong> ouvre la fiche (commentaire, poste fixe, RGPD) ; la case à cocher sert à fusionner deux fiches.</span></li>
+        <figure class="shot">
+          <a href="guide/personnel.jpg" target="_blank" rel="noopener" title="Ouvrir la capture en taille réelle"><img src="guide/personnel.jpg" alt="Écran Personnel" loading="lazy"></a>
+          <ul class="annot2">
+            <li><strong>＋ Ajouter</strong>, sous le titre, ouvre la fiche de création ; à côté de la recherche, le nombre de personnes affichées sur le total.</li>
+            <li><strong>Les filtres</strong> : Statut (Tous, À venir, Actif, Parti), Fiche (Toutes, ⚠ Incomplètes), Contrat, puis Service et Équipe.</li>
+            <li><strong>Contrat et Statut</strong> sont des résultats : un clic ouvre le <strong>Cycle de vie</strong>, où l'on gère les contrats.</li>
+            <li><strong>Abs.</strong> ouvre les absences de la personne ; <strong>TP</strong> son temps partiel (« TP » coloré = un temps partiel est réglé).</li>
+            <li><strong>L'engrenage</strong> ouvre la fiche (commentaire, poste fixe, RGPD) ; la case à cocher sert à fusionner deux fiches.</li>
           </ul>
-          <figcaption>L'écran Personnel. L'intérim ressort en jaune ; une personne « Partie » est grisée ; une pastille orange « ! » signale une fiche à compléter.</figcaption>
+          <figcaption>L'écran Personnel, filtré sur le service Condi et les personnes actives. L'intérim ressort en jaune.</figcaption>
         </figure>
 
         <h3>Les colonnes</h3>
@@ -1002,6 +960,10 @@
         </div>
 
         <h3>Créer une personne</h3>
+        <figure class="shot etroite">
+          <a href="guide/personnel-creation.jpg" target="_blank" rel="noopener" title="Ouvrir la capture en taille réelle"><img src="guide/personnel-creation.jpg" alt="Fenêtre Nouvelle personne" loading="lazy"></a>
+          <figcaption>La fenêtre « Nouvelle personne ». Le champ Agence d'intérim n'apparaît que pour un contrat géré par une agence.</figcaption>
+        </figure>
         <ol>
           <li><strong>＋ Ajouter</strong> ouvre la fiche : contrat, agence (pour un contrat géré par une agence),
             matricule, badge, nom, prénom, H/F, équipe, service, <strong>date d'arrivée</strong>, livret d'accueil,
@@ -1021,6 +983,10 @@
         </p>
 
         <h3>Le cycle de vie : contrats, arrivée, départ</h3>
+        <figure class="shot">
+          <a href="guide/personnel-cycle.jpg" target="_blank" rel="noopener" title="Ouvrir la capture en taille réelle"><img src="guide/personnel-cycle.jpg" alt="Fenêtre Cycle de vie" loading="lazy"></a>
+          <figcaption>Le Cycle de vie d'une personne : arrivée et départ prévu (déduits), « + Ajouter une période », et la liste des contrats (type, agence, début, fin, motifs, commentaire).</figcaption>
+        </figure>
         <p>
           Un clic sur le Contrat ou le Statut ouvre le <strong>Cycle de vie</strong> : la liste des périodes de contrat
           (type, agence, dates de début et de fin, motifs). L'arrivée et le départ en sont <strong>déduits</strong> :
@@ -1084,6 +1050,12 @@
           deviennent justes.
         </p>
 
+
+        <figure class="shot">
+          <a href="guide/absences.jpg" target="_blank" rel="noopener" title="Ouvrir la capture en taille réelle"><img src="guide/absences.jpg" alt="Écran Absences spécifiques" loading="lazy"></a>
+          <figcaption>L'écran Absences spécifiques : filtres en haut (nom, période, service, équipe, motifs), « + Déclarer une absence », puis la liste des périodes avec le crayon et la corbeille.</figcaption>
+        </figure>
+
         <h3>Filtrer</h3>
         <ul>
           <li><strong>Nom</strong> et <strong>période</strong> (calendrier, deux clics : début puis fin) ;</li>
@@ -1097,37 +1069,15 @@
         </p>
 
         <h3>Déclarer, modifier, supprimer</h3>
-        <figure>
-          <div class="m-scroll">
-            <div class="m">
-              <div class="m-body" style="gap:6px">
-                <table class="m-grid">
-                  <thead>
-                    <tr><th style="text-align:left;background:var(--paper-2);color:var(--ink-3)">Personne</th><th>Motif</th><th>Période</th><th>Jours</th><th>Commentaire</th><th></th></tr>
-                  </thead>
-                  <tbody>
-                    <tr style="background:var(--warn-bg)">
-                      <td><span class="m-btn"><b class="cal">1</b>&nbsp;Choisir une personne… ▾</span></td>
-                      <td><span class="m-btn"><span class="m-dot" style="background:#f59e0b"></span>CP ▾</span></td>
-                      <td><span class="m-btn"><b class="cal">2</b>&nbsp;04/09 → 12/09 📅</span></td>
-                      <td class="c">7</td>
-                      <td style="color:var(--ink-3)">Commentaire — pas d'info médicale</td>
-                      <td class="c"><b class="cal">3</b> ✓ ✕</td>
-                    </tr>
-                    <tr><td class="nm">MARTIN Luc</td><td><span class="m-dot" style="background:#dc2626"></span> MAL</td><td>18/08 → 22/08</td><td class="c">5</td><td>—</td><td class="c">✏️ 🗑</td></tr>
-                    <tr><td class="nm">ROUX Sofia</td><td><span class="m-dot" style="background:#ef4444"></span> CP ?</td><td>11/07</td><td class="c">1</td><td>en attente de validation</td><td class="c">✏️ 🗑</td></tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-          <ul class="annot">
-            <li><b class="num">1</b><span><strong>La personne et le motif</strong> se choisissent dans une liste avec recherche.</span></li>
-            <li><b class="num">2</b><span><strong>La période</strong> se prend au calendrier ; le nombre de jours se calcule seul.</span></li>
-            <li><b class="num">3</b><span><strong>Enregistrer / annuler.</strong> Sur une ligne existante, le crayon la rouvre (motif, dates, commentaire) et la corbeille la supprime de tous ses jours d'un coup.</span></li>
-          </ul>
-          <figcaption>La saisie d'une absence, en ligne dans le tableau. La même fenêtre existe sur la fiche Personnel (colonne « Abs. »).</figcaption>
-        </figure>
+        <ul>
+          <li><strong>+ Déclarer une absence</strong> : la personne, le motif (liste avec recherche), la période au calendrier
+            (le nombre de jours se calcule seul) et un commentaire facultatif.</li>
+          <li><strong>Le crayon</strong> rouvre une période (motif, dates, commentaire) ; <strong>la corbeille</strong> la supprime de
+            tous ses jours d'un coup.</li>
+          <li>La même saisie existe sur la fiche Personnel (colonne « Abs. »). <strong>Réinitialiser</strong> vide les filtres ;
+            <strong>← Planning</strong> retourne au Planning.</li>
+        </ul>
+        
         <ul>
           <li><strong>Si la personne a déjà des affectations</strong> pendant la période, Polaris les liste et demande s'il
             faut les <strong>écraser</strong> par l'absence. Rien n'est remplacé sans confirmation.</li>
@@ -1175,22 +1125,9 @@
           tableaux de compétences, et elle alimente l'aide au placement et les bilans de polyvalence.
         </p>
 
-        <figure>
-          <div class="m-scroll">
-            <table class="m-grid">
-              <thead>
-                <tr><th style="background:var(--paper-2);color:var(--ink-3)">Personne</th><th>Conducteur T1</th><th>Chargement T1</th><th>Mise en colis T1</th><th>Palettiseur</th></tr>
-              </thead>
-              <tbody>
-                <tr><td class="nm">DUBOIS Anna</td><td><svg class="mark" width="26" height="26"><use href="#n3-3"/></svg></td><td><svg class="mark" width="26" height="26"><use href="#n3-2"/></svg></td><td><svg class="mark" width="26" height="26"><use href="#n3-1"/></svg></td><td><svg class="mark" width="26" height="26"><use href="#lvl0"/></svg></td></tr>
-                <tr><td class="nm" style="background:#fde68a;color:#92400e">MARTIN Luc</td><td><svg class="mark" width="26" height="26"><use href="#n3-1"/></svg></td><td><svg class="mark" width="26" height="26"><use href="#n3-2"/></svg></td><td><svg class="mark" width="26" height="26"><use href="#n3-2"/></svg></td><td><svg class="mark" width="26" height="26"><use href="#n3-1"/></svg></td></tr>
-                <tr><td class="nm">PETIT Karim</td><td><svg class="mark" width="26" height="26"><use href="#lvl0"/></svg></td><td><svg class="mark" width="26" height="26"><use href="#n3-2"/></svg></td><td><svg class="mark" width="26" height="26"><use href="#lvlrx"/></svg></td><td><svg class="mark" width="26" height="26"><use href="#n3-3"/></svg></td></tr>
-              </tbody>
-            </table>
-          </div>
-          <figcaption>
-            Un extrait de matrice. Le niveau se lit comme un <strong>camembert qui se remplit</strong>. L'intérim est en jaune.
-          </figcaption>
+        <figure class="shot">
+          <a href="guide/matrice.jpg" target="_blank" rel="noopener" title="Ouvrir la capture en taille réelle"><img src="guide/matrice.jpg" alt="Écran Matrice de polyvalence" loading="lazy"></a>
+          <figcaption>La Matrice, service Condi, en vue Actuelle : les postes groupés par ligne en colonnes. Le niveau se lit comme un camembert qui se remplit ; le petit chiffre rappelle l'autre matrice. Un « ! » orange devant un nom = aucune compétence nulle part.</figcaption>
         </figure>
 
         <h3>Les niveaux</h3>
@@ -1235,7 +1172,8 @@
 
         <h3>Trouver et filtrer</h3>
         <ul>
-          <li><strong>Service et Équipe</strong> limitent les lignes et les colonnes ; <strong>Conducteurs</strong> ne garde que les
+          <li><strong>Service et Équipe</strong> limitent les lignes et les colonnes ; le bouton à l'icône de personne, au bout des
+            filtres (« Filtre Conducteurs »), ne garde que les
             personnes compétentes sur au moins un poste de conducteur.</li>
           <li><strong>La recherche</strong> cherche dans tout l'effectif, même hors des filtres.</li>
           <li><strong>Clic sur l'en-tête</strong> d'un poste (ou d'une ligne) : ne garde que les personnes compétentes sur ce
@@ -1267,19 +1205,8 @@
           (Sécurité, Qualité, Conduite d'engins…). La pastille dit où en est la validité.
         </p>
 
-        <figure>
-          <div class="m-scroll">
-            <table class="m-grid">
-              <thead>
-                <tr><th style="background:var(--paper-2);color:var(--ink-3)">Personne</th><th>CCP détecteur</th><th>Transpalette élec.</th><th>Habil. élec.</th><th>Hygiène</th></tr>
-              </thead>
-              <tbody>
-                <tr><td class="nm">DUBOIS Anna</td><td><svg class="mark" width="26" height="26"><use href="#habv"/></svg></td><td><svg class="mark" width="26" height="26"><use href="#habv"/></svg></td><td><svg class="mark" width="26" height="26"><use href="#habo"/></svg></td><td><svg class="mark" width="26" height="26"><use href="#habn"/></svg></td></tr>
-                <tr><td class="nm">MARTIN Luc</td><td><svg class="mark" width="26" height="26"><use href="#habo"/></svg></td><td><svg class="mark" width="26" height="26"><use href="#habr"/></svg></td><td><svg class="mark" width="26" height="26"><use href="#habn"/></svg></td><td><svg class="mark" width="26" height="26"><use href="#habv"/></svg></td></tr>
-                <tr><td class="nm">LEFEBVRE Tom</td><td><svg class="mark" width="26" height="26"><use href="#habv"/></svg></td><td><svg class="mark" width="26" height="26"><use href="#habn"/></svg></td><td><svg class="mark" width="26" height="26"><use href="#habn"/></svg></td><td><svg class="mark" width="26" height="26" style="opacity:.45"><use href="#habn"/></svg></td></tr>
-              </tbody>
-            </table>
-          </div>
+        <figure class="shot">
+          <a href="guide/habilitations.jpg" target="_blank" rel="noopener" title="Ouvrir la capture en taille réelle"><img src="guide/habilitations.jpg" alt="Écran Habilitations, vue Grille" loading="lazy"></a>
           <ul class="legend" style="margin-top:14px">
             <li><svg class="mark" width="22" height="22"><use href="#habv"/></svg> valable</li>
             <li><svg class="mark" width="22" height="22"><use href="#habo"/></svg> bientôt dépassée — moins de 90 jours avant l'échéance : à replanifier</li>
@@ -1287,18 +1214,22 @@
             <li><svg class="mark" width="22" height="22"><use href="#habn"/></svg> jamais passée</li>
             <li><svg class="mark" width="22" height="22" style="opacity:.45"><use href="#habn"/></svg> supprimée (grisée : l'historique est gardé)</li>
           </ul>
-          <figcaption>La grille des habilitations et sa légende (bouton 📖 Légende). Une petite carte sur la pastille indique une formation soumise à <strong>autorisation</strong> du site (conduite d'engins, habilitation électrique…).</figcaption>
+          <figcaption>La grille, service Condi : formations réglementaires puis internes, par groupe. Dans le coin, les compteurs (formées, valables, expirées, autorisations à remettre) et « + Bilan ». La petite carte bleue sous un nom de formation signale une formation soumise à <strong>autorisation</strong>.</figcaption>
         </figure>
 
         <h3>Enregistrer un passage</h3>
+        <figure class="shot etroite">
+          <a href="guide/habilitations-fenetre.jpg" target="_blank" rel="noopener" title="Ouvrir la capture en taille réelle"><img src="guide/habilitations-fenetre.jpg" alt="Fenêtre de saisie d'une habilitation" loading="lazy"></a>
+          <figcaption>La fenêtre ouverte en cliquant une pastille : ici « Recycler une habilitation » (déjà détenue), avec la date du dernier passage, puis l'historique de la pastille.</figcaption>
+        </figure>
         <ol>
           <li><strong>Cliquez la pastille</strong> de la personne pour la formation. La fenêtre s'ouvre avec la personne et la
             formation déjà choisies.</li>
           <li>Saisissez la <strong>date de passage</strong> : la vraie date de la formation, même si vous la saisissez
             des semaines plus tard. Polaris calcule l'échéance à partir de cette date et de la durée de validité
             de la formation.</li>
-          <li>Pour une formation soumise à autorisation, cochez <strong>Autorisation remise</strong> quand le document signé
-            par le site a été remis.</li>
+          <li>Pour une formation soumise à autorisation, une case <strong>Autorisation · remise</strong> apparaît : cochez-la quand
+            le document signé par le site a été remis (sa date est celle du passage).</li>
           <li><strong>Commentaire</strong> (facultatif) : numéro d'autorisation, <strong>réserve du formateur</strong> (« questionnaire à
             revoir à l'oral »…).</li>
           <li>Enregistrez : la pastille passe au vert. Un recyclage se saisit de la même façon : nouvelle date de
@@ -1315,10 +1246,15 @@
         </p>
 
         <h3>Les vues et le bilan</h3>
+        <figure class="shot">
+          <a href="guide/habilitations-liste.jpg" target="_blank" rel="noopener" title="Ouvrir la capture en taille réelle"><img src="guide/habilitations-liste.jpg" alt="Habilitations, vue Liste" loading="lazy"></a>
+          <figcaption>La vue Liste : une ligne par habilitation détenue, statut « expirée (N j) » en rouge.</figcaption>
+        </figure>
         <ul>
-          <li><strong>Grille / Liste</strong> : la liste donne une ligne par habilitation (formation, passage, échéance,
-            statut), triée par échéance — pratique pour programmer les sessions. Elle se filtre en
-            <strong>Détenues</strong>, <strong>Supprimées</strong> ou <strong>Toutes</strong>, avec l'historique ligne par ligne.</li>
+          <li><strong>Grille / Liste</strong> : la liste donne une ligne par habilitation (personne, formation, passage, échéance,
+            autorisation, statut, commentaire modifiable sur place), les plus anciennes échéances d'abord — pratique pour
+            programmer les sessions. Elle se filtre en <strong>Détenues</strong>, <strong>Supprimées</strong> ou <strong>Toutes</strong> ; le bouton
+            en bout de ligne ouvre l'historique.</li>
           <li><strong>Les compteurs</strong> du coin de la grille : personnes formées, habilitations valables, expirées,
             autorisations à remettre ; le bouton <strong>Bilan</strong> les détaille formation par formation.</li>
           <li><strong>Clic sur un en-tête</strong> (catégorie, groupe ou formation) : ne garde que les personnes habilitées.</li>
@@ -1352,38 +1288,15 @@
           au Planning et au Placement. En consultation, c'est le moyen de savoir si une ligne sera disponible demain.
         </p>
 
-        <figure>
-          <div class="m-scroll">
-            <div class="m">
-              <div class="m-body">
-                <table class="m-grid">
-                  <thead>
-                    <tr>
-                      <th style="text-align:left;background:var(--paper-2);color:var(--ink-3)"><b class="cal">1</b> ‹ Quinzaine ›</th>
-                      <th colspan="3">Lun 19</th><th colspan="3">Mar 20</th>
-                    </tr>
-                    <tr>
-                      <th style="text-align:left;background:var(--paper-2);color:var(--ink-3)"><span class="m-btn" style="font-size:11px"><b class="cal">2</b>&nbsp;⚙️ Initialiser</span></th>
-                      <th>M</th><th>AM</th><th>N</th><th>M</th><th>AM</th><th>N</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr><td class="nm"><b class="cal">3</b> Activation</td><td style="background:#dcfce7">☑</td><td style="background:#dcfce7">☑</td><td style="background:#fee2e2">☐</td><td style="background:#dcfce7">☑</td><td style="background:#dcfce7">☑</td><td style="background:#fee2e2">☐</td></tr>
-                    <tr><td class="nm" colspan="7" style="background:var(--paper-3)">Conditionnement</td></tr>
-                    <tr><td class="nm">Thermo 1</td><td>☑</td><td>☑</td><td style="background:#f1f5f9">·</td><td>☑</td><td>☑</td><td style="background:#f1f5f9">·</td></tr>
-                    <tr><td class="nm"><b class="cal">4</b> Thermo 2</td><td style="background:#fee2e2">☐</td><td style="background:#fee2e2">☐</td><td style="background:#f1f5f9">·</td><td>☑</td><td style="background:#fee2e2">☐</td><td style="background:#f1f5f9">·</td></tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-          <ul class="annot">
-            <li><b class="num">1</b><span><strong>Une quinzaine</strong> par écran, un jour par colonne, découpé en quarts. On avance par quinzaine ou par mois ; un bouton revient à la semaine en cours.</span></li>
-            <li><b class="num">2</b><span><strong>⚙️ Initialiser</strong> applique une <strong>semaine type</strong> à la semaine (voir plus bas).</span></li>
-            <li><b class="num">3</b><span><strong>Activation</strong> : le quart travaille-t-il ce jour ? Vert = actif, rouge = inactif, gris = semaine pas encore initialisée. Un samedi, un dimanche, un jour férié s'activent ou se désactivent ici.</span></li>
-            <li><b class="num">4</b><span><strong>Une ligne</strong> : cochée = elle tourne ; décochée (rouge) = fermée. Un point gris = la ligne ne tourne jamais sur ce quart (Référentiel).</span></li>
+        <figure class="shot">
+          <a href="guide/ordonnancement.jpg" target="_blank" rel="noopener" title="Ouvrir la capture en taille réelle"><img src="guide/ordonnancement.jpg" alt="Écran Ordonnancement" loading="lazy"></a>
+          <ul class="annot2">
+            <li><strong>‹ Aujourd'hui ›</strong> et la période affichée (deux semaines) ; <strong>Semaine type</strong>, en haut à droite, ouvre le gabarit.</li>
+            <li>En tête de chaque semaine, <strong>Initialiser</strong> applique une semaine type ; chaque jour est découpé en quarts (MAT, APR, NUI).</li>
+            <li><strong>Activation</strong> : le quart travaille-t-il ce jour ? Coché = actif. Ici le samedi et le dimanche sont inactifs.</li>
+            <li><strong>Une case par ligne, par jour et par quart</strong> : cochée = la ligne tourne ; décochée (fond rouge) = fermée. Une case grise et vide : la ligne ne tourne pas sur ce quart (Référentiel), ou le quart est inactif ce jour-là.</li>
           </ul>
-          <figcaption>L'Ordonnancement : la ligne Activation, puis, service par service, les lignes ouvertes jour par jour et quart par quart.</figcaption>
+          <figcaption>L'Ordonnancement sur deux semaines.</figcaption>
         </figure>
 
         <h3>Ce que voient le Planning et le Placement</h3>
@@ -1391,8 +1304,9 @@
           <li><strong>Quart inactif</strong> (ou semaine non initialisée) : la colonne du jour est fermée au Planning avec le
             message « Jour sans production — pour l'activer, contacter l'ordo » ; aucune saisie possible.</li>
           <li><strong>Ligne fermée</strong> : son besoin tombe à 0, mais elle <strong>reste visible et plaçable</strong>. On peut y
-            passer un produit, faire une reprise : le Placement affiche alors la tuile en orange
-            « X/0 · fermée par ordo ». Si des gens y sont placés, c'est un signal que l'ordonnancement n'est peut-être
+            passer un produit, faire une reprise : au Placement, la ligne porte la mention « fermée par ordo » et
+            ses postes demandent 0 personne (« 0/0 ») ; une personne qui y est placée met le poste en sureffectif
+            (cadre orange, « 1/0 »). Si des gens y sont placés, c'est un signal que l'ordonnancement n'est peut-être
             pas à jour, ou qu'il y a une reprise.</li>
           <li><strong>Journée</strong> : le quart de journée (pleine journée) est actif automatiquement dès qu'un quart tourne
             ce jour-là. Une ligne qui ne tourne sur aucun quart posté n'apparaît que dans cette partie.</li>
@@ -1438,51 +1352,16 @@
           semaine d'il y a deux mois montre ce qui a réellement été saisi, absences comprises.
         </p>
 
-        <figure>
-          <div class="m-scroll">
-            <div class="m">
-              <div class="m-bar" style="background:var(--paper-2);color:var(--ink);border-bottom:1px solid var(--rule)">
-                <b class="cal">1</b>
-                <span class="m-seg"><span>Année</span><span>Mois</span><span class="on">Semaine</span></span>
-                <span class="m-btn">‹</span><span class="m-btn">Aujourd'hui</span><span class="m-btn">›</span>
-                <b class="cal">2</b>
-                <span class="m-lab">Quart</span>
-                <span class="m-seg"><span>Journée</span><span class="on">Matin</span><span>Après-midi</span><span>Nuit</span></span>
-                <span class="m-lab">Service</span>
-                <span class="m-seg"><span class="on">Condi</span><span>Fab.</span></span>
-                <span class="m-lab">Équipe</span>
-                <span class="m-seg"><span class="on">AUTO</span><span>A</span><span>B</span></span>
-                <b class="cal" style="margin-left:auto">3</b>
-                <span class="m-seg"><span class="on">Suivre le quart</span><span>Suivre l'équipe</span></span>
-                <span class="m-seg"><span class="on">Par nom</span><span>Par poste</span></span>
-              </div>
-              <div class="m-body" style="padding:0">
-                <table class="m-grid">
-                  <thead>
-                    <tr>
-                      <th style="text-align:left;background:var(--paper-2);color:var(--ink-3)">Personne</th>
-                      <th>Lun 19 <b class="cal">4</b></th><th style="background:#dbeafe">Mar 20</th><th>Mer 21</th><th>Jeu 22</th><th>Ven 23</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr><td class="nm">DUBOIS Anna</td><td>CDC1</td><td style="background:#eff6ff">CDC1</td><td>CDC1</td><td class="c" style="background:#f59e0b33;color:#92400e">CP</td><td class="c" style="background:#f59e0b33;color:#92400e">CP</td></tr>
-                    <tr><td class="nm" style="background:#fde68a;color:#92400e">MARTIN Luc</td><td style="background:#fef2f2;color:#991b1b"><b class="cal">5</b> CHG1</td><td style="background:#fef2f2;outline:2px solid #dc2626;outline-offset:-2px;color:#991b1b">CDC2</td><td>CHG1</td><td style="background:#fffbeb;color:#92400e">MEC1</td><td class="c" style="color:var(--ink-3)">JNT</td></tr>
-                    <tr><td class="nm">PETIT Karim</td><td class="c" style="color:var(--ink-3)">—</td><td style="background:#eff6ff">MEC1 🕐</td><td>MEC1</td><td>MEC1</td><td>MEC1 »</td></tr>
-                    <tr><td class="nm">ROUX Sofia</td><td class="c" style="background:#e0e7ff;color:#3730a3">TP</td><td style="background:#e0e7ff;color:#3730a3" class="c">TP</td><td>PAL</td><td>PAL</td><td>PAL</td></tr>
-                    <tr><td class="nm">LEFEBVRE Tom</td><td class="c" style="color:var(--ink-3)">→ Après-midi</td><td class="c" style="background:#f1f5f9;color:#94a3b8">·</td><td class="c" style="background:#f1f5f9;color:#94a3b8">·</td><td class="c" style="background:#f1f5f9;color:#94a3b8">·</td><td class="c" style="background:#f1f5f9;color:#94a3b8">·</td></tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-          <ul class="annot">
-            <li><b class="num">1</b><span><strong>Se déplacer dans le temps</strong> : année, mois, semaine, flèches ; <strong>Aujourd'hui</strong> ramène à la semaine en cours. La semaine en cours est en bleu, le jour du jour bleuté.</span></li>
-            <li><b class="num">2</b><span><strong>Quart, Service, Équipe.</strong> Un planning par quart (journée, matin, après-midi, nuit). En équipe <strong>AUTO</strong>, on voit les équipes de ce quart cette semaine <em>et</em> toute personne réellement placée sur ce quart. Un bandeau de la couleur du quart rappelle lequel on édite.</span></li>
-            <li><b class="num">3</b><span><strong>Les bascules de vue</strong> : suivre le quart ou l'équipe, par nom ou par poste (voir plus bas), et le filtre Conducteurs.</span></li>
-            <li><b class="num">4</b><span><strong>En-tête du jour</strong> : la date, et en vue « Suivre l'équipe », le quart de la semaine en couleur. Un jour sans production est fermé.</span></li>
-            <li><b class="num">5</b><span><strong>Les couleurs d'une case</strong> : voir le tableau ci-dessous. Au survol, une info-bulle donne le <strong>nom complet du poste et sa ligne</strong> (ou le libellé du motif), et les alertes de la case.</span></li>
+        <figure class="shot">
+          <a href="guide/planning.jpg" target="_blank" rel="noopener" title="Ouvrir la capture en taille réelle"><img src="guide/planning.jpg" alt="Écran Planning, vue Par nom" loading="lazy"></a>
+          <ul class="annot2">
+            <li><strong>Se déplacer dans le temps</strong>, en haut à gauche : l'année, le mois, la semaine (S40, S41…). <strong>‹ Aujourd'hui ›</strong>, à gauche de la grille, avance ou recule d'une semaine et ramène à la semaine en cours (bleue).</li>
+            <li><strong>Quart, Service, Équipe</strong>, en haut à droite. En équipe <strong>Auto</strong>, on voit les équipes de ce quart cette semaine <em>et</em> toute personne réellement placée sur ce quart. <strong>Suivre le quart / Suivre l'équipe</strong> s'active quand une équipe tournante est choisie.</li>
+            <li><strong>Par nom / Par poste</strong>, la recherche, puis les raccourcis : écran TV, horaires spécifiques, absences, filtre Conducteurs.</li>
+            <li>Le bandeau « <strong>Vous éditez le quart MATIN</strong> », puis en tête de chaque semaine le quart (en couleur) et le bouton <strong>TP + pré-affectation</strong>.</li>
+            <li><strong>+ Bilan</strong> déplie les lignes de besoin et d'alertes. Au pied de la grille, un rappel des couleurs et des gestes.</li>
           </ul>
-          <figcaption>Le Planning en vue « Par nom », au quart du matin.</figcaption>
+          <figcaption>Le Planning, quart du matin, service Condi, équipe Auto, vue « Par nom ».</figcaption>
         </figure>
 
         <h3>Lire une case</h3>
@@ -1506,6 +1385,10 @@
         </div>
 
         <h3>Saisir</h3>
+        <figure class="shot">
+          <a href="guide/planning-case.jpg" target="_blank" rel="noopener" title="Ouvrir la capture en taille réelle"><img src="guide/planning-case.jpg" alt="Menu d'une case du Planning" loading="lazy"></a>
+          <figcaption>Le clic sur une case : les postes ouverts ce jour, groupés par ligne (cadre vert = la personne y est compétente), « Voir tous » pour les autres, « ✕ Effacer », et à droite les motifs d'absence. Le « » » au coin de la case recopie sur la suite de la semaine.</figcaption>
+        </figure>
         <ul>
           <li><strong>Clic sur une case</strong> : une petite fenêtre propose les postes ouverts ce jour-là, d'abord ceux où la
             personne est compétente (<strong>Voir compétents</strong> / <strong>Voir tous</strong>), puis les motifs
@@ -1528,7 +1411,7 @@
 
         <h3>Charger une semaine : TP + pré-affectation</h3>
         <p>
-          En tête de chaque semaine, le bouton <strong>⛁</strong> prépare la semaine d'un coup, sans jamais écraser une case
+          En tête de chaque semaine, le bouton <strong>TP + pré-affectation</strong> prépare la semaine d'un coup, sans jamais écraser une case
           déjà remplie :
         </p>
         <ol>
@@ -1558,13 +1441,22 @@
         </div>
 
         <h3>Le bilan et les alertes</h3>
+        <figure class="shot">
+          <a href="guide/planning-bilan.jpg" target="_blank" rel="noopener" title="Ouvrir la capture en taille réelle"><img src="guide/planning-bilan.jpg" alt="Planning avec le bilan déplié" loading="lazy"></a>
+          <figcaption>Le bilan déplié : besoin, présents, delta, puis présents / requis par catégorie, et les alertes du jour.</figcaption>
+        </figure>
         <p>
-          <strong>+ Bilan</strong> déplie, en tête de grille, pour chaque jour : présents sur requis par catégorie (managers,
-          conducteurs, opérateurs), et les <strong>Alertes</strong> — nombre de cases hors compétence, de postes en
-          sur-effectif. Un clic sur une alerte <strong>surligne</strong> les cases concernées ce jour-là.
+          <strong>+ Bilan</strong> déplie, en tête de grille, pour chaque jour : le <strong>Besoin</strong>, les <strong>Présents</strong>, le
+          <strong>Delta</strong>, puis présents sur requis par catégorie (managers, conducteurs, opérateurs), et les
+          <strong>Alertes</strong> : pastille rouge = cases hors compétence, pastille jaune = postes en sur-effectif. Un clic sur une
+          pastille <strong>surligne</strong> les cases concernées ce jour-là. Le bouton devient « − Bilan » pour replier.
         </p>
 
         <h3>La vue « Par poste »</h3>
+        <figure class="shot">
+          <a href="guide/planning-poste.jpg" target="_blank" rel="noopener" title="Ouvrir la capture en taille réelle"><img src="guide/planning-poste.jpg" alt="Planning, vue Par poste" loading="lazy"></a>
+          <figcaption>La vue « Par poste » : les zones d'attente repliées (« N à répartir »), puis chaque ligne avec son besoin, et une rangée par place. Les habilitations exigées sont rappelées sous le nom du poste, les titulaires (« tit. ») en dessous.</figcaption>
+        </figure>
         <p>
           La bascule <strong>Par nom / Par poste</strong> retourne la grille : une ligne par <strong>place</strong> de poste (un poste à
           effectif 3 occupe trois lignes), sur un seul quart. C'est la vue pour répondre à « qui était au
@@ -1593,7 +1485,8 @@
         <ul>
           <li><strong>📺</strong> — l'écran TV du service filtré ;</li>
           <li><strong>🕐</strong> — l'écran des horaires spécifiques ;</li>
-          <li><strong>🤒</strong> — l'écran Absences, filtré sur le même service et la même recherche.</li>
+          <li><strong>🤒</strong> — l'écran Absences, filtré sur le même service et la même recherche ;</li>
+          <li><strong>l'icône de personne</strong> — le filtre Conducteurs (ne garde que les personnes compétentes sur un poste de conducteur).</li>
         </ul>
       </section>
 
@@ -1608,90 +1501,17 @@
           noms sur les postes</strong>. C'est la feuille qui est imprimée et affichée dans le couloir.
         </p>
 
-        <figure>
-          <div class="m-scroll">
-            <div class="m">
-              <div class="m-bar" style="background:var(--paper-2);color:var(--ink);border-bottom:1px solid var(--rule)">
-                <b class="cal">1</b>
-                <span class="m-lab">Service</span>
-                <span class="m-seg"><span class="on">Condi</span><span>Fabrication</span></span>
-                <span class="m-lab">Jour</span>
-                <span class="m-btn">‹</span><span class="m-btn">📅 20/10/2026</span><span class="m-btn">›</span>
-                <span class="m-lab">Quart</span>
-                <span class="m-seg"><span class="on">Matin</span><span>Après-midi</span><span>Nuit</span></span>
-                <span class="m-seg"><span class="on">Plan</span><span>Absences</span></span>
-                <b class="cal" style="margin-left:auto">2</b>
-                <span class="m-count" style="color:var(--bad);margin-left:0">14/17</span>
-                <b class="cal">3</b>
-                <span class="m-btn">Copier…</span>
-                <span class="m-btn">PDF Manager</span>
-                <span class="m-btn">PDF pour Affich.</span>
-              </div>
-              <div class="m-body">
-                <div class="m-plan">
-                  <div>
-                    <div class="m-ligne">
-                      <div class="m-lignenom">Thermo 1</div>
-                      <div class="m-postes">
-                        <div class="m-poste">
-                          <div class="m-postehead"><span class="m-postenom">Conducteur</span><span class="m-eff ok">1/1</span></div>
-                          <div class="m-slot"><span class="m-chip"><span class="m-dot" style="background:#2563eb"></span>MARTIN L.</span></div>
-                        </div>
-                        <div class="m-poste">
-                          <div class="m-postehead"><span class="m-postenom">Chargement</span><span class="m-eff ko">2/3</span></div>
-                          <div class="m-slot"><b class="cal">4</b><span class="m-slotnum">1</span><span class="m-chip"><span class="m-dot" style="background:#16a34a"></span>ROUX S.</span></div>
-                          <div class="m-slot"><span class="m-slotnum">2</span><span class="m-chip forced"><b class="cal">5</b><span class="m-dot" style="background:#16a34a"></span>LEFEBVRE T.</span></div>
-                          <div class="m-slot"><span class="m-slotnum">3</span><span class="m-free">libre</span></div>
-                        </div>
-                      </div>
-                    </div>
-                    <div class="m-ligne">
-                      <div class="m-lignenom" style="border-left-color:var(--warn)">Thermo 2</div>
-                      <div class="m-postes">
-                        <div class="m-poste" style="border-color:var(--warn);border-width:2px">
-                          <div class="m-postehead"><span class="m-postenom">Conducteur</span><span class="m-eff" style="color:var(--warn)">1/0 · fermée par ordo</span></div>
-                          <div class="m-slot"><b class="cal">6</b><span class="m-chip"><span class="m-dot" style="background:#2563eb"></span>DUBOIS A.</span></div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="m-names">
-                    <div style="display:flex;align-items:center;gap:6px">
-                      <b class="cal">7</b>
-                      <div class="m-search" style="flex:1">🔍 Rechercher un nom</div>
-                    </div>
-                    <div class="m-row" style="gap:5px">
-                      <span class="m-btn" style="flex:1">Équipe A</span>
-                      <span class="m-btn" style="flex:1">Condi</span>
-                    </div>
-                    <div style="font-size:11px">☑ Masquer les placés · ☐ Conducteurs · ☐ Masquer non-compétents</div>
-                    <div class="m-name"><span class="m-dot" style="background:#2563eb"></span>PETIT Karim<span class="m-stat" style="color:var(--bad)">à placer</span></div>
-                    <div class="m-name"><span class="m-dot" style="background:#2563eb"></span>LEROY Inès<span class="m-stat" style="color:var(--bad)">à placer</span></div>
-                    <div class="m-name"><span class="m-dot" style="background:#16a34a"></span>SIMON Paul<span class="m-stat" style="color:var(--warn)">CP</span></div>
-                  </div>
-                </div>
-              </div>
-              <div class="m-foot">
-                <b class="cal">8</b>
-                <span class="m-lab">Glisser vers :</span>
-                <span class="m-chip"><span class="m-dot" style="background:#f59e0b"></span>CP</span>
-                <span class="m-chip"><span class="m-dot" style="background:#dc2626"></span>MAL</span>
-                <span class="m-chip"><span class="m-dot" style="background:#6366f1"></span>FORM</span>
-                <span class="m-chip"><span class="m-dot" style="background:#64748b"></span>JNT</span>
-              </div>
-            </div>
-          </div>
-          <ul class="annot">
-            <li><b class="num">1</b><span><strong>Service, jour, quart.</strong> Le calendrier du jour grise les jours sans quart actif. <strong>Plan / Absences</strong> bascule entre le plan et la photo des absents du jour (une carte par motif, plus « Temps partiel »).</span></li>
-            <li><b class="num">2</b><span><strong>Compteur de couverture</strong> : positions pourvues sur positions requises. Rouge tant qu'il manque du monde.</span></li>
-            <li><b class="num">3</b><span><strong>Copier…</strong> et les trois <strong>PDF</strong> (voir plus bas).</span></li>
-            <li><b class="num">4</b><span><strong>Les cases numérotées</strong> : les places de rotation du poste, dans l'ordre de la prise de poste.</span></li>
-            <li><b class="num">5</b><span><strong>Pastille rouge encadrée</strong> : placement forcé (habilitation manquante) ; fond rouge : hors compétence.</span></li>
-            <li><b class="num">6</b><span><strong>Tuile orange « X/0 · fermée par ordo »</strong> : la ligne est fermée dans l'Ordonnancement (besoin 0), mais quelqu'un y est placé. Reprise prévue, ou ordonnancement pas à jour ?</span></li>
-            <li><b class="num">7</b><span><strong>La liste des noms</strong>, avec le statut de chacun : à placer, → poste, absent (code du motif), sur un autre quart.</span></li>
-            <li><b class="num">8</b><span><strong>Le bandeau des motifs</strong> : glissez-y un nom pour déclarer une absence ce jour-là.</span></li>
+        <figure class="shot">
+          <a href="guide/placement.jpg" target="_blank" rel="noopener" title="Ouvrir la capture en taille réelle"><img src="guide/placement.jpg" alt="Écran Placement" loading="lazy"></a>
+          <ul class="annot2">
+            <li><strong>En haut</strong> : Service, Quart, Jour (le calendrier grise les jours sans quart actif) et Affichage <strong>Plan / Absences</strong>.</li>
+            <li><strong>Deuxième ligne</strong> : le compteur de couverture (positions pourvues / requises, rouge tant qu'il manque du monde), <strong>Copier…</strong>, les trois PDF, puis les cases <strong>Masquer les placés</strong>, <strong>Conducteurs</strong> et <strong>Masquer non-compétents</strong>.</li>
+            <li><strong>Le plan</strong> : une ligne par ligne de production, une tuile par poste avec son compteur (« 2/2 ») et ses places numérotées. Une ligne fermée dans l'Ordonnancement porte la mention « fermée par ordo » et ses postes passent à 0.</li>
+            <li><strong>À répartir</strong> (colonne violette) : les zones d'attente (CDT, conducteurs, périphériques) et les personnes qui y sont rangées.</li>
+            <li><strong>La liste</strong> : recherche, équipe et service, « N à placer » et « N absent(s) », puis les noms avec leur statut.</li>
+            <li><strong>Glisser vers</strong>, en bas : les motifs d'absence. Déposez-y un nom pour déclarer une absence ce jour-là.</li>
           </ul>
-          <figcaption>L'écran Placement, sur le service Condi au quart du matin.</figcaption>
+          <figcaption>Le Placement, service Condi, quart du matin.</figcaption>
         </figure>
 
         <h3>Placer et retirer</h3>
@@ -1733,6 +1553,10 @@
         </ul>
 
         <h3>Copier une journée</h3>
+        <figure class="shot etroite">
+          <a href="guide/placement-copier.jpg" target="_blank" rel="noopener" title="Ouvrir la capture en taille réelle"><img src="guide/placement-copier.jpg" alt="Fenêtre Copier des affectations" loading="lazy"></a>
+          <figcaption>La fenêtre « Copier des affectations ».</figcaption>
+        </figure>
         <p>
           <strong>Copier…</strong> recopie les affectations d'un jour vers un autre, sur le quart affiché et pour tout le site.
           Deux raccourcis : <strong>Veille</strong> et <strong>Semaine passée</strong>. Deux façons :
@@ -1747,7 +1571,13 @@
         </p>
 
         <h3>La liste des noms</h3>
+        <figure class="shot">
+          <a href="guide/placement-absences.jpg" target="_blank" rel="noopener" title="Ouvrir la capture en taille réelle"><img src="guide/placement-absences.jpg" alt="Placement, affichage Absences" loading="lazy"></a>
+          <figcaption>L'affichage « Absences » du Placement : une carte par motif avec les absents du jour.</figcaption>
+        </figure>
         <ul>
+          <li>L'affichage <strong>Absences</strong> remplace le plan par une carte par motif (plus « Temps partiel ») avec les absents du
+            jour : on peut aussi y déposer un nom.</li>
           <li>Préfiltrée sur l'équipe et le service du plan. <strong>Taper un nom</strong> cherche dans tout l'effectif, pour
             aller chercher un renfort ailleurs. Les personnes sans équipe (intérim, nouveaux) sont toujours montrées.</li>
           <li><strong>Masquer les placés</strong> (coché par défaut) ne garde que ceux qui restent à placer ; il ne s'applique pas
@@ -1792,11 +1622,17 @@
         <p>
           Les bilans <strong>se lisent</strong>, ils ne se saisissent pas : ils agrègent ce que contiennent les autres modules
           à l'instant où on les ouvre. Une donnée corrigée dans la Matrice ou les Habilitations s'y répercute aussitôt.
-          Ils sont conçus pour être imprimés (bouton <strong>PDF</strong>) ou projetés en réunion, et la plupart se
+          Ils sont conçus pour être imprimés (« Imprimer / PDF » ou l'icône d'imprimante ouvrent l'impression du navigateur ;
+          dans les Synthèses et les Recyclages, <strong>PDF</strong> et <strong>Excel</strong> téléchargent directement un fichier) ou projetés
+          en réunion, et la plupart se
           filtrent par service et par équipe.
         </p>
 
         <h3>Le Cockpit — pilotage d'équipe</h3>
+        <figure class="shot">
+          <a href="guide/bilans.jpg" target="_blank" rel="noopener" title="Ouvrir la capture en taille réelle"><img src="guide/bilans.jpg" alt="Cockpit des Bilans" loading="lazy"></a>
+          <figcaption>Le Cockpit : les indicateurs, les fins de contrat à 60 jours, les postes fragiles, puis les cartes des rapports détaillés.</figcaption>
+        </figure>
         <p>
           La page d'entrée du menu Bilans : effectif actif, part d'intérim, hommes / femmes, contrats qui se terminent
           dans 30 jours, taux d'absence du mois, postes fragiles et postes sans relève ; puis la liste des fins de
@@ -1816,10 +1652,20 @@
               <tr><td><strong>🛡️ Adéquation charge / capacité</strong></td><td>Sur un mois, par service et par quart : le besoin (d'après l'ordonnancement) face aux présents ; jours sous-couverts ; placements hors compétence.</td></tr>
               <tr><td><strong>🧑‍🏭 Assez de compétences ?</strong></td><td>Une aide pour valider les congés : sur 2 semaines, par service et par jour, les postes tenables une fois retirés les absents, les temps partiels et les fins de contrat — sans compter deux fois une personne polyvalente.</td></tr>
               <tr><td><strong>🗺️ Projection de compétences</strong></td><td>La feuille de route sur 24 semaines : par service et par catégorie, combien de personnes tiennent au moins un poste (titulaires et intérim séparés), face au besoin actualisé par l'ordonnancement. Absences d'une semaine pleine, expirations d'habilitation et fins de contrat sont déduites.</td></tr>
-              <tr><td><strong>🔁 Recyclages à prévoir</strong></td><td>Par formation, les personnes actives dont l'habilitation <strong>expire ou a expiré</strong> : formation, nom, prénom, service, équipe, dernier passage, date d'expiration, jours restants. Filtres : formations réglementaires / internes / non classées, une formation précise, l'échéance (expirées, 30 j, 90 j, 6 mois, 1 an, toutes), service, équipe. Une fin de contrat antérieure à l'échéance est signalée. Bouton <strong>Excel</strong> pour extraire la liste et l'envoyer aux chefs d'équipe.</td></tr>
+              <tr><td><strong>🔁 Recyclages à prévoir</strong></td><td>Par formation, les personnes actives dont l'habilitation <strong>expire ou a expiré</strong> : formation, nom, prénom, service, équipe, dernier passage, date d'expiration, jours restants. Filtres : formations réglementaires / internes / non classées, une formation précise, l'échéance (expirées, 30 j, 90 j, 6 mois, 1 an, toutes), service, équipe. Une fin de contrat antérieure à l'échéance est signalée, et un bandeau liste les formations sans durée de validité (jamais échues). Boutons <strong>Excel</strong> et <strong>PDF</strong> pour extraire la liste affichée.</td></tr>
             </tbody>
           </table>
         </div>
+
+        <figure class="shot">
+          <a href="guide/syntheses-interim.jpg" target="_blank" rel="noopener" title="Ouvrir la capture en taille réelle"><img src="guide/syntheses-interim.jpg" alt="Synthèses hebdomadaires, vue Intérim" loading="lazy"></a>
+          <figcaption>Les Synthèses en vue Intérim : par agence, le planning de la semaine de chaque intérimaire (horaire, poste, service), avec « PDF agence » et « Excel agence ».</figcaption>
+        </figure>
+
+        <figure class="shot">
+          <a href="guide/recyclages.jpg" target="_blank" rel="noopener" title="Ouvrir la capture en taille réelle"><img src="guide/recyclages.jpg" alt="Bilan Recyclages à prévoir" loading="lazy"></a>
+          <figcaption>Recyclages à prévoir : les filtres, les compteurs, le bandeau des formations sans durée, puis la liste par formation.</figcaption>
+        </figure>
         <p>
           Le <strong>bilan de la matrice</strong> (bouton « Voir le bilan » de la Matrice) complète ces rapports : par poste,
           le nombre de personnes à chaque niveau et au niveau requis.
@@ -1838,10 +1684,12 @@
       <!-- ================= 14. TV ================= -->
       <section id="tv">
         <h2>14. Affichage TV</h2>
+
         <div class="who"><span>Menu · droit</span><span class="role">affichage</span><span>— l'écran TV lui-même est public</span></div>
         <p>
-          Chaque service a une page d'affichage pour un écran de couloir : gros caractères, le placement des jours
-          à venir, poste par poste, avec l'horaire de chacun, en sections Matin / Après-midi / Nuit. C'est la seule
+          Chaque service a une page d'affichage pour un écran de couloir : gros caractères, en sections Matin /
+          Après-midi / Nuit, <strong>une ligne par personne</strong> et une colonne par jour, avec dans chaque case le poste tenu
+          et l'horaire (ou « Absence », « TP »). En haut : la semaine affichée (‹ ›), l'impression A3 et le logo. C'est la seule
           partie de Polaris <strong>accessible sans se connecter</strong> : ouvrez-la sur le poste relié à la TV, passez le
           navigateur en plein écran, et laissez-la tourner.
         </p>
@@ -1854,11 +1702,22 @@
             TP en violet, « (Service X) » en orange = personne prêtée par un autre service.</li>
           <li>Une personne apparaît sur la TV de son <strong>service d'affectation</strong> (fiche Personnel).</li>
         </ul>
+
+        <figure class="shot">
+          <a href="guide/tv.jpg" target="_blank" rel="noopener" title="Ouvrir la capture en taille réelle"><img src="guide/tv.jpg" alt="Écran TV d'un service" loading="lazy"></a>
+          <figcaption>L'écran TV du service Condi, quart du matin. La colonne du jour est en vert, l'intérim en jaune, les horaires en bleu.</figcaption>
+        </figure>
+
         <h3>Le menu Affichage : imprimer plusieurs services</h3>
+        <figure class="shot">
+          <a href="guide/affichage.jpg" target="_blank" rel="noopener" title="Ouvrir la capture en taille réelle"><img src="guide/affichage.jpg" alt="Menu Affichage" loading="lazy"></a>
+          <figcaption>Le menu Affichage : une case par service à imprimer, et le lien « Écran TV » de chacun.</figcaption>
+        </figure>
         <p>
           Le menu <strong>Affichage</strong> liste les services avec une case à cocher. Cochez ceux à imprimer (ou tous),
           choisissez au besoin une date, puis imprimez : chaque service commence sur une nouvelle feuille A3 portrait.
-          Le lien <strong>Écran TV</strong> de chaque ligne ouvre la page d'un seul service. Depuis le Planning, le bouton 📺
+          Le lien <strong>Écran TV</strong> de chaque ligne ouvre la page d'un seul service. La <strong>date de référence</strong>
+          (vide = aujourd'hui) choisit la semaine imprimée. Depuis le Planning, le bouton 📺
           ouvre directement la TV du service filtré.
         </p>
       </section>
@@ -1904,9 +1763,14 @@
             ligne de synthèse, dont on peut afficher le détail.</li>
           <li>Le Planning et la Polyvalence, qui font l'essentiel du volume, sont masqués par défaut (sauf leurs opérations
             groupées) : cochez <strong>Inclure le Planning et la Polyvalence</strong> pour les voir.</li>
-          <li>100 lignes par page, <strong>Plus anciens →</strong> pour remonter. Les entrées sont conservées un nombre de mois
-            fixé pour le site ; une personne anonymisée ou supprimée au titre du RGPD l'est aussi du journal.</li>
+          <li>100 lignes par page, <strong>Plus anciens →</strong> pour remonter. Les entrées sont conservées le nombre de mois
+            indiqué en haut de l'écran (<strong>Conservation : N mois · Enregistrer</strong>, pour qui peut modifier le Journal) ; une personne anonymisée ou supprimée au titre du RGPD l'est aussi du journal.</li>
         </ul>
+
+        <figure class="shot">
+          <a href="guide/journal.jpg" target="_blank" rel="noopener" title="Ouvrir la capture en taille réelle"><img src="guide/journal.jpg" alt="Écran Journal d'audit" loading="lazy"></a>
+          <figcaption>Le Journal d'audit : la conservation, les filtres, puis une ligne par modification. Une opération groupée (ici une fin de contrat qui retire 3 affectations) tient sur une ligne, avec « voir le détail ».</figcaption>
+        </figure>
         <p>
           C'est l'écran à ouvrir quand une donnée a changé sans qu'on sache pourquoi : on y lit l'ancienne valeur, et on
           la ressaisit.
@@ -1926,51 +1790,40 @@
 
         <h3>Équipes</h3>
         <ul>
-          <li><strong>Les équipes</strong> : nom, couleur (celle des pastilles et des noms partout dans Polaris), actif, et
-            <strong>quart fixe</strong> pour une équipe qui ne tourne pas (toujours de journée, toujours de nuit…).</li>
-          <li><strong>Chefs d'équipe</strong> : les comptes rattachés à chaque équipe. C'est ce qui donne à un chef d'équipe son
+          <li><strong>Nouvelle équipe</strong> (nom, couleur, Ajouter) ; pour chaque équipe : nom, couleur (celle des pastilles
+            partout dans Polaris), <strong>Quart fixe</strong> (« Rotation (tourne) » ou un quart fixe), Actif.</li>
+          <li><strong>Chefs d'équipe</strong> : les comptes rattachés à chaque équipe (<strong>Désigner un chef</strong>, Retirer). C'est ce qui donne à un chef d'équipe son
             périmètre de modification.</li>
           <li><strong>Rotation — référence d'une semaine</strong> : pour une semaine (« à partir du » lundi choisi), le quart de
             chaque équipe tournante ; les semaines suivantes en découlent (aperçu sous le formulaire). Pour changer la
             rotation, on <strong>ajoute une nouvelle référence</strong> à une autre date : les références enregistrées restent,
             et le passé n'est jamais recalculé.</li>
-          <li><strong>Horaires des quarts</strong> : les heures de chaque quart.</li>
+          <li><strong>Horaires des quarts</strong> : pour chaque quart, le libellé, le début et la fin, s'il fait partie de la
+            <strong>rotation</strong>, s'il s'agit d'une <strong>nuit</strong>, son <strong>créneau</strong> pour le temps partiel et la couleur de son
+            bandeau ; bouton « Enregistrer les horaires ».</li>
         </ul>
-        <figure>
-          <div class="m-scroll">
-            <div class="m">
-              <div class="m-body">
-                <div class="m-lab">Rotation — référence d'une semaine</div>
-                <div class="m-row" style="gap:10px">
-                  <span>À partir du <strong>lundi 02/11/2026</strong></span>
-                  <span class="m-lab">Équipe A</span>
-                  <span class="m-seg"><span class="on">Matin</span><span>Après-midi</span></span>
-                  <span class="m-lab">Équipe B</span>
-                  <span class="m-seg"><span>Matin</span><span class="on">Après-midi</span></span>
-                </div>
-                <div class="m-lab" style="margin-top:6px">Aperçu (calculé)</div>
-                <table class="m-grid">
-                  <thead>
-                    <tr><th style="text-align:left;background:var(--paper-2);color:var(--ink-3)">Semaine</th><th>S45</th><th>S46</th><th>S47</th><th>S48</th></tr>
-                  </thead>
-                  <tbody>
-                    <tr><td class="nm">Équipe A</td><td class="c">Matin</td><td class="c">Après-midi</td><td class="c">Matin</td><td class="c">Après-midi</td></tr>
-                    <tr><td class="nm">Équipe B</td><td class="c">Après-midi</td><td class="c">Matin</td><td class="c">Après-midi</td><td class="c">Matin</td></tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-          <figcaption>Une référence de rotation et son aperçu. Le Planning (équipe AUTO, « Suivre l'équipe ») et le temps partiel « une semaine sur deux » s'appuient dessus.</figcaption>
+        <figure class="shot">
+          <a href="guide/equipes.jpg" target="_blank" rel="noopener" title="Ouvrir la capture en taille réelle"><img src="guide/equipes.jpg" alt="Réglages des équipes : horaires des quarts et rotation" loading="lazy"></a>
+          <figcaption>Réglages · Équipes, bas de page : les horaires des quarts, la référence de rotation et l'aperçu des 8 prochaines semaines.</figcaption>
         </figure>
 
         <h3>Compétences</h3>
+        <figure class="shot etroite">
+          <a href="guide/competences.jpg" target="_blank" rel="noopener" title="Ouvrir la capture en taille réelle"><img src="guide/competences.jpg" alt="Réglages des compétences" loading="lazy"></a>
+          <figcaption>Réglages · Compétences.</figcaption>
+        </figure>
         <p>
-          L'<strong>échelle de niveaux</strong> de la matrice : le libellé et la couleur de chaque niveau (le niveau 0 reste
+          Le <strong>nombre de niveaux</strong> activés, le <strong>seuil « compétent »</strong> (le niveau à partir duquel une
+          personne compte comme compétente dans les bilans, sans effet sur la saisie ni le placement), et
+          l'<strong>échelle de niveaux</strong> de la matrice : le libellé et la couleur de chaque niveau (le niveau 0 reste
           toujours blanc). C'est ici qu'on réécrit, par exemple, la définition du niveau 1 si elle prête à confusion.
         </p>
 
         <h3>Param. Habilitation</h3>
+        <figure class="shot">
+          <a href="guide/param-habilitation.jpg" target="_blank" rel="noopener" title="Ouvrir la capture en taille réelle"><img src="guide/param-habilitation.jpg" alt="Paramétrage des formations" loading="lazy"></a>
+          <figcaption>Param. Habilitation : les formations réglementaires (puis internes), avec leur groupe, leur validité en mois, l'autorisation, l'ordre et l'état actif.</figcaption>
+        </figure>
         <p>
           La liste des formations, également accessible par « 📜 Paramétrer les formations » depuis les Habilitations :
         </p>
@@ -1985,6 +1838,10 @@
         </ul>
 
         <h3>Param. RH</h3>
+        <figure class="shot">
+          <a href="guide/param-rh.jpg" target="_blank" rel="noopener" title="Ouvrir la capture en taille réelle"><img src="guide/param-rh.jpg" alt="Paramètres RH, motifs d'absence" loading="lazy"></a>
+          <figcaption>Param. RH, en haut de page : les motifs d'absence.</figcaption>
+        </figure>
         <ul>
           <li><strong>Motifs d'absence</strong> : code court (affiché dans les cases), code GT (paie), libellé, couleur, ordre,
             <strong>non planifié</strong> (compte dans l'absentéisme non planifié et le facteur de Bradford), <strong>PDF pour Affich.</strong>
@@ -1998,6 +1855,10 @@
         </ul>
 
         <h3>Horaires</h3>
+        <figure class="shot">
+          <a href="guide/horaires.jpg" target="_blank" rel="noopener" title="Ouvrir la capture en taille réelle"><img src="guide/horaires.jpg" alt="Réglages des horaires des postes" loading="lazy"></a>
+          <figcaption>Réglages · Horaires : par service, une grille quart × jour pour chaque poste.</figcaption>
+        </figure>
         <p>
           Les horaires standard de chaque poste, par service, quart et jour de la semaine, avec :
         </p>
@@ -2005,12 +1866,23 @@
           <li>une variante <strong>« après une nuit »</strong>, appliquée le lendemain d'une nuit où la ligne a tourné (vide =
             même horaire) ;</li>
           <li>des horaires <strong>par place</strong> (n° de rotation), qui l'emportent sur ceux du poste ;</li>
-          <li>des raccourcis : recopier le lundi sur toute la semaine, copier les horaires d'un poste, recopier sur les
-            autres postes de la ligne.</li>
+          <li>des raccourcis : <strong>Lun → sem.</strong> recopie le lundi sur toute la semaine ; <strong>Copier</strong> / <strong>Coller</strong>
+            reportent les horaires d'un poste sur un autre ; <strong>↓ postes</strong> les recopie sur les autres postes de la ligne ;
+            <strong>Vider</strong> efface le samedi, le dimanche ou tout un quart ; <strong>Tout replier</strong> referme les lignes ; la case
+            <strong>Horaires après une nuit</strong> affiche les variantes.</li>
         </ul>
         <p>Ce sont ces horaires qu'affichent la TV, le « PDF pour Affich. + heures » et les Synthèses.</p>
 
         <h3>Utilisateurs</h3>
+        <figure class="shot">
+          <a href="guide/utilisateurs.jpg" target="_blank" rel="noopener" title="Ouvrir la capture en taille réelle"><img src="guide/utilisateurs.jpg" alt="Liste des comptes" loading="lazy"></a>
+          <figcaption>Réglages · Utilisateurs : les comptes, leur rôle, leur état et le lien de mot de passe (adresses e-mail remplacées).</figcaption>
+        </figure>
+
+        <figure class="shot">
+          <a href="guide/droits.jpg" target="_blank" rel="noopener" title="Ouvrir la capture en taille réelle"><img src="guide/droits.jpg" alt="Grille des droits d'accès" loading="lazy"></a>
+          <figcaption>La grille des droits (rôle × module) : un clic fait passer une case de Aucun à Lecture à Modif. Les colonnes grisées ne sont pas modifiables (votre propre rôle, l'administrateur).</figcaption>
+        </figure>
         <ul>
           <li><strong>Ajouter un utilisateur</strong> (nom, e-mail, rôle), puis <strong>générer le lien</strong> de mot de passe et le
             transmettre à la personne. Regénérer un lien annule le précédent. L'administrateur ne choisit jamais le mot
@@ -2039,7 +1911,7 @@
               <tr><td><span style="background:#fef2f2;color:#991b1b;padding:1px 6px;border-radius:4px">Fond rouge clair</span></td><td>Planning, Placement</td><td>Hors compétence.</td></tr>
               <tr><td><span style="outline:2px solid #dc2626;outline-offset:-2px;padding:1px 6px;border-radius:4px">Encadré rouge</span></td><td>Planning, Placement</td><td>Placement forcé : habilitation manquante.</td></tr>
               <tr><td><span style="background:#fffbeb;color:#92400e;padding:1px 6px;border-radius:4px">Fond jaune pâle</span></td><td>Planning</td><td>Sur-effectif sur le poste.</td></tr>
-              <tr><td><span style="border:2px solid #b45309;color:#b45309;padding:1px 6px;border-radius:4px">Tuile orange</span></td><td>Placement</td><td>Ligne fermée par l'ordonnancement, quelqu'un y est placé.</td></tr>
+              <tr><td><span style="border:2px solid #f59e0b;background:#fffbeb;color:#92400e;padding:1px 6px;border-radius:4px">Tuile à cadre orange</span></td><td>Placement</td><td>Sureffectif : plus de monde que requis sur le poste (« 3/2 »), y compris sur une ligne fermée par l'ordo (« 1/0 »).</td></tr>
               <tr><td><span style="color:#dc2626;font-weight:800">✕ rouge</span></td><td>Matrice, Planning</td><td>Restriction sur le poste.</td></tr>
               <tr><td><span style="background:#e0e7ff;color:#3730a3;padding:1px 6px;border-radius:4px">Violet</span></td><td>Planning, TV, Placement</td><td>Temps partiel ; colonne « À répartir ».</td></tr>
               <tr><td><span style="background:#f1f5f9;color:#94a3b8;padding:1px 6px;border-radius:4px">Gris</span></td><td>Planning, Personnel</td><td>Hors effectif (sans contrat ce jour) ; personne partie.</td></tr>
@@ -2066,7 +1938,7 @@
         <ol>
           <li><strong>Ordonnancement</strong> : la semaine est initialisée (⚙️ Initialiser) et les lignes ouvertes sont à jour.</li>
           <li><strong>Absences</strong> : les congés, arrêts et formations connus sont saisis.</li>
-          <li><strong>Planning</strong>, sur le bon quart : bouton <strong>⛁</strong> en tête de semaine pour poser les temps partiels
+          <li><strong>Planning</strong>, sur le bon quart : bouton <strong>TP + pré-affectation</strong> en tête de semaine pour poser les temps partiels
             et les titulaires. Lisez le message : il liste ceux qu'il n'a pas pu placer.</li>
           <li>Complétez les cases vides (clic sur la case, ou flèche » pour recopier sur la semaine), en commençant par
             les conducteurs. Ouvrez <strong>+ Bilan</strong> pour vérifier présents / requis et les alertes.</li>
@@ -2180,7 +2052,7 @@
           <dt>Une colonne affiche « Jour sans production ».</dt>
           <dd>Aucun quart n'est actif ce jour-là dans l'Ordonnancement (ou la semaine n'est pas initialisée). Contactez l'ordonnancement.</dd>
 
-          <dt>Une ligne est orange « fermée par ordo » et pourtant des gens y sont placés.</dt>
+          <dt>Une ligne est marquée « fermée par ordo » et pourtant des gens y sont placés.</dt>
           <dd>La ligne est fermée dans l'Ordonnancement (besoin 0), mais quelqu'un y a été placé : soit une reprise est prévue, soit l'ordonnancement n'est pas à jour. Les deux sont possibles ; l'outil ne bloque pas.</dd>
 
           <dt>Le poste où je veux placer quelqu'un n'apparaît pas.</dt>
@@ -2208,9 +2080,9 @@
 
       <footer class="end">
         <p>
-          Guide utilisateur Polaris — application de gestion des plannings de l'usine. Les schémas sont des
-          reproductions simplifiées des écrans : les couleurs et les repères y sont fidèles, les noms et les chiffres
-          sont des exemples.
+          Guide utilisateur Polaris — application de gestion des plannings de l'usine. Les captures viennent de
+          Polaris au Bignon (octobre 2026) ; les noms de personnes, matricules et adresses e-mail y ont été remplacés par
+          des valeurs fictives. Quelques schémas dessinés complètent les captures.
         </p>
       </footer>
 
