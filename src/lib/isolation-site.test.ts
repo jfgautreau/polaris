@@ -43,6 +43,9 @@ const TABLES_SITE_SCOPEES = new Set<string>([
   "contrat_periode", "agence_interim", "parametre_affichage", "tp_periode",
   "motif_absence", "type_contrat", "role_custom", "role_permission",
   "competence", "competence_niveau_libelle", "quart", "site_module",
+  // Visites médicales (0076) : lues en service_role seulement depuis 0092.
+  "visite", "visite_anci", "personne_suivi", "contrainte_affectation",
+  "visite_parametre", "visite_regime", "visite_type", "visite_anci_usage",
 ]);
 
 // Accès cross-site LÉGITIMES (identique à admin-client.test.ts).

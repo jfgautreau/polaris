@@ -3,6 +3,7 @@ import AppHeader from "@/components/AppHeader";
 import { requireModule, canWrite } from "@/lib/permissions";
 import PersonnelEditor from "./PersonnelEditor";
 import { getRotationRefsC, getTypesAgenceC } from "@/lib/refdata";
+import { fetchAll } from "@/lib/fetch-all";
 
 type Equipe = { id: string; nom: string; couleur: string | null; quart_fixe: string | null };
 type Quart = { code: string; libelle: string; creneau: string | null };
@@ -80,9 +81,9 @@ export default async function PersonnelPage({
   const [
     { data: equipesData },
     { data: ateliersData },
-    { data: rowsData },
+    rowsData,
     { data: lignesPostesData },
-    { data: cpData },
+    cpData,
     { data: quartsData },
     rotationRefs,
     { data: motifsData },
@@ -92,7 +93,9 @@ export default async function PersonnelPage({
   ] = await Promise.all([
     supabase.from("equipe").select("id, nom, couleur, quart_fixe").order("nom").returns<Equipe[]>(),
     supabase.from("atelier").select("id, nom").eq("actif", true).order("ordre_affichage").order("nom").returns<Atelier[]>(),
-    supabase.from("personne").select(COLS_PERSONNE).order("nom").returns<BaseRow[]>(),
+    // fetchAll : l'effectif (partis compris) et ses contrats approchent les 1000
+    // lignes, au-delà desquelles PostgREST tronque SANS erreur (audit 2026-11-03).
+    fetchAll<BaseRow>(() => supabase.from("personne").select(COLS_PERSONNE).order("nom").order("id").returns<BaseRow[]>()),
     // Postes actifs (pour le sélecteur « Poste fixe »), avec leur atelier.
     // `atelier_id` + `regroupement` (0069) servent en plus à lister les
     // regroupements proposés par service dans la colonne « Service ».
@@ -101,7 +104,7 @@ export default async function PersonnelPage({
     // date_depart_prevu (MAX date_fin si aucun contrat ouvert), motif_depart
     // (motif_fin du contrat le plus recent). Depuis 0050 ces trois valeurs
     // ne sont plus stockees sur personne.
-    supabase.from("contrat_periode").select("personne_id, date_debut, date_fin, motif_fin, created_at").returns<CpRow[]>(),
+    fetchAll<CpRow>(() => supabase.from("contrat_periode").select("personne_id, date_debut, date_fin, motif_fin, created_at").order("id").returns<CpRow[]>()),
     supabase.from("quart").select("code, libelle, creneau").order("ordre").returns<Quart[]>(),
     getRotationRefsC(),
     // Motifs d absence : alimentent la declaration depuis la modale Absences.
@@ -141,7 +144,7 @@ export default async function PersonnelPage({
 
   // Agregation des contrats par personne, pour deriver arrivee / depart / motif.
   const periodesParPersonne = new Map<string, CpRow[]>();
-  for (const r of cpData ?? []) {
+  for (const r of cpData) {
     const arr = periodesParPersonne.get(r.personne_id) ?? [];
     arr.push(r);
     periodesParPersonne.set(r.personne_id, arr);
@@ -176,7 +179,7 @@ export default async function PersonnelPage({
     };
   };
 
-  const rows: Row[] = (rowsData ?? []).map((r) => {
+  const rows: Row[] = rowsData.map((r) => {
     const d = deriverPersonne(r.id, r.date_debut ?? null);
     return {
       ...r,

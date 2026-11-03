@@ -1,4 +1,4 @@
-import { getServerClient } from "@/lib/supabase-server";
+import { getAdminClient } from "@/lib/supabase-server";
 import AppHeader from "@/components/AppHeader";
 import { requireModule, canWrite, canRead } from "@/lib/permissions";
 import { getAteliersC, getEquipesC, getTypesAgenceC } from "@/lib/refdata";
@@ -32,7 +32,10 @@ export default async function VisitesPage({
   const { profile, perms } = await requireModule("visites", "read");
   const sp = await searchParams;
 
-  const supabase = await getServerClient();
+  // Service_role borné au site : depuis 0092, le dossier médical (visite,
+  // personne_suivi, contraintes) n'est plus lisible sous RLS — c'est le droit
+  // « visites » ci-dessus qui en ouvre l'accès, pas l'appartenance au site.
+  const supabase = getAdminClient();
   const [donnees, ateliers, equipes] = await Promise.all([
     getTypesAgenceC().then((types) => chargerVisites(supabase, profile.siteId, types)),
     getAteliersC(),

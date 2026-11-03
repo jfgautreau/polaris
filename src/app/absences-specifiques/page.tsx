@@ -43,10 +43,11 @@ export default async function AbsencesSpecifiquesPage({
   const limite = toutHistorique ? null : isoDate(d);
 
   const supabase = await getServerClient();
-  const [{ data: persData }, { data: motifData }, { data: ateliersData }, joursRecents, { data: absData }, equipes] = await Promise.all([
+  const [persData, { data: motifData }, { data: ateliersData }, joursRecents, { data: absData }, equipes] = await Promise.all([
     // Map des libellés : toutes les personnes (y compris parties) pour ne jamais
     // afficher « ? » sur une absence dont la personne a changé de statut.
-    supabase.from("personne").select("id, nom, prenom, atelier_id, equipe_id").order("nom").returns<Personne[]>(),
+    // fetchAll : partis compris, l'effectif approche les 1000 lignes (troncature muette).
+    fetchAll<Personne>(() => supabase.from("personne").select("id, nom, prenom, atelier_id, equipe_id").order("nom").order("id").returns<Personne[]>()),
     supabase.from("motif_absence").select("id, code_court, libelle, couleur").eq("actif", true).order("libelle").returns<Motif[]>(),
     supabase.from("atelier").select("id, nom").eq("actif", true).order("ordre_affichage").order("nom").returns<Atelier[]>(),
     // Jours d'absence (depuis la limite, ou tous), dédoublonnés par (personne,
@@ -92,10 +93,10 @@ export default async function AbsencesSpecifiquesPage({
     }
   }
 
-  const personnes = persData ?? [];
+  const personnes = persData;
   const motifs = motifData ?? [];
   const ateliers = ateliersData ?? [];
-  const persById = new Map((persData ?? []).map((p) => [p.id, p]));
+  const persById = new Map(persData.map((p) => [p.id, p]));
   const commentaires = new Map((absData ?? []).map((a) => [a.id, a.commentaire ?? ""]));
 
   // Regroupement par personne, puis grouperAbsences sur ses jours.

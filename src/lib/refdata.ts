@@ -479,10 +479,9 @@ export async function getHorairesPlaceC(): Promise<HorairePlaceRow[]> {
 
 // -------- Réglages des Visites médicales (alertes du Placement) ----------------
 // Relus à CHAQUE affectation avant le 2026-10-15 (41 lectures en 50 min dans les
-// journaux Supabase). Lu en service_role : pour un compte sous RLS (chef
-// d'équipe), alertesVisite ne s'en fie qu'à « tout éteint » et relit sinon avec
-// ses droits (cf. visites-placement.ts). Écrits par /api/visites-param, qui
-// invalide le tag.
+// journaux Supabase). Lu en service_role, comme tout l'avertissement depuis
+// 0092 (cf. visites-placement.ts). Écrits par /api/visites-param, qui invalide
+// le tag.
 export const VISITE_PARAM_TAG = "refdata-visite-param";
 const getVisiteReglagesBySite = unstable_cache(
   async (site: string): Promise<{ cle: string; valeur: string }[]> => {

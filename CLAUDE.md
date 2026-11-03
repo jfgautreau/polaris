@@ -42,12 +42,17 @@ L'historique des décisions est dans git et dans l'en-tête de chaque migration.
    l'ouvre plus d'office à l'API → « permission denied ». Test `migrations-sql` (échoue sinon).
    **0091** (`grants_api_explicites`, appliquée le 2026-10-23) réaffirme les droits existants et pose les
    privilèges PAR DÉFAUT de `postgres` sur `public` (tables + séquences → authenticated, service_role).
+   **0092** (`durcissement_securite`, audit du 2026-11-03) **écrite, À APPLIQUER** : app_user
+   fermé en écriture à `authenticated` (⚠️ tout futur « grant … on all tables » doit être suivi
+   du même REVOKE), dossier médical sans lecture sous RLS, trigger `verifier_site_fk`, fonction
+   `fusionner_personnes`. Le code poussé avec elle en dépend (Visites, Utilisateurs, fusion).
 6. **PowerShell 5.1** : message de commit multi-lignes via here-string `@'…'@` (le `'@`
    en colonne 0) ou `git commit -F`. **Jamais** `Get-Content`/`Set-Content`/`Out-File`
    pour éditer un fichier source accentué (mojibake + BOM) : outil Edit ou Node.
 7. **Toute lecture Supabase pouvant dépasser 1000 lignes passe par `fetchAll()`**
    (`src/lib/fetch-all.ts`) : PostgREST tronque à 1000 **sans erreur**. Concernées :
-   `matrice`, `personne_competence`, `placement`, `ouverture_quart`, `contrat_periode`.
+   `matrice`, `personne_competence`, `placement`, `ouverture_quart`, `contrat_periode`, et
+   `personne` lue sans filtre de statut (partis compris : ~800 lignes en 2026-11).
    La fabrique pose un `.order()` déterministe (clé composite pour `ouverture_quart` /
    `jour_quart`, sans `id`).
 
@@ -83,6 +88,13 @@ L'historique des décisions est dans git et dans l'en-tête de chaque migration.
   site source (`copierReferentiels()`). Toute écriture pose `site_id` explicitement, même
   en service_role. Tout UUID de rattachement venu du client et écrit en service_role est
   validé par `verifierIdSite()` / `verifierFksSite()` (`src/lib/verifier-site.ts`).
+  **Filet en base** (0092) : le trigger `verifier_site_fk` refuse toute référence (FK à une
+  colonne, tables avec `site_id` des deux côtés, hors `site` / `app_user`) vers une ligne d'un
+  autre site, même en service_role — une nouvelle table est couverte en rejouant le bloc DO de 0092.
+  Les références vers `app_user` (chefs d'équipe) restent vérifiées dans le code.
+- **`app_user`** : écrit **uniquement** en service_role (aucun droit d'écriture à
+  `authenticated`, 0092) ; sous RLS on ne lit que sa propre ligne (+ l'admin du site). Une liste
+  de comptes se lit en service_role bornée au site, après la garde du module.
 - Les écrans de réglage s'ouvrent en **lecture** (`<LectureSeule>` = `fieldset disabled`) ;
   seul Placement exige `write`.
 - Rôles intégrés : `admin`, `chef_equipe`, `ordo`, `rh`, `codir`, `planning`. Rôles
@@ -98,6 +110,9 @@ L'historique des décisions est dans git et dans l'en-tête de chaque migration.
   quatre valeurs. Seule chose qui sorte du module : l'avertissement du Placement,
   **sans motif** (cf. `src/lib/visites-placement.ts`) — les quatre cas partent
   **éteints** (module vide = tout le monde en défaut), les RH les allument.
+  `visite`, `visite_anci`, `personne_suivi`, `contrainte_affectation` : **aucune lecture sous
+  RLS** (0092) — l'écran Suivi (après `requireModule("visites")`) et l'avertissement lisent en
+  service_role borné au site. Ne jamais les relire avec `getServerClient()`.
 
 ## Modèle métier — invariants et pièges
 - **« Atelier » (code) = « Service » (UI).** `atelier` partout dans le code et la base ;
@@ -187,8 +202,8 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   (+ contrats, habilitations) et le poste (+ exigences, cycle du quart) en **deux** requêtes à
   jointures ; l'équipe n'est revérifiée que si elle diffère de celle de la personne ; le n° libre
   n'est lu qu'après les verdicts et pour un poste numéroté ; réglages des visites en cache
-  (`getVisiteReglagesC`, `VISITE_PARAM_TAG`) ; sous RLS (chef), le cache ne vaut que pour « tout
-  éteint », sinon relecture avec ses droits (`reglagesFiables`). Un dépôt : ~4 appels
+  (`getVisiteReglagesC`, `VISITE_PARAM_TAG`), l'avertissement entier étant lu en service_role
+  borné au site (0092). Un dépôt : ~4 appels
   au lieu de ~11. Ne pas revenir à une lecture par contrôle.
 - **Unicité `(personne_id, jour)`** : `/cell` fait un upsert qui remplace poste, absence, NT ou TP.
   Un écran qui ne montre pas la case de la personne (vue Par poste) envoie **`proteger: true`** :

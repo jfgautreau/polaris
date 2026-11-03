@@ -10,7 +10,7 @@
 // cochés). `fetchAll` partout où la lecture peut dépasser 1000 lignes
 // (personne_competence, placement).
 
-import type { getServerClient } from "@/lib/supabase-server";
+import type { getAdminClient } from "@/lib/supabase-server";
 import { fetchAll } from "@/lib/fetch-all";
 import { addMonthsIso, habValable } from "@/lib/habilitations";
 import { grouperAbsences } from "@/lib/absences-periodes";
@@ -29,7 +29,9 @@ import {
   estRegime,
 } from "@/lib/visites";
 
-type SupabaseClient = Awaited<ReturnType<typeof getServerClient>>;
+// Client service_role (0092 : le dossier n'est plus lisible sous RLS) ; chaque
+// lecture ci-dessous est bornée par site_id.
+type SupabaseClient = ReturnType<typeof getAdminClient>;
 
 export type TypeVisite = { id: string; code: string; libelle: string; categorie: CategorieVisite; actif: boolean; ordre: number };
 export type UsageAnci = { id: string; code: string; libelle: string; actif: boolean; ordre: number };

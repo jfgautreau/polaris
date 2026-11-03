@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
     .eq("id", competence_id)
     .eq("site_id", profile.siteId)
     .single<{ duree_validite_mois: number | null; type: string }>();
+  if (!comp) return NextResponse.json({ error: "Formation inconnue ou hors de votre site." }, { status: 400 });
 
   // L'echeance est figee a la saisie (cf. CLAUDE.md) : recalculee ici a partir de
   // la duree de validite en vigueur au moment ou l'on enregistre.

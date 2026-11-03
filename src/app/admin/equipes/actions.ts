@@ -80,6 +80,17 @@ export async function addChef(fd: FormData) {
   const equipe_id = s(fd, "equipe_id");
   const app_user_id = s(fd, "app_user_id");
   if (!equipe_id || !app_user_id) done();
+  // Le compte doit être du site : la cohérence de site des clés étrangères
+  // (verifier_site_fk, 0092) couvre equipe_id mais pas les références vers
+  // app_user (un super_admin y écrit pour d'autres sites).
+  const { data: compte, error: compteErr } = await supabase
+    .from("app_user")
+    .select("user_id")
+    .eq("user_id", app_user_id)
+    .eq("site_id", profile!.siteId)
+    .maybeSingle();
+  if (compteErr) done(compteErr);
+  if (!compte) redirect(urlAvecErreur(PATH, "Compte inconnu ou hors de votre site."));
   const { error } = await supabase.from("equipe_chef").insert({ equipe_id, app_user_id, site_id: profile!.siteId });
   done(error);
 }

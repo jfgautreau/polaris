@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getServerClient } from "@/lib/supabase-server";
+import { getServerClient, getAdminClient } from "@/lib/supabase-server";
 import { getCurrentProfile } from "@/lib/current-user";
 import AppHeader from "@/components/AppHeader";
 import { getPermissions, canWrite, canRead } from "@/lib/permissions";
@@ -57,20 +57,24 @@ export default async function EquipesPage({
     supabase
       .from("equipe")
       .select("id, nom, actif, couleur, quart_fixe, equipe_chef(id, app_user_id)")
+      .eq("site_id", profile.siteId)
       .order("nom")
       .returns<Equipe[]>(),
-    supabase
+    // Comptes proposés comme chefs : service_role borné au site (0092 : app_user
+    // n'est plus lisible sous RLS au-delà de sa propre ligne).
+    getAdminClient()
       .from("app_user")
       .select("user_id, name, email")
+      .eq("site_id", profile.siteId)
       .order("name")
       .returns<AppUser[]>(),
     // Migration 0068 : `couleur` peut ne pas exister — repli plus bas.
-    supabase.from("quart").select("code, libelle, debut, fin, rotation, creneau, couleur, nuit").order("ordre").returns<Quart[]>(),
-    supabase.from("rotation_reference").select("semaine, equipe_id, quart_code").order("semaine").returns<RotationRef[]>(),
+    supabase.from("quart").select("code, libelle, debut, fin, rotation, creneau, couleur, nuit").eq("site_id", profile.siteId).order("ordre").returns<Quart[]>(),
+    supabase.from("rotation_reference").select("semaine, equipe_id, quart_code").eq("site_id", profile.siteId).order("semaine").returns<RotationRef[]>(),
   ]);
   let quarts: Quart[] = quartsData ?? [];
   if (quartsErr && (quartsErr.code === "42703" || quartsErr.code === "PGRST204")) {
-    const { data: q2 } = await supabase.from("quart").select("code, libelle, debut, fin, rotation, creneau").order("ordre").returns<Omit<Quart, "couleur" | "nuit">[]>();
+    const { data: q2 } = await supabase.from("quart").select("code, libelle, debut, fin, rotation, creneau").eq("site_id", profile.siteId).order("ordre").returns<Omit<Quart, "couleur" | "nuit">[]>();
     quarts = (q2 ?? []).map((q) => ({ ...q, couleur: null, nuit: false }));
   }
   // Quarts composant le cycle de rotation : seuls ceux-ci sont proposés dans le

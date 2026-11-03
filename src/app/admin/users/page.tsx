@@ -1,4 +1,4 @@
-import { getServerClient } from "@/lib/supabase-server";
+import { getAdminClient } from "@/lib/supabase-server";
 import AppHeader from "@/components/AppHeader";
 import { requireModule, canWrite, MODULES, getAllPermissions, roleModifiablePar } from "@/lib/permissions";
 import { getAllRoles } from "@/lib/roles-server";
@@ -20,10 +20,13 @@ type Row = {
 export default async function AdminUsersPage() {
   const { profile, perms } = await requireModule("utilisateurs", "read");
 
-  const supabase = await getServerClient();
-  const { data: users } = await supabase
+  // Service_role borné au site : depuis 0092, un compte ne lit plus que sa propre
+  // ligne d'app_user sous RLS. C'est le droit « utilisateurs » ci-dessus qui
+  // ouvre la liste, pas le rôle admin.
+  const { data: users } = await getAdminClient()
     .from("app_user")
     .select("user_id, email, name, role, is_active")
+    .eq("site_id", profile.siteId)
     .order("created_at", { ascending: true })
     .returns<Row[]>();
 

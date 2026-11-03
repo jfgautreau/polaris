@@ -42,9 +42,10 @@ export default async function AbsenteismeReport({ searchParams }: { searchParams
   const lastIso = isoDate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
 
   const supabase = await getServerClient();
-  const [motifsR, { data: persD }, { data: eqD }, { data: atD }, plD] = await Promise.all([
+  const [motifsR, persD, { data: eqD }, { data: atD }, plD] = await Promise.all([
     supabase.from("motif_absence").select("id, code_court, libelle, couleur, non_planifie").returns<Motif[]>(),
-    supabase.from("personne").select("id, nom, prenom, statut, equipe_id, atelier_id").returns<Personne[]>(),
+    // fetchAll : partis compris, l'effectif approche les 1000 lignes (troncature muette).
+    fetchAll<Personne>(() => supabase.from("personne").select("id, nom, prenom, statut, equipe_id, atelier_id").order("id").returns<Personne[]>()),
     supabase.from("equipe").select("id, nom").returns<{ id: string; nom: string }[]>(),
     supabase.from("atelier").select("id, nom").eq("actif", true).order("ordre_affichage").order("nom").returns<{ id: string; nom: string }[]>(),
     fetchAll<Placement>(() => supabase.from("placement").select("personne_id, jour, poste_id, motif_absence_id").gte("jour", firstIso).lte("jour", lastIso).order("id").returns<Placement[]>()),
@@ -57,14 +58,14 @@ export default async function AbsenteismeReport({ searchParams }: { searchParams
     motD = data;
   }
 
-  const persById = new Map((persD ?? []).map((p) => [p.id, p]));
+  const persById = new Map(persD.map((p) => [p.id, p]));
   const eqNom = (id: string | null) => (id ? (eqD ?? []).find((e) => e.id === id)?.nom ?? "—" : "Sans équipe");
   const nonPlanifie = new Map((motD ?? []).map((m) => [m.id, estNonPlanifie(m)]));
 
   // Population de référence = personnes ACTIVES du périmètre (atelier). Le taux
   // se mesure sur cet effectif × jours ouvrés — jamais sur les jours placés, très
   // incomplets rétroactivement (le planning n'est pas rempli mois par mois).
-  const actifs = (persD ?? []).filter((p) => p.statut === "ACTIF" && (!atelier || p.atelier_id === atelier));
+  const actifs = persD.filter((p) => p.statut === "ACTIF" && (!atelier || p.atelier_id === atelier));
   const actifSet = new Set(actifs.map((p) => p.id));
   const effectif = actifs.length;
   const placements = plD.filter((r) => actifSet.has(r.personne_id));

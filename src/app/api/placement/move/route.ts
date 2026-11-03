@@ -93,14 +93,13 @@ export async function POST(req: NextRequest) {
     }),
     // Visites médicales : avertissement SANS détail, si les RH l'ont activé.
     poste_id
-      ? alertesVisite(supabase, {
+      ? alertesVisite({
           personne_id: toPid,
           poste_id,
           quart: quart_code,
           jour: toJour,
           siteId: profile.siteId,
           reglages: getVisiteReglagesC(profile.siteId),
-          reglagesFiables: ecritureComplete,
         })
       : ([] as string[]),
   ]);

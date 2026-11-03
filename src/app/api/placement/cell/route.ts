@@ -118,16 +118,15 @@ export async function POST(req: NextRequest) {
           .maybeSingle<{ poste_id: string | null; quart_code: string | null; motif_absence_id: string | null; non_travaille: boolean; tp: boolean | null }>()
       : null,
     // Visites medicales : avertissement SANS detail, si les RH l'ont active.
-    // Reglages en cache ; sous RLS, relus avec les droits de l'appelant si une alerte est allumee.
+    // Reglages en cache ; dossier lu en service_role borne au site (cf. visites-placement.ts).
     poste_id
-      ? alertesVisite(supabase, {
+      ? alertesVisite({
           personne_id,
           poste_id,
           quart: quart_code,
           jour,
           siteId,
           reglages: getVisiteReglagesC(siteId),
-          reglagesFiables: ecritureComplete,
         })
       : ([] as string[]),
   ]);

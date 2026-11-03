@@ -11,11 +11,16 @@
 // la contrainte d'affectation — la seule qui soit une consigne d'organisation
 // plutôt que la conséquence lisible d'un dossier médical.
 //
+// LECTURE EN SERVICE_ROLE (0092) : visite, visite_anci et contrainte_affectation
+// ne sont plus lisibles par l'API sous RLS — seul le service_role les lit, et
+// chaque requête ci-dessous est bornée par site_id. C'est ce qui permet au chef
+// d'équipe de recevoir l'avertissement sans jamais pouvoir lire le dossier.
+//
 // COÛT. Les contrôles activés partent ensemble, et chacun se limite à UNE
 // personne. Quand aucun cas n'est coché — le réglage d'origine hors contrainte —
 // la fonction ne lit rien de plus que les réglages.
 
-import type { getServerClient } from "@/lib/supabase-server";
+import { getAdminClient } from "@/lib/supabase-server";
 import { grouperAbsences } from "@/lib/absences-periodes";
 import {
   REGIMES_DEFAUT,
@@ -27,8 +32,6 @@ import {
   type Contrainte,
 } from "@/lib/visites";
 
-type SupabaseClient = Awaited<ReturnType<typeof getServerClient>>;
-
 const MSG_GENERIQUE = "Point à vérifier avec les RH avant de placer cette personne.";
 
 /**
@@ -36,7 +39,6 @@ const MSG_GENERIQUE = "Point à vérifier avec les RH avant de placer cette pers
  * Tableau vide = rien à signaler.
  */
 export async function alertesVisite(
-  supabase: SupabaseClient,
   opts: {
     personne_id: string;
     poste_id: string;
@@ -45,14 +47,10 @@ export async function alertesVisite(
     siteId: string;
     /** Réglages du site déjà lus en service_role (cache `getVisiteReglagesC`). */
     reglages?: Promise<{ cle: string; valeur: string }[]>;
-    /** `supabase` est le client service_role : les réglages en cache valent tels
-     *  quels. Sinon (RLS, chef d'équipe), seul « tout éteint » est repris du
-     *  cache — résultat identique pour tous — et une alerte allumée fait relire
-     *  les réglages avec les droits de l'appelant, comme avant. */
-    reglagesFiables?: boolean;
   },
 ): Promise<string[]> {
   const { personne_id, poste_id, quart, jour, siteId } = opts;
+  const supabase = getAdminClient();
 
   const relire = async () =>
     lireParametres(
@@ -69,8 +67,7 @@ export async function alertesVisite(
 
   // Erreur de lecture du cache : on relit directement, comme avant.
   const enCache = opts.reglages ? await opts.reglages.catch(() => null) : null;
-  let params = enCache ? lireParametres(enCache) : await relire();
-  if (enCache && !opts.reglagesFiables && allume(params)) params = await relire();
+  const params = enCache ? lireParametres(enCache) : await relire();
   if (!allume(params)) return [];
 
   const besoinPoste = params.alertePlacementAnci || params.alertePlacementSir;
