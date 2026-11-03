@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { cheminInterne } from "@/lib/redirection";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -25,8 +26,10 @@ export default function LoginPage() {
       setError("Identifiants invalides.");
       return;
     }
-    // Recharge cote serveur pour que le middleware voie la session.
-    router.replace("/");
+    // Recharge cote serveur pour que le middleware voie la session. Retour a la
+    // page demandee (?next=, pose par le proxy), chemin interne seulement.
+    const next = cheminInterne(new URLSearchParams(window.location.search).get("next"));
+    router.replace(next ?? "/");
     router.refresh();
   }
 

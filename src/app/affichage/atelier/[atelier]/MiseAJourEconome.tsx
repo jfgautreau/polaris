@@ -32,8 +32,11 @@ export default function MiseAJourEconome({ version, suitAujourdhui }: { version:
         router.refresh();
         return;
       }
-      const v = await versionDonnees().catch(() => "");
-      if (v && version && v !== version) router.refresh();
+      // Session perdue : « hors-session » (ou une erreur, la requête ayant été
+      // renvoyée vers la connexion) fait recharger, donc afficher la page de
+      // connexion plutôt qu'un planning figé.
+      const v = await versionDonnees().catch(() => null);
+      if (v !== version) router.refresh();
     }, PERIODE_MS);
     return () => clearInterval(id);
   }, [version, suitAujourdhui, router]);

@@ -350,7 +350,9 @@ export async function requireModule(module: string, level: "read" | "write") {
   const [masques, perms] = await Promise.all([getModulesMasquesC(), getPermissions(profile.role)]);
   if (masques.has(module)) redirect("/");
   const ok = level === "write" ? canWrite(perms, module) : canRead(perms, module);
-  if (!ok) redirect("/planning");
+  // Sans droit sur Planning lui-même, retour à l'accueil : sinon /planning se
+  // redirigeait vers lui-même en boucle (compte TV, droit « affichage » seul).
+  if (!ok) redirect(module === "planning" ? "/" : "/planning");
   return { profile, perms };
 }
 

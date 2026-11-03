@@ -99,8 +99,11 @@ L'historique des décisions est dans git et dans l'en-tête de chaque migration.
   seul Placement exige `write`.
 - Rôles intégrés : `admin`, `chef_equipe`, `ordo`, `rh`, `codir`, `planning`. Rôles
   personnalisés (`role_custom`, `getAllRoles()`) : naissent sans aucun droit.
-- Routes publiques (`src/proxy.ts`) : `/login`, `/forgot`, `/reset`, `/auth/*`, `/affichage/*`.
-  Le proxy vérifie le jeton par `getClaims()`.
+- Routes publiques (`src/proxy.ts`) : `/login`, `/forgot`, `/reset`, `/auth/*`. **Plus
+  `/affichage`** (2026-11-03) : une TV se connecte avec un compte dont le rôle ne porte que le
+  droit `affichage`. Le proxy vérifie le jeton par `getClaims()` et renvoie vers
+  `/login?next=<page>` ; tout `next` passe par `cheminInterne()` (`src/lib/redirection.ts`,
+  anti-redirection ouverte, aussi dans `/auth/callback`).
 - **Mot de passe** : jamais choisi par l'admin ; `/admin/users` génère un **lien**
   `{base}/reset?token_hash=…` (`src/lib/password-link.ts`) — ne pas revenir à `action_link`.
 - **RGPD** (export / anonymiser / supprimer) : droit dédié `rgpd`, distinct de `personnel`.
@@ -443,7 +446,8 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   l'horizon (expirées comprises), type = `competence.categorie` (réglementaire / interne / non
   classée) ; extraction Excel par `src/lib/xlsx.ts` (générateur .xlsx maison, sans dépendance —
   réutiliser pour toute autre extraction).
-- **Affichage TV** (`src/app/affichage/`, public) : rattachement par service d'affectation ;
+- **Affichage TV** (`src/app/affichage/`, droit `affichage`, compte requis depuis le 2026-11-03 :
+  pages et server action `versionDonnees` gardées, site = celui du compte) : rattachement par service d'affectation ;
   sections Matin / Après-midi / Nuit classées par `creneau` ; fenêtre relative ou absolue
   (`getFenetreAffichage`, `joursDeFenetre`) ; PDF A3 portrait multi-pages. **Mise à jour
   économe** (2026-10-14, `MiseAJourEconome`) : toutes les 5 min, la server action

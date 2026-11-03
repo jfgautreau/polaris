@@ -15,7 +15,7 @@ placement journalier, habilitations, visites médicales, affichage couloir, bila
 - `src/lib/supabase.ts` — client navigateur (clé anon, soumis à la RLS).
 - `src/lib/supabase-server.ts` — `getServerClient()` (session utilisateur, RLS) et
   `getAdminClient()` (service_role, **bypass RLS**, usage serveur contrôlé : invitations,
-  affichage couloir public, export RGPD, écritures « module » validées).
+  affichage couloir, export RGPD, écritures « module » validées).
 - `src/lib/current-user.ts` — `getCurrentProfile()`, `requireAdmin()`. Ligne `app_user` en
   cache inter-requêtes (`PROFIL_TAG`, invalidé par `/api/users/*` et `/platform`).
 - `src/lib/permissions.ts` — matrice de droits par module (`MODULES`, `defaultsFor`,
@@ -263,7 +263,8 @@ intégrés + `role_custom`).
   `/admin/horaires`, `/admin/visites-param` (déclencheurs des visites, RH),
   `/admin/users` (comptes **+ matrice des droits**, admin), `/admin/rgpd`,
   `/journal`.
-- Public : `/affichage` (choix des services), `/affichage/impression?atelier=…` (A3, une
+- Droit `affichage` (compte requis depuis le 2026-11-03 ; une TV se connecte avec un
+  compte dédié) : `/affichage` (choix des services), `/affichage/impression?atelier=…` (A3, une
   page par service coché), `/affichage/atelier/[atelier]` (écran TV, refresh 5 min,
   fenêtre glissante paramétrable dans Param. RH — cf. `getFenetreAffichage()`).
 - Super_admin (multi-site) : `/platform` (back-office : lister / créer / suspendre un

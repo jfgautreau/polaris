@@ -1,4 +1,5 @@
 import { getCurrentSite } from "@/lib/current-site";
+import { requireModule } from "@/lib/permissions";
 import { getQuartsC } from "@/lib/refdata";
 import { parseJour, isoDate, mondayOf } from "@/lib/week";
 import { getFenetreAffichage, joursDeFenetre } from "@/lib/parametres";
@@ -16,6 +17,9 @@ export default async function AffichageAtelier({
   params: Promise<{ atelier: string }>;
   searchParams: Promise<{ date?: string }>;
 }) {
+  // Compte requis (2026-11-03) : une TV se connecte avec un compte au droit
+  // « affichage » ; le site affiché est celui de ce compte.
+  await requireModule("affichage", "read");
   const { atelier: param } = await params;
   const sp = await searchParams;
   // Fenetre glissante autour d'aujourd'hui, dont les bornes sont reglees dans

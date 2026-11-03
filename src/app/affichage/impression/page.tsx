@@ -1,5 +1,6 @@
 import { getAdminClient } from "@/lib/supabase-server";
 import { getCurrentSite } from "@/lib/current-site";
+import { requireModule } from "@/lib/permissions";
 import { getQuartsC } from "@/lib/refdata";
 import { parseJour } from "@/lib/week";
 import { getFenetreAffichage, joursDeFenetre } from "@/lib/parametres";
@@ -12,13 +13,14 @@ export const dynamic = "force-dynamic";
 // une nouvelle feuille A3 portrait.
 // Ouverte depuis /affichage, où l'on coche les services (`?atelier=…` répété) ;
 // sans `atelier`, tous les services ayant du contenu. L'impression se lance
-// automatiquement (ImpressionAuto). Route publique comme le reste de /affichage,
-// mais résolue au site courant (impersonation-aware).
+// automatiquement (ImpressionAuto). Réservée au droit « affichage » (compte
+// requis depuis le 2026-11-03), résolue au site courant (impersonation-aware).
 export default async function ImpressionTousLesPlannings({
   searchParams,
 }: {
   searchParams: Promise<{ date?: string; atelier?: string | string[] }>;
 }) {
+  await requireModule("affichage", "read");
   const sp = await searchParams;
   const fen = await getFenetreAffichage();
   const days = joursDeFenetre(fen, parseJour(sp.date));

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { decodeImpersonation, IMPERSONATE_COOKIE, IMPERSONATE_HEADER } from "@/lib/impersonation";
 import { optionsClaims } from "@/lib/jwks";
+import { cheminInterne } from "@/lib/redirection";
 
 // Convention Next.js 16 : "proxy" (ex-"middleware").
 // Rafraichit la session Supabase, resout le site (multi-tenant) et protege
@@ -55,13 +56,15 @@ export async function proxy(req: NextRequest) {
     }
   );
 
-  // Routes publiques (flux d'authentification).
+  // Routes publiques (flux d'authentification). L'écran TV (/affichage) ne l'est
+  // plus depuis le 2026-11-03 : il servait le planning nominatif de tout le
+  // personnel à qui connaissait l'URL. Une TV se connecte avec un compte dont le
+  // rôle ne porte que le droit « affichage ».
   const isPublic =
     pathname === "/login" ||
     pathname === "/forgot" ||
     pathname === "/reset" ||
-    pathname.startsWith("/auth/") ||
-    pathname.startsWith("/affichage");
+    pathname.startsWith("/auth/");
 
   // Perf (P3, 2026-09-28) : getClaims() vérifie la SIGNATURE du jeton localement
   // (clés asymétriques Supabase, JWKS mis en cache) au lieu d'un aller-retour au
@@ -76,10 +79,19 @@ export async function proxy(req: NextRequest) {
   const user = userId ? { id: userId } : null;
 
   if (!user && !isPublic) {
-    return NextResponse.redirect(new URL("/login", req.url));
+    // Retour à la page demandée après connexion (une TV retrouve son service).
+    const login = new URL("/login", req.url);
+    if (req.method === "GET" && pathname !== "/") {
+      const suite = new URL(req.url);
+      suite.searchParams.delete("_rsc");
+      const next = cheminInterne(suite.pathname + suite.search);
+      if (next) login.searchParams.set("next", next);
+    }
+    return NextResponse.redirect(login);
   }
   if (user && pathname === "/login") {
-    return NextResponse.redirect(new URL("/", req.url));
+    const next = cheminInterne(req.nextUrl.searchParams.get("next"));
+    return NextResponse.redirect(new URL(next ?? "/", req.url));
   }
 
   // -------- /platform : super_admin uniquement --------
