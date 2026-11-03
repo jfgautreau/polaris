@@ -33,7 +33,7 @@ L'historique des décisions est dans git et dans l'en-tête de chaque migration.
    Pour de la *donnée* seulement, un script Node lisant `SUPABASE_SERVICE_ROLE_KEY` de
    `.env.local` est acceptable (simulation d'abord, écriture après accord).
    Projet Supabase : ref `stcxlsmmnplxpirrnefm`, eu-west-3.
-   **Dernière migration appliquée : `0091`** (droits de l'API explicites + privilèges par défaut, avant le changement Supabase du 30/10). Toute nouvelle policy RLS s'écrit
+   **Dernière migration appliquée : `0092`** (durcissement sécurité, audit du 2026-11-03). Toute nouvelle policy RLS s'écrit
    `site_id = (select public.current_site_id())` (forme InitPlan, calculée une fois par
    requête) — idem pour `is_admin()`, `has_role('x')`, `auth.uid()`.
    **Toute nouvelle table** (`create table` dans `public`, migration 0091+) porte dans la même
@@ -42,10 +42,10 @@ L'historique des décisions est dans git et dans l'en-tête de chaque migration.
    l'ouvre plus d'office à l'API → « permission denied ». Test `migrations-sql` (échoue sinon).
    **0091** (`grants_api_explicites`, appliquée le 2026-10-23) réaffirme les droits existants et pose les
    privilèges PAR DÉFAUT de `postgres` sur `public` (tables + séquences → authenticated, service_role).
-   **0092** (`durcissement_securite`, audit du 2026-11-03) **écrite, À APPLIQUER** : app_user
+   **0092** (`durcissement_securite`, appliquée le 2026-11-03) : app_user
    fermé en écriture à `authenticated` (⚠️ tout futur « grant … on all tables » doit être suivi
    du même REVOKE), dossier médical sans lecture sous RLS, trigger `verifier_site_fk`, fonction
-   `fusionner_personnes`. Le code poussé avec elle en dépend (Visites, Utilisateurs, fusion).
+   `fusionner_personnes` (service_role seulement).
 6. **PowerShell 5.1** : message de commit multi-lignes via here-string `@'…'@` (le `'@`
    en colonne 0) ou `git commit -F`. **Jamais** `Get-Content`/`Set-Content`/`Out-File`
    pour éditer un fichier source accentué (mojibake + BOM) : outil Edit ou Node.
