@@ -7,6 +7,7 @@ import { getCurrentProfile } from "@/lib/current-user";
 import { NIVEAUX_TAG, NB_NIVEAUX_TAG, SEUIL_COMPETENT_TAG } from "@/lib/refdata";
 import { HEX_NIVEAUX_AUTORISES } from "@/lib/couleurs-niveau";
 import { messageErreur, urlAvecErreur, type ErreurPg } from "@/lib/erreurs";
+import { recalculerEcheances } from "@/lib/echeances-habilitations";
 
 const PATH = "/admin/competences";
 const s = (fd: FormData, k: string) => String(fd.get(k) ?? "").trim();
@@ -112,17 +113,38 @@ export async function createCompetence(fd: FormData) {
 
 export async function updateCompetence(fd: FormData) {
   const supabase = await requireModuleWrite("competences");
+  const profile = await getCurrentProfile();
   const a_recycler = bool(fd, "a_recycler");
+  const id = s(fd, "id");
+  const duree = a_recycler ? intOrNull(fd, "duree_validite_mois") : null;
+  const { data: avant, error: lectureErr } = await supabase
+    .from("competence")
+    .select("duree_validite_mois")
+    .eq("id", id)
+    .eq("site_id", profile!.siteId)
+    .maybeSingle<{ duree_validite_mois: number | null }>();
+  if (lectureErr) done(lectureErr);
+  const nom = s(fd, "nom");
   const { error } = await supabase
     .from("competence")
     .update({
-      nom: s(fd, "nom"),
+      nom,
       type: s(fd, "type") === "ACQUIS" ? "ACQUIS" : "NIVEAU",
       a_recycler,
-      duree_validite_mois: a_recycler ? intOrNull(fd, "duree_validite_mois") : null,
+      duree_validite_mois: duree,
     })
-    .eq("id", s(fd, "id"));
-  done(error);
+    .eq("id", id)
+    .eq("site_id", profile!.siteId);
+  if (error) done(error);
+  // Durée changée : les échéances déjà saisies suivent (elles sont stockées).
+  if (avant && (avant.duree_validite_mois ?? null) !== duree) {
+    try {
+      await recalculerEcheances(supabase, id, profile!.siteId, duree, nom);
+    } catch (e) {
+      done({ code: (e as { code?: string }).code, message: (e as Error).message ?? "Échec du recalcul des échéances.", details: null });
+    }
+  }
+  done();
 }
 
 export async function toggleCompetence(fd: FormData) {
@@ -130,6 +152,7 @@ export async function toggleCompetence(fd: FormData) {
   const { error } = await supabase
     .from("competence")
     .update({ actif: bool(fd, "actif") })
-    .eq("id", s(fd, "id"));
+    .eq("id", s(fd, "id"))
+    .eq("site_id", (await getCurrentProfile())!.siteId);
   done(error);
 }

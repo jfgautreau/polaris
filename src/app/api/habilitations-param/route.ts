@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getAdminClient } from "@/lib/supabase-server";
 import { getCurrentProfile } from "@/lib/current-user";
 import { canWriteModule } from "@/lib/permissions";
+import { recalculerEcheances } from "@/lib/echeances-habilitations";
 
 // POST /api/habilitations-param { op, ... }
 // Paramétrage des formations / habilitations. Ecriture admin.
@@ -78,9 +79,19 @@ export async function POST(req: NextRequest) {
         }
       }
       if (Object.keys(patch).length === 0) return NextResponse.json({ error: "Rien à modifier" }, { status: 400 });
-      const { error } = await supabase.from("competence").update(patch).eq("id", id).eq("site_id", site_id);
+      const { data: maj, error } = await supabase
+        .from("competence")
+        .update(patch)
+        .eq("id", id)
+        .eq("site_id", site_id)
+        .select("nom, duree_validite_mois")
+        .maybeSingle<{ nom: string; duree_validite_mois: number | null }>();
       if (error) throw error;
-      return NextResponse.json({ ok: true });
+      // Nouvelle durée : les échéances déjà saisies suivent (elles sont stockées).
+      const echeances = maj && "duree_validite_mois" in patch
+        ? await recalculerEcheances(supabase, id, site_id, maj.duree_validite_mois, maj.nom)
+        : 0;
+      return NextResponse.json({ ok: true, echeances });
     }
 
     if (op === "delete") {
