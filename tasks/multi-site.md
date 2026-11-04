@@ -39,9 +39,9 @@ et le backfill `app_metadata` n'est plus nécessaire (le `site_id` vient de la t
 chargement du profil ; écritures `site_id: profile.siteId` sur le mauvais site).
 
 **⏸️ Reste à faire** (cf. `tasks/todo.md`) :
-- **`/affichage` (TV, public, sans compte)** — seul flux qui a encore besoin du site
-  dans l'URL (pas de session → repli lebignon). À faire au moment d'ouvrir un 2ᵉ site :
-  slug dans le chemin (`/affichage/<slug>/atelier/[atelier]`).
+- ~~`/affichage` (TV, public, sans compte)~~ — **réglé le 2026-11-03** : la TV se connecte
+  avec un compte (rôle portant le seul droit `affichage`), le site vient de ce compte comme
+  partout ailleurs. Plus aucun flux sans session, plus de repli sur lebignon.
 - **Sous-domaines par site** (cosmétique) — `polaris.app` non acheté. Plus un blocage :
   le site vient du compte connecté ; un sous-domaine ne ferait que fournir la même
   valeur autrement. Reporté tant que le plan Vercel gratuit ne le permet pas.
@@ -157,7 +157,12 @@ extras hors nav via `MASQUABLES_EXTRA`, ex. `guide` ; helper `src/lib/site-modul
 `site.seuil_competent` (niveau minimal « compétent » des bilans, 1..4 borné à ≤ nb_niveaux) ·
 `competence_niveau_libelle.couleur` (couleur par niveau positif, palette fermée de 4 teintes,
 CHECK en base). Le niveau 0 (blanc) et la restriction restent toujours présents. Lectures
-résilientes (repli 4 / 2 / échelle historique tant que la colonne manque). **Appliquées.**
+résilientes (repli 4 / 2 / échelle historique tant que la colonne manque). **Appliquées.** ·
+`0092` **filet inter-sites en base** (audit du 2026-11-03, appliquée le 2026-11-03) : trigger
+générique `verifier_site_fk` sur toute FK à une colonne entre deux tables portant `site_id`
+(hors `site` / `app_user`) — une référence vers une ligne d'un autre site est refusée, même
+en service_role ; `app_user` fermé en écriture à `authenticated` (lecture RLS : sa ligne +
+l'admin du site) ; une nouvelle table est couverte en rejouant le bloc DO de la 0092.
 
 ## 5 bis. Incident 2026-08-23 (deux régressions en chaîne après 0055)
 Après application de 0055, prod HS puis écritures sur le mauvais site. À retenir :
@@ -183,7 +188,10 @@ Après application de 0055, prod HS puis écritures sur le mauvais site. À rete
 
 ## 7. Risques identifiés
 - **Fuite RLS** — une policy oubliée ou un `getAdminClient()` non borné exposerait un autre
-  site. Défense : `.eq("site_id", …)` partout + les 4 tests statiques.
+  site. Défense : `.eq("site_id", …)` partout + les tests statiques (`routes-multi-site`,
+  `admin-client`, `isolation-site`, `refdata-cache`) + depuis 0092 le trigger
+  `verifier_site_fk` (une FK vers un autre site est refusée en base) et `verifierIdSite()` /
+  `verifierFksSite()` côté code pour les UUID venus du client.
   ⚠️ **Piège vécu (0055)** : un passe-droit `OR is_super_admin()` dans une policy RLS
   **court-circuite le filtre de site** — le super_admin voyait les `app_user` et `audit_log`
   de TOUS les sites (y compris en impersonation). Règle : les policies d'écran applicatif se

@@ -13,6 +13,12 @@
 - L'exécuter dans le **SQL Editor** Supabase (ou `npm run db:migrate`).
 - Après un DDL, le cache de schéma PostgREST peut mettre ~1 min à se rafraîchir
   (*Project Settings > API > Reload schema* pour forcer).
+- **Toute nouvelle table** porte dans la même migration son
+  `grant select, insert, update, delete on public.<t> to authenticated, service_role;`
+  (Supabase ne l'ouvre plus d'office à l'API depuis le 2026-10-30 ; test `migrations-sql`).
+  ⚠️ Un futur « grant … on all tables » doit être suivi du `revoke insert, update, delete
+  on public.app_user from authenticated` de la 0092. Une table qui porte `site_id` et des
+  FK vers d'autres tables du site : rejouer le bloc DO de la 0092 (trigger `verifier_site_fk`).
 - **Vérifier qu'elle est passée** : sonder un de ses objets (colonne, fonction) plutôt que
   se fier à la doc. Une erreur de syntaxe fait rejeter TOUT le script (la 0086, écrite avec
   `$` au lieu de `$$`, n'a été appliquée que cinq jours après « son » déploiement).
@@ -43,6 +49,11 @@
   de la matrice / du planning / des habilitations).
 - L'utilisateur peut changer son propre mot de passe depuis son menu (`/compte`), ou
   passer par `/forgot` s'il n'arrive plus à se connecter.
+- **Comptes TV** : un rôle personnalisé n'ayant que le droit `affichage` (lecture), un
+  compte par écran ou par atelier (cf. Affichage couloir).
+- Les comptes ne s'écrivent que par cet écran (service_role, 0092) : un compte créé
+  directement dans Supabase *Authentication* naît **inactif** et sans droit, à activer en SQL
+  (cf. INSTALL.md §4).
 
 ## Visites médicales (RH)
 - **Droits** : modules `visites` (écran `/visites`) et `visites_param`
@@ -72,7 +83,14 @@
 - Pour le modifier : éditer `public/guide.html` (HTML statique, aucune dépendance) et pousser.
 
 ## RGPD
-- Fiche personne (`/personnel/[id]`) : **Exporter** (JSON), **Anonymiser**, **Supprimer**.
+- Fiche personne (`/personnel/[id]`) : **Exporter** (JSON, sans le dossier médical),
+  **Anonymiser**, **Supprimer**. Droit `rgpd`, distinct de `personnel`.
+- **Supprimer** annonce avant confirmation ce qui disparaîtrait avec la fiche : jours placés
+  sur un poste (dont à venir, en orange), jours d'absence, habilitations, contrats. Si la
+  personne a un historique utile aux bilans, préférer **Anonymiser**.
+- **Doublons** : la fusion de deux fiches (Personnel) passe par la fonction SQL
+  `fusionner_personnes` (une seule transaction) puis recalcule le contrat affiché (type,
+  agence, dates, statut) de la fiche gardée d'après ses contrats.
 - Registre des traitements : `/admin/rgpd`.
 
 ## Journal d'audit
@@ -84,6 +102,13 @@
   écriture). Ce qui dépasse est effacé à l'ouverture du Journal.
 - **RGPD** : anonymiser une personne efface du journal les lignes de sa fiche ; la
   supprimer efface toutes les lignes qui la référencent.
+
+## Habilitations
+- L'échéance d'une habilitation = date de passage + **durée de validité** de la formation
+  (Param. Habilitation ou Compétences). Changer cette durée recalcule les échéances déjà
+  saisies de la formation sur le site (une ligne de lot au Journal).
+- Import d'un fichier de suivi des formations : script de données hors dépôt (simulation,
+  validation, puis écriture en un lot du Journal) — jamais de fichier nominatif dans le dépôt.
 
 ## Horaires des postes
 - `/admin/horaires` : horaire standard par poste × quart × jour.
@@ -104,7 +129,9 @@
 - **Fenêtre paramétrable** dans `/admin/motifs` (section « Fenêtre d'affichage du
   planning ») : nombre de jours avant J et après J, auto-sauvegardés (défaut J-1 / J+4).
   Table `parametre_affichage`, une ligne **par site** depuis la migration `0051`.
-- Restreindre l'accès réseau en production (cf. INSTALL.md §7).
+- **Compte requis** (2026-11-03) : sur le poste de la TV, se connecter avec un compte dont
+  le rôle n'a que le droit `affichage`, ouvrir la page du service, plein écran. Session
+  perdue → la TV revient sur `/login`, puis sur le service après reconnexion.
 
 ## Plateforme multi-site (`/platform`)
 - Réservé aux comptes `est_super_admin`. Permet de **lister / créer / suspendre /
@@ -134,3 +161,5 @@
 - « Could not find the table ... in the schema cache » : cache PostgREST pas à jour
   après une migration → attendre ~1 min ou recharger le schéma.
 - Page qui redirige vers /login : session expirée (8 h) → se reconnecter.
+- Ressource bloquée, erreur « Content Security Policy » dans la console du navigateur :
+  domaine externe absent de la CSP de `next.config.ts` → l'y ajouter.

@@ -1,6 +1,6 @@
 # Reste à faire — Polaris
 
-> État au 2026-10-20. Migrations appliquées jusqu'à **0090**. **567** tests Vitest.
+> État au 2026-11-04. Migrations appliquées jusqu'à **0092**.
 > Ce fichier ne garde que ce qui reste ouvert ; le détail de ce qui est fait est dans
 > `git log` (et l'en-tête de chaque migration).
 
@@ -24,9 +24,17 @@
       palettisation » au Référentiel, puis contrôler les cases du Placement, le PDF pour
       Affich. et la vue Par poste du Planning.
 
+## À vérifier sur le terrain (lot du 2026-11-04)
+- [ ] **TV** : créer le rôle « TV » (droit `affichage` seul) et un compte, se connecter sur
+      chaque écran, vérifier que la page tient plusieurs jours (retour sur `/login` puis sur
+      le service si la session se perd).
+- [ ] **En-têtes de sécurité** (CSP) : parcourir les écrans en production, console du
+      navigateur ouverte — aucune ressource bloquée (PDF, Excel, captures du guide, TV).
+- [ ] **Import du suivi des formations** (Le Bignon, 04/11) : 10 personnes présentes dans le
+      fichier mais parties dans Polaris ont reçu leurs habilitations — statut à confirmer
+      par les RH (liste dans le rapport hors dépôt, jamais dans le repo).
+
 ## Base de données
-- [ ] **Backfill SQL** des `personne_competence.date_expiration` nulles alors que la
-      formation a une durée de validité (aujourd'hui compensé à l'affichage seulement).
 - [ ] RLS `audit_log` : `can_read_audit()` nomme encore admin + codir. L'écran Journal ne
       s'en sert plus (lecture service_role après la garde de module) ; l'aligner sur la
       matrice ou la laisser comme simple filet.
@@ -50,14 +58,13 @@ Spécification : `tasks/planning-par-poste.md`.
 - [ ] **Visite de mi-carrière** (L4624-2-2) : type créé mais désactivé (pas de date de
       naissance). À confronter à la convention collective applicable.
 - [ ] Rappel « rendez-vous de liaison » à 30 jours d'arrêt (L1226-1-3) : non codé.
-- [ ] Guide utilisateur (`public/guide.html`) : section Visites médicales à écrire.
 
 ## Sécurité / multi-site
 - [ ] **Test d'isolation « en conditions réelles »** — les gardes actuelles sont statiques
       (analyse du source). Un vrai test RLS cross-site (deux sites, une base de test)
       reste à mettre en place quand un environnement de test avec base dédiée existera.
-- [ ] **`/affichage` (TV public) par site** — seul flux sans compte connecté : slug dans le
-      chemin (`/affichage/<slug>/…`).
+- [ ] **CSP sans `'unsafe-inline'`** (scripts) : passer à un nonce par requête posé par le
+      proxy ; demande de rendre les pages dynamiques, à mesurer avant.
 - [ ] **Domaine `polaris.app` + sous-domaines par site** — cosmétique, non bloquant
       (cf. `tasks/multi-site.md`).
 
@@ -66,13 +73,16 @@ Spécification : `tasks/planning-par-poste.md`.
       `jour_quart` (EXPLAIN planning + placement), invalidations de cache Next.
       Cf. `tasks/multi-site.md`.
 - [ ] Prochain candidat React Compiler : `PlacementBoard`.
+- [ ] Pistes de l'audit du 2026-11-03 : Personnel lisant le référentiel par les caches de
+      `refdata` (comme le Planning) ; index `placement (site_id, jour)` à confirmer par un
+      EXPLAIN avant migration.
 
 ## Consommation Supabase (analyse du 2026-10-14)
 Quota gratuit « Log Ingestion » de 1 Go/mois (0,77 Go au 14/10) : une ligne de journal par
 appel à la base. Fait le 2026-10-14 : socle en cache (profil, droits, modules masqués),
 types de contrat lus seulement par les ops qui en ont besoin (`/api/personnel`),
-rechargement auto de la TV retiré, `fetchAll` en 1 + 3 + 8 (4 appels au lieu de 9 jusqu'à
-4 000 lignes), référentiel du Placement en cache (~13 appels de moins par affichage),
+rechargement auto de la TV retiré, `fetchAll` par total demandé d'emblée (`count=exact`, 2026-10-16 :
+plus aucune tranche vide), référentiel du Placement en cache (~13 appels de moins par affichage),
 Ordonnancement sans rechargement à chaque case, TV en mise à jour économe.
 Reste, par ordre d'impact :
 - [ ] **Listes d'ids dans l'URL** (`.in("personne_id", [200-400 ids])`) : 8 à 15 Ko par ligne

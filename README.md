@@ -24,16 +24,16 @@ Détails : **[INSTALL.md](INSTALL.md)**.
 
 ## Modules
 - **Référentiel** — services / lignes / postes (effectif par quart, catégorie, habilitations requises, numéros de rotation, couleur de ligne, ordre d'affichage), équipes & chefs.
-- **Personnel** — fiche, cycle de vie (contrats = source de vérité), temps partiel, RGPD.
+- **Personnel** — fiche, cycle de vie (contrats = source de vérité), temps partiel, fusion de doublons, RGPD (la suppression annonce ce qu'elle efface).
 - **Absences** — périodes reconstruites depuis les jours posés, filtres service / équipe / motif.
 - **Matrice de polyvalence** — niveaux actuel / cible par personne × poste, objectifs, bilan. Échelle du carré magique paramétrable par site (nombre de niveaux, seuil « compétent », couleur par niveau) dans l'écran Compétences. Intitulés de poste verticaux ou obliques (bascule à l'écran).
-- **Habilitations** — échéances de recyclage, alertes couleur, cloche d'alerte, historique (suppressions comprises).
+- **Habilitations** — échéances de recyclage (date de passage + durée de la formation, recalculées si la durée change), alertes couleur, cloche d'alerte, historique (suppressions comprises).
 - **Visites médicales** (RH) — dates et types de visites de médecine du travail, sans aucune donnée de santé. Le régime de suivi (simple / adapté / renforcé) est calculé à partir des quarts de nuit, des postes tenus et des habilitations ; les déclencheurs se règlent dans Param. Visites.
 - **Ordonnancement** — ouverture des lignes par quart, semaines types, rotation des équipes.
 - **Planning** — placement (poste / absence / non travaillé) sur plusieurs semaines, vues par nom ou par poste, recopie sans écrasement, indicateurs.
 - **Placement** — saisie glisser-déposer par jour et par quart, copie, trois feuilles PDF (Manager, pour Affichage, pour Affichage + heures).
 - **Horaires** — horaire par poste, quart et jour ; variantes « après une nuit » et par place.
-- **Affichage couloir** — écran TV public par service (fenêtre glissante paramétrable).
+- **Affichage couloir** — écran TV par service (fenêtre glissante paramétrable), ouvert avec un compte dédié dont le rôle ne porte que le droit « affichage ».
 - **Bilans** — cockpit CODIR + rapports imprimables (effectifs, polyvalence, couverture, anticipation).
 - **Journal d'audit** — auteur réel, filtres, opérations groupées, conservation réglable ; notifications (cloche habilitations).
 - **Plateforme** (`/platform`) — back-office super_admin : gestion des sites, impersonation tracée.

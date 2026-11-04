@@ -15,29 +15,40 @@ placement journalier, habilitations, visites médicales, affichage couloir, bila
 - `src/lib/supabase.ts` — client navigateur (clé anon, soumis à la RLS).
 - `src/lib/supabase-server.ts` — `getServerClient()` (session utilisateur, RLS) et
   `getAdminClient()` (service_role, **bypass RLS**, usage serveur contrôlé : invitations,
-  affichage couloir, export RGPD, écritures « module » validées).
+  export RGPD, écritures « module » validées, lectures d'`app_user` et du dossier médical
+  bornées au site — 0092).
 - `src/lib/current-user.ts` — `getCurrentProfile()`, `requireAdmin()`. Ligne `app_user` en
   cache inter-requêtes (`PROFIL_TAG`, invalidé par `/api/users/*` et `/platform`).
 - `src/lib/permissions.ts` — matrice de droits par module (`MODULES`, `defaultsFor`,
   `getPermissions`, `canRead`/`canWrite`, `canWriteModule`, `requireModule`). Surcharges
   `role_permission` en cache (`PERMISSIONS_TAG`, invalidé par `/api/droits`).
-- `src/lib/refdata.ts` — cache des données de référence (`unstable_cache`, 30 s, segmenté
-  par site, invalidé par tag à chaque écriture) : services, équipes, quarts, motifs,
+- `src/lib/refdata.ts` — cache des données de référence (`unstable_cache`, segmenté par site,
+  invalidé par tag à chaque écriture ; `revalidate` 300 s en filet) : services, équipes, quarts, motifs,
   niveaux, rotation, types d'agence, et depuis le 2026-10-14 le **référentiel des postes**
   (`REFERENTIEL_TAG` : lignes + postes, `poste_quart`, dates d'ouverture, horaires).
   ⚠️ En route API, invalider par `revalidateTag(tag, { expire: 0 })` (`updateTag` lève).
 - `src/lib/fetch-all.ts` — `fetchAll()`. PostgREST plafonne **chaque réponse à 1000 lignes**
   (`db-max-rows`) sans lever d'erreur. Toute lecture d'une table qui peut dépasser ce
   seuil (`matrice`, `personne_competence`, `placement`, `ouverture_quart`,
-  `contrat_periode`, `visite`) doit passer par cet utilitaire, avec un `.order()`
-  déterministe. Lecture par 1re tranche, puis vague de 3, puis vagues de 8.
-- `src/proxy.ts` — protège les routes (redirige vers /login). Public : `/login`, `/forgot`,
-  `/reset`, `/auth/*`, `/affichage/*`.
+  `contrat_periode`, `visite`, `personne` lue sans filtre de statut) doit passer par cet
+  utilitaire, avec un `.order()` déterministe. La 1re tranche demande le total
+  (`count=exact`), puis exactement les tranches restantes par vagues de 8.
+- `src/proxy.ts` — protège les routes : jeton vérifié par `getClaims()`, sinon redirection vers
+  `/login?next=<page>`. Public : `/login`, `/forgot`, `/reset`, `/auth/*` (plus `/affichage`
+  depuis le 2026-11-03). Tout `next` passe par `cheminInterne()` (`src/lib/redirection.ts`,
+  anti-redirection ouverte, aussi dans `/auth/callback` et `/login`).
+- `next.config.ts` — en-têtes de sécurité sur toutes les pages (2026-11-04) : CSP
+  (`default-src 'self'`, Supabase seul en `connect-src`, `frame-ancestors 'none'`,
+  `object-src 'none'`), `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`,
+  `Permissions-Policy` ; `poweredByHeader: false`. Un nouveau domaine externe (script,
+  image, API) doit y être ajouté, sinon le navigateur le bloque.
 - `src/components/AppHeader.tsx` — navigation par rôle + cloche d'alerte habilitations.
 
 ## Modèle de données (Supabase / PostgreSQL)
 - **Auth & droits** : `app_user` (compte + rôle), liée à `auth.users` (trigger
-  `handle_new_user`) ; `role_permission` (surcharge de la matrice de droits par module).
+  `handle_new_user`, compte créé **inactif** depuis 0092) ; écrite **uniquement** en
+  service_role (aucun droit d'écriture à `authenticated`, 0092), lue sous RLS pour sa
+  propre ligne seulement (+ l'admin du site) ; `role_permission` (surcharge de la matrice de droits par module).
 - **Référentiel** : `atelier` (= « service » à l'écran ; `ordre_affichage`, 0085 : ordre des
   services sur tous les écrans) > `ligne` (`couleur`, 0082 : couleur fixe sur les PDF du
   Placement, palette fermée `src/lib/ligne-couleurs.ts`) > `poste` (`effectif_requis` = abaque **déprécié**,
@@ -53,8 +64,7 @@ placement journalier, habilitations, visites médicales, affichage couloir, bila
   quart ; l'alternance des semaines suivantes est *calculée* par `src/lib/rotation.ts`,
   jamais stockée — pour une semaine cible, la référence active est la plus récente ≤ cette
   semaine, donc changer la rotation = ajouter une référence datée sans toucher le passé),
-  `equipe_quart_semaine` (ancienne saisie semaine-par-semaine, **conservée mais plus
-  lue/écrite**), `poste_quart` (**effectif PAR quart** depuis 0070, colonne
+  `poste_quart` (**effectif PAR quart** depuis 0070, colonne
   `effectif_requis` : trois états lus par `src/lib/poste-quart.ts` — aucune ligne =
   repli sur `poste.effectif_requis` ; `actif=false` = « – » ne tourne pas ;
   `actif=true` = tourne à 0 ou N. L'ancien « ne stocke que les désactivations » n'est
@@ -84,10 +94,12 @@ placement journalier, habilitations, visites médicales, affichage couloir, bila
   la restriction restent toujours présents.
 - **Habilitations** : `competence` (`a_recycler`, `duree_validite_mois`, `categorie`,
   `groupe`, `ordre`, `a_autorisation_conduite`), `personne_competence`
-  (`date_obtention`, `date_expiration` **stockée à la saisie**, `date_autorisation_conduite`),
+  (`date_obtention`, `date_expiration` **stockée à la saisie** = obtention + `duree_validite_mois`,
+  `date_autorisation_conduite`). Changer la durée d'une formation recalcule les échéances
+  déjà saisies (`src/lib/echeances-habilitations.ts`, une ligne de lot au Journal, 2026-11-04) ;
   `personne_competence_historique` (0084 : ajout / modification / suppression, écrite par
   déclencheur, reprise depuis `audit_log` ; une suppression n'efface plus rien).
-- **Planning** : `ligne_ouverture`, `jour_equipe`, `placement` (1 personne/jour : poste,
+- **Planning** : `placement` (1 personne/jour : poste,
   ou motif d'absence, ou non travaillé), `horaire_exception` (personne × jour),
   `absence` (période longue → `placement.absence_id`, cascade),
   `semaine_type` (+ ouverture, profils).
@@ -107,13 +119,21 @@ placement journalier, habilitations, visites médicales, affichage couloir, bila
     la visite).
   - `personne_suivi` (`suivi_adapte` **sans motif**, `regime_force`) et
     `contrainte_affectation` (quart ou poste exclu sur une période, **sans motif**).
+  - **Aucune lecture sous RLS** (0092) pour `visite`, `visite_anci`, `personne_suivi`,
+    `contrainte_affectation` : l'écran Suivi (après `requireModule("visites")`) et
+    l'avertissement du Placement lisent en service_role borné au site.
   - Drapeaux posés sur les référentiels existants, écrits **seulement** par
     `/api/visites-param` : `quart.nuit` (aussi réglable dans Équipes depuis 0087),
     `poste.suivi_renforce` / `suivi_motifs` / `anci_usages` (tableaux, 0080 ; les colonnes
-    scalaires `suivi_motif` / `anci_usage` sont dépréciées), `competence.suivi_renforce` /
+    scalaires `suivi_motif` / `anci_usage` ont été supprimées en 0089), `competence.suivi_renforce` /
     `anci_usage`, `motif_absence.visite_reprise`.
   - Le **régime n'est pas stocké** : il est recalculé à chaque affichage
     (`evaluerPersonne`) depuis ces drapeaux, les placements récents et les habilitations.
+- **Filet inter-sites** (0092) : trigger générique `verifier_site_fk` posé sur toute FK
+  (une colonne) entre deux tables portant `site_id` (hors `site` / `app_user`) — refuse une
+  référence vers une ligne d'un autre site, même en service_role. Une nouvelle table est
+  couverte en rejouant le bloc DO de 0092. Les références vers `app_user` (chefs) restent
+  vérifiées dans le code (`verifierIdSite` / `verifierFksSite`).
 - **Transverse** : `audit_log` (alimenté par triggers ; `lot` / `lot_libelle` depuis 0086),
   `site.journal_conservation_mois` (0086).
 
@@ -137,13 +157,14 @@ chantier : `tasks/multi-site.md`.
 
 Écriture en base :
 - Référentiel, équipes, compétences, motifs, objectifs, personnel : **admin**.
+- Comptes (`app_user`) : **service_role seulement** (`/api/users/*`, `userAdminGuard`).
 - Matrice / placement / habilitations : **admin ou chef de l'équipe** (`can_edit_personne()`).
 - Ouverture de lignes, rotation des équipes : **admin ou ordo** (`has_role('ordo')`).
 - Journal d'audit : la matrice décide (module `journal`) ; l'écran lit en service_role
   borné au site (la RLS `can_read_audit()` nomme encore admin + codir, simple filet).
 - Visites médicales : modules `visites` et `visites_param`, accordés au seul rôle `rh`
-  par défaut. Lecture RLS bornée au site ; écriture par les routes API gardées par
-  `moduleWriteGuard` (service_role). Le Placement n'en voit qu'un avertissement **sans
+  par défaut. Aucune lecture sous RLS (0092) : lecture et écriture en service_role
+  bornées au site, après la garde du module (`requireModule` / `moduleWriteGuard`). Le Placement n'en voit qu'un avertissement **sans
   motif** (`src/lib/visites-placement.ts`), désactivé par défaut.
 
 Rôles : `admin`, `chef_equipe`, `ordo`, `rh`, `codir`, `planning`.
@@ -169,11 +190,14 @@ Triggers PostgreSQL (`audit_trigger`) sur les tables métier → `audit_log`
 - **Conservation** : `site.journal_conservation_mois` (13 par défaut), purge
   `journal_purger()` à l'ouverture du Journal. **RGPD** : anonymiser une personne efface les
   lignes de sa fiche, la supprimer efface tout ce qui la référence
-  (`journal_purger_personne`). Ces fonctions sont réservées au service_role.
+  (`journal_purger_personne`). Ces fonctions sont réservées au service_role. Avant de
+  supprimer, la fiche affiche ce qui serait effacé (jours placés passés / à venir, absences,
+  habilitations, contrats : `/api/personnel/[id]/impact`) ; anonymiser et supprimer sont
+  bornés au site courant.
 
 ## Migrations
-Fichiers SQL ordonnés dans `supabase/migrations/` (**0001 → 0090**, dernière appliquée :
-**0090**), **exécutés manuellement** par l'utilisateur dans le SQL Editor Supabase
+Fichiers SQL ordonnés dans `supabase/migrations/` (**0001 → 0092**, dernière appliquée :
+**0092**), **exécutés manuellement** par l'utilisateur dans le SQL Editor Supabase
 (`SUPABASE_DB_URL` est vide ; `npm run db:migrate` ne fonctionne que s'il est défini).
 
 Depuis la **0037**, trois séquences délicates passent par des **fonctions SQL** appelées
@@ -250,6 +274,17 @@ intégrés + `role_custom`).
   le contexte (personne, jour, quart, poste, nom…), créations / suppressions sans colonnes
   techniques, modifications sans effet non journalisées (lignes futures seulement).
   ⚠️ La 0086 n'avait jamais été appliquée avant le 2026-10-14 (délimiteurs `$`, cf. L54).
+
+**Novembre 2026 (0091 → 0092)** :
+- **0091** — droits de l'API explicites (`grant` sur toutes les tables + privilèges par
+  défaut de `postgres` sur `public`) avant le changement Supabase du 2026-10-30 : toute
+  nouvelle table porte son `grant … to authenticated, service_role` (test `migrations-sql`).
+- **0092** — durcissement après l'audit du 2026-11-03 : `app_user` fermé en écriture à
+  `authenticated` (⚠️ tout futur « grant … on all tables » doit être suivi du même REVOKE),
+  nouveau compte inactif, dossier médical sans lecture RLS, trigger `verifier_site_fk`,
+  fonction `fusionner_personnes(keep, dup, site, patch)` (fusion de deux fiches en une
+  transaction, FK et index uniques introspectés ; service_role seulement — la route
+  `/api/personnel/merge` resynchronise ensuite le contrat affiché et le temps partiel).
 
 ## Sitemap (principales routes)
 - `/` accueil (logo + titre « planning »), `/planning` (+ vue `?par=poste`), `/placement` (saisie par

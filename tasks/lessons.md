@@ -945,3 +945,39 @@ que la virgule : « Aide palettisation » devenait deux places, et l'utilisateur
 séparateur, vérifier en base qu'aucune saisie n'en dépend (ici aucune) et garder un repli
 étroit pour l'ancien usage (nombres seuls séparés par des espaces). Montrer le découpage
 réel à la saisie (info-bulle du Référentiel).
+
+## L61 — Une valeur dérivée stockée doit être recalculée quand sa source change
+**Contexte** : 2026-11-04, import du suivi des formations. `personne_competence.date_expiration`
+est stockée à la saisie (obtention + `duree_validite_mois`) ; passer les EPI de 24 à 36 mois
+dans Param. Habilitation ne touchait que les saisies futures : les échéances existantes
+gardaient l'ancienne durée, et l'utilisateur a cru à une « règle en dur ».
+**Règle** : toute colonne stockée calculée depuis un paramètre se recalcule à l'écriture du
+paramètre (ici `recalculerEcheances`, en un lot du Journal), sur les deux écrans qui
+l'écrivent. Avant d'expliquer un écart par « la règle de calcul », vérifier si la valeur a
+été figée par une saisie ou un import antérieur.
+
+## L62 — Après une écriture hors de la route habituelle, resynchroniser les reflets
+**Contexte** : 2026-11-04, fusion de deux fiches (une en CDI, une en intérim). Les contrats
+avaient bien migré, mais la fiche gardée affichait « Intérimaire » : `personne.type_contrat`,
+`agence_interim`, `date_debut` / `date_fin` sont des **reflets** de `contrat_periode`,
+recalculés par `/api/personnel` (`syncPersonneFromPeriodes`) — pas par un trigger, et pas
+par la fusion.
+**Règle** : toute écriture de `contrat_periode` / `tp_periode` hors de `/api/personnel`
+appelle les helpers de `src/lib/personne-reflets.ts`. Seul `statut` est maintenu par trigger ;
+les autres reflets dépendent du code.
+
+## L63 — Une redirection de refus ne doit pas viser la page refusée
+**Contexte** : 2026-11-03, écran TV avec un compte n'ayant que le droit `affichage`.
+`requireModule` renvoyait tout refus vers `/planning` ; pour un compte sans Planning, la page
+de repli refusait à son tour… vers elle-même (boucle de redirection).
+**Règle** : la cible de repli d'une garde doit être accessible à tout compte connecté, ou
+différente de la page gardée (`planning` refusé → `/`). Tester un rôle « minimal » (un seul
+droit) à chaque nouvelle garde.
+
+## L64 — Un script de données s'authentifie avec le compte Polaris, pas l'identité git
+**Contexte** : 2026-11-04, script d'import (scratchpad). Il cherchait l'auteur du Journal par
+l'adresse git (`jf.gautreau@gmail.com`) : « compte auteur introuvable ». Le compte Polaris de
+l'utilisateur est une autre adresse.
+**Règle** : un script hors dépôt vérifie TOUS ses prérequis (auteur, site, formations, plan
+attendu) **avant** la première écriture et s'arrête sans rien écrire au moindre écart ;
+l'auteur se lit dans `app_user` du site, jamais déduit de l'identité git.

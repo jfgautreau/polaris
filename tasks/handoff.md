@@ -109,6 +109,24 @@ menu suit l'écriture, pas la lecture.
   présents à l'ouverture ou gardés : bandeau seulement. Le retrait ne demande plus que le
   droit d'écriture Personnel (garde de la route) et s'inscrit en un lot du Journal.
 
+## Personnel — fusion et suppression RGPD
+- **Fusion de deux fiches** (`/api/personnel/merge`, 2026-11-03) : un seul appel à la
+  fonction SQL `fusionner_personnes(p_keep, p_dup, p_site, p_patch)` (0092, service_role) —
+  toutes les références (FK introspectées) passent sur la fiche gardée dans la même
+  transaction, les conflits d'index uniques sont résolus en gardant la ligne existante.
+  Ensuite `syncPersonneFromPeriodes()` (et `syncPersonneTP()` si des périodes de temps
+  partiel ont bougé) — helpers de `src/lib/personne-reflets.ts`, partagés avec
+  `/api/personnel`. Sans ce recalcul (bug du 2026-11-04), la fiche gardée affichait le type
+  de contrat / l'agence du doublon (« Intérimaire ») alors que ses contrats disaient CDI.
+- **Suppression (droit à l'oubli)** : `SupprimerPersonne.tsx` lit
+  `/api/personnel/[id]/impact` (droit `rgpd` en écriture, comptages `head: true` bornés au
+  site) et l'écrit sous le bouton et dans la confirmation : jours placés sur un poste (dont
+  à venir, en orange avec ⚠), jours d'absence, habilitations, contrats. Lecture impossible
+  → la confirmation le dit. `anonymiserPersonne` / `supprimerPersonne` filtrent par
+  `site_id` ; une suppression qui ne touche aucune ligne → « Personne introuvable sur ce site ».
+- **Export RGPD** (`/api/personnel/[id]/export`) : tables volumineuses lues par `fetchAll` ;
+  le dossier médical (visites) n'en fait pas partie.
+
 ## Temps partiel (`personne.tp_config`, jsonb, options cumulables)
 Modale `TempsPartielModal`, API `/api/personnel` op `tp`. Périodes datées dans
 `tp_periode` (migration 0052) avec repli sur `personne.tp_config`.
@@ -288,6 +306,13 @@ Priorité d'affichage de l'horaire (TV) : **exception ponctuelle > temps partiel
 - Formation sans durée de validité → échéance « **-** ». Statut : rouge < 30 j · orange
   30–90 j · vert > 90 j. ⚠️ `date_expiration` est **stockée à la saisie** — repli
   `addMonthsIso(date_obtention, duree)` à l'affichage (cf. `lessons.md` L6).
+- **Changer la durée d'une formation** (Param. Habilitation → `/api/habilitations-param`,
+  ou Compétences → `updateCompetence`) recalcule les échéances déjà saisies
+  (`recalculerEcheances`, `src/lib/echeances-habilitations.ts`, 2026-11-04) : lecture
+  `fetchAll` bornée au site, upsert des seules échéances qui changent par tranches de 500,
+  une ligne de lot au Journal. Durée vidée → échéances vidées. Avant, l'ancienne durée
+  restait figée dans les lignes existantes (EPI saisis à 24 mois après passage à 36).
+- `/api/habilitations` refuse (400) une formation qui n'est pas celle du site.
 - **Historique** (0084) : chaque ajout, recyclage, modification et suppression est gardé
   (`personne_competence_historique`, déclencheur). Fenêtre de saisie → section Historique ;
   une case vide dont l'habilitation a été supprimée est **grisée** dans la grille.
@@ -323,6 +348,9 @@ pas de troisième** : la fiche d'une personne est une modale du Suivi.
 - **Statut** : reprise > retard > RDV pris > à planifier (fenêtre d'alerte) > à jour ;
   un RDV à venir apaise un retard (affiché « RDV pris »).
 - **Exclus** : statut `PARTI`, types de contrat avec agence (intérim).
+- **Lectures en service_role bornées au site** (0092 : plus aucune lecture RLS sur
+  `visite`, `visite_anci`, `personne_suivi`, `contrainte_affectation`) : `/visites` après
+  `requireModule("visites")`, `alertesVisite()` du Placement en interne (`getAdminClient`).
 - Écritures : `/api/visites` (visite, suivi, contraintes) et `/api/visites-param`
   (régimes, types, usages, drapeaux des référentiels, réglages). Une visite se
   réécrit avec sa liste d'ANCI (effacer puis poser `visite_anci`).
@@ -364,6 +392,12 @@ pas de troisième** : la fiche d'une personne est une modale du Suivi.
   pour une écriture sans effet). `champsMontres` / `decrireElement` fonctionnent tels quels.
 
 ## Affichage TV (`/affichage`)
+- **Compte requis** (2026-11-03) : plus de route publique. Pages et impression gardées par
+  `requireModule("affichage","read")`, site = celui du compte. `versionDonnees` renvoie
+  `"hors-session"` sans profil ou sans le droit → `MiseAJourEconome` voit la version changer,
+  `router.refresh()`, et le proxy renvoie vers `/login?next=<page TV>` ; après connexion,
+  retour sur la page (`cheminInterne`). `requireModule` refusé sur `/planning` redirige vers
+  `/` (et non plus vers lui-même : un compte TV sans Planning bouclait).
 - Index : liste des services avec **cases à cocher** (« Tous les services », date de
   référence facultative) → « Imprimer N services » ouvre `/affichage/impression?atelier=…`
   (paramètre répété, impression lancée au chargement). Mêmes règles d'impression que
@@ -440,6 +474,5 @@ Redéployer sans changement de code : `git commit --allow-empty`.
   en haut du panneau (hors champ quand on édite en bas). Rollback en cas d'échec à faire.
 - Alerte « > 18 mois » : du début du contrat le plus ancien jusqu'à la fin (ou
   aujourd'hui), hors CDI.
-- Backfill SQL des `personne_competence.date_expiration` nulles (compensé à l'affichage).
 - ⚠️ **Aucun écran n'est vérifiable visuellement par l'agent** (pages derrière login) :
   validation par `npm run build` + tests. Les retours visuels viennent de l'utilisateur.

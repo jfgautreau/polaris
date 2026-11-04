@@ -107,6 +107,10 @@ L'historique des décisions est dans git et dans l'en-tête de chaque migration.
 - **Mot de passe** : jamais choisi par l'admin ; `/admin/users` génère un **lien**
   `{base}/reset?token_hash=…` (`src/lib/password-link.ts`) — ne pas revenir à `action_link`.
 - **RGPD** (export / anonymiser / supprimer) : droit dédié `rgpd`, distinct de `personnel`.
+  Bornés au site ; « Supprimer » annonce ce qu'il efface (`/api/personnel/[id]/impact`).
+- **En-têtes de sécurité** (`next.config.ts`, 2026-11-04) : CSP (`'self'` + URL Supabase
+  seulement, `frame-ancestors 'none'`), `X-Frame-Options`, `nosniff`… Tout nouveau domaine
+  externe (script, image, API) doit être ajouté à la CSP, sinon le navigateur le bloque.
 - **Visites médicales** : deux droits, `visites` (écran de suivi) et `visites_param`
   (déclencheurs), accordés au rôle `rh` par défaut et **à personne d'autre**. Aucune
   donnée de santé en base : dates, type de visite, et `avis` borné par CHECK à
@@ -402,7 +406,9 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   7 jours.
 - **Personnel** (`src/app/personnel/`) : édition inline (casse normalisée par `noms.ts`),
   Contrat et Statut = résultantes ouvrant `CycleDeVieModal` ; fiche incomplète = aucun
-  contrat ou agence manquante ; engrenage unique (commentaire, poste fixe, RGPD) ;
+  contrat ou agence manquante ; **reflets du contrat** (`type_contrat`, agence, dates) recalculés
+  par `src/lib/personne-reflets.ts` — toute écriture de `contrat_periode` hors de
+  `/api/personnel` (fusion de doublons…) doit l'appeler (`statut` seul est un trigger, L62) ; engrenage unique (commentaire, poste fixe, RGPD) ;
   recherche multi-colonnes ; filtres dans l'URL.
 - **Matrice** (`src/app/matrice/`) : charge tout l'effectif, `displayedIds` = sous-ensemble
   par défaut, la recherche balaie tout ; colonnes bornées au service. Cible qui suit
@@ -501,7 +507,8 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   (règles pures), `visites-data` (lectures de l'écran Suivi), `visites-placement`
   (avertissement sans motif), `journal` (règles de l'écran Journal) et `journal-contexte`
   (en-têtes auteur / lot), `nuit-avant` (+ `-data`), `planning-recopie`, `ligne-couleurs`,
-  `noms-comptes`.
+  `noms-comptes`, `personne-reflets` (reflets du contrat sur la fiche), `echeances-habilitations`
+  (recalcul des échéances), `redirection` (`cheminInterne`).
 - `src/components/` : `AppHeader`, `MainNav`, `GardeCacheNavigation`, `icons`,
   `ModaleDeplacable`, `InfoBulle`, `usePersonGrid`, `persongrid.module.css`,
   `PastillesCouleur`, composants partagés listés plus haut.

@@ -40,6 +40,8 @@ historique « lebignon ». Toutes les données existantes lui sont rattachées.
    where email = 'ton.email@exemple.fr';
    ```
    Pour un compte de plateforme (gestion des sites) : ajouter `est_super_admin = true`.
+   (Depuis la migration 0092, un compte créé hors de l'écran Utilisateurs naît **inactif** :
+   c'est cette requête qui l'ouvre.)
 
 ## 5. Lancer en local
 ```sh
@@ -58,5 +60,10 @@ npm run build
 2. Définir les variables d'environnement (mêmes valeurs que `.env.local`).
 3. Supabase → *Authentication > URL Configuration* : ajouter l'URL Vercel (et
    `http://localhost:3000`) aux *Redirect URLs*.
-4. **Affichage couloir** : les pages `/affichage/*` sont publiques. En production,
-   restreindre l'accès réseau (allowlist IP au proxy, Vercel Firewall, ou URL à jeton).
+4. **Affichage couloir** : depuis le 2026-11-03, les pages `/affichage/*` exigent un compte.
+   Créer dans `/admin/users` un rôle personnalisé (ex. « TV ») qui n'a que le droit
+   `affichage` en lecture, un compte de ce rôle, puis se connecter avec lui sur le poste
+   relié à la TV et laisser la page du service ouverte.
+5. **En-têtes de sécurité** (CSP, anti-clickjacking) : posés par `next.config.ts`. La CSP
+   n'autorise que le site lui-même et l'URL Supabase (`NEXT_PUBLIC_SUPABASE_URL`) : tout
+   nouveau service externe (script, image, API) doit y être ajouté.
