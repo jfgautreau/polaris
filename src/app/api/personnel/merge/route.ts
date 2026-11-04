@@ -3,6 +3,7 @@ import { getAdminClient } from "@/lib/supabase-server";
 import { getCurrentProfile } from "@/lib/current-user";
 import { canWriteModule } from "@/lib/permissions";
 import { messageErreur } from "@/lib/erreurs";
+import { syncPersonneFromPeriodes, syncPersonneTP } from "@/lib/personne-reflets";
 
 // POST /api/personnel/merge { keep_id, dup_id }
 // Fusionne deux personnes : repointe tous les rattachements du doublon vers la
@@ -70,5 +71,18 @@ export async function POST(req: NextRequest) {
     p_patch: patch,
   });
   if (error) return NextResponse.json({ error: messageErreur(error) }, { status: 403 });
+
+  // La fiche gardee a recu les contrats (et periodes de temps partiel) du
+  // doublon : son contrat affiche (type, agence, dates) et son temps partiel
+  // sont des reflets a recalculer, comme apres une saisie au Cycle de vie. Le
+  // statut, lui, est recalcule en base par trigger. Sans cela, une fiche
+  // interimaire fusionnee avec la fiche CDI restait affichee « Interim ».
+  try {
+    await syncPersonneFromPeriodes(sb, keep, profile.siteId);
+    if ((moved as Record<string, unknown> | null)?.tp_periode) await syncPersonneTP(sb, keep, profile.siteId);
+  } catch (e) {
+    const pg = e as { code?: string; message?: string; details?: string | null };
+    return NextResponse.json({ error: `Fiches fusionnées, mais contrat affiché non recalculé : ${messageErreur({ code: pg?.code, message: pg?.message ?? "Erreur", details: pg?.details ?? null })}` }, { status: 500 });
+  }
   return NextResponse.json({ ok: true, moved });
 }
