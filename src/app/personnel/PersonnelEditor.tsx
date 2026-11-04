@@ -9,7 +9,8 @@ import ConfirmForm from "@/components/ConfirmForm";
 import ModaleDeplacable from "@/components/ModaleDeplacable";
 import TempsPartielModal from "./TempsPartielModal";
 import CycleDeVieModal from "./CycleDeVieModal";
-import { anonymiserPersonne, supprimerPersonne } from "./actions";
+import { anonymiserPersonne } from "./actions";
+import SupprimerPersonne from "./SupprimerPersonne";
 import BandeauErreur from "@/components/BandeauErreur";
 import { normaliseNom, normalisePrenom } from "@/lib/noms";
 import AbsencesModal from "./AbsencesModal";
@@ -1198,13 +1199,7 @@ export default function PersonnelEditor({
                     label="Anonymiser"
                     confirm="Anonymiser cette personne ? Le nom est remplacé, l'historique de placement est conservé."
                   />
-                  <ConfirmForm
-                    action={supprimerPersonne}
-                    hidden={{ id: detailFor.id }}
-                    label="Supprimer (droit à l'oubli)"
-                    className="btn-sm"
-                    confirm="Supprimer DÉFINITIVEMENT cette personne et tout son historique ? Action irréversible."
-                  />
+                  <SupprimerPersonne id={detailFor.id} />
                 </div>
                 <p className="muted" style={{ marginTop: 8 }}>
                   Anonymiser conserve l&apos;historique (bilans) en retirant l&apos;identité. Supprimer efface définitivement la personne et ses données liées.

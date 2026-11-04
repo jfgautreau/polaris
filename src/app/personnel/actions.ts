@@ -43,13 +43,18 @@ function done(err: ErreurPg = null): never {
 // operation sensible, elle a son propre droit dans la matrice.
 export async function anonymiserPersonne(fd: FormData) {
   const supabase = await requireModuleWrite("rgpd");
+  const profile = await getCurrentProfile();
   const id = s(fd, "id");
-  if (!id) done();
+  if (!id || !profile) done();
+  // Bornee au site de l'appelant : le client service_role ignore la RLS, un
+  // identifiant d'un autre site ne doit rien toucher.
   const { data: p } = await supabase
     .from("personne")
     .select("matricule")
     .eq("id", id)
-    .single<{ matricule: string | null }>();
+    .eq("site_id", profile.siteId)
+    .maybeSingle<{ matricule: string | null }>();
+  if (!p) done({ message: "Personne introuvable sur ce site." });
   const { error } = await supabase
     .from("personne")
     .update({
@@ -61,7 +66,8 @@ export async function anonymiserPersonne(fd: FormData) {
       anonymise: true,
       anonymise_at: new Date().toISOString(),
     })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("site_id", profile.siteId);
   if (!error) await purgerJournal(supabase, id, false);
   done(error);
 }
@@ -69,9 +75,13 @@ export async function anonymiserPersonne(fd: FormData) {
 // RGPD : droit a l'oubli (suppression definitive + cascade). Droit « rgpd: write ».
 export async function supprimerPersonne(fd: FormData) {
   const supabase = await requireModuleWrite("rgpd");
+  const profile = await getCurrentProfile();
   const id = s(fd, "id");
-  if (!id) done();
-  const { error } = await supabase.from("personne").delete().eq("id", id);
-  if (!error) await purgerJournal(supabase, id, true);
-  done(error);
+  if (!id || !profile) done();
+  // Bornee au site de l'appelant (client service_role, cf. anonymiserPersonne).
+  const { data, error } = await supabase.from("personne").delete().eq("id", id).eq("site_id", profile.siteId).select("id");
+  if (error) done(error);
+  if (!data?.length) done({ message: "Personne introuvable sur ce site." });
+  await purgerJournal(supabase, id, true);
+  done();
 }
