@@ -196,8 +196,8 @@ Triggers PostgreSQL (`audit_trigger`) sur les tables métier → `audit_log`
   bornés au site courant.
 
 ## Migrations
-Fichiers SQL ordonnés dans `supabase/migrations/` (**0001 → 0093**, dernière appliquée :
-**0093**), **exécutés manuellement** par l'utilisateur dans le SQL Editor Supabase
+Fichiers SQL ordonnés dans `supabase/migrations/` (**0001 → 0094**, dernière appliquée :
+**0094**), **exécutés manuellement** par l'utilisateur dans le SQL Editor Supabase
 (`SUPABASE_DB_URL` est vide ; `npm run db:migrate` ne fonctionne que s'il est défini).
 
 Depuis la **0037**, trois séquences délicates passent par des **fonctions SQL** appelées
@@ -276,7 +276,7 @@ intégrés + `role_custom`).
   techniques, modifications sans effet non journalisées (lignes futures seulement).
   ⚠️ La 0086 n'avait jamais été appliquée avant le 2026-10-14 (délimiteurs `$`, cf. L54).
 
-**Novembre 2026 (0091 → 0093)** :
+**Novembre 2026 (0091 → 0094)** :
 - **0091** — droits de l'API explicites (`grant` sur toutes les tables + privilèges par
   défaut de `postgres` sur `public`) avant le changement Supabase du 2026-10-30 : toute
   nouvelle table porte son `grant … to authenticated, service_role` (test `migrations-sql`).

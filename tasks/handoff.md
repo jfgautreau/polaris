@@ -12,7 +12,7 @@
   `/api/placement-mise-en-page` (garde du module, atelier vérifié du site, `validerMiseEnPage` : blocs dans la
   grille, une fois chacun, lignes du service, ordre des postes borné à la ligne). Le Placement lit la mise en
   page du service (RLS) ; à l'impression, `ajusterGrille()` remplace `ajusterFeuille()` et la classe de page
-  vient du format choisi (`feuille()`). Avant la migration, la lecture échoue en silence → automatique.
+  vient du format choisi (`feuille()`). Migration 0094 appliquée le 2026-11-05.
 Saisie « un jour / un quart » par glisser-déposer. **Module de droits à part entière**
 (`MODULES`, entrée normale de `MAIN_ORDER`) ; sa page exige `write`, donc l'entrée de
 menu suit l'écriture, pas la lecture.
