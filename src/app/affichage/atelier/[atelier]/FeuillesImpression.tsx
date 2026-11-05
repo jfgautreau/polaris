@@ -4,55 +4,92 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { FEUILLE_L, FEUILLE_H, ENTETE_H, PIED_H, ECART_H } from "./feuilles-impression";
 
 // Impression de l'affichage TV (2026-11-05) : UNE feuille A3 portrait par section
-// (Matin, Après-midi, Nuit), chacune agrandie ou réduite pour occuper le plus de
-// place possible en largeur ET en hauteur.
+// (Matin, Après-midi, Nuit), chacune remplie au mieux en largeur ET en hauteur.
 //
 // Au `beforeprint` (bouton, impression automatique ou Ctrl+P), chaque
-// `.aff-zoom` est mesuré à plusieurs largeurs de mise en page : on retient celle
-// qui donne la plus grande échelle `min(largeur page / largeur, hauteur page /
-// hauteur)`, puis `transform: scale()` (jamais `zoom`). Une section dense est mise
-// en page large puis réduite ; une section courte, étroite puis agrandie.
-// `afterprint` rend l'écran TV tel quel.
+// `.aff-zoom` est mesuré, puis mis à l'échelle par `transform: scale()` (jamais
+// `zoom`) ; `afterprint` rend l'écran TV tel quel.
+//  - Section DENSE : la largeur de mise en page est cherchée par dichotomie
+//    jusqu'au point où le tableau réduit touche À LA FOIS le bord droit et le
+//    bas (largeur page / largeur = hauteur page / hauteur). Une liste de largeurs
+//    fixes laissait une marge d'un côté ou de l'autre.
+//  - Section COURTE : jamais de mise en page plus étroite qu'une colonne de jour
+//    lisible (JOUR_MIN) — c'est ce qui hachait les noms de poste, ensuite agrandis
+//    et illisibles. L'échelle reste donc proche de 1 et ce sont les RANGÉES qui
+//    s'étirent (au plus ETIREMENT_MAX × leur hauteur) pour occuper la page.
 
-// Cible de hauteur VOLONTAIREMENT plus courte que la place restante : le rendu
-// imprimé est toujours un peu plus haut que la mesure faite à l'écran (cf.
-// ajusterFeuille du Placement).
-const CIBLE_H = FEUILLE_H - ENTETE_H - ECART_H - PIED_H - 50;
-const LARGEURS_ESSAI = [560, 640, 720, 820, 940, 1080, 1240, 1440, 1680, 1960, 2300, 2700, 3200];
-// Au-delà, quelques noms donnent des pavés démesurés.
-const ECHELLE_MAX = 2;
+// Petite réserve en bas : le rendu imprimé peut dépasser d'un rien la mesure
+// faite à l'écran, et la feuille coupe ce qui déborde.
+const CIBLE_H = FEUILLE_H - ENTETE_H - ECART_H - PIED_H - 16;
+const NOM_W = 260; // colonne des noms (largeur fixe du tableau)
+const JOUR_MIN = 120; // colonne de jour la plus étroite admise
+const ECHELLE_MAX = 1.25;
+const ETIREMENT_MAX = 1.8;
 
-function ajuster(racine: HTMLElement) {
-  for (const zoom of racine.querySelectorAll<HTMLElement>(".aff-zoom")) {
-    zoom.style.transform = "none";
-    let meilleur = { f: 0, w: FEUILLE_L };
-    for (const w of LARGEURS_ESSAI) {
-      zoom.style.width = `${w}px`;
-      const h = zoom.scrollHeight;
-      if (!h) continue;
-      const f = Math.min(ECHELLE_MAX, FEUILLE_L / w, CIBLE_H / h);
-      if (f > meilleur.f) meilleur = { f, w };
+function ajusterZoom(zoom: HTMLElement) {
+  retablirZoom(zoom);
+  if (!zoom.offsetParent) return; // élément masqué : rien à mesurer
+  const nJours = Math.max(1, (zoom.querySelector("thead tr")?.children.length ?? 2) - 1);
+  const wMin = NOM_W + nJours * JOUR_MIN;
+  const echelles = (w: number) => {
+    zoom.style.width = `${w}px`;
+    const h = zoom.scrollHeight || 1;
+    return { fl: FEUILLE_L / w, fh: CIBLE_H / h };
+  };
+
+  // L'échelle permise par la largeur décroît avec la largeur de mise en page,
+  // celle permise par la hauteur croît (moins de retours à la ligne) : l'optimum
+  // est leur croisement, ou la largeur minimale si la hauteur n'est pas limitante.
+  let w = wMin;
+  let e = echelles(w);
+  if (e.fh < e.fl) {
+    let lo = wMin;
+    let hi = Math.max(4000, wMin * 3);
+    if (echelles(hi).fh < echelles(hi).fl) {
+      w = hi; // contenu démesuré : on prend la plus large, bornée par la hauteur
+    } else {
+      while (hi - lo > 4) {
+        const mid = (lo + hi) / 2;
+        const m = echelles(mid);
+        if (m.fh >= m.fl) hi = mid;
+        else lo = mid;
+      }
+      w = hi;
     }
-    zoom.style.width = `${meilleur.w}px`;
-    zoom.style.transformOrigin = "top left";
-    zoom.style.transform = `scale(${meilleur.f || 1})`;
+    e = echelles(w);
+  }
+  const f = Math.min(ECHELLE_MAX, e.fl, e.fh);
+  zoom.style.width = `${w}px`;
+  zoom.style.transformOrigin = "top left";
+  zoom.style.transform = `scale(${f})`;
+
+  // Place restante en bas : on étire les rangées de personnes (bornées).
+  const h = zoom.scrollHeight;
+  const surplus = CIBLE_H / f - h;
+  const rangees = [...zoom.querySelectorAll<HTMLTableRowElement>("tbody tr")];
+  if (surplus > 8 && rangees.length) {
+    const naturel = rangees.reduce((s, tr) => s + tr.offsetHeight, 0) || 1;
+    const k = Math.min(ETIREMENT_MAX, 1 + surplus / naturel);
+    for (const tr of rangees) tr.style.height = `${Math.floor(tr.offsetHeight * k)}px`;
+    zoom.classList.add("aff-etire");
   }
 }
 
-function retablir(racine: HTMLElement) {
-  for (const zoom of racine.querySelectorAll<HTMLElement>(".aff-zoom")) {
-    zoom.style.width = "";
-    zoom.style.transform = "";
-    zoom.style.transformOrigin = "";
-  }
+function retablirZoom(zoom: HTMLElement) {
+  zoom.style.width = "";
+  zoom.style.transform = "";
+  zoom.style.transformOrigin = "";
+  zoom.classList.remove("aff-etire");
+  for (const tr of zoom.querySelectorAll<HTMLTableRowElement>("tbody tr")) tr.style.height = "";
 }
 
 export default function FeuillesImpression({ children }: { children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const avant = () => ref.current && ajuster(ref.current);
-    const apres = () => ref.current && retablir(ref.current);
+    const zooms = () => [...(ref.current?.querySelectorAll<HTMLElement>(".aff-zoom") ?? [])];
+    const avant = () => zooms().forEach(ajusterZoom);
+    const apres = () => zooms().forEach(retablirZoom);
     window.addEventListener("beforeprint", avant);
     window.addEventListener("afterprint", apres);
     return () => {

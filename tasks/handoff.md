@@ -405,8 +405,11 @@ pas de troisième** : la fiche d'une personne est une modale du Suivi.
   Nuit ; section vide non imprimée) de chaque service (`.aff-feuille`, `break-before: page`),
   en-tête fixe (numéro de semaine ISO en gros, service, section) et pied (légende). Chaque
   section est mise à l'échelle **séparément** au `beforeprint` (`FeuillesImpression`,
-  gabarit `feuilles-impression.ts`) : plusieurs largeurs de mise en page essayées, échelle
-  `min(L/w, H/h)` la plus grande (≤ 2) — jamais d'échelle commune (cf. L50).
+  gabarit `feuilles-impression.ts`, feuille ≈ zone imprimable) — jamais d'échelle commune (cf. L50).
+  Section dense : largeur de mise en page cherchée par **dichotomie** jusqu'au croisement
+  `L/w = H/h` (remplit largeur ET hauteur ; une liste de largeurs fixes laissait des marges).
+  Section courte : largeur jamais sous 260 + 120 px par jour (sinon noms de poste hachés puis
+  agrandis = illisibles), échelle ≤ 1,25, et ce sont les **rangées qui s'étirent** (≤ 1,8×).
 - **Roster** (2026-11-05) : personnes du service d'affectation **+** toute personne ayant au
   moins une affectation sur un poste du service pendant la fenêtre (une seule lecture des
   placements du site, nom joint). Une personne prêtée figure sur deux plannings.

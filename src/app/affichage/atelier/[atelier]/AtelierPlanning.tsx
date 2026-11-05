@@ -592,6 +592,8 @@ export default async function AtelierPlanning({
           }
           .aff-entete { height: ${ENTETE_H}px; }
           .aff-zoom { margin-top: ${ECART_H}px; }
+          /* Rangées étirées pour remplir la page (FeuillesImpression) : contenu centré. */
+          .aff-etire tbody td { vertical-align: middle !important; }
           .aff-pied { position: absolute; left: 0; right: 0; bottom: 0; height: ${PIED_H}px; font-size: 14px; color: #6b7280; }
         }
       `}</style>
