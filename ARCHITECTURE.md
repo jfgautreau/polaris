@@ -291,6 +291,8 @@ intégrés + `role_custom`).
   « Excel agence », personne_id → texte des cases, aucune lecture sous RLS, purge 8 semaines par la route).
   Les sous-droits des habilitations par famille (même jour) n'ont pas de migration : lignes
   `role_permission` de module `habfam:<famille>`.
+- **0094** — `placement_mise_en_page` (site × service × PDF : format, orientation, blocs jsonb sur une grille
+  12 × 12), lecture RLS du site, écriture service_role par la route, trigger `verifier_site_fk` sur atelier_id.
 
 ## Sitemap (principales routes)
 - `/` accueil (logo + titre « planning »), `/planning` (+ vue `?par=poste`), `/placement` (saisie par

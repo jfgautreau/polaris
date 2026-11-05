@@ -30,6 +30,7 @@ import { estAuTravailLe, deriverArriveeDepart } from "@/lib/personne-statut";
 import { horaireTxt, dowLundi, type HM, type TpCfg, type HorairePlace } from "@/lib/horaires";
 import { chargerNuitsAvant } from "@/lib/nuit-avant-data";
 import PlacementBoard from "./PlacementBoard";
+import type { MiseEnPage, PdfPlacement } from "@/lib/mise-en-page-pdf";
 import QuartBandeau from "../planning/QuartBandeau";
 
 type Atelier = { id: string; nom: string };
@@ -186,6 +187,23 @@ export default async function PlacementPage({
     valeurValide(jar.get(COOKIE_PLACEMENT_SERVICE)?.value, atelierIds) ||
     ateliers[0]?.id ||
     "";
+
+  // Mises en page des PDF de ce service (écran « Mise en page PDF », 0094 ; RLS
+  // du site). Lancée tôt, attendue au rendu. Une erreur = disposition automatique.
+  const pMisesEnPage = enAvance(
+    atelierId
+      ? supabase
+          .from("placement_mise_en_page")
+          .select("pdf, format, orientation, blocs")
+          .eq("atelier_id", atelierId)
+          .returns<({ pdf: PdfPlacement } & MiseEnPage)[]>()
+          .then(({ data }) => {
+            const m: Partial<Record<PdfPlacement, MiseEnPage>> = {};
+            for (const r of data ?? []) m[r.pdf] = { format: r.format, orientation: r.orientation, blocs: r.blocs ?? [] };
+            return m;
+          })
+      : Promise.resolve({} as Partial<Record<PdfPlacement, MiseEnPage>>),
+  );
 
   // Ouverture (jour + fenêtre du calendrier) : dépend du quart résolu, part avec
   // la vague ci-dessous au lieu de l'attendre (cf. commentaires plus bas).
@@ -619,6 +637,7 @@ export default async function PlacementPage({
         habPers={habPers}
         quartOuvert={quartOuvert}
         siteNom={site.nom}
+        misesEnPage={await pMisesEnPage}
         tpIds={tpIds}
         openDays={openDays}
         winStart={winStart}

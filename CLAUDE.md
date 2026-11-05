@@ -399,6 +399,12 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   ex-« PDF CE ») et **PDF** « pour Affich. » (ex-« PDF opérateurs », A3 compact paysage OU portrait — page `plcA3P` —, codes d'alerte en noir, colonne « Absents du jour » limitée aux motifs `motif_absence.visible_operateurs`, 0083, cochés dans Param. RH), plus **PDF pour Affich. + heures** (= PDF pour Affich. + horaire de chacun, résolu par `src/lib/horaires.ts` côté `page.tsx`) ; sur les PDF pour Affich. (pas le Manager, qui garde le surnombre et le hors compétence seuls en couleur), les lignes qui tournent (≥ 1 personne placée) prennent la couleur fixe de leur ligne (`ligne.couleur`, 0082, choisie au Référentiel dans la palette fermée `src/lib/ligne-couleurs.ts`), celles à l'arrêt restent grisées (jamais une ligne d'encadrement, que des postes `manager`) ; en-tête service ·
   quart (pastille centrée) · date, hors zone mise à l'échelle ; numéros vides et commentaires du jour imprimés (sur les PDF pour Affich., aussi sous le nom d'un absent en **Formation** — motif repéré par libellé comme au Planning, jamais pour un autre motif ; pendule du Planning puis commentaire de la période saisi dans Absences, `absence.commentaire` lu pour les seules absences de Formation du jour) ; filtre
   `imprimable`. TP du jour sans placement = carte « Temps partiel », pas « à placer ».
+  **Mise en page sur mesure** (2026-11-05, 0094, droit dédié `placement_pdf`, écran `/admin/mise-en-page-pdf`,
+  règles `src/lib/mise-en-page-pdf.ts`) : par service × PDF (`placement_mise_en_page`), format + orientation +
+  blocs sur une grille 12 × 12 (entête, légende, absents, une ligne par bloc avec l'ordre de ses postes —
+  un poste ne sort jamais de sa ligne). `ajusterGrille()` : la zone est agrandie d'un facteur k jusqu'à ce
+  qu'aucun bloc ne déborde, puis `scale(1/k)` (toute la page rétrécit) ; lignes non placées qui tournent =
+  imprimées sous la grille. Sans ligne en base : disposition automatique (`ajusterFeuille`).
   Postes `zone_attente` (CDT) : hors du plan, colonne « À répartir » entre le plan et les noms
   (dépôt et glisser-déposer comme une tuile) ; les PDF suivent seulement « Impr. ».
 - **Ordonnancement** (`src/app/ordonnancement/`) : quinzaine (`?debut=`), sous-colonnes par

@@ -10,6 +10,7 @@ import SlideSwitch from "@/components/SlideSwitch";
 import ModaleDeplacable from "@/components/ModaleDeplacable";
 import { PrintIcon, OperateurIcon } from "@/components/icons";
 import { couleurDeLigne } from "@/lib/ligne-couleurs";
+import { GRILLE, feuille, ordonnerPostes, pdfDuMode, type Bloc, type MiseEnPage, type PdfPlacement } from "@/lib/mise-en-page-pdf";
 import JourNav from "./JourNav";
 import s from "./placement.module.css";
 
@@ -83,6 +84,7 @@ export default function PlacementBoard({
   heures = {},
   quartOuvert = true,
   siteNom = "",
+  misesEnPage = {},
   tpIds = [],
   horsPlan = {},
   openDays = [],
@@ -120,6 +122,8 @@ export default function PlacementBoard({
   heures?: Record<string, string>;
   quartOuvert?: boolean; // le quart est-il ouvert ce jour-la (Ordonnancement) ?
   siteNom?: string; // multi-tenant : nom d'usine dans le pied de page du PDF
+  // Mises en page enregistrées de ce service, par PDF (écran « Mise en page PDF », 0094).
+  misesEnPage?: Partial<Record<PdfPlacement, MiseEnPage>>;
   tpIds?: string[]; // personnes en temps partiel (indisponibles) ce jour-la
   // Placés sur ce quart sur un poste qu'aucun plan ne dessine (ne tourne pas sur ce
   // quart, désactivé, fermé) : personne -> { poste, libellé }. Jamais masqués.
@@ -571,6 +575,50 @@ export default function PlacementBoard({
     return orient;
   }
 
+  // Mise en page enregistrée (grille de 12 × 12) : la feuille garde ses
+  // proportions ; si un bloc reçoit plus de contenu que sa place, TOUTE la page
+  // rétrécit. On agrandit la zone d'un facteur k (le texte garde sa taille, il a
+  // donc proportionnellement plus de place), puis on la ramène à la feuille par
+  // scale(1/k). k part de 1 et suit le bloc le plus à l'étroit ; il peut descendre
+  // jusqu'à 1/ECHELLE_MAX quand tout est large (texte agrandi).
+  function ajusterGrille(mep: MiseEnPage) {
+    const el = printRef.current;
+    if (!el) return;
+    const { l, utileH } = feuille(mep.format, mep.orientation);
+    let k = 1;
+    const mesurer = () => {
+      let r = 0;
+      el.querySelectorAll<HTMLElement>("[data-mep-bloc]").forEach((b) => {
+        const c = b.querySelector<HTMLElement>("[data-mep-contenu]");
+        if (!c || !b.clientHeight || !b.clientWidth) return;
+        r = Math.max(r, (c.offsetHeight + 4) / b.clientHeight, c.scrollWidth / b.clientWidth);
+      });
+      // Lignes imprimées sous la grille : la zone entière ne doit pas déborder.
+      r = Math.max(r, el.scrollHeight / el.clientHeight);
+      return r || 1;
+    };
+    const poser = () => {
+      el.style.transform = "none";
+      el.style.width = `${l * k}px`;
+      el.style.height = `${utileH * k}px`;
+    };
+    // 1) Tout est large : on agrandit (une fois), sans dépasser ECHELLE_MAX.
+    poser();
+    const r0 = mesurer();
+    if (r0 < 1) {
+      k = Math.max(1 / ECHELLE_MAX, r0);
+      poser();
+    }
+    // 2) Puis on élargit la zone tant qu'un bloc déborde (k ne fait que croître).
+    for (let i = 0; i < 10; i++) {
+      const r = mesurer();
+      if (r <= 1) break;
+      k *= r * 1.01;
+      poser();
+    }
+    el.style.transform = `scale(${1 / k})`;
+  }
+
   // La feuille doit etre montee (donc mesurable) avant d'ouvrir la boite d'impression.
   // Le bouton « PDF pour Affich. » (mode "simple") imprime en A3 : on pose `print-a3` sur <body>
   // (bascule la page nommée `plcA3` de globals.css) le temps de l'impression, puis
@@ -579,10 +627,18 @@ export default function PlacementBoard({
     if (!prepImpression) return;
     // « PDF pour Affich. + heures » = même feuille (A3) avec l'horaire de chacun.
     const a3 = prepImpression !== "ce";
-    // Paysage ou portrait selon ce qui imprime le plus grand ; la classe posée
-    // sur <body> choisit la page nommée de globals.css (format papier réel).
-    const portrait = ajusterFeuille(a3) === "portrait";
-    const classe = a3 ? (portrait ? "print-a3p" : "print-a3") : portrait ? "print-a4p" : null;
+    const mep = misesEnPage[pdfDuMode(prepImpression)];
+    let classe: string | null;
+    if (mep) {
+      // Mise en page enregistrée : format et orientation imposés par elle.
+      ajusterGrille(mep);
+      classe = feuille(mep.format, mep.orientation).classe;
+    } else {
+      // Paysage ou portrait selon ce qui imprime le plus grand ; la classe posée
+      // sur <body> choisit la page nommée de globals.css (format papier réel).
+      const portrait = ajusterFeuille(a3) === "portrait";
+      classe = a3 ? (portrait ? "print-a3p" : "print-a3") : portrait ? "print-a4p" : null;
+    }
     if (classe) document.body.classList.add(classe);
     window.print();
     if (classe) document.body.classList.remove(classe);
@@ -1374,175 +1430,250 @@ export default function PlacementBoard({
           Plan a gauche, absents du jour a droite ; tous les postes y figurent,
           meme non pourvus.
           ------------------------------------------------------------------ */}
-      {prepImpression && (
-      <div
-        className={s.printSheet}
-        data-mode={prepImpression === "heures" ? "simple" : prepImpression}
-        data-heures={prepImpression === "heures" ? "1" : undefined}
-        aria-hidden="true"
-      >
-      {/* En-tête à taille fixe : service à gauche, quart en pastille pleine au
-          centre, date à droite — lisibles d'un coup d'œil, en couleur comme en noir. */}
-      <div className={s.printHead} ref={printHeadRef}>
-        <strong className={s.printTitre}>{ateliers.find((a) => a.id === atelierId)?.nom ?? "Service"}</strong>
-        <span className={s.printQuart}>{quartLib[quart] ?? quart}</span>
-        <span className={s.printDate}>
-          <strong>{jourLong(jour)[0]}</strong> {jourLong(jour)[1]}
-        </span>
-        {/* Mention « Couverture X/Y » retirée du PDF le 2026-09-10 : la
-            couverture globale sature à un chiffre agrégé peu utile sur la
-            feuille imprimée, et les compteurs par poste (X/Y en tête de
-            chaque tuile) portent déjà l'information au bon niveau de détail. */}
-      </div>
-      {/* Cadre exterieur = une page exactement ; ce bloc interieur porte le
-          contenu et la mise a l'echelle (cf. placement.module.css). */}
-      <div className={s.printInner} ref={printRef}>
-        <div className={s.printBody}>
-          <div className={s.printPlan}>
-            {groupsImpr.map((g) => (
-              <div
-                key={g.ligneId}
-                // PDF Manager : pas de couleur de ligne, pour que le surnombre (fond orangé)
-                // et le hors compétence (rouge) ressortent seuls. Ligne à l'arrêt : grisée partout.
-                className={`${s.printLigne} ${!g.tourne ? (g.encadrement ? "" : s.printLigneOff) : prepImpression !== "ce" ? s.printLigneOn : ""}`}
-                style={{ "--lc": g.couleur.lc, "--lc-pale": g.couleur.pale, "--lc-dark": g.couleur.dark } as CSSProperties}
-              >
-                <div className={s.printLigneNom}>
-                  {g.ligneNom}
-                  {!g.tourne && !g.encadrement && <span className={s.printArret}>à l'arrêt</span>}
+      {prepImpression && (() => {
+        // Mise en page enregistrée pour ce service et ce PDF (écran « Mise en page
+        // PDF », 0094) : blocs posés sur une grille de 12 × 12 ; sinon la
+        // disposition automatique (plan à gauche, absents à droite).
+        const mep = misesEnPage[pdfDuMode(prepImpression)] ?? null;
+        const dims = mep ? feuille(mep.format, mep.orientation) : null;
+
+        // En-tête : service à gauche, quart en pastille au centre, date à droite.
+        const entete = (enBloc: boolean) => (
+          <div className={s.printHead} ref={enBloc ? undefined : printHeadRef} style={enBloc ? { margin: 0, paddingBottom: 4 } : undefined}>
+            <strong className={s.printTitre}>{ateliers.find((a) => a.id === atelierId)?.nom ?? "Service"}</strong>
+            <span className={s.printQuart}>{quartLib[quart] ?? quart}</span>
+            <span className={s.printDate}>
+              <strong>{jourLong(jour)[0]}</strong> {jourLong(jour)[1]}
+            </span>
+          </div>
+        );
+
+        // Tuile d'un poste : compteur, places numérotées, occupants, commentaires.
+        const tuile = (g: (typeof groupsImpr)[number], po: (typeof groupsImpr)[number]["postes"][number]) => {
+          const occ = occupants(po.id);
+          // Impression : même règle que la tuile écran (besoin 0 sur ligne fermée).
+          const effReq = g.fermee ? 0 : po.effectifRequis;
+          const sur = occ.length > effReq;
+          const trou = occ.length < effReq;
+          const nums = numerosDe(po);
+          // Ligne d'un occupant imprimé : badge (n° de rotation) + NOM Prénom +
+          // éventuel commentaire du jour (horaire_exception.motif).
+          const ligneOcc = (p: Personne, badge: ReactNode) => {
+            const alerte = habManque(p.id, po.id).length > 0 || compState(p.id, po) !== "ok";
+            // Toutes les feuilles : nom (et heure) sur la 1re ligne, commentaire
+            // du jour en dessous, sur toute la largeur de la tuile.
+            return (
+              <div key={p.id} className={`${s.printNom} ${alerte ? s.printAlerte : ""}`}>
+                <div className={s.printNomLigne}>
+                  <span>
+                    {badge}
+                    <NomPrenom p={p} />
+                  </span>
+                  {prepImpression === "heures" && heures[p.id] && <span className={s.printHeure}>{heures[p.id]}</span>}
                 </div>
-                <div className={s.printPostes}>
-                  {g.postes.map((po) => {
-                    const occ = occupants(po.id);
-                    // Impression : même règle que la tuile écran (besoin 0 sur ligne fermée).
-                    const effReq = g.fermee ? 0 : po.effectifRequis;
-                    const sur = occ.length > effReq;
-                    const trou = occ.length < effReq;
-                    const nums = numerosDe(po);
-                    // Ligne d'un occupant imprimé : badge (n° de rotation) + NOM Prénom +
-                    // éventuel commentaire du jour (horaire_exception.motif).
-                    const ligneOcc = (p: Personne, badge: ReactNode) => {
-                      const alerte = habManque(p.id, po.id).length > 0 || compState(p.id, po) !== "ok";
-                      // Toutes les feuilles : nom (et heure) sur la 1re ligne, commentaire
-                      // du jour en dessous, sur toute la largeur de la tuile.
-                      return (
-                        <div key={p.id} className={`${s.printNom} ${alerte ? s.printAlerte : ""}`}>
-                          <div className={s.printNomLigne}>
-                            <span>
-                              {badge}
-                              <NomPrenom p={p} />
-                            </span>
-                            {prepImpression === "heures" && heures[p.id] && <span className={s.printHeure}>{heures[p.id]}</span>}
-                          </div>
-                          {commentaires[p.id] && <div className={s.printCommentBloc}>{commentaires[p.id]}</div>}
-                        </div>
-                      );
-                    };
-                    return (
-                      <div key={po.id} className={`${s.printPoste} ${sur ? s.printSur : ""} ${po.manager ? s.printManager : ""}`}>
-                        <div className={s.printPosteHead}>
-                          <span className={s.printPosteNom}>{po.nom}</span>
-                          <span className={trou ? s.printTrou : sur ? s.printSurNb : s.printOk}>
-                            {occ.length}/{effReq}
-                          </span>
-                        </div>
-                        {nums.length === 0 ? (
-                          // Poste sans numéro de rotation : liste des occupants (ou —).
-                          occ.length === 0 ? (
-                            <div className={s.printVide}>—</div>
-                          ) : (
-                            occ.map((p) => ligneOcc(p, numero[p.id] ? <span className={s.printNum}>{numero[p.id]}</span> : null))
-                          )
-                        ) : (
-                          // Poste numéroté : UNE ligne par numéro, même vide (« libre »),
-                          // pour que le n° de rotation figure toujours sur la feuille.
-                          <>
-                            {nums.map((n) => {
-                              const gens = occupantsNum(po.id, n);
-                              const badge = <span className={s.printNum}>{n}</span>;
-                              return gens.length === 0 ? (
-                                <div key={n} className={s.printNom}>
-                                  {badge}
-                                  <span className={s.printVide}>libre</span>
-                                </div>
-                              ) : (
-                                gens.map((p) => ligneOcc(p, badge))
-                              );
-                            })}
-                            {/* Occupants sans numéro (surnombre non numéroté). */}
-                            {occupantsSansNum(po.id).map((p) => ligneOcc(p, null))}
-                          </>
-                        )}
+                {commentaires[p.id] && <div className={s.printCommentBloc}>{commentaires[p.id]}</div>}
+              </div>
+            );
+          };
+          return (
+            <div key={po.id} className={`${s.printPoste} ${sur ? s.printSur : ""} ${po.manager ? s.printManager : ""}`}>
+              <div className={s.printPosteHead}>
+                <span className={s.printPosteNom}>{po.nom}</span>
+                <span className={trou ? s.printTrou : sur ? s.printSurNb : s.printOk}>
+                  {occ.length}/{effReq}
+                </span>
+              </div>
+              {nums.length === 0 ? (
+                // Poste sans numéro de rotation : liste des occupants (ou —).
+                occ.length === 0 ? (
+                  <div className={s.printVide}>—</div>
+                ) : (
+                  occ.map((p) => ligneOcc(p, numero[p.id] ? <span className={s.printNum}>{numero[p.id]}</span> : null))
+                )
+              ) : (
+                // Poste numéroté : UNE ligne par numéro, même vide (« libre »),
+                // pour que le n° de rotation figure toujours sur la feuille.
+                <>
+                  {nums.map((n) => {
+                    const gens = occupantsNum(po.id, n);
+                    const badge = <span className={s.printNum}>{n}</span>;
+                    return gens.length === 0 ? (
+                      <div key={n} className={s.printNom}>
+                        {badge}
+                        <span className={s.printVide}>libre</span>
                       </div>
+                    ) : (
+                      gens.map((p) => ligneOcc(p, badge))
                     );
                   })}
-                </div>
-              </div>
-            ))}
-            {groupsImpr.length === 0 && <p className={s.printVide}>Aucun poste imprimable ce jour-là sur ce quart.</p>}
+                  {/* Occupants sans numéro (surnombre non numéroté). */}
+                  {occupantsSansNum(po.id).map((p) => ligneOcc(p, null))}
+                </>
+              )}
+            </div>
+          );
+        };
+        // PDF Manager : pas de couleur de ligne, pour que le surnombre (fond orangé)
+        // et le hors compétence (rouge) ressortent seuls. Ligne à l'arrêt : grisée partout.
+        const classeLigne = (g: (typeof groupsImpr)[number]) =>
+          `${s.printLigne} ${!g.tourne ? (g.encadrement ? "" : s.printLigneOff) : prepImpression !== "ce" ? s.printLigneOn : ""}`;
+        const varsLigne = (g: (typeof groupsImpr)[number]) => ({ "--lc": g.couleur.lc, "--lc-pale": g.couleur.pale, "--lc-dark": g.couleur.dark }) as CSSProperties;
+        const nomLigne = (g: (typeof groupsImpr)[number]) => (
+          <div className={s.printLigneNom}>
+            {g.ligneNom}
+            {!g.tourne && !g.encadrement && <span className={s.printArret}>à l'arrêt</span>}
           </div>
+        );
+        const ligneFlux = (g: (typeof groupsImpr)[number]) => (
+          <div key={g.ligneId} className={classeLigne(g)} style={varsLigne(g)}>
+            {nomLigne(g)}
+            <div className={s.printPostes}>{g.postes.map((po) => tuile(g, po))}</div>
+          </div>
+        );
 
-          {prepImpression !== "ce" && absPrintOp.length > 0 && (
-          <div className={s.printAbs}>
-            <div className={s.printAbsTitre}>Absents du jour</div>
-            {absPrintOp.map((c) => (
-              <div key={c.key} className={s.printAbsBloc}>
-                <div className={s.printAbsMotif}>
-                  {c.titre} <span className={s.printAbsNb}>({c.gens.length})</span>
-                </div>
-                {c.gens.map((p) => (
-                  <div key={p.id} className={s.printAbsNom}>
-                    <NomPrenom p={p} />
-                    {c.avecCommentaire && commentaires[p.id] && <div className={s.printCommentBloc}>{commentaires[p.id]}</div>}
+        // Absents du jour : ceux des motifs « PDF pour Affich. » sur les feuilles
+        // du couloir, tous les absents + TP sur le PDF Manager.
+        const absents = (enBloc: boolean) =>
+          prepImpression !== "ce" ? (
+            absPrintOp.length > 0 || enBloc ? (
+              <div className={s.printAbs} style={enBloc ? { flexBasis: "auto", width: "100%" } : undefined}>
+                <div className={s.printAbsTitre}>Absents du jour</div>
+                {absPrintOp.map((c) => (
+                  <div key={c.key} className={s.printAbsBloc}>
+                    <div className={s.printAbsMotif}>
+                      {c.titre} <span className={s.printAbsNb}>({c.gens.length})</span>
+                    </div>
+                    {c.gens.map((p) => (
+                      <div key={p.id} className={s.printAbsNom}>
+                        <NomPrenom p={p} />
+                        {c.avecCommentaire && commentaires[p.id] && <div className={s.printCommentBloc}>{commentaires[p.id]}</div>}
+                      </div>
+                    ))}
                   </div>
                 ))}
+                {absPrintOp.length === 0 && <div className={s.printVide}>Aucun absent.</div>}
               </div>
-            ))}
-          </div>
-          )}
-
-          {prepImpression === "ce" && (
-          <div className={s.printAbs}>
-            <div className={s.printAbsTitre}>Absents / TP du jour</div>
-            {absPrint.map((c) => (
-              <div key={c.key} className={s.printAbsBloc}>
-                <div className={s.printAbsMotif}>
-                  {c.titre} <span className={s.printAbsNb}>({c.gens.length})</span>
-                </div>
-                {c.gens.map((p) => (
-                  <div key={p.id} className={s.printAbsNom}>
-                    <NomPrenom p={p} />
+            ) : null
+          ) : (
+            <div className={s.printAbs} style={enBloc ? { flexBasis: "auto", width: "100%" } : undefined}>
+              <div className={s.printAbsTitre}>Absents / TP du jour</div>
+              {absPrint.map((c) => (
+                <div key={c.key} className={s.printAbsBloc}>
+                  <div className={s.printAbsMotif}>
+                    {c.titre} <span className={s.printAbsNb}>({c.gens.length})</span>
                   </div>
-                ))}
-              </div>
-            ))}
-            {absPrint.length === 0 && <div className={s.printVide}>Aucun absent ni TP.</div>}
-          </div>
-          )}
-        </div>
-      </div>
-      {siteNom && (
-        // Multi-tenant : le nom d'usine paraît en pied de page pour qu'une
-        // feuille imprimée d'un site ne puisse pas être confondue avec celle
-        // d'un autre. Positionné en ABSOLU dans .printSheet (le cadre A4),
-        // hors de printInner qui est mesuré par ajusterFeuille — sinon un
-        // atelier dense (Condi 50 postes) fait déborder le contenu et rogne
-        // ce pied.
-        <div
-          style={{
+                  {c.gens.map((p) => (
+                    <div key={p.id} className={s.printAbsNom}>
+                      <NomPrenom p={p} />
+                    </div>
+                  ))}
+                </div>
+              ))}
+              {absPrint.length === 0 && <div className={s.printVide}>Aucun absent ni TP.</div>}
+            </div>
+          );
+
+        // Légende : ce que veulent dire les marques de CE PDF.
+        const legende =
+          prepImpression === "ce"
+            ? "X/Y = placés / requis (rouge : il manque du monde, orange : surnombre) · fond orangé = poste en surnombre · nom sur fond rose = compétence ou habilitation manquante · « libre » = place non pourvue · ligne grisée = à l'arrêt"
+            : "X/Y = placés / requis · « libre » = place non pourvue · ligne en couleur = ligne qui tourne · ligne grisée = à l'arrêt";
+
+        // Grille : chaque bloc en pourcentage de la zone ; le contenu de chaque
+        // bloc est mesuré par ajusterGrille() (data-mep-bloc / data-mep-contenu).
+        const placees = new Set((mep?.blocs ?? []).filter((b) => b.type === "ligne").map((b) => b.ligne_id));
+        const groupeParLigne = new Map(groupsImpr.map((g) => [g.ligneId, g]));
+        // Lignes du jour absentes de la mise en page : imprimées sous la grille si elles tournent.
+        const nonPlacees = mep ? groupsImpr.filter((g) => !placees.has(g.ligneId) && g.tourne) : [];
+        const blocGrille = (b: Bloc) => {
+          const pos: CSSProperties = {
             position: "absolute",
-            bottom: 4,
-            right: 10,
-            fontSize: 10,
-            color: "#6b7280",
-            pointerEvents: "none",
-          }}
-        >
-          {siteNom}
-        </div>
-      )}
-      </div>
-      )}
+            left: `${(b.x / GRILLE) * 100}%`,
+            top: `${(b.y / GRILLE) * 100}%`,
+            width: `${(b.w / GRILLE) * 100}%`,
+            height: `${(b.h / GRILLE) * 100}%`,
+            padding: 2,
+            boxSizing: "border-box",
+            overflow: "hidden",
+          };
+          const cle = b.type === "ligne" ? `l:${b.ligne_id}` : b.type;
+          if (b.type === "ligne") {
+            const g = groupeParLigne.get(b.ligne_id ?? "");
+            // Ligne qui ne figure pas ce jour-là (aucun poste sur ce quart) : place vide.
+            if (!g) return <div key={cle} style={pos} />;
+            return (
+              <div key={cle} style={pos} data-mep-bloc="1">
+                <div data-mep-contenu="1" className={classeLigne(g)} style={{ ...varsLigne(g), display: "block", margin: 0 }}>
+                  {nomLigne(g)}
+                  <div className={s.printPostes} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(124px, 1fr))", marginTop: 2 }}>
+                    {ordonnerPostes(g.postes, b.postes).map((po) => tuile(g, po))}
+                  </div>
+                </div>
+              </div>
+            );
+          }
+          return (
+            <div key={cle} style={pos} data-mep-bloc="1">
+              <div data-mep-contenu="1">
+                {b.type === "entete" ? entete(true) : b.type === "absents" ? absents(true) : <div style={{ fontSize: "0.9em", color: "#334155", lineHeight: 1.3 }}>{legende}</div>}
+              </div>
+            </div>
+          );
+        };
+
+        return (
+          <div
+            className={s.printSheet}
+            data-mode={prepImpression === "heures" ? "simple" : prepImpression}
+            data-heures={prepImpression === "heures" ? "1" : undefined}
+            style={dims ? { width: dims.l, height: dims.h } : undefined}
+            aria-hidden="true"
+          >
+            {mep && dims ? (
+              <div className={s.printInner} ref={printRef} style={{ display: "flex", flexDirection: "column", width: dims.l, height: dims.utileH }}>
+                <div style={{ position: "relative", flex: "1 1 auto", minHeight: 0 }}>{mep.blocs.map(blocGrille)}</div>
+                {nonPlacees.length > 0 && <div style={{ flex: "0 0 auto", paddingTop: 6 }}>{nonPlacees.map(ligneFlux)}</div>}
+              </div>
+            ) : (
+              <>
+                {/* Mention « Couverture X/Y » retirée du PDF le 2026-09-10 : les
+                    compteurs par poste (X/Y en tête de chaque tuile) portent déjà
+                    l'information au bon niveau de détail. */}
+                {entete(false)}
+                {/* Cadre exterieur = une page exactement ; ce bloc interieur porte le
+                    contenu et la mise a l'echelle (cf. placement.module.css). */}
+                <div className={s.printInner} ref={printRef}>
+                  <div className={s.printBody}>
+                    <div className={s.printPlan}>
+                      {groupsImpr.map(ligneFlux)}
+                      {groupsImpr.length === 0 && <p className={s.printVide}>Aucun poste imprimable ce jour-là sur ce quart.</p>}
+                    </div>
+                    {absents(false)}
+                  </div>
+                </div>
+              </>
+            )}
+            {siteNom && (
+              // Multi-tenant : le nom d'usine paraît en pied de page pour qu'une
+              // feuille imprimée d'un site ne puisse pas être confondue avec celle
+              // d'un autre. Positionné en ABSOLU dans .printSheet (le cadre),
+              // hors de printInner qui est mis à l'échelle.
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: 4,
+                  right: 10,
+                  fontSize: 10,
+                  color: "#6b7280",
+                  pointerEvents: "none",
+                }}
+              >
+                {siteNom}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Copie des affectations d'un jour vers un autre (meme quart) */}
       {showCopy && (

@@ -41,6 +41,9 @@ export const MODULES: { key: string; label: string; href: string; admin: boolean
   { key: "motifs", label: "Param. RH", href: "/admin/motifs", admin: true },
   { key: "visites_param", label: "Param. Visites", href: "/admin/visites-param", admin: true },
   { key: "horaires", label: "Horaires", href: "/admin/horaires", admin: true },
+  // Mise en page des PDF du Placement (0094) : droit dédié, accordé à personne
+  // par défaut (l’admin l’a par la matrice).
+  { key: "placement_pdf", label: "Mise en page PDF", href: "/admin/mise-en-page-pdf", admin: true },
   { key: "utilisateurs", label: "Utilisateurs", href: "/admin/users", admin: true },
   { key: "rgpd", label: "RGPD", href: "/admin/rgpd", admin: true },
 ];
