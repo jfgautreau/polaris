@@ -5,8 +5,9 @@ import { usePathname, useRouter } from "next/navigation";
 import Logo from "@/components/Logo";
 import { addDays, isoDate } from "@/lib/week";
 
-// Barre d'actions de l'ecran TV : choix de la semaine affichee, impression PDF
-// et retour a l'application. Masquee a l'impression (`noprint`).
+// Barre d'actions de l'ecran TV : retour au menu Affichage, choix de la semaine
+// affichee, impression PDF et retour a l'application. Masquee a l'impression
+// (`noprint`).
 //
 // Impression (2026-11-05) : une feuille A3 portrait par section (Matin,
 // Après-midi, Nuit), mise à l'échelle pour remplir la page — règles et mesure
@@ -54,6 +55,31 @@ export default function AffichageBarre({
       `}</style>
 
       <div className="noprint" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        {/* Retour à l'écran de base (choix des services), sans passer par le
+            bouton Précédent du navigateur. */}
+        <Link
+          href="/affichage"
+          prefetch={false}
+          title="Revenir au choix des services (menu Affichage)"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            height: TAILLE,
+            boxSizing: "border-box",
+            padding: "0 14px",
+            background: "#fff",
+            color: "#1d4ed8",
+            border: "1px solid var(--border)",
+            borderRadius: 9,
+            fontWeight: 600,
+            fontSize: 15,
+            textDecoration: "none",
+            whiteSpace: "nowrap",
+          }}
+        >
+          <span aria-hidden="true" style={{ fontSize: 20, lineHeight: 1 }}>&lsaquo;</span> Services
+        </Link>
         {/* Selecteur de semaine : precedente / periode affichee / suivante. */}
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <button

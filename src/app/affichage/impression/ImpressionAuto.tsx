@@ -41,8 +41,25 @@ export default function ImpressionAuto() {
       >
         <PrintIcon /> Imprimer
       </button>
-      <Link href="/affichage" style={{ color: "#6b7280", textDecoration: "none" }}>
-        ← Choix des services
+      {/* Retour à l'écran de base, sans le bouton Précédent du navigateur. */}
+      <Link
+        href="/affichage"
+        prefetch={false}
+        title="Revenir au choix des services (menu Affichage)"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
+          padding: "8px 14px",
+          background: "#fff",
+          color: "#1d4ed8",
+          border: "1px solid var(--border)",
+          borderRadius: 9,
+          fontWeight: 600,
+          textDecoration: "none",
+        }}
+      >
+        <span aria-hidden="true" style={{ fontSize: 18, lineHeight: 1 }}>&lsaquo;</span> Choix des services
       </Link>
     </div>
   );
