@@ -291,6 +291,12 @@ Priorité d'affichage de l'horaire (TV) : **exception ponctuelle > temps partiel
   « Attente » au Référentiel les fait revenir (rien n'est supprimé).
 
 ## Habilitations (`/habilitations`)
+- **Sous-droits par famille** (2026-11-05) : « qui peut actualiser quelle famille » dans l'écran Droits
+  (sous-lignes d'Habilitations, une par `competence.groupe`, « Sans famille » comprise). Stockage :
+  `role_permission` module `habfam:<groupe en minuscules>`, `none` = refus, `write` = rétabli ; aucune
+  ligne = ouvert. `getFamillesRefusees(role)` lit les surcharges en cache (PERMISSIONS_TAG) ; le plafond
+  anti-escalade d'une famille = ce que l'appelant actualise lui-même. Renommer un groupe dans Param.
+  Habilitation « rouvre » la famille (nouvelle clé) : refaire le réglage.
 - **Même grille que la matrice** (`persongrid.module.css`, `usePersonGrid`). Deux pages
   distinctes car les droits diffèrent : `chef_equipe` écrit dans la matrice, pas ici.
 - Vue **Grille** (pastilles) ou **Liste** : `SlideSwitch` en ligne 2 de l'en-tête.

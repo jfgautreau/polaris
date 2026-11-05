@@ -3,6 +3,7 @@ import { getServerClient, getAdminClient } from "@/lib/supabase-server";
 import { getCurrentProfile } from "@/lib/current-user";
 import { canWriteModule } from "@/lib/permissions";
 import { messageRefusPerimetre } from "@/lib/erreurs";
+import { refusFamille } from "@/lib/habilitations-familles-server";
 
 // POST /api/habilitations/autorisation { id, remise: boolean }
 // Toggle « autorisation remise » sur un enregistrement personne_competence
@@ -24,6 +25,9 @@ export async function POST(req: NextRequest) {
   // MULTI-SITE : borne par site_id (défense en profondeur — l'id UUID
   // est unique global, mais avec service_role la RLS ne filtre pas).
   const site_id = profile.siteId;
+  // Sous-droit par famille de formation (écran Droits, 2026-11-05).
+  const refus = await refusFamille(supabase, site_id, profile.role, { habilitationId: id });
+  if (refus) return NextResponse.json({ error: refus }, { status: 403 });
 
   // Lire la date d'obtention pour l'utiliser comme date d'autorisation.
   // Sans date d'obtention (cas theorique : ligne existant mais vide), on refuse :

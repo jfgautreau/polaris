@@ -5,6 +5,7 @@ import { getCurrentProfile } from "@/lib/current-user";
 import { canWriteModule } from "@/lib/permissions";
 import { addMonthsIso } from "@/lib/habilitations";
 import { messageRefusPerimetre } from "@/lib/erreurs";
+import { refusFamille } from "@/lib/habilitations-familles-server";
 
 // POST /api/habilitations { personne_id, competence_id, date_obtention, date_autorisation_conduite? }
 // Enregistre (ou recycle) une habilitation. Pendant longtemps c'etait une server
@@ -45,6 +46,9 @@ export async function POST(req: NextRequest) {
     .eq("site_id", profile.siteId)
     .single<{ duree_validite_mois: number | null; type: string }>();
   if (!comp) return NextResponse.json({ error: "Formation inconnue ou hors de votre site." }, { status: 400 });
+  // Sous-droit par famille de formation (écran Droits, 2026-11-05).
+  const refus = await refusFamille(supabase, profile.siteId, profile.role, { competenceId: competence_id });
+  if (refus) return NextResponse.json({ error: refus }, { status: 403 });
 
   // L'echeance est figee a la saisie (cf. CLAUDE.md) : recalculee ici a partir de
   // la duree de validite en vigueur au moment ou l'on enregistre.
@@ -95,6 +99,8 @@ export async function DELETE(req: NextRequest) {
   }
 
   const supabase = (await canWriteModule(profile.role, "habilitations")) ? getAdminClient() : await getServerClient();
+  const refus = await refusFamille(supabase, profile.siteId, profile.role, { competenceId: competence_id });
+  if (refus) return NextResponse.json({ error: refus }, { status: 403 });
 
   // Historique (0084) : la suppression est journalisée par un déclencheur, qui
   // prend l'auteur sur la ligne quand la session est absente (client admin).

@@ -9,6 +9,7 @@ import g from "@/components/persongrid.module.css";
 import HabMark from "./HabMark";
 import HabLegendeModal from "./HabLegendeModal";
 import HabMajModal from "./HabMajModal";
+import { LIBELLE_SANS_FAMILLE, peutActualiser } from "@/lib/habilitations-familles";
 import { HabHistoriqueModal } from "./HistoriqueHabilitation";
 import { HistoryIcon } from "@/components/icons";
 import AutorisationMark from "./AutorisationMark";
@@ -28,7 +29,7 @@ type Row = {
   date_autorisation_conduite: string | null;
   commentaire: string | null;
   personne: { nom: string; prenom: string } | null;
-  competence: { nom: string; a_recycler: boolean; a_autorisation_conduite: boolean } | null;
+  competence: { nom: string; a_recycler: boolean; a_autorisation_conduite: boolean; groupe: string | null } | null;
 };
 type Personne = { id: string; nom: string; prenom: string; type_contrat?: string };
 // Dernière suppression d'un couple personne × habilitation (historique, 0084).
@@ -212,6 +213,7 @@ export default function HabilitationsList({
   displayedIds = null,
   comps,
   canEdit = false,
+  famillesRefusees = [],
   ateliers = [],
   equipes = [],
   atelier = "",
@@ -229,6 +231,8 @@ export default function HabilitationsList({
   displayedIds?: string[] | null;
   comps: Comp[];
   canEdit?: boolean;
+  // Familles de formation que ce rôle ne peut pas actualiser (clés habfam:…).
+  famillesRefusees?: string[];
   ateliers?: { id: string; label: string }[];
   equipes?: { id: string; label: string }[];
   atelier?: string;
@@ -243,6 +247,8 @@ export default function HabilitationsList({
 }) {
   const agenceSet = useMemo(() => new Set(agenceCodes), [agenceCodes]);
   const supprSet = useMemo(() => new Set(supprimees), [supprimees]);
+  // Sous-droit par famille : la case d'une famille refusée reste lisible, verrouillée.
+  const peutFamille = (groupe: string | null | undefined) => peutActualiser(canEdit, famillesRefusees, groupe);
   // Recherche ⚠️ PORTÉE PAR L'URL (?search=) : survit au rafraîchissement et
   // VOYAGE entre Planning / Personnel / Matrice / Habilitations (cf. MainNav).
   const pathname = usePathname();
@@ -721,7 +727,12 @@ export default function HabilitationsList({
                       {shownOrdered.map((c) => {
                         const { statut, title } = cellOf(p.id, c);
                         const rec = recMap.get(`${p.id}:${c.id}`);
-                        const hint = canEdit ? `\n(cliquer pour ${rec ? "recycler" : "enregistrer"})` : "";
+                        const modif = peutFamille(c.groupe);
+                        const hint = modif
+                          ? `\n(cliquer pour ${rec ? "recycler" : "enregistrer"})`
+                          : canEdit
+                            ? `\n🔒 Famille « ${(c.groupe ?? "").trim() || LIBELLE_SANS_FAMILLE} » : votre rôle ne peut pas l'actualiser`
+                            : "";
                         // Case vide dont l'habilitation a été supprimée : gris clair,
                         // l'historique de la modale en garde le détail.
                         const supprimee = !rec && supprSet.has(`${p.id}:${c.id}`);
@@ -735,7 +746,7 @@ export default function HabilitationsList({
                               className={g.cellMark}
                               title={`${p.nom} ${p.prenom}\n${title}${supprimee ? "\nSupprimée (voir l'historique)" : ""}${hint}`}
                               onClick={
-                                canEdit
+                                modif
                                   ? () =>
                                       setMaj({
                                         personneId: p.id,
@@ -746,7 +757,7 @@ export default function HabilitationsList({
                                       })
                                   : undefined
                               }
-                              style={canEdit ? { cursor: "pointer" } : undefined}
+                              style={modif ? { cursor: "pointer" } : canEdit ? { cursor: "not-allowed" } : undefined}
                             >
                               <HabMark statut={statut} />
                             </span>
@@ -802,7 +813,7 @@ export default function HabilitationsList({
                         {anyAutor && (
                           <td style={{ whiteSpace: "nowrap", textAlign: "center" }}>
                             {r.competence?.a_autorisation_conduite ? (
-                              canEdit ? (
+                              peutFamille(r.competence?.groupe) ? (
                                 <AutorisationCell id={r.id} initial={!!r.date_autorisation_conduite} />
                               ) : (
                                 r.date_autorisation_conduite ? "✓" : <span className="muted">—</span>
@@ -820,7 +831,7 @@ export default function HabilitationsList({
                           )}
                         </td>
                         <td>
-                          {canEdit ? (
+                          {peutFamille(r.competence?.groupe) ? (
                             <CommentaireCell id={r.id} initial={r.commentaire} />
                           ) : (
                             r.commentaire ? r.commentaire : <span className="muted">—</span>

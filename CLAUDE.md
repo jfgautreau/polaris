@@ -420,7 +420,11 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   colonne se prolonge par une bande inclinée à 45° (`.obliqueBand`, `skewX`) portant le
   libellé, teintes alternées **par ligne de production**, noms de ligne décalés de
   `--oblique-h`, colonne de marge en bout de tableau (cf. `lessons.md` L53).
-- **Habilitations** (`src/app/habilitations/`) : même principe de recherche transverse ;
+- **Habilitations** (`src/app/habilitations/`) : **sous-droits par famille** (2026-11-05,
+  `src/lib/habilitations-familles.ts`) : `role_permission.module = habfam:<groupe>` au niveau `none` = ce rôle
+  n'actualise pas cette famille (`competence.groupe`), sans migration ; défaut = tout ouvert. Écran Droits :
+  sous-lignes sous Habilitations ; routes `/api/habilitations{,/autorisation,/commentaire}` → `refusFamille()` ;
+  grille : pastilles verrouillées (🔒). Même principe de recherche transverse ;
   bilan sur le sous-ensemble affiché ; saisie au clic sur une pastille ; filtre au clic sur
   un en-tête. **Historique** (`personne_competence_historique`, 0084, écrit par déclencheur) :
   rien n'est perdu à la suppression ; case grisée si supprimée ; vue Liste « Détenues /

@@ -12,7 +12,7 @@ type SuppRow = {
 };
 import AppHeader from "@/components/AppHeader";
 import { fetchAll } from "@/lib/fetch-all";
-import { requireModule, canWrite, canRead } from "@/lib/permissions";
+import { requireModule, canWrite, canRead, getFamillesRefusees } from "@/lib/permissions";
 import { getAteliersC, getEquipesC, getTypesAgenceC } from "@/lib/refdata";
 import HabilitationsList from "./HabilitationsList";
 
@@ -27,7 +27,7 @@ type Row = {
   date_autorisation_conduite: string | null;
   commentaire: string | null;
   personne: { nom: string; prenom: string } | null;
-  competence: { nom: string; a_recycler: boolean; a_autorisation_conduite: boolean } | null;
+  competence: { nom: string; a_recycler: boolean; a_autorisation_conduite: boolean; groupe: string | null } | null;
 };
 
 export default async function HabilitationsPage({
@@ -38,6 +38,8 @@ export default async function HabilitationsPage({
   const { profile, perms } = await requireModule("habilitations", "read");
   const sp = await searchParams;
   const canEdit = canWrite(perms, "habilitations");
+  // Sous-droits par famille (écran Droits) : familles que ce rôle ne peut pas actualiser.
+  const famillesRefusees = [...(await getFamillesRefusees(profile.role))];
   const filtreConducteurs = sp.cond === "1";
 
   const supabase = await getServerClient();
@@ -61,7 +63,7 @@ export default async function HabilitationsPage({
     fetchAll<Row>(() =>
       supabase
         .from("personne_competence")
-        .select("id, personne_id, competence_id, date_obtention, date_expiration, date_autorisation_conduite, commentaire, personne:personne_id(nom, prenom), competence:competence_id(nom, a_recycler, a_autorisation_conduite)")
+        .select("id, personne_id, competence_id, date_obtention, date_expiration, date_autorisation_conduite, commentaire, personne:personne_id(nom, prenom), competence:competence_id(nom, a_recycler, a_autorisation_conduite, groupe)")
         .order("id")
         .returns<Row[]>()
     ),
@@ -152,6 +154,7 @@ export default async function HabilitationsPage({
           displayedIds={displayedIds}
           comps={comps}
           canEdit={canEdit}
+          famillesRefusees={famillesRefusees}
           ateliers={ateliers.map((a) => ({ id: a.id, label: a.nom }))}
           equipes={equipes.map((e) => ({ id: e.id, label: e.nom }))}
           atelier={sp.atelier ?? ""}

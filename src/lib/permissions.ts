@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { getServerClient } from "@/lib/supabase-server";
 import { getCurrentProfile } from "@/lib/current-user";
 import { ROLES, type Role } from "@/lib/roles";
+import { estCleFamille, peutActualiser } from "@/lib/habilitations-familles";
 
 export type Niveau = "none" | "read" | "write";
 
@@ -152,7 +153,12 @@ export async function verifierChangementDroit(
     return { ok: false, status: 403, error: "L'administrateur conserve tous les droits." };
   }
   const miens = await getPermissions(appelant);
-  if (RANG[niveau] > RANG[miens[module] ?? "none"]) {
+  // Sous-droit d'une famille d'habilitation (habfam:…) : le plafond est ce que
+  // l'appelant peut lui-même actualiser dans cette famille.
+  const plafond: Niveau = estCleFamille(module)
+    ? canWrite(miens, "habilitations") && !(await getFamillesRefusees(appelant)).has(module) ? "write" : "none"
+    : miens[module] ?? "none";
+  if (RANG[niveau] > RANG[plafond]) {
     return { ok: false, status: 403, error: "Vous ne pouvez pas accorder un droit que vous n'avez pas vous-même." };
   }
   return { ok: true };
@@ -218,6 +224,46 @@ export const getPermissions = parRequete(async function getPermissions(role: str
   }
   return p;
 });
+
+// Familles d'habilitation REFUSÉES à un rôle (clés `habfam:…` au niveau none,
+// cf. src/lib/habilitations-familles.ts) — mêmes surcharges en cache que
+// getPermissions. Erreur de lecture : aucun refus (comportement d'avant).
+export const getFamillesRefusees = parRequete(async function getFamillesRefusees(role: string): Promise<Set<string>> {
+  try {
+    const { getCurrentSite } = await import("@/lib/current-site");
+    const site = await getCurrentSite();
+    return new Set((await lireSurcharges(site.id, role)).filter((r) => estCleFamille(r.module) && r.niveau === "none").map((r) => r.module));
+  } catch {
+    return new Set();
+  }
+});
+
+// Ce rôle peut-il actualiser une habilitation de cette famille (competence.groupe) ?
+// Droit « Habilitations » en écriture ET famille non refusée. Le périmètre RLS
+// du chef d'équipe reste appliqué par la base.
+export async function peutActualiserFamille(role: string, groupe: string | null | undefined): Promise<boolean> {
+  const [p, refus] = await Promise.all([getPermissions(role), getFamillesRefusees(role)]);
+  return peutActualiser(canWrite(p, "habilitations"), refus, groupe);
+}
+
+// Refus de familles de TOUS les rôles du site (écran Droits).
+export async function getAllFamillesRefusees(): Promise<Record<string, string[]>> {
+  const out: Record<string, string[]> = {};
+  try {
+    const { getCurrentSite } = await import("@/lib/current-site");
+    const [supabase, site] = await Promise.all([getServerClient(), getCurrentSite()]);
+    const { data } = await supabase
+      .from("role_permission")
+      .select("role, module, niveau")
+      .eq("site_id", site.id)
+      .like("module", "habfam:%")
+      .returns<{ role: string; module: string; niveau: Niveau }[]>();
+    for (const r of data ?? []) if (r.niveau === "none") (out[r.role] ??= []).push(r.module);
+  } catch {
+    /* aucun refus */
+  }
+  return out;
+}
 
 // Tous les droits effectifs (pour l'editeur de la matrice).
 // `rolesSupplementaires` : codes des roles personnalises (role_custom) a inclure

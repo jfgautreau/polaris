@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 
 type Niveau = "none" | "read" | "write";
 type RoleOpt = { key: string; label: string };
@@ -21,6 +21,9 @@ export default function DroitsMatrix({
   rolesModifiables,
   roleAppelant,
   permsAppelant,
+  familles = [],
+  famillesRefusees = {},
+  famillesRefuseesAppelant = [],
 }: {
   roles: RoleOpt[]; // tous les roles, y compris ceux qu'on ne peut pas editer
   modules: ModuleOpt[];
@@ -31,7 +34,41 @@ export default function DroitsMatrix({
   // des droits qu'il n'a pas, dont l'admin — restent VISIBLES mais grises.
   rolesModifiables: string[];
   permsAppelant: Record<string, Niveau>; // plafond : on n'accorde pas plus qu'on n'a
+  // Sous-droits des habilitations par famille de formation (habfam:…) : par rôle,
+  // les familles qu'il ne peut PAS actualiser. Par défaut tout est ouvert.
+  familles?: { cle: string; libelle: string }[];
+  famillesRefusees?: Record<string, string[]>;
+  famillesRefuseesAppelant?: string[];
 }) {
+  const [refus, setRefus] = useState<Record<string, string[]>>(famillesRefusees);
+  const appelantPeutFamille = (cle: string) => permsAppelant.habilitations === "write" && !famillesRefuseesAppelant.includes(cle);
+
+  // Coche / décoche « peut actualiser » une famille pour un rôle. Refus serveur :
+  // retour à l'état précédent et message, comme les modules.
+  async function basculerFamille(role: string, cle: string) {
+    const avant = refus[role] ?? [];
+    const refusee = avant.includes(cle);
+    if (refusee && !appelantPeutFamille(cle)) return; // on n'accorde pas ce qu'on n'a pas
+    const apres = refusee ? avant.filter((c) => c !== cle) : [...avant, cle];
+    setRefus((r) => ({ ...r, [role]: apres }));
+    setSave("saving");
+    setSaveMsg("");
+    const res = await fetch("/api/droits", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role, module: cle, niveau: refusee ? "write" : "none" }),
+    }).catch(() => null);
+    if (res && res.ok) {
+      setSave("saved");
+      setTimeout(() => setSave("idle"), 1500);
+      return;
+    }
+    const j = res ? await res.json().catch(() => ({} as { error?: string })) : {};
+    setRefus((r) => ({ ...r, [role]: avant }));
+    setSave("error");
+    setSaveMsg(typeof (j as { error?: string }).error === "string" ? (j as { error: string }).error : res ? "Modification refusée." : "Enregistrement impossible (réseau).");
+    setTimeout(() => setSave("idle"), 4000);
+  }
   const [m, setM] = useState<Record<string, Record<string, Niveau>>>(initial);
   const [save, setSave] = useState<"idle" | "saving" | "saved" | "error">("idle");
   // Message circonstancié du serveur (anti-escalade, rôle protégé…) : sans lui,
@@ -100,7 +137,8 @@ export default function DroitsMatrix({
       </thead>
       <tbody>
         {modules.map((mod) => (
-          <tr key={mod.key}>
+          <Fragment key={mod.key}>
+          <tr>
             <td style={{ position: "sticky", left: 0, background: "#fff", fontWeight: 600, whiteSpace: "nowrap" }}>
               {mod.label}
             </td>
@@ -196,6 +234,55 @@ export default function DroitsMatrix({
               );
             })}
           </tr>
+          {/* Sous-lignes « famille » sous Habilitations : qui peut actualiser quoi. */}
+          {mod.key === "habilitations" &&
+            familles.map((f) => (
+              <tr key={f.cle}>
+                <td style={{ position: "sticky", left: 0, background: "#fff", whiteSpace: "nowrap", paddingLeft: 18, fontSize: 12, color: "var(--muted)" }}>
+                  ↳ {f.libelle}
+                </td>
+                {roles.map((r) => {
+                  const ecrit = (m[r.key]?.habilitations ?? "none") === "write";
+                  const ok = ecrit && !(refus[r.key] ?? []).includes(f.cle);
+                  const modifiable = modifiables.has(r.key) && ecrit && (ok || appelantPeutFamille(f.cle));
+                  const titre = !ecrit
+                    ? "Sans le droit « Modif. » sur Habilitations, ce rôle n'actualise aucune famille."
+                    : !modifiables.has(r.key)
+                      ? "Rôle non modifiable par vous."
+                      : !modifiable
+                        ? "Vous ne pouvez pas accorder une famille que vous ne pouvez pas actualiser vous-même."
+                        : ok
+                          ? `Peut actualiser « ${f.libelle} » — cliquer pour retirer`
+                          : `Ne peut pas actualiser « ${f.libelle} » — cliquer pour accorder`;
+                  const style: React.CSSProperties = {
+                    margin: 0,
+                    width: 78,
+                    padding: "3px 6px",
+                    borderRadius: 6,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    background: ok ? "#ede9fe" : "#fff",
+                    color: ok ? "#5b21b6" : "#6b7280",
+                    border: ok ? "1px solid #c4b5fd" : "1px solid #cbd5e1",
+                    opacity: modifiable ? 1 : 0.45,
+                    cursor: modifiable ? "pointer" : "not-allowed",
+                  };
+                  const libelle = !ecrit ? "—" : ok ? "✓ Actualise" : "🔒 Non";
+                  return (
+                    <td key={r.key} style={{ textAlign: "center", padding: 2 }}>
+                      {modifiable ? (
+                        <button type="button" title={titre} onClick={() => void basculerFamille(r.key, f.cle)} style={style}>
+                          {libelle}
+                        </button>
+                      ) : (
+                        <span title={titre} style={{ ...style, display: "inline-block" }}>{libelle}</span>
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </Fragment>
         ))}
       </tbody>
     </table>

@@ -3,6 +3,7 @@ import { revalidateTag } from "next/cache";
 import { MODULE_KEYS, PERMISSIONS_TAG, moduleWriteGuard, verifierChangementDroit, type Niveau } from "@/lib/permissions";
 import { getCurrentSite } from "@/lib/current-site";
 import { getAllRoles } from "@/lib/roles-server";
+import { estCleFamille } from "@/lib/habilitations-familles";
 
 // POST /api/droits { role, module, niveau }
 // Enregistre un droit (role x module) a la volee, pour le titulaire du droit
@@ -32,7 +33,10 @@ export async function POST(req: NextRequest) {
   // Ne PAS valider contre les seuls ROLES intégrés : éditer les droits d'un rôle
   // personnalisé retombait alors en 400 « Paramètres invalides » → « Échec » à l'écran.
   const rolesValides = new Set((await getAllRoles()).map((r) => r.code));
-  if (!rolesValides.has(role) || !MODULE_KEYS.includes(module) || !VALID.includes(niveau)) {
+  // Module = un module de l'appli, ou une famille d'habilitation (habfam:…,
+  // sous-droit « peut actualiser » : none ou write seulement).
+  const famille = estCleFamille(module);
+  if (!rolesValides.has(role) || !(MODULE_KEYS.includes(module) || famille) || !VALID.includes(niveau) || (famille && niveau === "read")) {
     return NextResponse.json({ error: "Paramètres invalides" }, { status: 400 });
   }
 

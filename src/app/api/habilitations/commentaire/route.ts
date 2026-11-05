@@ -3,6 +3,7 @@ import { getServerClient, getAdminClient } from "@/lib/supabase-server";
 import { getCurrentProfile } from "@/lib/current-user";
 import { canWriteModule } from "@/lib/permissions";
 import { messageRefusPerimetre } from "@/lib/erreurs";
+import { refusFamille } from "@/lib/habilitations-familles-server";
 
 // POST /api/habilitations/commentaire { id, commentaire }
 // Edition inline du commentaire d'une habilitation depuis la vue liste. Meme
@@ -17,6 +18,9 @@ export async function POST(req: NextRequest) {
   if (!id) return NextResponse.json({ error: "id manquant" }, { status: 400 });
 
   const supabase = (await canWriteModule(profile.role, "habilitations")) ? getAdminClient() : await getServerClient();
+  // Sous-droit par famille de formation (écran Droits, 2026-11-05).
+  const refus = await refusFamille(supabase, profile.siteId, profile.role, { habilitationId: id });
+  if (refus) return NextResponse.json({ error: refus }, { status: 403 });
   // MULTI-SITE : borne par site_id (défense en profondeur avec service_role).
   const { error } = await supabase
     .from("personne_competence")

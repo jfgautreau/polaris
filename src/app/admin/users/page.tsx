@@ -1,6 +1,7 @@
 import { getAdminClient } from "@/lib/supabase-server";
 import AppHeader from "@/components/AppHeader";
-import { requireModule, canWrite, MODULES, getAllPermissions, roleModifiablePar } from "@/lib/permissions";
+import { requireModule, canWrite, MODULES, getAllPermissions, roleModifiablePar, getAllFamillesRefusees, getFamillesRefusees } from "@/lib/permissions";
+import { famillesDe } from "@/lib/habilitations-familles";
 import { getAllRoles } from "@/lib/roles-server";
 import LectureSeule from "@/components/LectureSeule";
 import NouvelUtilisateur from "./NouvelUtilisateur";
@@ -43,6 +44,17 @@ export default async function AdminUsersPage() {
   const peutEditerDroits = canWrite(perms, "utilisateurs");
   const customCodes = roleCodes.filter((c) => !(["codir", "chef_equipe", "ordo", "rh", "admin", "planning"] as string[]).includes(c));
   const allPerms = peutEditerDroits ? await getAllPermissions(customCodes) : null;
+
+  // Sous-droits des habilitations par famille de formation (competence.groupe) :
+  // une sous-ligne par famille sous « Habilitations ». Lecture bornée au site.
+  const [compsFam, famRefusees, famRefuseesMoi] = peutEditerDroits
+    ? await Promise.all([
+        getAdminClient().from("competence").select("groupe").eq("site_id", profile.siteId).eq("actif", true).returns<{ groupe: string | null }[]>(),
+        getAllFamillesRefusees(),
+        getFamillesRefusees(profile.role),
+      ])
+    : [{ data: [] as { groupe: string | null }[] }, {} as Record<string, string[]>, new Set<string>()];
+  const familles = famillesDe((compsFam.data ?? []).map((c) => c.groupe));
 
   // Quels roles cet appelant peut-il reellement editer ? La regle est cote
   // serveur (roleModifiablePar) ; l'ecran ne fait que la refleter, pour ne pas
@@ -136,6 +148,9 @@ export default async function AdminUsersPage() {
                 rolesModifiables={rolesModifiables}
                 roleAppelant={profile.role}
                 permsAppelant={perms}
+                familles={familles}
+                famillesRefusees={famRefusees}
+                famillesRefuseesAppelant={[...famRefuseesMoi]}
               />
             </div>
           </div>
