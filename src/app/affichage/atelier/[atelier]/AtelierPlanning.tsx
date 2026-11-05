@@ -678,9 +678,20 @@ export default async function AtelierPlanning({
                       const interim = agenceSet.has(p.type_contrat);
                       return (
                         <tr key={p.id}>
-                          <td className="aff-nom" style={{ border: cellBorder, fontWeight: 600, whiteSpace: "nowrap" }}>
-                            <span style={{ background: interim ? INTERIM_BG : undefined, padding: interim ? "0 4px" : 0, borderRadius: 3 }}>
-                              {p.nom} {p.prenom}
+                          {/* Nom trop long pour la colonne : le prénom passe à la ligne
+                              (jamais rogné, colonne à largeur fixe). Le prénom reste
+                              d'un bloc ; seul un nom à lui seul trop long se coupe. */}
+                          <td className="aff-nom" style={{ border: cellBorder, fontWeight: 600, overflowWrap: "anywhere", lineHeight: 1.25 }}>
+                            <span
+                              style={{
+                                background: interim ? INTERIM_BG : undefined,
+                                padding: interim ? "0 4px" : 0,
+                                borderRadius: 3,
+                                boxDecorationBreak: "clone",
+                                WebkitBoxDecorationBreak: "clone",
+                              }}
+                            >
+                              {p.nom} <span style={{ whiteSpace: "nowrap" }}>{p.prenom}</span>
                             </span>
                           </td>
                           {shownDays.map((d) => (
