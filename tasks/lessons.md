@@ -981,3 +981,13 @@ l'utilisateur est une autre adresse.
 **Règle** : un script hors dépôt vérifie TOUS ses prérequis (auteur, site, formations, plan
 attendu) **avant** la première écriture et s'arrête sans rien écrire au moindre écart ;
 l'auteur se lit dans `app_user` du site, jamais déduit de l'identité git.
+
+## L65 — Une colonne lue par jointure PostgREST doit exister : `personne.date_arrivee` n'existe plus
+2026-11-05 : l'affichage TV lisait `personne:personne_id(…, date_arrivee)` pour signaler les
+nouveaux. La colonne a été supprimée en 0050 (l'arrivée = plus ancien `contrat_periode.date_debut`) :
+PostgREST a refusé TOUTE la requête des placements, `fetchAll` a levé, et chaque écran TV / page
+d'impression est tombé en 500 (« This page couldn't load »). Ni `tsc` ni le build ne le voient :
+le type passé à `.returns<>()` est déclaratif.
+**Règle** : avant d'ajouter une colonne à un `select`, vérifier qu'elle existe encore
+(`grep` des migrations : `add column` ET `drop column`) ; un signal secondaire (« nouveau »)
+se lit à part, avec repli, pour ne jamais faire tomber la lecture principale.

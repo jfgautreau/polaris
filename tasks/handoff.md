@@ -425,7 +425,7 @@ pas de troisième** : la fiche d'une personne est une modale du Suivi.
   site, nom joint) — le service de la fiche Personnel ne compte plus ; sans affectation (absent,
   non planifié) = affiché nulle part. Une personne prêtée figure sur deux plannings. Elle est
   dans **chaque** section (Matin / Après-midi / Nuit) où elle a une affectation sur ce service ;
-  sa ligne montre toute la semaine. **Nouveaux** : « ★ » + nom bleu si `date_arrivee` ≥ aujourd'hui
+  sa ligne montre toute la semaine. **Nouveaux** : « ★ » + nom bleu si l'arrivée (plus ancien `contrat_periode.date_debut`) ≥ aujourd'hui
   − 14 jours (`NOUVEAU_JOURS`).
   Les ids reçus ne font que **filtrer** la liste des services du site. Chaque service garde
   son lien **« Écran TV »** (`/affichage/atelier/[id]`, un service). Mise à jour **économe** depuis le 2026-10-14 :

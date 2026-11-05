@@ -14,9 +14,10 @@ import { FEUILLE_L, FEUILLE_H, ENTETE_H, PIED_H, ECART_H } from "./feuilles-impr
 type Atelier = { id: string; nom: string };
 type Site = { id: string; nom: string };
 type Quart = { code: string; libelle?: string; ordre?: number; creneau?: string | null };
-type Personne = { nom: string; prenom: string; type_contrat: string; date_arrivee: string | null };
+type Personne = { nom: string; prenom: string; type_contrat: string };
 
-// « Nouveau » à l'affichage (2026-11-05) : arrivé (début du 1er contrat) depuis
+// « Nouveau » à l'affichage (2026-11-05) : arrivé (début du 1er contrat, lu dans
+// contrat_periode — personne n'a plus de colonne d'arrivée depuis 0050) depuis
 // moins de 14 jours, ou arrivée à venir. Un intérimaire revenu avec un ancien
 // contrat garde sa première arrivée : il n'est pas nouveau.
 const NOUVEAU_JOURS = 14;
@@ -152,7 +153,7 @@ export default async function AtelierPlanning({
     const plSite = await fetchAll<PlSite>(() =>
       admin
         .from("placement")
-        .select("poste_id, jour, quart_code, personne_id, numero_rotation, personne:personne_id(nom, prenom, type_contrat, date_arrivee)")
+        .select("poste_id, jour, quart_code, personne_id, numero_rotation, personne:personne_id(nom, prenom, type_contrat)")
         .eq("site_id", site.id)
         .in("jour", isos)
         .not("poste_id", "is", null)
@@ -339,13 +340,24 @@ export default async function AtelierPlanning({
       (byPerson.get(pk) ?? byPerson.set(pk, []).get(pk)!).push(r);
       if (posteIciSet.has(r.poste_id) && r.personne && !displayById.has(r.personne_id)) {
         const p = r.personne;
-        displayById.set(r.personne_id, { nom: p.nom, prenom: p.prenom, type_contrat: p.type_contrat, date_arrivee: p.date_arrivee });
+        displayById.set(r.personne_id, { nom: p.nom, prenom: p.prenom, type_contrat: p.type_contrat });
       }
     }
   }
 
   // Personnes affichées, orphelins compris (découverts dans le bloc ci-dessus).
   const personIds = [...displayById.keys()];
+
+  // Arrivée = plus ancien début de contrat (contrat_periode, seule source depuis
+  // 0050). Lecture du site, sans liste d'ids dans l'URL ; fetchAll (> 1000 lignes).
+  const pArrivees = fetchAll<{ personne_id: string; date_debut: string | null }>(() =>
+    admin
+      .from("contrat_periode")
+      .select("personne_id, date_debut")
+      .eq("site_id", site.id)
+      .order("id")
+      .returns<{ personne_id: string; date_debut: string | null }[]>()
+  ).catch(() => [] as { personne_id: string; date_debut: string | null }[]); // signal secondaire : un échec ne casse pas l’écran
 
   // Absences (tous motifs) des personnes affichées -> une simple mention "Absence"
   // (pas de detail du motif). fetchAll : L8 (troncature silencieuse > 1000 lignes).
@@ -478,7 +490,16 @@ export default async function AtelierPlanning({
 
   // Nouveaux : arrivée dans les NOUVEAU_JOURS derniers jours (ou à venir).
   const seuilNouveau = isoDate(new Date(Date.now() - NOUVEAU_JOURS * 86400000));
-  const estNouveau = (p: Personne) => !!p.date_arrivee && p.date_arrivee >= seuilNouveau;
+  const arrivee = new Map<string, string>();
+  {
+    const affiches = new Set(personIds);
+    for (const c of await pArrivees) {
+      if (!c.date_debut || !affiches.has(c.personne_id)) continue;
+      const d = arrivee.get(c.personne_id);
+      if (!d || c.date_debut < d) arrivee.set(c.personne_id, c.date_debut);
+    }
+  }
+  const estNouveau = (id: string) => (arrivee.get(id) ?? "") >= seuilNouveau;
 
   // Numéro(s) de semaine ISO des jours affichés, en tête de chaque page imprimée
   // (et à l'écran à côté du nom du service). Une fenêtre à cheval sur deux
@@ -603,7 +624,7 @@ export default async function AtelierPlanning({
                   <tbody>
                     {liste.map((p) => {
                       const interim = agenceSet.has(p.type_contrat);
-                      const nouveau = estNouveau(p);
+                      const nouveau = estNouveau(p.id);
                       return (
                         <tr key={p.id}>
                           {/* Nom trop long pour la colonne : le prénom passe à la ligne

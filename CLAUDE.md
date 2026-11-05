@@ -474,7 +474,7 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   affectées au moins une fois sur un poste du service dans la fenêtre, quel que soit leur service à la fiche
   (2026-11-05, deux plannings possibles ; sans affectation = nulle part) ; sections Matin / Après-midi / Nuit
   classées par `creneau`, une personne dans **chaque** section où elle est affectée ici (ligne = semaine entière) ;
-  « ★ » + nom bleu = arrivée (`date_arrivee`) depuis < 14 jours ; fenêtre relative ou absolue
+  « ★ » + nom bleu = arrivée (plus ancien `contrat_periode.date_debut` — `personne.date_arrivee` n’existe plus depuis 0050) depuis < 14 jours ; fenêtre relative ou absolue
   (`getFenetreAffichage`, `joursDeFenetre`) ; impression A3 portrait, **une feuille par section**
   mise à l'échelle séparément (`FeuillesImpression`), numéro de semaine en gros en tête de page. **Mise à jour
   économe** (2026-10-14, `MiseAJourEconome`) : toutes les 5 min, la server action
