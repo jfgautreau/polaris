@@ -48,7 +48,8 @@ Spécification : `tasks/planning-par-poste.md`.
 ## Visites médicales (module RH)
 - [ ] **Import initial de l'historique** des visites (matricule, date, type, éventuelles
       ANCI). Sans lui, tout le personnel apparaît « En retard ». Format à obtenir des RH ;
-      s'inspirer de l'import des absences RH (`src/lib/import-absences-rh.ts`).
+      l'ancien import des absences RH (retiré le 2026-11-05, voir l'historique git de
+      `src/lib/import-absences-rh.ts`) peut servir de modèle.
 - [ ] **Relire les déclencheurs posés par la migration 0076** avec les RH : quarts de nuit,
       habilitations à autorisation de conduite, motifs d'arrêt cochés pour la reprise.
 - [ ] **Postes à risques particuliers** : à cocher depuis la liste annuelle transmise au

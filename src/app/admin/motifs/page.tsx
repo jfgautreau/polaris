@@ -14,7 +14,6 @@ import BandeauErreur from "@/components/BandeauErreur";
 import FenetreAffichageInline from "./FenetreAffichageInline";
 import NomFichierInterimInline from "./NomFichierInterimInline";
 import { getCurrentSite } from "@/lib/current-site";
-import ImportAbsences from "./ImportAbsences";
 import { CheckIcon, EditIcon } from "@/components/icons";
 import PastillesCouleur from "@/components/PastillesCouleur";
 
@@ -415,20 +414,6 @@ export default async function MotifsPage({
             <FenetreAffichageInline initial={fenetre} />
           </div>
         )}
-
-        {/* ---------------- Import des absences (logiciel RH / GT) ---------------- */}
-        <h2 style={{ marginTop: 32, marginBottom: 4 }}>Import des absences (logiciel RH)</h2>
-        <p className="muted" style={{ marginBottom: 16 }}>
-          Déposez l&apos;export CSV du logiciel de gestion des temps (absences groupées
-          par matricule). L&apos;analyse rapproche chaque personne <strong>par le nom</strong>
-          {" "}(les matricules RH ne correspondent pas à Polaris) et propose de créer les
-          motifs manquants d&apos;après leur <strong>Code GT</strong>. Les cas douteux sont à
-          confirmer avant l&apos;import ; l&apos;équivalence retenue est mémorisée pour les
-          imports suivants. À l&apos;import, les jours d&apos;absence de la période couverte
-          sont <strong>remplacés</strong> par le fichier (le RH fait foi). Chaque ligne datée
-          compte pour une <strong>journée entière</strong>.
-        </p>
-        <ImportAbsences />
 
         </LectureSeule>
       </div>

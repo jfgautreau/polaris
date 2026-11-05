@@ -33,8 +33,8 @@ L'historique des décisions est dans git et dans l'en-tête de chaque migration.
    Pour de la *donnée* seulement, un script Node lisant `SUPABASE_SERVICE_ROLE_KEY` de
    `.env.local` est acceptable (simulation d'abord, écriture après accord).
    Projet Supabase : ref `stcxlsmmnplxpirrnefm`, eu-west-3.
-   **Dernière migration appliquée : `0092`** (durcissement sécurité, audit du 2026-11-03) ; **`0093`**
-   (`export_interim` : atelier.couleur, parametre_rh, export_interim_photo) écrite le 2026-11-05, à exécuter. Toute nouvelle policy RLS s'écrit
+   **Dernière migration appliquée : `0093`** (`export_interim` : atelier.couleur, parametre_rh,
+   export_interim_photo, 2026-11-05) ; avant elle `0092` (durcissement sécurité, audit du 2026-11-03). Toute nouvelle policy RLS s'écrit
    `site_id = (select public.current_site_id())` (forme InitPlan, calculée une fois par
    requête) — idem pour `is_admin()`, `has_role('x')`, `auth.uid()`.
    **Toute nouvelle table** (`create table` dans `public`, migration 0091+) porte dans la même
@@ -377,7 +377,8 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   tournante exigée) : chaque semaine prend le quart de l'équipe (`Jour.quart`, groupes
   et effectifs **par semaine** dans la grille) ; bande de quart colorée par semaine en tête (dans les deux vues, même quart sur les 3 semaines en « Suivre le quart »,
   `BANDE_H` décale tous les en-têtes figés) ; `»` écrit chaque jour sur son quart et
-  saute un poste hors cycle. Jours de semaine toujours affichés (jour fermé = message fusionné). Bascule
+  saute un poste hors cycle. Jours de semaine toujours affichés (jour fermé = message fusionné). Bilan : Besoin / Présent / Delta, catégories,
+  ligne **poste au choix** (menu, `localStorage planning.bilanPoste`, présents / effectif du poste sur le quart), Alertes. Bascule
   Conducteurs (`?cond=1`). Pendule 🕐 (horaire + commentaire, `horaire_exception` ; son `»`
   recopie l'horaire sur les mêmes jours cibles que `»`, jours postés → postés, Formation →
   Formation, remplace après confirmation, op `save-many`),
@@ -494,8 +495,8 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   régimes, déclencheurs (quarts / postes / habilitations / motifs), catalogue, alertes —
   **séparé de Param. RH**, ce sont deux métiers.
 - **Param. RH** (`/admin/motifs`, droit `motifs`) : motifs (code GT, planifié ou non, affiché sur le « PDF pour Affich. »),
-  agences, nom du fichier Excel intérim (`parametre_rh`, 0093), types de contrat (`avec_agence`), fenêtre d'affichage TV, import des absences RH
-  (`src/lib/import-absences-rh.ts`).
+  agences, nom du fichier Excel intérim (`parametre_rh`, 0093), types de contrat (`avec_agence`), fenêtre d'affichage TV. L'import des absences du logiciel RH a été **retiré**
+  le 2026-11-05 (écran, route, règles ; la table `import_absence_personne` reste en base, inutilisée).
 - **Journal** (`src/app/journal/`, droit `journal`, règles pures `src/lib/journal.ts`) : lu en
   service_role borné au site (la matrice décide, pas la RLS d'audit_log à rôles en dur) ;
   filtres dans l'URL, 100 lignes par page, Planning + Polyvalence masqués par défaut.

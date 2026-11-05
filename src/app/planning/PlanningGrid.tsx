@@ -684,6 +684,17 @@ export default function PlanningGrid({
   useEffect(() => {
     if (typeof window !== "undefined" && window.localStorage.getItem("planning.showBilan") === "1") setShowInd(true);
   }, []);
+  // Ligne « poste au choix » du bilan (2026-11-05) : un poste choisi dans la liste
+  // (CDT…), compté comme les catégories — présents / requis par jour sur le quart.
+  // Mémorisé dans ce navigateur, comme le dépliage du bilan.
+  const [bilanPoste, setBilanPoste] = useState("");
+  useEffect(() => {
+    if (typeof window !== "undefined") setBilanPoste(window.localStorage.getItem("planning.bilanPoste") ?? "");
+  }, []);
+  const choisirBilanPoste = (id: string) => {
+    setBilanPoste(id);
+    if (typeof window !== "undefined") window.localStorage.setItem("planning.bilanPoste", id);
+  };
   const toggleInd = () =>
     setShowInd((s) => {
       const next = !s;
@@ -903,6 +914,17 @@ export default function PlanningGrid({
       }
     return { posteLigne: pl, posteLabel: lab, posteCat: cat, allLigneIds: [...ids] };
   }, [groups]);
+  // Postes proposés à la ligne « poste au choix » : ceux de la grille (filtre de
+  // service compris), une fois chacun, rangés par ligne de production.
+  const optionsBilanPoste = useMemo(() => {
+    const parLigne = new Map<string, { ligneNom: string; postes: Map<string, string> }>();
+    for (const gs of groups)
+      for (const g of gs) {
+        const e = parLigne.get(g.ligneId) ?? parLigne.set(g.ligneId, { ligneNom: g.ligneNom, postes: new Map() }).get(g.ligneId)!;
+        for (const p of g.postes) e.postes.set(p.id, p.nom);
+      }
+    return [...parLigne.values()].map((l) => ({ ligneNom: l.ligneNom, postes: [...l.postes].map(([id, nom]) => ({ id, nom })) }));
+  }, [groups]);
 
   // Données du panneau d'affectation, calculées sur TOUS les ateliers (allGroups).
   // Le panneau propose toute l'usine ; il n'est plus borné au filtre atelier.
@@ -985,7 +1007,11 @@ export default function PlanningGrid({
           const c = p.categorie ?? "operateur";
           if (c in catRequis) catRequis[c] += p.effectif ?? 0;
         }
-    return { counts, present, alerts, overCount, catPresent, catRequis };
+    // Poste au choix : présents (comptés plus haut) / effectif requis du poste sur
+    // le quart du jour, si sa ligne est ouverte.
+    const choixPresent = bilanPoste ? counts[bilanPoste] ?? 0 : 0;
+    const choixRequis = bilanPoste && openLines.has(posteLigne[bilanPoste] ?? "") ? effectif[`${d.quart}:${bilanPoste}`] ?? 0 : 0;
+    return { counts, present, alerts, overCount, catPresent, catRequis, choixPresent, choixRequis };
   });
 
   // ⚠️ Ne jamais ajouter `numero` ici : son ABSENCE indique a l'API que l'appel
@@ -1605,16 +1631,62 @@ ${ecritures.length} case(s) seront écrites (postes et NT)${remplacees ? `, dont
             );
           })}
 
+          {/* Poste au choix (menu déroulant), même lecture que les catégories. */}
+          <tr>
+            <td style={{ ...indLeftStyle(6, "#f8fafc"), whiteSpace: "nowrap", fontWeight: 400, padding: "0 4px" }}>
+              <select
+                id="bilan-poste"
+                value={posteLigne[bilanPoste] !== undefined ? bilanPoste : ""}
+                onChange={(e) => choisirBilanPoste(e.target.value)}
+                title="Poste compté sur cette ligne du bilan (présents / requis)"
+                aria-label="Poste compté sur cette ligne du bilan"
+                style={{ height: 19, padding: "0 2px", margin: 0, fontSize: 11, maxWidth: "100%", width: "100%" }}
+              >
+                <option value="">Poste au choix…</option>
+                {optionsBilanPoste.map((l) => (
+                  <optgroup key={l.ligneNom} label={l.ligneNom}>
+                    {l.postes.map((p) => (
+                      <option key={p.id} value={p.id}>{p.nom}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </td>
+            {days.map((d, i) => {
+              const actif = posteLigne[bilanPoste] !== undefined;
+              const pres = perDay[i].choixPresent;
+              const req = perDay[i].choixRequis;
+              const manque = actif && req > 0 && pres < req;
+              const bg = manque ? "#fee2e2" : isToday(d) ? "#eef2ff" : "#f8fafc";
+              return (
+                <td
+                  key={d.iso}
+                  style={{ ...indCellStyle(6, bg), textAlign: "center", fontWeight: 700, padding: "1px 4px", color: manque ? "#7f1d1d" : "var(--text)", ...sep(d) }}
+                  title={actif ? `${posteLabel[bilanPoste]} : ${pres} présents / ${req} requis` : "Choisissez un poste dans la liste"}
+                >
+                  {actif ? (
+                    <>
+                      {pres}
+                      <span style={{ fontWeight: 400, fontSize: 11, opacity: 0.7 }}>/{req}</span>
+                    </>
+                  ) : (
+                    <span className="muted">·</span>
+                  )}
+                </td>
+              );
+            })}
+          </tr>
+
           {/* Ligne d'alertes : puces cliquables (hors-competence / sur-effectif) */}
           <tr>
-            <td style={indLeftStyle(6, "#f8fafc")}>Alertes</td>
+            <td style={indLeftStyle(7, "#f8fafc")}>Alertes</td>
             {days.map((d, i) => {
               const hc = perDay[i].alerts;
               const ov = perDay[i].overCount;
               const hcOn = highlight?.iso === d.iso && highlight.type === "hc";
               const ovOn = highlight?.iso === d.iso && highlight.type === "over";
               return (
-                <td key={d.iso} style={{ ...indCellStyle(6, isToday(d) ? "#eef2ff" : "#f8fafc"), textAlign: "center", padding: "2px 2px", ...sep(d) }}>
+                <td key={d.iso} style={{ ...indCellStyle(7, isToday(d) ? "#eef2ff" : "#f8fafc"), textAlign: "center", padding: "2px 2px", ...sep(d) }}>
                   {hc > 0 && (
                     <button
                       type="button"
