@@ -15,7 +15,7 @@ import {
 
 // Éditeur de la mise en page des PDF du Placement (0094) : on choisit le
 // service, le PDF, le format et l'orientation, puis on pose les blocs sur une
-// grille de 12 × 12 cases. Un bloc se déplace par son bandeau et s'agrandit par
+// grille de 15 × 15 cases (feuille à la largeur de l'écran). Un bloc se déplace par son bandeau et s'agrandit par
 // son coin bas-droit ; dans une ligne, les postes se réordonnent au
 // glisser-déposer (ils ne quittent jamais leur ligne). Enregistrement explicite.
 
@@ -72,9 +72,26 @@ export default function MiseEnPageEditor({
   const [glisse, setGlisse] = useState<Glisse | null>(null);
   const [fantome, setFantome] = useState<{ x: number; y: number } | null>(null);
   const feuilleRef = useRef<HTMLDivElement>(null);
+  // Feuille aussi grande que la place disponible : largeur de sa colonne, et
+  // hauteur bornée à la fenêtre (un portrait reste visible en entier).
+  const zoneRef = useRef<HTMLDivElement>(null);
+  const [place, setPlace] = useState({ l: 1100, h: 800 });
+  useEffect(() => {
+    const el = zoneRef.current;
+    if (!el) return;
+    const mesurer = () => setPlace({ l: Math.max(600, el.clientWidth - 4), h: Math.max(480, window.innerHeight - 190) });
+    mesurer();
+    const ro = new ResizeObserver(mesurer);
+    ro.observe(el);
+    window.addEventListener("resize", mesurer);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", mesurer);
+    };
+  }, []);
 
   const f = feuille(brouillon.format, brouillon.orientation);
-  const largeurEcran = 880;
+  const largeurEcran = Math.round(Math.min(place.l, (place.h * f.l) / f.utileH));
   const hauteurEcran = Math.round((largeurEcran * f.utileH) / f.l);
   const cw = largeurEcran / GRILLE;
   const ch = hauteurEcran / GRILLE;
@@ -277,7 +294,7 @@ export default function MiseEnPageEditor({
         {etat?.msg ?? (enregistrees[cle] ? (modifie ? "Modifications non enregistrées." : "Mise en page enregistrée.") : "Pas encore de mise en page : le PDF utilise sa disposition automatique.")}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "220px auto", gap: 14, alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "200px minmax(0, 1fr)", gap: 14, alignItems: "start" }}>
         <div className="card" style={{ margin: 0, padding: 10, display: "grid", gap: 6 }}>
           <strong style={{ fontSize: 13 }}>Blocs à placer</strong>
           {aPlacer.length === 0 && <span className="muted" style={{ fontSize: 12 }}>Tous les blocs sont sur la feuille.</span>}
@@ -303,7 +320,7 @@ export default function MiseEnPageEditor({
           </p>
         </div>
 
-        <div style={{ overflowX: "auto" }}>
+        <div ref={zoneRef} style={{ overflowX: "auto", minWidth: 0 }}>
           <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
             {PDF_LIBELLES[pdf]} · {service.nom} · {brouillon.format} {brouillon.orientation} · grille {GRILLE} × {GRILLE}
           </div>
@@ -377,7 +394,7 @@ function BlocEd({
   const titre = ligne?.nom ?? fixe?.nom ?? "Ligne supprimée";
   const postes = ligne ? ordonnerPostes(ligne.postes, bloc.postes) : [];
   const cle = bloc.type === "ligne" ? `ligne:${bloc.ligne_id}` : bloc.type;
-  const colonnes = Math.max(1, Math.min(postes.length || 1, Math.floor((bloc.w * cw) / 110)));
+  const colonnes = Math.max(1, Math.min(postes.length || 1, Math.floor((bloc.w * cw) / 78)));
   return (
     <div
       style={{
@@ -397,7 +414,7 @@ function BlocEd({
     >
       <div
         onPointerDown={(e) => canEdit && onGeste("deplacer", e)}
-        style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 6px", background: couleur, color: "#fff", fontSize: 12, fontWeight: 700, cursor: canEdit ? "move" : "default", userSelect: "none" }}
+        style={{ display: "flex", alignItems: "center", gap: 4, padding: "1px 4px", background: couleur, color: "#fff", fontSize: 10, fontWeight: 700, cursor: canEdit ? "move" : "default", userSelect: "none" }}
         title={canEdit ? "Glisser pour déplacer" : undefined}
       >
         <span style={{ flex: 1, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>{titre}</span>
@@ -408,15 +425,15 @@ function BlocEd({
             onClick={onRetirer}
             title="Retirer de la feuille"
             aria-label={`Retirer ${titre} de la feuille`}
-            style={{ boxSizing: "border-box", margin: 0, padding: 0, width: 18, height: 18, lineHeight: 1, border: "none", borderRadius: 4, background: "rgba(255,255,255,.25)", color: "#fff", fontSize: 12, cursor: "pointer" }}
+            style={{ boxSizing: "border-box", margin: 0, padding: 0, width: 14, height: 14, lineHeight: 1, border: "none", borderRadius: 3, background: "rgba(255,255,255,.25)", color: "#fff", fontSize: 10, cursor: "pointer" }}
           >
             ×
           </button>
         )}
       </div>
-      <div style={{ flex: 1, padding: 4, overflow: "hidden", fontSize: 11 }}>
+      <div style={{ flex: 1, padding: 3, overflow: "hidden", fontSize: 9, lineHeight: 1.2 }}>
         {bloc.type === "ligne" ? (
-          <div style={{ display: "grid", gap: 4, gridTemplateColumns: `repeat(${colonnes}, 1fr)` }}>
+          <div style={{ display: "grid", gap: 3, gridTemplateColumns: `repeat(${colonnes}, 1fr)` }}>
             {postes.map((p, pos) => (
               <div
                 key={p.id}
@@ -432,8 +449,8 @@ function BlocEd({
                 style={{
                   border: `1px solid ${glissePoste && glissePoste.vers === pos && glissePoste.de !== pos ? "#1d4ed8" : "#cbd5e1"}`,
                   outline: glissePoste && glissePoste.vers === pos && glissePoste.de !== pos ? "2px dashed #1d4ed8" : "none",
-                  borderRadius: 5,
-                  padding: "2px 4px",
+                  borderRadius: 4,
+                  padding: "1px 3px",
                   background: glissePoste?.de === pos ? "#e0e7ff" : "#f8fafc",
                   cursor: canEdit ? "grab" : "default",
                   userSelect: "none",

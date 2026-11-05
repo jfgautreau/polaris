@@ -7,7 +7,7 @@
 
 ## Placement (`/placement`)
 - **Mise en page des PDF** (2026-11-05, migration 0094, droit `placement_pdf`) : éditeur
-  `/admin/mise-en-page-pdf` (`MiseEnPageEditor`, pointer events, grille 12 × 12, enregistrement explicite,
+  `/admin/mise-en-page-pdf` (`MiseEnPageEditor`, pointer events, grille 15 × 15, enregistrement explicite,
   « Copier depuis… » un autre PDF du service, « Revenir à l'automatique » = DELETE). Route
   `/api/placement-mise-en-page` (garde du module, atelier vérifié du site, `validerMiseEnPage` : blocs dans la
   grille, une fois chacun, lignes du service, ordre des postes borné à la ligne). Le Placement lit la mise en

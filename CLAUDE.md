@@ -401,7 +401,7 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   `imprimable`. TP du jour sans placement = carte « Temps partiel », pas « à placer ».
   **Mise en page sur mesure** (2026-11-05, 0094, droit dédié `placement_pdf`, écran `/admin/mise-en-page-pdf`,
   règles `src/lib/mise-en-page-pdf.ts`) : par service × PDF (`placement_mise_en_page`), format + orientation +
-  blocs sur une grille 12 × 12 (entête, légende, absents, une ligne par bloc avec l'ordre de ses postes —
+  blocs sur une grille 15 × 15 (entête, légende, absents, une ligne par bloc avec l'ordre de ses postes —
   un poste ne sort jamais de sa ligne). `ajusterGrille()` : la zone est agrandie d'un facteur k jusqu'à ce
   qu'aucun bloc ne déborde, puis `scale(1/k)` (toute la page rétrécit) ; lignes non placées qui tournent =
   imprimées sous la grille. Sans ligne en base : disposition automatique (`ajusterFeuille`).

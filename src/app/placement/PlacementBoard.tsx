@@ -575,7 +575,7 @@ export default function PlacementBoard({
     return orient;
   }
 
-  // Mise en page enregistrée (grille de 12 × 12) : la feuille garde ses
+  // Mise en page enregistrée (grille de 15 × 15) : la feuille garde ses
   // proportions ; si un bloc reçoit plus de contenu que sa place, TOUTE la page
   // rétrécit. On agrandit la zone d'un facteur k (le texte garde sa taille, il a
   // donc proportionnellement plus de place), puis on la ramène à la feuille par
@@ -1432,7 +1432,7 @@ export default function PlacementBoard({
           ------------------------------------------------------------------ */}
       {prepImpression && (() => {
         // Mise en page enregistrée pour ce service et ce PDF (écran « Mise en page
-        // PDF », 0094) : blocs posés sur une grille de 12 × 12 ; sinon la
+        // PDF », 0094) : blocs posés sur une grille de 15 × 15 ; sinon la
         // disposition automatique (plan à gauche, absents à droite).
         const mep = misesEnPage[pdfDuMode(prepImpression)] ?? null;
         const dims = mep ? feuille(mep.format, mep.orientation) : null;

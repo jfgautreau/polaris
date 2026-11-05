@@ -44,11 +44,11 @@ export default async function MiseEnPagePdfPage() {
   return (
     <>
       <AppHeader role={profile.role} active="/admin/mise-en-page-pdf" />
-      <div className="container" style={{ maxWidth: 1240 }}>
+      <div className="container" style={{ maxWidth: "none" }}>
         <h1>Mise en page des PDF de placement</h1>
         <p className="muted" style={{ marginBottom: 12 }}>
           Une mise en page par service et par PDF (Manager, pour Affich., pour Affich. + heures), en A4 ou A3, paysage ou
-          portrait. Glissez les blocs de la colonne de gauche sur la grille de 12 × 12 cases, déplacez-les par leur bandeau
+          portrait. Glissez les blocs de la colonne de gauche sur la grille de 15 × 15 cases, déplacez-les par leur bandeau
           et agrandissez-les par leur coin. Dans une ligne, l&apos;ordre des postes se change au glisser-déposer. Sans mise en page
           enregistrée, le PDF garde sa disposition automatique. <strong>Pensez à enregistrer.</strong>
         </p>

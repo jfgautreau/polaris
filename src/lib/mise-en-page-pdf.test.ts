@@ -16,7 +16,7 @@ describe("mise en page des PDF de placement", () => {
   });
   it("refuse un bloc hors grille, une ligne d'un autre service, un doublon", () => {
     const base = { format: "A4", orientation: "portrait" };
-    expect(validerMiseEnPage({ ...base, blocs: [{ type: "entete", x: 6, y: 0, w: 7, h: 1 }] }, LIGNES).ok).toBe(false);
+    expect(validerMiseEnPage({ ...base, blocs: [{ type: "entete", x: 9, y: 0, w: 7, h: 1 }] }, LIGNES).ok).toBe(false);
     expect(validerMiseEnPage({ ...base, blocs: [{ type: "ligne", ligne_id: "zz", x: 0, y: 0, w: 1, h: 1 }] }, LIGNES).ok).toBe(false);
     expect(validerMiseEnPage({ ...base, blocs: [{ type: "legende", x: 0, y: 0, w: 1, h: 1 }, { type: "legende", x: 1, y: 0, w: 1, h: 1 }] }, LIGNES).ok).toBe(false);
     expect(validerMiseEnPage({ format: "A5", orientation: "portrait", blocs: [] }, LIGNES).ok).toBe(false);

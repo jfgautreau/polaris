@@ -1,13 +1,16 @@
 // Mise en page des PDF de placement (2026-11-05, migration 0094). Pur et testé.
 //
 // Une mise en page par service et par PDF : format (A4 / A3), orientation, et
-// des blocs posés sur une grille de 12 × 12 cases — en-tête, légende, absents du
+// des blocs posés sur une grille de 15 × 15 cases — en-tête, légende, absents du
 // jour, et une ligne de production par bloc (ses postes restent dedans, dans
 // l'ordre choisi). Le jour J, si un bloc reçoit plus de noms que sa place, TOUTE
 // la page rétrécit (proportions gardées). Sans mise en page enregistrée, le PDF
 // garde sa disposition automatique.
 
-export const GRILLE = 12;
+// Grille de 15 × 15 cases depuis le 2026-11-05 (12 × 12 au départ ; aucune mise
+// en page n'était encore enregistrée, rien à convertir). Le commentaire de la
+// migration 0094 parle encore de 0-11 : la base ne contrôle pas ces bornes.
+export const GRILLE = 15;
 
 export type PdfPlacement = "manager" | "affich" | "affich_heures";
 export const PDF_LIBELLES: Record<PdfPlacement, string> = {
@@ -93,7 +96,7 @@ export function validerMiseEnPage(
 /** Disposition de départ de l'éditeur : en-tête, lignes sur deux colonnes, absents à droite, légende en bas. */
 export function dispositionDepart(ligneIds: string[], avecAbsents = true): Bloc[] {
   const blocs: Bloc[] = [{ type: "entete", x: 0, y: 0, w: GRILLE, h: 1 }];
-  const largeurPlan = avecAbsents ? GRILLE - 3 : GRILLE;
+  const largeurPlan = avecAbsents ? GRILLE - 4 : GRILLE;
   const parRangee = ligneIds.length > 4 ? 2 : 1;
   const w = Math.floor(largeurPlan / parRangee);
   const rangees = Math.max(1, Math.ceil(ligneIds.length / parRangee));
@@ -102,7 +105,7 @@ export function dispositionDepart(ligneIds: string[], avecAbsents = true): Bloc[
     const y = 1 + Math.floor(i / parRangee) * h;
     if (y + h <= GRILLE - 1) blocs.push({ type: "ligne", ligne_id: id, x: (i % parRangee) * w, y, w, h });
   });
-  if (avecAbsents) blocs.push({ type: "absents", x: GRILLE - 3, y: 1, w: 3, h: GRILLE - 2 });
+  if (avecAbsents) blocs.push({ type: "absents", x: GRILLE - 4, y: 1, w: 4, h: GRILLE - 2 });
   blocs.push({ type: "legende", x: 0, y: GRILLE - 1, w: GRILLE, h: 1 });
   return blocs;
 }
