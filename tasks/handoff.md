@@ -10,7 +10,7 @@
   `/admin/mise-en-page-pdf` (`MiseEnPageEditor`, pointer events, grille 15 × 15, enregistrement explicite,
   « Copier depuis… » un autre PDF du service, « Revenir à l'automatique » = DELETE). Route
   `/api/placement-mise-en-page` (garde du module, atelier vérifié du site, `validerMiseEnPage` : blocs dans la
-  grille, une fois chacun, lignes du service, ordre des postes borné à la ligne). Le Placement lit la mise en
+  grille, une fois chacun, lignes du service ; postes de la ligne seulement, dans le cadre, sans chevauchement). Le Placement lit la mise en
   page du service (RLS) ; à l'impression, `ajusterGrille()` remplace `ajusterFeuille()` et la classe de page
   vient du format choisi (`feuille()`). Migration 0094 appliquée le 2026-11-05.
 Saisie « un jour / un quart » par glisser-déposer. **Module de droits à part entière**

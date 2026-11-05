@@ -49,7 +49,8 @@ export default async function MiseEnPagePdfPage() {
         <p className="muted" style={{ marginBottom: 12 }}>
           Une mise en page par service et par PDF (Manager, pour Affich., pour Affich. + heures), en A4 ou A3, paysage ou
           portrait. Glissez les blocs de la colonne de gauche sur la grille de 15 × 15 cases, déplacez-les par leur bandeau
-          et agrandissez-les par leur coin. Dans une ligne, l&apos;ordre des postes se change au glisser-déposer. Sans mise en page
+          et agrandissez-les par leur coin. Une ligne est un cadre : chaque poste y occupe une case, qu&apos;on déplace case par case
+          (cases vides permises) et qu&apos;on agrandit par son coin ; il ne sort pas du cadre de sa ligne. Sans mise en page
           enregistrée, le PDF garde sa disposition automatique. <strong>Pensez à enregistrer.</strong>
         </p>
         {/* Lecture seule sans <LectureSeule> : on doit pouvoir parcourir les services

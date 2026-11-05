@@ -10,7 +10,7 @@ import SlideSwitch from "@/components/SlideSwitch";
 import ModaleDeplacable from "@/components/ModaleDeplacable";
 import { PrintIcon, OperateurIcon } from "@/components/icons";
 import { couleurDeLigne } from "@/lib/ligne-couleurs";
-import { GRILLE, feuille, ordonnerPostes, pdfDuMode, type Bloc, type MiseEnPage, type PdfPlacement } from "@/lib/mise-en-page-pdf";
+import { GRILLE, feuille, hauteursDisponibles, pdfDuMode, placerPostes, type Bloc, type MiseEnPage, type PdfPlacement } from "@/lib/mise-en-page-pdf";
 import JourNav from "./JourNav";
 import s from "./placement.module.css";
 
@@ -589,9 +589,10 @@ export default function PlacementBoard({
     const mesurer = () => {
       let r = 0;
       el.querySelectorAll<HTMLElement>("[data-mep-bloc]").forEach((b) => {
-        const c = b.querySelector<HTMLElement>("[data-mep-contenu]");
+        const c = b.querySelector<HTMLElement>("[data-mep-contenu]") ?? (b.firstElementChild as HTMLElement | null);
         if (!c || !b.clientHeight || !b.clientWidth) return;
-        r = Math.max(r, (c.offsetHeight + 4) / b.clientHeight, c.scrollWidth / b.clientWidth);
+        // Bas du contenu (retrait haut compris) rapporté à la hauteur de sa case.
+        r = Math.max(r, (c.offsetTop + c.offsetHeight + 2) / b.clientHeight, c.scrollWidth / b.clientWidth);
       });
       // Lignes imprimées sous la grille : la zone entière ne doit pas déborder.
       r = Math.max(r, el.scrollHeight / el.clientHeight);
@@ -1585,6 +1586,21 @@ export default function PlacementBoard({
         const groupeParLigne = new Map(groupsImpr.map((g) => [g.ligneId, g]));
         // Lignes du jour absentes de la mise en page : imprimées sous la grille si elles tournent.
         const nonPlacees = mep ? groupsImpr.filter((g) => !placees.has(g.ligneId) && g.tourne) : [];
+        // Cases des postes du jour dans chaque cadre : celles de la mise en page,
+        // puis la 1re case libre pour un poste sans case ; un cadre plein envoie ses
+        // postes restants sous la grille (dans le cadre de leur ligne, en flux).
+        const casesParLigne = new Map<string, { places: NonNullable<Bloc["places"]>; dispo: Map<string, number> }>();
+        for (const b of mep?.blocs ?? []) {
+          if (b.type !== "ligne") continue;
+          const g = groupeParLigne.get(b.ligne_id ?? "");
+          if (!g) continue;
+          const { places, sansPlace } = placerPostes(b, g.postes.map((po) => po.id));
+          casesParLigne.set(g.ligneId, { places, dispo: hauteursDisponibles(places, b.h) });
+          if (sansPlace.length) {
+            const reste = new Set(sansPlace);
+            nonPlacees.push({ ...g, postes: g.postes.filter((po) => reste.has(po.id)) });
+          }
+        }
         const blocGrille = (b: Bloc) => {
           const pos: CSSProperties = {
             position: "absolute",
@@ -1599,16 +1615,40 @@ export default function PlacementBoard({
           const cle = b.type === "ligne" ? `l:${b.ligne_id}` : b.type;
           if (b.type === "ligne") {
             const g = groupeParLigne.get(b.ligne_id ?? "");
+            const cases = casesParLigne.get(b.ligne_id ?? "");
             // Ligne qui ne figure pas ce jour-là (aucun poste sur ce quart) : place vide.
-            if (!g) return <div key={cle} style={pos} />;
+            if (!g || !cases) return <div key={cle} style={pos} />;
+            const posteParId = new Map(g.postes.map((po) => [po.id, po]));
+            // Cadre de la ligne, nom sur son bord haut ; chaque poste à sa case, qui
+            // peut s'étirer sur les cases vides sous elle (hauteursDisponibles).
             return (
-              <div key={cle} style={pos} data-mep-bloc="1">
-                <div data-mep-contenu="1" className={classeLigne(g)} style={{ ...varsLigne(g), display: "block", margin: 0 }}>
-                  {nomLigne(g)}
-                  <div className={s.printPostes} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(124px, 1fr))", marginTop: 2 }}>
-                    {ordonnerPostes(g.postes, b.postes).map((po) => tuile(g, po))}
-                  </div>
+              <div key={cle} className={`${classeLigne(g)} ${s.mepCadre}`} style={{ ...pos, ...varsLigne(g), padding: 0, overflow: "visible" }}>
+                <div className={s.mepCadreNom}>
+                  {g.ligneNom}
+                  {!g.tourne && !g.encadrement && <span className={s.printArret}> à l'arrêt</span>}
                 </div>
+                {cases.places.map((p) => {
+                  const po = posteParId.get(p.poste_id);
+                  if (!po) return null;
+                  const dispo = cases.dispo.get(p.poste_id) ?? p.h;
+                  return (
+                    <div
+                      key={p.poste_id}
+                      className={s.mepCase}
+                      data-mep-bloc="1"
+                      style={{
+                        left: `${(p.x / b.w) * 100}%`,
+                        top: `${(p.y / b.h) * 100}%`,
+                        width: `${(p.w / b.w) * 100}%`,
+                        height: `${(dispo / b.h) * 100}%`,
+                        paddingTop: p.y === 0 ? "0.9em" : undefined,
+                        ["--mep-min" as string]: `${(p.h / dispo) * 100}%`,
+                      }}
+                    >
+                      {tuile(g, po)}
+                    </div>
+                  );
+                })}
               </div>
             );
           }
@@ -1631,7 +1671,7 @@ export default function PlacementBoard({
           >
             {mep && dims ? (
               <div className={s.printInner} ref={printRef} style={{ display: "flex", flexDirection: "column", width: dims.l, height: dims.utileH }}>
-                <div style={{ position: "relative", flex: "1 1 auto", minHeight: 0 }}>{mep.blocs.map(blocGrille)}</div>
+                <div style={{ position: "relative", flex: "1 1 auto", minHeight: 0, marginTop: 8 }}>{mep.blocs.map(blocGrille)}</div>
                 {nonPlacees.length > 0 && <div style={{ flex: "0 0 auto", paddingTop: 6 }}>{nonPlacees.map(ligneFlux)}</div>}
               </div>
             ) : (

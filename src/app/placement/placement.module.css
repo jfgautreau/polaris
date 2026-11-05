@@ -827,3 +827,45 @@
     left: auto;
   }
 }
+
+/* Mise en page sur mesure (0094, écran « Mise en page PDF ») : une ligne est un
+   cadre posé sur la grille de 15 × 15 ; chacun de ses postes remplit sa case
+   (.mepCase, positionnée en % du cadre) et peut s'étirer sur les cases vides
+   sous elle (--mep-min = sa hauteur propre). Couleurs : celles de la ligne,
+   comme la disposition automatique (.printLigneOn / .printLigneOff). */
+.mepCadre {
+  position: absolute;
+  display: block;
+  margin: 0;
+  box-sizing: border-box;
+  border: 1.5px solid #94a3b8;
+  border-radius: 5px;
+}
+.printLigneOn.mepCadre { border-color: var(--lc); }
+.printLigneOff.mepCadre { border-style: dashed; border-color: #c4cad3; }
+.mepCadreNom {
+  position: absolute;
+  left: 6px;
+  top: 0;
+  transform: translateY(-58%);
+  z-index: 1;
+  padding: 0 5px;
+  background: #fff;
+  font-weight: 800;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+.printLigneOn .mepCadreNom { color: var(--lc-dark); }
+.printLigneOff .mepCadreNom { color: #9aa3af; }
+.mepCase {
+  position: absolute;
+  box-sizing: border-box;
+  padding: 2px;
+  overflow: hidden;
+}
+.mepCase > .printPoste {
+  width: 100% !important;
+  box-sizing: border-box;
+  min-height: var(--mep-min, 0px);
+  margin: 0;
+}
