@@ -196,8 +196,8 @@ Triggers PostgreSQL (`audit_trigger`) sur les tables métier → `audit_log`
   bornés au site courant.
 
 ## Migrations
-Fichiers SQL ordonnés dans `supabase/migrations/` (**0001 → 0092**, dernière appliquée :
-**0092**), **exécutés manuellement** par l'utilisateur dans le SQL Editor Supabase
+Fichiers SQL ordonnés dans `supabase/migrations/` (**0001 → 0093**, dernière appliquée :
+**0093**), **exécutés manuellement** par l'utilisateur dans le SQL Editor Supabase
 (`SUPABASE_DB_URL` est vide ; `npm run db:migrate` ne fonctionne que s'il est défini).
 
 Depuis la **0037**, trois séquences délicates passent par des **fonctions SQL** appelées
@@ -245,7 +245,8 @@ intégrés + `role_custom`).
 **Après le multi-site (0064 → 0078)** :
 - **0064** — temps partiel **matérialisé** dans le planning (`placement.tp`, semaine
   « chargée ») ; **0065** — couleur de niveau ouverte au nuancier (rattrapage 0063) ;
-  **0066** — import des absences depuis le logiciel RH ; **0067** — affichage TV en mode
+  **0066** — import des absences depuis le logiciel RH (écran retiré le 2026-11-05, table
+  `import_absence_personne` laissée en base) ; **0067** — affichage TV en mode
   relatif ou absolu ; **0068** — `quart.couleur` (bandeau de rappel du Planning).
 - **0069** (deux fichiers) — cible de la matrice alignée sur le niveau actuel ;
   `regroupement` de lignes (étiquette de reporting).
@@ -275,7 +276,7 @@ intégrés + `role_custom`).
   techniques, modifications sans effet non journalisées (lignes futures seulement).
   ⚠️ La 0086 n'avait jamais été appliquée avant le 2026-10-14 (délimiteurs `$`, cf. L54).
 
-**Novembre 2026 (0091 → 0092)** :
+**Novembre 2026 (0091 → 0093)** :
 - **0091** — droits de l'API explicites (`grant` sur toutes les tables + privilèges par
   défaut de `postgres` sur `public`) avant le changement Supabase du 2026-10-30 : toute
   nouvelle table porte son `grant … to authenticated, service_role` (test `migrations-sql`).
@@ -285,6 +286,11 @@ intégrés + `role_custom`).
   fonction `fusionner_personnes(keep, dup, site, patch)` (fusion de deux fiches en une
   transaction, FK et index uniques introspectés ; service_role seulement — la route
   `/api/personnel/merge` resynchronise ensuite le contrat affiché et le temps partiel).
+- **0093** — Excel intérim des Synthèses : `atelier.couleur` (pastel, palette fermée), `parametre_rh`
+  (une ligne par site : forme du nom du fichier Excel intérim), `export_interim_photo` (photo de chaque
+  « Excel agence », personne_id → texte des cases, aucune lecture sous RLS, purge 8 semaines par la route).
+  Les sous-droits des habilitations par famille (même jour) n'ont pas de migration : lignes
+  `role_permission` de module `habfam:<famille>`.
 
 ## Sitemap (principales routes)
 - `/` accueil (logo + titre « planning »), `/planning` (+ vue `?par=poste`), `/placement` (saisie par
