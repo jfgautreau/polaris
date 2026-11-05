@@ -7,7 +7,9 @@ import { quartOuDefaut } from "@/lib/quarts";
 import { horaireTxt as horaireTxtShared, type MapsHoraire, type HorairePlace } from "@/lib/horaires";
 import { chargerNuitsAvant } from "@/lib/nuit-avant-data";
 import { INTERIM_BG } from "@/lib/interim";
-import { isoDate, mondayOf, type Jour } from "@/lib/week";
+import { isoDate, isoWeekNumber, mondayOf, type Jour } from "@/lib/week";
+import FeuillesImpression from "./FeuillesImpression";
+import { FEUILLE_L, FEUILLE_H, ENTETE_H, PIED_H, ECART_H } from "./feuilles-impression";
 
 type Atelier = { id: string; nom: string };
 type Site = { id: string; nom: string };
@@ -101,13 +103,11 @@ export default async function AtelierPlanning({
   const posteInfo = new Map<string, { nom: string; ligneId: string; atelierId: string; actif: boolean }>();
   for (const l of lignesSite ?? []) for (const p of l.poste ?? []) posteInfo.set(p.id, { nom: p.nom, ligneId: l.id, atelierId: l.atelier_id, actif: p.actif });
 
-  // ROSTER de base : personnes dont l'atelier D'AFFECTATION est celui-ci. Une
-  // personne rattachée n'apparaît que sur SON atelier, une seule fois, même les
-  // jours de prêt (annotés en cellule). Les personnes d'un AUTRE atelier prêtées
-  // ici n'y figurent pas — SAUF les personnes SANS atelier d'affectation
-  // (`atelier_id` null), qui n'ont pas d'écran maison : elles restent sur leur
-  // atelier de PLACEMENT (ajoutées dans le bloc ci-dessous depuis les placements
-  // sur les postes de cet atelier).
+  // ROSTER : personnes dont l'atelier D'AFFECTATION est celui-ci (leurs jours de
+  // prêt ailleurs sont annotés en cellule), PLUS toute personne ayant au moins une
+  // affectation sur un poste de cet atelier pendant la fenêtre (2026-11-05,
+  // ajoutées plus bas depuis les placements). Une personne prêtée figure donc sur
+  // son planning maison ET sur celui où elle travaille.
   const { data: rosterD } = await admin
     .from("personne")
     .select("id, nom, prenom, type_contrat")
@@ -145,52 +145,24 @@ export default async function AtelierPlanning({
   const tpSet = new Set<string>();      // `${personne_id}:${iso}` bloque par temps partiel
 
   if (posteIds.length) {
-    // Personnes SANS atelier d'affectation placées ICI : pas d'écran maison, on
-    // les garde sur leur atelier de placement. On lit les placements sur les
-    // postes de CET atelier et on retient celles dont personne.atelier_id est null.
-    type PlHere = { personne_id: string; personne: { atelier_id: string | null; nom: string; prenom: string; type_contrat: string } | null };
-    const plHere = await fetchAll<PlHere>(() =>
+    // Placements du site sur la fenêtre, avec le nom de la personne (une seule
+    // lecture, sans liste d'ids dans l'URL — 2026-10-14). Sert à la fois au roster
+    // (personnes affectées sur un poste de ce service) et aux cellules.
+    type PlSite = PlacementRow & { personne: Personne | null };
+    const plSite = await fetchAll<PlSite>(() =>
       admin
         .from("placement")
-        .select("personne_id, personne:personne_id(atelier_id, nom, prenom, type_contrat)")
+        .select("poste_id, jour, quart_code, personne_id, numero_rotation, personne:personne_id(nom, prenom, type_contrat)")
         .eq("site_id", site.id)
         .in("jour", isos)
-        .in("poste_id", posteIds)
         .not("poste_id", "is", null)
         .order("id")
-        .returns<PlHere[]>()
+        .returns<PlSite[]>()
     );
-    for (const r of plHere) {
-      const p = r.personne;
-      if (p && p.atelier_id === null && !displayById.has(r.personne_id)) {
-        displayById.set(r.personne_id, { nom: p.nom, prenom: p.prenom, type_contrat: p.type_contrat });
-      }
-    }
-    const displayIds = [...displayById.keys()];
-
-    // Placements des personnes affichées, TOUS postes confondus (y compris ceux
-    // d'un autre atelier — le prêt). Depuis le 2026-10-14 (journaux Supabase), plus
-    // de liste des personnes dans l'URL : placements du site sur la fenêtre, puis
-    // tri en mémoire. fetchAll + `.order("id")` : L8.
-    const displaySet = new Set(displayIds);
-    const pl = displayIds.length
-      ? (
-          await fetchAll<PlacementRow>(() =>
-            admin
-              .from("placement")
-              .select("poste_id, jour, quart_code, personne_id, numero_rotation")
-              .eq("site_id", site.id)
-              .in("jour", isos)
-              .not("poste_id", "is", null)
-              .order("id")
-              .returns<PlacementRow[]>()
-          )
-        ).filter((r) => displaySet.has(r.personne_id))
-      : [];
     // Postes concernés par les horaires : ceux de l'atelier + ceux où quelqu'un
-    // est prêté. On ne charge les horaires standards que pour ceux-là.
+    // est placé sur la fenêtre (filtre en mémoire sur le référentiel en cache).
     const involved = new Set<string>(posteIds);
-    for (const r of pl) if (r.poste_id) involved.add(r.poste_id);
+    for (const r of plSite) if (r.poste_id) involved.add(r.poste_id);
     // Horaires (standard et par place) : référentiel en cache (refdata,
     // REFERENTIEL_TAG), bornés ici aux postes concernés — plus de liste dans l'URL.
     const pPlaces = getHorairesPlaceC().then((rows) => rows.filter((h) => involved.has(h.poste_id)));
@@ -352,7 +324,12 @@ export default async function AtelierPlanning({
       }
     }
 
-    for (const r of pl) {
+    // Index par personne et jour (tout le site : on ne sait qu'après qui est
+    // affiché). Une personne affectée au moins une fois sur un poste de CE service
+    // pendant la fenêtre rejoint le roster (2026-11-05), quel que soit son service
+    // d'affectation : elle peut donc figurer sur deux plannings la même semaine.
+    const posteIciSet = new Set(posteIds);
+    for (const r of plSite) {
       if (!r.poste_id) continue;
       const info = posteInfo.get(r.poste_id);
       if (info && !info.actif) continue; // poste desactive : ne pas ressortir un placement residuel
@@ -360,6 +337,10 @@ export default async function AtelierPlanning({
       if (info && !isOpen(info.ligneId, qc, r.jour)) continue; // quart fermé ce jour -> on n'affiche pas
       const pk = `${r.personne_id}:${r.jour}`;
       (byPerson.get(pk) ?? byPerson.set(pk, []).get(pk)!).push(r);
+      if (posteIciSet.has(r.poste_id) && r.personne && !displayById.has(r.personne_id)) {
+        const p = r.personne;
+        displayById.set(r.personne_id, { nom: p.nom, prenom: p.prenom, type_contrat: p.type_contrat });
+      }
     }
   }
 
@@ -446,8 +427,11 @@ export default async function AtelierPlanning({
   // journée ouverte doit se voir), PLUS les jours où au moins une personne
   // affichée est placée. Ce second terme fait apparaître la feuille même quand
   // l'atelier maison est FERMÉ ce jour-là mais que des gens sont prêtés ailleurs.
+  // `byPerson` couvre tout le site : seules comptent les personnes affichées.
   const placementDays = new Set<string>();
-  for (const k of byPerson.keys()) placementDays.add(k.slice(k.indexOf(":") + 1));
+  for (const [k, rows] of byPerson) {
+    if (rows.length && displayById.has(k.slice(0, k.indexOf(":")))) placementDays.add(k.slice(k.indexOf(":") + 1));
+  }
   const shownDays = days.filter((d) => openDays.has(d.iso) || placementDays.has(d.iso));
   const noWork = shownDays.length === 0;
 
@@ -570,92 +554,147 @@ export default async function AtelierPlanning({
   const apremList = personList.filter((p) => sectionParPers.get(p.id) === "aprem");
   const nuitList = personList.filter((p) => sectionParPers.get(p.id) === "nuit");
 
-  return (
+  // Numéro(s) de semaine ISO des jours affichés, en tête de chaque page imprimée
+  // (et à l'écran à côté du nom du service). Une fenêtre à cheval sur deux
+  // semaines affiche les deux.
+  const semaines = [...new Set(shownDays.map((d) => isoWeekNumber(new Date(d.iso + "T00:00"))))];
+  const libelleSemaine = semaines.length > 1 ? `Semaines ${semaines.join(" – ")}` : `Semaine ${semaines[0] ?? ""}`;
+  const periodeTxt = shownDays.length ? `du ${shownDays[0].num} au ${shownDays[shownDays.length - 1].num}` : "";
+
+  const sections = [
+    { titre: "Matin", liste: matinList, teinte: "#1e3a8a" },
+    { titre: "Après-midi", liste: apremList, teinte: "#7c2d12" },
+    ...(nuitList.length ? [{ titre: "Nuit", liste: nuitList, teinte: "#312e81" }] : []),
+  ] as { titre: string; liste: typeof matinList; teinte: string }[];
+
+  const legende = (
     <>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+      Légende : <span style={{ background: INTERIM_BG, padding: "0 6px" }}>Intérimaire</span>{" "}
+      · <span style={{ background: AUJOURDHUI, padding: "0 6px" }}>Aujourd&apos;hui</span> · horaires en bleu ·{" "}
+      <span style={{ color: "#b45309", fontStyle: "italic" }}>(Service X)</span> = affecté à un autre service ·{" "}
+      <span style={{ color: "#b91c1c" }}>Absence</span>{" "}
+      · <span style={{ color: "#3730a3" }}>TP</span> (temps partiel).
+    </>
+  );
+
+  return (
+    <FeuillesImpression>
+      {/* Impression (2026-11-05) : une feuille A3 portrait par section, mise à
+          l'échelle par FeuillesImpression ; en-tête (semaine en gros, service,
+          section) et pied (légende) à taille fixe, hors zone mise à l'échelle. */}
+      <style>{`
+        @media print {
+          @page { size: A3 portrait; margin: 10mm; }
+          .aff-feuille {
+            width: ${FEUILLE_L}px; height: ${FEUILLE_H}px; overflow: hidden;
+            margin: 0 !important; position: relative;
+            break-before: page; page-break-before: always; break-inside: avoid;
+          }
+          .aff-entete { height: ${ENTETE_H}px; }
+          .aff-zoom { margin-top: ${ECART_H}px; }
+          .aff-pied { position: absolute; left: 0; right: 0; bottom: 0; height: ${PIED_H}px; font-size: 14px; color: #6b7280; }
+        }
+      `}</style>
+
+      <div className="noprint" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 14 }}>
           <h1 style={{ fontSize: 30, margin: 0 }}>{atelier.nom}</h1>
+          {!noWork && <span style={{ fontSize: 26, fontWeight: 800, color: "#111827" }}>{libelleSemaine}</span>}
           <span style={{ fontSize: 16, color: "#6b7280", fontWeight: 500 }}>{site.nom}</span>
         </div>
         {actions}
       </div>
 
       {noWork ? (
-        <p className="muted" style={{ fontSize: 18, padding: 20 }}>
-          Aucun jour ouvert dans ce service sur la période affichée (J-1 à J+4).
-          Vérifiez l’ouverture des lignes dans Ordonnancement.
-        </p>
+        <div>
+          <h1 className="printonly" style={{ fontSize: 30, margin: "0 0 8px" }}>{atelier.nom}</h1>
+          <p className="muted" style={{ fontSize: 18, padding: 20 }}>
+            Aucun jour ouvert dans ce service sur la période affichée.
+            Vérifiez l’ouverture des lignes dans Ordonnancement.
+          </p>
+        </div>
       ) : (
         <>
           {/* Tableaux empilés : Matin, Après-midi, puis Nuit (seulement si des
               personnes y travaillent). Chaque personne apparaît dans une seule
-              section — cf. `sectionDe()`. Un tableau vide affiche un message discret. */}
-          {([
-            { titre: "Matin", liste: matinList, teinte: "#1e3a8a" },
-            { titre: "Après-midi", liste: apremList, teinte: "#7c2d12" },
-            ...(nuitList.length ? [{ titre: "Nuit", liste: nuitList, teinte: "#312e81" }] : []),
-          ] as { titre: string; liste: typeof matinList; teinte: string }[]).map(({ titre, liste, teinte }) => (
-            <section key={titre} style={{ marginBottom: 18 }}>
-              <h2 style={{ fontSize: 20, margin: "6px 0 8px", color: teinte }}>{titre}</h2>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 16, tableLayout: "fixed" }}>
-                <thead>
-                  <tr>
-                    <th style={{ width: 260, border: cellBorder, background: teinte, color: "#fff", padding: "8px 10px" }}></th>
-                    {shownDays.map((d) => (
-                      <th
-                        key={d.iso}
-                        style={{
-                          border: cellBorder,
-                          padding: "8px 6px",
-                          textAlign: "center",
-                          fontSize: 20,
-                          background: colBg(d.iso) ?? teinte,
-                          color: d.iso === todayIso ? "#000" : "#fff",
-                        }}
-                      >
-                        {d.nom}
-                        <div style={{ fontSize: 14, fontWeight: 400 }}>{d.num}</div>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {liste.map((p) => {
-                    const interim = agenceSet.has(p.type_contrat);
-                    return (
-                      <tr key={p.id}>
-                        <td style={{ border: cellBorder, padding: "5px 10px", fontWeight: 600, whiteSpace: "nowrap" }}>
-                          <span style={{ background: interim ? INTERIM_BG : undefined, padding: interim ? "0 4px" : 0, borderRadius: 3 }}>
-                            {p.nom} {p.prenom}
-                          </span>
-                        </td>
-                        {shownDays.map((d) => (
-                          <td key={d.iso} style={{ border: cellBorder, padding: "4px 6px", verticalAlign: "top", overflowWrap: "anywhere", wordBreak: "break-word" }}>
-                            {cellNom(p.id, d.iso)}
-                          </td>
-                        ))}
-                      </tr>
-                    );
-                  })}
-                  {liste.length === 0 && (
+              section — cf. `sectionDe()`. Un tableau vide affiche un message
+              discret à l'écran et n'est pas imprimé (sauf si tout est vide). */}
+          {sections.map(({ titre, liste, teinte }) => (
+            <section
+              key={titre}
+              className={`aff-feuille${liste.length === 0 && personList.length > 0 ? " noprint" : ""}`}
+              style={{ marginBottom: 18 }}
+            >
+              <div className="printonly aff-entete">
+                <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", height: "100%", borderBottom: `4px solid ${teinte}` }}>
+                  <div style={{ lineHeight: 1.05 }}>
+                    <div style={{ fontSize: 56, fontWeight: 800, color: "#111827" }}>{libelleSemaine}</div>
+                    <div style={{ fontSize: 16, color: "#6b7280" }}>{periodeTxt}</div>
+                  </div>
+                  <div style={{ textAlign: "center", lineHeight: 1.1 }}>
+                    <div style={{ fontSize: 36, fontWeight: 700 }}>{atelier.nom}</div>
+                    <div style={{ fontSize: 30, fontWeight: 700, color: teinte }}>{titre}</div>
+                  </div>
+                  <div style={{ textAlign: "right", fontSize: 18, color: "#6b7280" }}>{site.nom}</div>
+                </div>
+              </div>
+              <h2 className="noprint" style={{ fontSize: 20, margin: "6px 0 8px", color: teinte }}>{titre}</h2>
+              <div className="aff-zoom">
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 16, tableLayout: "fixed" }}>
+                  <thead>
                     <tr>
-                      <td colSpan={shownDays.length + 1} className="muted" style={{ padding: 10 }}>Aucune affectation {titre.toLowerCase()} sur la période affichée.</td>
+                      <th style={{ width: 260, border: cellBorder, background: teinte, color: "#fff", padding: "8px 10px" }}></th>
+                      {shownDays.map((d) => (
+                        <th
+                          key={d.iso}
+                          style={{
+                            border: cellBorder,
+                            padding: "8px 6px",
+                            textAlign: "center",
+                            fontSize: 20,
+                            background: colBg(d.iso) ?? teinte,
+                            color: d.iso === todayIso ? "#000" : "#fff",
+                          }}
+                        >
+                          {d.nom}
+                          <div style={{ fontSize: 14, fontWeight: 400 }}>{d.num}</div>
+                        </th>
+                      ))}
                     </tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {liste.map((p) => {
+                      const interim = agenceSet.has(p.type_contrat);
+                      return (
+                        <tr key={p.id}>
+                          <td style={{ border: cellBorder, padding: "5px 10px", fontWeight: 600, whiteSpace: "nowrap" }}>
+                            <span style={{ background: interim ? INTERIM_BG : undefined, padding: interim ? "0 4px" : 0, borderRadius: 3 }}>
+                              {p.nom} {p.prenom}
+                            </span>
+                          </td>
+                          {shownDays.map((d) => (
+                            <td key={d.iso} style={{ border: cellBorder, padding: "4px 6px", verticalAlign: "top", overflowWrap: "anywhere", wordBreak: "break-word" }}>
+                              {cellNom(p.id, d.iso)}
+                            </td>
+                          ))}
+                        </tr>
+                      );
+                    })}
+                    {liste.length === 0 && (
+                      <tr>
+                        <td colSpan={shownDays.length + 1} className="muted" style={{ padding: 10 }}>Aucune affectation {titre.toLowerCase()} sur la période affichée.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <div className="printonly aff-pied">{legende}</div>
             </section>
           ))}
         </>
       )}
 
-      <div style={{ marginTop: 14, fontSize: 14, color: "#6b7280" }}>
-        Légende : <span style={{ background: INTERIM_BG, padding: "0 6px" }}>Intérimaire</span>{" "}
-        · <span style={{ background: AUJOURDHUI, padding: "0 6px" }}>Aujourd&apos;hui</span> · horaires en bleu ·{" "}
-        <span style={{ color: "#b45309", fontStyle: "italic" }}>(Service X)</span> = prêté ·{" "}
-        <span style={{ color: "#b91c1c" }}>Absence</span>{" "}
-        · <span style={{ color: "#3730a3" }}>TP</span> (temps partiel).
-      </div>
-    </>
+      <div className="noprint" style={{ marginTop: 14, fontSize: 14, color: "#6b7280" }}>{legende}</div>
+    </FeuillesImpression>
   );
 }

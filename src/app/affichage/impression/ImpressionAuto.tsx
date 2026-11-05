@@ -4,10 +4,9 @@ import Link from "next/link";
 import { useEffect } from "react";
 import { PrintIcon } from "@/components/icons";
 
-// Impression des services cochés : chaque atelier commence sur une nouvelle
-// feuille A3 portrait, à la largeur de la page, et coule sur plusieurs feuilles
-// si besoin (règles @media print de la page, comme l'écran TV). Plus de mise à
-// l'échelle mesurée : le navigateur pagine tout seul.
+// Impression des services cochés : une feuille A3 portrait par section (Matin,
+// Après-midi, Nuit) de chaque service, mise à l'échelle au `beforeprint`
+// (FeuillesImpression).
 const imprimer = () => window.print();
 
 export default function ImpressionAuto() {
@@ -26,7 +25,7 @@ export default function ImpressionAuto() {
       <button
         type="button"
         onClick={imprimer}
-        title="Imprimer / enregistrer en PDF (A3 portrait, chaque service sur une nouvelle page)"
+        title="Imprimer / enregistrer en PDF (A3 portrait, une page par section de chaque service)"
         style={{
           display: "inline-flex",
           alignItems: "center",

@@ -401,11 +401,15 @@ pas de troisième** : la fiche d'une personne est une modale du Suivi.
 - Index : liste des services avec **cases à cocher** (« Tous les services », date de
   référence facultative) → « Imprimer N services » ouvre `/affichage/impression?atelier=…`
   (paramètre répété, impression lancée au chargement). Mêmes règles d'impression que
-  l'écran TV (2026-10-08) : A3 portrait, tableau à la **largeur de la feuille**, contenu qui
-  coule sur plusieurs pages (rangées entières, en-tête des jours répété), chaque service
-  sur une **nouvelle page** (`break-after: page`). Plus de mise à l'échelle mesurée :
-  l'ancienne échelle commune, imposée par le service le plus dense, rétrécissait toutes
-  les pages (cf. L50).
+  l'écran TV (2026-11-05) : A3 portrait, **une feuille par section** (Matin, Après-midi,
+  Nuit ; section vide non imprimée) de chaque service (`.aff-feuille`, `break-before: page`),
+  en-tête fixe (numéro de semaine ISO en gros, service, section) et pied (légende). Chaque
+  section est mise à l'échelle **séparément** au `beforeprint` (`FeuillesImpression`,
+  gabarit `feuilles-impression.ts`) : plusieurs largeurs de mise en page essayées, échelle
+  `min(L/w, H/h)` la plus grande (≤ 2) — jamais d'échelle commune (cf. L50).
+- **Roster** (2026-11-05) : personnes du service d'affectation **+** toute personne ayant au
+  moins une affectation sur un poste du service pendant la fenêtre (une seule lecture des
+  placements du site, nom joint). Une personne prêtée figure sur deux plannings.
   Les ids reçus ne font que **filtrer** la liste des services du site. Chaque service garde
   son lien **« Écran TV »** (`/affichage/atelier/[id]`, un service). Mise à jour **économe** depuis le 2026-10-14 :
   version des données vérifiée toutes les 5 min (une lecture), rechargement seulement si

@@ -47,29 +47,25 @@ export default async function AffichageAtelier({
   const version = await versionDonnees();
 
   return (
-    // Deux boites imbriquees pour l'impression : `affichage-feuille` est le cadre,
-    // borne a UNE page A3 verticale ; `affichage-contenu` porte la mise a l'echelle
-    // mesuree par AffichageBarre. A l'ecran, elles sont transparentes.
+    // Cadre de l'écran TV ; à l'impression, une feuille A3 par section (cf.
+    // AtelierPlanning / FeuillesImpression).
     <div id="affichage-feuille" style={{ padding: "18px 24px" }}>
       <MiseAJourEconome version={version} suitAujourdhui={!sp.date} />
-      <div id="affichage-contenu" style={{ transformOrigin: "top left" }}>
-        <AtelierPlanning
-          atelierRef={param}
-          site={site}
-          quarts={quarts}
-          days={days}
-          actions={
-            <AffichageBarre
-              cadreId="affichage-feuille"
-              contenuId="affichage-contenu"
-              pivotIso={pivotIso}
-              debutIso={debutIso}
-              finIso={finIso}
-              estCourant={estCourant}
-            />
-          }
-        />
-      </div>
+      <AtelierPlanning
+        atelierRef={param}
+        site={site}
+        quarts={quarts}
+        days={days}
+        actions={
+          <AffichageBarre
+            cadreId="affichage-feuille"
+            pivotIso={pivotIso}
+            debutIso={debutIso}
+            finIso={finIso}
+            estCourant={estCourant}
+          />
+        }
+      />
     </div>
   );
 }

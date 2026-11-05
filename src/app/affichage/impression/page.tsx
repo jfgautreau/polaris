@@ -9,8 +9,8 @@ import ImpressionAuto from "./ImpressionAuto";
 
 export const dynamic = "force-dynamic";
 
-// Impression des plannings (version affichage TV) : chaque atelier commence sur
-// une nouvelle feuille A3 portrait.
+// Impression des plannings (version affichage TV) : une feuille A3 portrait par
+// section (Matin, Après-midi, Nuit) de chaque service.
 // Ouverte depuis /affichage, où l'on coche les services (`?atelier=…` répété) ;
 // sans `atelier`, tous les services ayant du contenu. L'impression se lance
 // automatiquement (ImpressionAuto). Réservée au droit « affichage » (compte
@@ -58,23 +58,12 @@ export default async function ImpressionTousLesPlannings({
     <div>
       <ImpressionAuto />
 
-      {/* Mêmes règles que l'écran TV (AffichageBarre, 2026-09-15) : colonnes à la
-          LARGEUR de la feuille (`table width:100%`), contenu qui COULE sur
-          plusieurs pages si besoin, rangées jamais coupées, en-tête des jours
-          répété. Chaque atelier commence sur une nouvelle feuille. Jusqu'au
-          2026-10-08 : une échelle commune mesurée, imposée par l'atelier le plus
-          dense, rétrécissait toutes les pages bien en deçà de la largeur. */}
+      {/* Une feuille A3 portrait par section (Matin, Après-midi, Nuit) de chaque
+          service, mise à l'échelle pour remplir la page : règles et mesure portées
+          par AtelierPlanning / FeuillesImpression (2026-11-05). */}
       <style>{`
         .atelier-page { padding: 18px 24px; }
-        @media print {
-          @page { size: A3 portrait; margin: 10mm; }
-          .atelier-page { padding: 0; break-after: page; }
-          .atelier-page:last-child { break-after: auto; }
-          .atelier-page table { page-break-inside: auto; }
-          .atelier-page thead { display: table-header-group; }
-          .atelier-page tr { break-inside: avoid; page-break-inside: avoid; }
-          .atelier-page section { break-inside: auto; }
-        }
+        @media print { .atelier-page { padding: 0; } }
       `}</style>
 
       {ateliers.length === 0 ? (

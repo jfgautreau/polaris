@@ -455,9 +455,11 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   classée) ; extraction Excel par `src/lib/xlsx.ts` (générateur .xlsx maison, sans dépendance —
   réutiliser pour toute autre extraction).
 - **Affichage TV** (`src/app/affichage/`, droit `affichage`, compte requis depuis le 2026-11-03 :
-  pages et server action `versionDonnees` gardées, site = celui du compte) : rattachement par service d'affectation ;
+  pages et server action `versionDonnees` gardées, site = celui du compte) : service d'affectation **+** toute personne
+  affectée au moins une fois sur un poste du service dans la fenêtre (2026-11-05, deux plannings possibles) ;
   sections Matin / Après-midi / Nuit classées par `creneau` ; fenêtre relative ou absolue
-  (`getFenetreAffichage`, `joursDeFenetre`) ; PDF A3 portrait multi-pages. **Mise à jour
+  (`getFenetreAffichage`, `joursDeFenetre`) ; impression A3 portrait, **une feuille par section**
+  mise à l'échelle séparément (`FeuillesImpression`), numéro de semaine en gros en tête de page. **Mise à jour
   économe** (2026-10-14, `MiseAJourEconome`) : toutes les 5 min, la server action
   `versionDonnees` (`src/app/affichage/actions.ts`, dernier id d'`audit_log` du site) ;
   `router.refresh()` seulement si la version change, ou au changement de jour (≥ 3 h). L'ancien

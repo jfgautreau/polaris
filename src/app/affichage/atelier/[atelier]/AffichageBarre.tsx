@@ -8,13 +8,10 @@ import { addDays, isoDate } from "@/lib/week";
 // Barre d'actions de l'ecran TV : choix de la semaine affichee, impression PDF
 // et retour a l'application. Masquee a l'impression (`noprint`).
 //
-// Impression (2026-09-15, refonte) : on n'ecrase plus tout le planning sur UNE
-// page A3 (rognait la derniere ligne des services denses). On imprime en A3
-// PORTRAIT, les colonnes ajustees a la LARGEUR de la feuille (`table width:100%`),
-// et le contenu COULE sur plusieurs pages : chaque rangee reste entiere
-// (`break-inside: avoid` sur les `tr`) et l'en-tete des jours se repete en haut
-// de chaque page (`thead { display: table-header-group }`). Plus de mise a
-// l'echelle mesuree — le navigateur pagine tout seul.
+// Impression (2026-11-05) : une feuille A3 portrait par section (Matin,
+// Après-midi, Nuit), mise à l'échelle pour remplir la page — règles et mesure
+// portées par AtelierPlanning / FeuillesImpression. Ici, seul le cadre de l'écran
+// perd son retrait à l'impression.
 
 // Gabarit commun aux commandes : le bouton porte une bordure, le logo n'en a pas.
 const TAILLE = 42;
@@ -26,14 +23,12 @@ function jjmm(iso: string) {
 
 export default function AffichageBarre({
   cadreId,
-  contenuId,
   pivotIso,
   debutIso,
   finIso,
   estCourant,
 }: {
   cadreId: string;
-  contenuId: string;
   pivotIso: string;
   debutIso: string;
   finIso: string;
@@ -51,18 +46,10 @@ export default function AffichageBarre({
 
   return (
     <>
-      {/* Regles d'impression propres a cet ecran. Le @page global est en A4
-          paysage ; declare ici APRES, celui-ci l'emporte. Le cadre ne borne plus
-          la hauteur a une page : le contenu coule sur plusieurs feuilles. */}
+      {/* Le @page A3 portrait est posé par AtelierPlanning. */}
       <style>{`
         @media print {
-          @page { size: A3 portrait; margin: 10mm; }
-          #${cadreId} { width: auto !important; height: auto !important; overflow: visible !important; padding: 0 !important; }
-          #${contenuId} { transform: none !important; width: auto !important; }
-          #${cadreId} table { page-break-inside: auto; }
-          #${cadreId} thead { display: table-header-group; }
-          #${cadreId} tr { break-inside: avoid; page-break-inside: avoid; }
-          #${cadreId} section { break-inside: auto; }
+          #${cadreId} { padding: 0 !important; }
         }
       `}</style>
 
@@ -108,7 +95,7 @@ export default function AffichageBarre({
         <button
           type="button"
           onClick={() => window.print()}
-          title="Imprimer / enregistrer en PDF (A3 portrait, plusieurs pages si besoin)"
+          title="Imprimer / enregistrer en PDF (A3 portrait : une page Matin, une Après-midi, une Nuit)"
           aria-label="Imprimer"
           style={{
             display: "inline-flex",
