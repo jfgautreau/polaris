@@ -14,7 +14,13 @@ import { FEUILLE_L, FEUILLE_H, ENTETE_H, PIED_H, ECART_H } from "./feuilles-impr
 type Atelier = { id: string; nom: string };
 type Site = { id: string; nom: string };
 type Quart = { code: string; libelle?: string; ordre?: number; creneau?: string | null };
-type Personne = { nom: string; prenom: string; type_contrat: string };
+type Personne = { nom: string; prenom: string; type_contrat: string; date_arrivee: string | null };
+
+// « Nouveau » à l'affichage (2026-11-05) : arrivé (début du 1er contrat) depuis
+// moins de 14 jours, ou arrivée à venir. Un intérimaire revenu avec un ancien
+// contrat garde sa première arrivée : il n'est pas nouveau.
+const NOUVEAU_JOURS = 14;
+const NOUVEAU_COULEUR = "#1e40af";
 type PlacementRow = {
   poste_id: string | null;
   jour: string;
@@ -103,19 +109,13 @@ export default async function AtelierPlanning({
   const posteInfo = new Map<string, { nom: string; ligneId: string; atelierId: string; actif: boolean }>();
   for (const l of lignesSite ?? []) for (const p of l.poste ?? []) posteInfo.set(p.id, { nom: p.nom, ligneId: l.id, atelierId: l.atelier_id, actif: p.actif });
 
-  // ROSTER : personnes dont l'atelier D'AFFECTATION est celui-ci (leurs jours de
-  // prêt ailleurs sont annotés en cellule), PLUS toute personne ayant au moins une
-  // affectation sur un poste de cet atelier pendant la fenêtre (2026-11-05,
-  // ajoutées plus bas depuis les placements). Une personne prêtée figure donc sur
-  // son planning maison ET sur celui où elle travaille.
-  const { data: rosterD } = await admin
-    .from("personne")
-    .select("id, nom, prenom, type_contrat")
-    .eq("site_id", site.id)
-    .eq("atelier_id", atelier.id)
-    .returns<(Personne & { id: string })[]>();
+  // ROSTER (2026-11-05) : toute personne ayant au moins une affectation sur un
+  // poste de CE service pendant la fenêtre, quel que soit son service à la fiche
+  // Personnel — et elle seule. Quelqu'un du Condi affecté en FAB toute la semaine
+  // n'apparaît qu'en FAB ; affecté aux deux, il figure sur les deux plannings.
+  // Une personne sans aucune affectation (absente, non planifiée) n'est affichée
+  // nulle part. Rempli plus bas depuis les placements.
   const displayById = new Map<string, Personne>();
-  for (const p of rosterD ?? []) displayById.set(p.id, { nom: p.nom, prenom: p.prenom, type_contrat: p.type_contrat });
 
   // Codes de contrat pilotés par agence (drapeau avec_agence, 0072) : surlignés en
   // jaune (intérim + CDI intérimaire…). Route publique → on ne passe pas par
@@ -152,7 +152,7 @@ export default async function AtelierPlanning({
     const plSite = await fetchAll<PlSite>(() =>
       admin
         .from("placement")
-        .select("poste_id, jour, quart_code, personne_id, numero_rotation, personne:personne_id(nom, prenom, type_contrat)")
+        .select("poste_id, jour, quart_code, personne_id, numero_rotation, personne:personne_id(nom, prenom, type_contrat, date_arrivee)")
         .eq("site_id", site.id)
         .in("jour", isos)
         .not("poste_id", "is", null)
@@ -326,7 +326,7 @@ export default async function AtelierPlanning({
 
     // Index par personne et jour (tout le site : on ne sait qu'après qui est
     // affiché). Une personne affectée au moins une fois sur un poste de CE service
-    // pendant la fenêtre rejoint le roster (2026-11-05), quel que soit son service
+    // pendant la fenêtre forme le roster (2026-11-05), quel que soit son service
     // d'affectation : elle peut donc figurer sur deux plannings la même semaine.
     const posteIciSet = new Set(posteIds);
     for (const r of plSite) {
@@ -339,7 +339,7 @@ export default async function AtelierPlanning({
       (byPerson.get(pk) ?? byPerson.set(pk, []).get(pk)!).push(r);
       if (posteIciSet.has(r.poste_id) && r.personne && !displayById.has(r.personne_id)) {
         const p = r.personne;
-        displayById.set(r.personne_id, { nom: p.nom, prenom: p.prenom, type_contrat: p.type_contrat });
+        displayById.set(r.personne_id, { nom: p.nom, prenom: p.prenom, type_contrat: p.type_contrat, date_arrivee: p.date_arrivee });
       }
     }
   }
@@ -435,124 +435,50 @@ export default async function AtelierPlanning({
   const shownDays = days.filter((d) => openDays.has(d.iso) || placementDays.has(d.iso));
   const noWork = shownDays.length === 0;
 
-  // Liste des lignes : personnes de l'atelier ayant une activité sur les jours
-  // affichés (placement ici ou ailleurs, absence, ou TP). On ALLÈGE l'écran en
-  // retirant celles qui ne travaillent JAMAIS sur toute la période — inutile
-  // d'occuper une ligne pour un mur d'« Absence » ou de « TP ». Une absence ou
-  // un TP PARTIEL reste visible (on doit voir les jours travaillés autour).
-  const aUnPlacement = (id: string) => shownDays.some((d) => (byPerson.get(`${id}:${d.iso}`)?.length ?? 0) > 0);
-  const aUneAbsence = (id: string) => shownDays.some((d) => absByPerson.get(id)?.has(d.iso));
-  const aUnTp = (id: string) => shownDays.some((d) => tpSet.has(`${id}:${d.iso}`));
-  // Aucun placement et chaque jour affiché est « off » (absence OU TP) : la ligne
-  // n'apporte rien. Couvre l'absence complète (comportement historique), le TP
-  // complet (nouveau) et un mélange absence/TP couvrant toute la période.
-  const toutOff = (id: string) =>
-    !noWork &&
-    !aUnPlacement(id) &&
-    shownDays.every((d) => absByPerson.get(id)?.has(d.iso) || tpSet.has(`${id}:${d.iso}`));
-
+  // Liste des lignes : le roster entier — chacun y a au moins une affectation sur
+  // un poste de ce service (cf. ROSTER). Les absences / TP des autres jours restent
+  // visibles dans ses cases.
   const personList = personIds
-    .filter((id) => (aUnPlacement(id) || aUneAbsence(id) || aUnTp(id)) && !toutOff(id))
     .map((id) => ({ id, ...displayById.get(id)! }))
     .sort((a, b) => (a.nom + a.prenom).localeCompare(b.nom + b.prenom));
 
-  // Éclatement Matin / Après-midi (2026-09-09). But : réduire la liste par bloc
-  // pour un écran TV lisible. On classe CHAQUE personne dans UNE seule section :
-  //  1) créneau du placement le plus fréquent (matin/aprem) sur la fenêtre — respecte
-  //     la réalité du planning et la réponse choisie « quart du placement du jour » ;
-  //  2) à défaut (aucun placement matin/AM — nuit, journée, ou pas de placement du
-  //     tout : purement absence/TP) : créneau du quart de son ÉQUIPE cette semaine
-  //     via la rotation datée, sinon quart fixe ;
-  //  3) en dernier recours : matin par défaut.
-  // Un quart sans créneau (journée, nuit) ne compte pas pour le split.
+  // Sections Matin / Après-midi / Nuit (2026-11-05) : une personne figure dans
+  // CHAQUE section où elle a au moins une affectation sur un poste de ce service
+  // pendant la fenêtre. En Matin lundi-mercredi puis Nuit jeudi-vendredi, elle est
+  // donc sur la page Matin ET sur la page Nuit ; chaque ligne montre sa semaine
+  // entière (poste + horaire, autres quarts compris).
   // Classe un quart en Matin / Après-midi / Nuit (sans code en dur) : créneau
   // matin/aprem = direct ; créneau null = soit la JOURNÉE (plein temps, plus petit
   // ordre parmi les quarts sans créneau → rangée en Matin car présente le matin),
-  // soit la NUIT (les autres quarts sans créneau). Sans ce 3e cas, la nuit tombait
-  // sur le repli « matin » et se mélangeait au matin.
+  // soit la NUIT (les autres quarts sans créneau).
   const ordreJournee = Math.min(
     ...quarts.filter((q) => !q.creneau).map((q) => q.ordre ?? 0),
     Number.POSITIVE_INFINITY,
   );
-  const sectionDuQuart = (code: string | null | undefined): "matin" | "aprem" | "nuit" => {
+  type Section = "matin" | "aprem" | "nuit";
+  const sectionDuQuart = (code: string | null | undefined): Section => {
     const q = quarts.find((x) => x.code === code);
     if (!q) return "matin";
     if (q.creneau === "matin") return "matin";
     if (q.creneau === "aprem") return "aprem";
     return (q.ordre ?? 0) === ordreJournee ? "matin" : "nuit";
   };
-  // Lecture d'équipe pour repli. Une seule requête (postée par personne concernée).
-  const persEquipe = new Map<string, string | null>();
-  if (personList.length) {
-    // Équipes du site (≤ quelques centaines de lignes), gardées pour les seules
-    // personnes affichées — plus de liste d'ids dans l'URL (2026-10-14).
-    const affichees = new Set(personList.map((p) => p.id));
-    const { data: pe } = await admin
-      .from("personne")
-      .select("id, equipe_id")
-      .eq("site_id", site.id)
-      .returns<{ id: string; equipe_id: string | null }[]>();
-    for (const r of pe ?? []) if (affichees.has(r.id)) persEquipe.set(r.id, r.equipe_id);
-  }
-  // Quart d'équipe pour chaque lundi de la fenêtre (repli). Recalcule sur les
-  // rotations déjà chargées si le bloc TP n'était pas exécuté (posteIds vide).
-  const rotRefsAll = await getRotationRefsC();
-  const mondaySetAll = new Set(isos.map((iso) => isoDate(mondayOf(new Date(iso + "T00:00")))));
-  const rotByMondayAll = new Map<string, Record<string, string>>();
-  for (const m of mondaySetAll) rotByMondayAll.set(m, rotationForWeek(rotRefsAll, m));
-  const { data: equipesAll } = await admin
-    .from("equipe")
-    .select("id, quart_fixe")
-    .eq("site_id", site.id)
-    .eq("actif", true)
-    .returns<{ id: string; quart_fixe: string | null }[]>();
-  const quartFixeAll = new Map((equipesAll ?? []).map((e) => [e.id, e.quart_fixe]));
-
-  type Section = "matin" | "aprem" | "nuit";
-  // Section dominante d'un compteur ; égalité tranchée matin > aprem > nuit.
-  const dominante = (c: { matin: number; aprem: number; nuit: number }): Section | null => {
-    const max = Math.max(c.matin, c.aprem, c.nuit);
-    if (max === 0) return null;
-    if (c.matin === max) return "matin";
-    if (c.aprem === max) return "aprem";
-    return "nuit";
+  const posteIci = new Set(posteIds);
+  const sectionsDe = (persId: string): Set<Section> => {
+    const s = new Set<Section>();
+    for (const iso of isos)
+      for (const r of byPerson.get(`${persId}:${iso}`) ?? [])
+        if (r.poste_id && posteIci.has(r.poste_id)) s.add(sectionDuQuart(quartOuDefaut(r.quart_code, quarts)));
+    return s;
   };
+  const sectionsParPers = new Map(personList.map((p) => [p.id, sectionsDe(p.id)] as const));
+  const matinList = personList.filter((p) => sectionsParPers.get(p.id)?.has("matin"));
+  const apremList = personList.filter((p) => sectionsParPers.get(p.id)?.has("aprem"));
+  const nuitList = personList.filter((p) => sectionsParPers.get(p.id)?.has("nuit"));
 
-  const creneauEquipe = (persId: string): Section | null => {
-    const eq = persEquipe.get(persId);
-    if (!eq) return null;
-    const qf = quartFixeAll.get(eq);
-    if (qf) return sectionDuQuart(qf);
-    // Section majoritaire sur la fenêtre (peut varier d'une semaine à l'autre).
-    const compte = { matin: 0, aprem: 0, nuit: 0 };
-    for (const m of mondaySetAll) {
-      const rot = rotByMondayAll.get(m) ?? {};
-      const q = rot[eq];
-      if (q) compte[sectionDuQuart(q)] += 1;
-    }
-    return dominante(compte);
-  };
-
-  const sectionDe = (persId: string): Section => {
-    // 1) Placement le plus fréquent (matin / aprem / nuit).
-    const compte = { matin: 0, aprem: 0, nuit: 0 };
-    for (const iso of isos) {
-      const rows = byPerson.get(`${persId}:${iso}`) ?? [];
-      for (const r of rows) compte[sectionDuQuart(quartOuDefaut(r.quart_code, quarts))] += 1;
-    }
-    const dom = dominante(compte);
-    if (dom) return dom;
-    // 2) Repli équipe (rotation datée / quart fixe).
-    const c = creneauEquipe(persId);
-    if (c) return c;
-    // 3) Défaut.
-    return "matin";
-  };
-
-  const sectionParPers = new Map(personList.map((p) => [p.id, sectionDe(p.id)] as const));
-  const matinList = personList.filter((p) => sectionParPers.get(p.id) === "matin");
-  const apremList = personList.filter((p) => sectionParPers.get(p.id) === "aprem");
-  const nuitList = personList.filter((p) => sectionParPers.get(p.id) === "nuit");
+  // Nouveaux : arrivée dans les NOUVEAU_JOURS derniers jours (ou à venir).
+  const seuilNouveau = isoDate(new Date(Date.now() - NOUVEAU_JOURS * 86400000));
+  const estNouveau = (p: Personne) => !!p.date_arrivee && p.date_arrivee >= seuilNouveau;
 
   // Numéro(s) de semaine ISO des jours affichés, en tête de chaque page imprimée
   // (et à l'écran à côté du nom du service). Une fenêtre à cheval sur deux
@@ -573,7 +499,8 @@ export default async function AtelierPlanning({
       · <span style={{ background: AUJOURDHUI, padding: "0 6px" }}>Aujourd&apos;hui</span> · horaires en bleu ·{" "}
       <span style={{ color: "#b45309", fontStyle: "italic" }}>(Service X)</span> = affecté à un autre service ·{" "}
       <span style={{ color: "#b91c1c" }}>Absence</span>{" "}
-      · <span style={{ color: "#3730a3" }}>TP</span> (temps partiel).
+      · <span style={{ color: "#3730a3" }}>TP</span> (temps partiel) ·{" "}
+      <span style={{ color: NOUVEAU_COULEUR, fontWeight: 700 }}>★ Nouveau</span> (arrivé depuis moins de 2 semaines).
     </>
   );
 
@@ -628,8 +555,8 @@ export default async function AtelierPlanning({
       ) : (
         <>
           {/* Tableaux empilés : Matin, Après-midi, puis Nuit (seulement si des
-              personnes y travaillent). Chaque personne apparaît dans une seule
-              section — cf. `sectionDe()`. Un tableau vide affiche un message
+              personnes y travaillent). Une personne figure dans chaque section où
+              elle est affectée — cf. `sectionsDe()`. Un tableau vide affiche un message
               discret à l'écran et n'est pas imprimé (sauf si tout est vide). */}
           {sections.map(({ titre, liste, teinte }) => (
             <section
@@ -676,12 +603,18 @@ export default async function AtelierPlanning({
                   <tbody>
                     {liste.map((p) => {
                       const interim = agenceSet.has(p.type_contrat);
+                      const nouveau = estNouveau(p);
                       return (
                         <tr key={p.id}>
                           {/* Nom trop long pour la colonne : le prénom passe à la ligne
                               (jamais rogné, colonne à largeur fixe). Le prénom reste
                               d'un bloc ; seul un nom à lui seul trop long se coupe. */}
-                          <td className="aff-nom" style={{ border: cellBorder, fontWeight: 600, overflowWrap: "anywhere", lineHeight: 1.25 }}>
+                          <td
+                            className="aff-nom"
+                            style={{ border: cellBorder, fontWeight: nouveau ? 700 : 600, color: nouveau ? NOUVEAU_COULEUR : undefined, overflowWrap: "anywhere", lineHeight: 1.25 }}
+                            title={nouveau ? "Nouveau : arrivé depuis moins de 2 semaines" : undefined}
+                          >
+                            {nouveau && <span aria-label="Nouveau" style={{ marginRight: 4 }}>★</span>}
                             <span
                               style={{
                                 background: interim ? INTERIM_BG : undefined,

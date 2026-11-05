@@ -202,12 +202,16 @@
   max-width: 100%;
   padding: 1px 7px 1px 5px;
   border: 1px solid #cbd5e1;
-  border-radius: 999px;
+  /* Nom + prénom complets (2026-11-05) : trop longs pour la tuile, le prénom
+     passe à la ligne (NomPrenom) — rayon modéré pour une pastille sur deux lignes. */
+  border-radius: 10px;
   background: #fff;
   font-size: 12px;
   font-weight: 600;
+  line-height: 1.25;
   cursor: grab;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 /* Competence insuffisante (niveau < minimum du poste, ou restriction) : fond rouge. */
 .alerte {

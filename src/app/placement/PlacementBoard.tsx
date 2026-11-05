@@ -32,7 +32,17 @@ const VUE_ABSENCES = "absences";
 
 const norm = (v: string) => v.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 // Affichage compact : NOM P.
-const label = (p: { nom: string; prenom: string }) => (p.prenom ? `${p.nom} ${p.prenom.charAt(0).toUpperCase()}.` : p.nom);
+// Nom + prénom complet (2026-11-05, ex-« NOM P. ») : trop long pour la case, le
+// prénom passe à la ligne d’un bloc — jamais rogné (cf. NomPrenom).
+const label = (p: { nom: string; prenom: string }) => (p.prenom ? `${p.nom} ${p.prenom}` : p.nom);
+function NomPrenom({ p }: { p: { nom: string; prenom: string } }) {
+  return (
+    <>
+      {p.nom}
+      {p.prenom ? <> <span style={{ whiteSpace: "nowrap" }}>{p.prenom}</span></> : null}
+    </>
+  );
+}
 const JOURS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
 const jourLabel = (iso: string) => {
   const [y, m, d] = iso.split("-").map(Number);
@@ -321,7 +331,7 @@ export default function PlacementBoard({
         title={raisons.length ? `${p.nom} ${p.prenom}\n⚠ ${raisons.join("\n⚠ ")}` : `${p.nom} ${p.prenom}`}
       >
         <span className={s.dot} style={{ background: p.couleur ?? "#e5e7eb" }} />
-        <span style={{ ...styleInterim(p.type_contrat, agenceSet), padding: estAvecAgence(p.type_contrat, agenceSet) ? "0 3px" : 0 }}>{label(p)}</span>
+        <span style={{ ...styleInterim(p.type_contrat, agenceSet), padding: estAvecAgence(p.type_contrat, agenceSet) ? "0 3px" : 0, boxDecorationBreak: "clone", WebkitBoxDecorationBreak: "clone" }}><NomPrenom p={p} /></span>
       </span>
     );
   };
@@ -1409,7 +1419,7 @@ export default function PlacementBoard({
                     const sur = occ.length > effReq;
                     const trou = occ.length < effReq;
                     const nums = numerosDe(po);
-                    // Ligne d'un occupant imprimé : badge (n° de rotation) + NOM P. +
+                    // Ligne d'un occupant imprimé : badge (n° de rotation) + NOM Prénom +
                     // éventuel commentaire du jour (horaire_exception.motif).
                     const ligneOcc = (p: Personne, badge: ReactNode) => {
                       const alerte = habManque(p.id, po.id).length > 0 || compState(p.id, po) !== "ok";
@@ -1420,7 +1430,7 @@ export default function PlacementBoard({
                           <div className={s.printNomLigne}>
                             <span>
                               {badge}
-                              {p.nom} {p.prenom.charAt(0).toUpperCase()}.
+                              <NomPrenom p={p} />
                             </span>
                             {prepImpression === "heures" && heures[p.id] && <span className={s.printHeure}>{heures[p.id]}</span>}
                           </div>
@@ -1482,7 +1492,7 @@ export default function PlacementBoard({
                 </div>
                 {c.gens.map((p) => (
                   <div key={p.id} className={s.printAbsNom}>
-                    {p.nom} {p.prenom.charAt(0).toUpperCase()}.
+                    <NomPrenom p={p} />
                     {c.avecCommentaire && commentaires[p.id] && <div className={s.printCommentBloc}>{commentaires[p.id]}</div>}
                   </div>
                 ))}
@@ -1501,7 +1511,7 @@ export default function PlacementBoard({
                 </div>
                 {c.gens.map((p) => (
                   <div key={p.id} className={s.printAbsNom}>
-                    {p.nom} {p.prenom.charAt(0).toUpperCase()}.
+                    <NomPrenom p={p} />
                   </div>
                 ))}
               </div>

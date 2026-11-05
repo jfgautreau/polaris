@@ -46,6 +46,9 @@ export default function AbsencesModal({
   const [enCours, setEnCours] = useState(false);
   const [edit, setEdit] = useState<Edition | null>(null);
   const [ouvertPop, setOuvertPop] = useState<null | "motif" | "cal">(null);
+  // Rangée qui porte le popover ouvert : la ligne de saisie du haut, ou la ligne
+  // d'historique en cours de modification (les deux peuvent être affichées).
+  const [popLigne, setPopLigne] = useState<"haut" | "ligne">("haut");
   const [conflit, setConflit] = useState<{ jours: string[]; poursuivre: () => void } | null>(null);
 
   const motifById = new Map(motifs.map((m) => [m.id, m]));
@@ -54,10 +57,11 @@ export default function AbsencesModal({
   // `overflow: auto`, un popover `absolute` y est rogné et crée un ascenseur
   // (même piège que l'InfoBulle). On mesure le bouton au clic.
   const [popAnchor, setPopAnchor] = useState<{ top: number; left: number; width: number } | null>(null);
-  const openPop = (type: "motif" | "cal", e: React.MouseEvent) => {
+  const openPop = (ligne: "haut" | "ligne") => (type: "motif" | "cal", e: React.MouseEvent) => {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     setPopAnchor({ top: r.bottom + 4, left: r.left, width: r.width });
-    setOuvertPop((cur) => (cur === type ? null : type));
+    setOuvertPop((cur) => (cur === type && popLigne === ligne ? null : type));
+    setPopLigne(ligne);
   };
   const popStyle = (w: number): React.CSSProperties => {
     const vw = typeof window !== "undefined" ? window.innerWidth : 1280;
@@ -105,10 +109,6 @@ export default function AbsencesModal({
     };
   }, [ouvertPop]);
 
-  function commencerNouveau() {
-    setErreur(null);
-    setEdit({ mode: "new", motif_absence_id: "", debut: "", fin: "", commentaire: "" });
-  }
   function commencerEdition(p: Periode) {
     setErreur(null);
     if (p.absence_id) {
@@ -164,8 +164,7 @@ export default function AbsencesModal({
   }
 
   async function verifierEtEnregistrer() {
-    if (!edit) return;
-    if (!edit.motif_absence_id || !edit.debut || !edit.fin) {
+    if (!edit || !edit.motif_absence_id || !edit.debut || !edit.fin) {
       setErreur("Motif, date de début et date de fin sont requis.");
       return;
     }
@@ -242,10 +241,22 @@ export default function AbsencesModal({
   }
 
 
-  const m = edit?.motif_absence_id ? motifById.get(edit.motif_absence_id) : null;
-  const periodeTxt = edit && edit.debut && edit.fin
-    ? libellePeriode({ motif_absence_id: null, debut: edit.debut, fin: edit.fin, jours: 0, declaree: false, absence_id: null })
-    : "—";
+  // Ligne de saisie TOUJOURS ouverte en haut (2026-11-05, plus de bouton
+  // « Déclarer une absence ») : elle montre le brouillon (`edit` en mode « new »)
+  // ou une ligne vide. Taper dedans pendant la modification d'une ligne
+  // d'historique abandonne cette modification au profit d'une nouvelle saisie.
+  const brouillon: Edition = edit?.mode === "new" ? edit : BROUILLON_VIDE;
+  const setBrouillon: React.Dispatch<React.SetStateAction<Edition | null>> = (v) =>
+    setEdit((cur) => {
+      const base = cur?.mode === "new" ? cur : BROUILLON_VIDE;
+      return typeof v === "function" ? v(base) : v;
+    });
+  const motifDe = (e: Edition | null) => (e?.motif_absence_id ? motifById.get(e.motif_absence_id) : null);
+  const periodeDe = (e: Edition | null) =>
+    e && e.debut && e.fin
+      ? libellePeriode({ motif_absence_id: null, debut: e.debut, fin: e.fin, jours: 0, declaree: false, absence_id: null })
+      : "—";
+  const annuler = () => { setEdit(null); setOuvertPop(null); setErreur(null); };
 
   return (
     <ModaleDeplacable onClose={onClose} largeur={980}>
@@ -259,14 +270,6 @@ export default function AbsencesModal({
       {erreur && (
         <div role="alert" style={{ margin: "0 0 12px", padding: "8px 12px", borderRadius: 8, background: "#fef2f2", color: "#991b1b", border: "1px solid #fecaca", fontSize: 13, fontWeight: 600 }}>
           {erreur}
-        </div>
-      )}
-
-      {canEdit && !edit && (
-        <div style={{ marginBottom: 8 }}>
-          <button type="button" className="btn-sm" onClick={commencerNouveau} style={{ width: "auto" }}>
-            + Déclarer une absence
-          </button>
         </div>
       )}
 
@@ -288,18 +291,23 @@ export default function AbsencesModal({
           </tr>
         </thead>
         <tbody>
-          {edit && edit.mode === "new" && (
+          {canEdit && (
             <RowsEdit
-              edit={edit} m={m} periodeTxt={periodeTxt}
-              ouvertPop={ouvertPop} openPop={openPop} popStyle={popStyle} setOuvertPop={setOuvertPop} setEdit={setEdit}
+              edit={brouillon} m={motifDe(brouillon)} periodeTxt={periodeDe(brouillon)}
+              ouvertPop={popLigne === "haut" ? ouvertPop : null} openPop={openPop("haut")} popStyle={popStyle} setOuvertPop={setOuvertPop} setEdit={setBrouillon}
               motifs={motifs} popRef={popRef} enCours={enCours}
               onEnregistrer={verifierEtEnregistrer}
-              onAnnuler={() => { setEdit(null); setOuvertPop(null); setErreur(null); }}
+              onAnnuler={annuler}
+              libelleAnnuler="Effacer la saisie"
             />
+          )}
+          {/* Espace entre la ligne de saisie et l'historique. */}
+          {canEdit && (
+            <tr aria-hidden="true"><td colSpan={5} style={{ height: 32, padding: 0, border: "none" }} /></tr>
           )}
           {periodes === null ? (
             <tr><td colSpan={5} className="muted" style={{ padding: 10 }}>Chargement…</td></tr>
-          ) : periodes.length === 0 && !edit ? (
+          ) : periodes.length === 0 ? (
             <tr><td colSpan={5} className="muted" style={{ padding: 10 }}>Aucune absence enregistrée pour cette personne.</td></tr>
           ) : (
             periodes.map((p, i) => {
@@ -311,10 +319,10 @@ export default function AbsencesModal({
                   <RowsEdit
                     key={`edit-${p.absence_id}`}
                     edit={edit}
-                    m={m}
-                    periodeTxt={periodeTxt}
-                    ouvertPop={ouvertPop}
-                    openPop={openPop}
+                    m={motifDe(edit)}
+                    periodeTxt={periodeDe(edit)}
+                    ouvertPop={popLigne === "ligne" ? ouvertPop : null}
+                    openPop={openPop("ligne")}
                     popStyle={popStyle}
                     setOuvertPop={setOuvertPop}
                     setEdit={setEdit}
@@ -323,7 +331,7 @@ export default function AbsencesModal({
                     enCours={enCours}
                     onEnregistrer={verifierEtEnregistrer}
                     onSupprimer={supprimerDepuisEdition}
-                    onAnnuler={() => { setEdit(null); setOuvertPop(null); setErreur(null); }}
+                    onAnnuler={annuler}
                   />
                 );
               }
@@ -386,7 +394,7 @@ export default function AbsencesModal({
 // corbeille via `onSupprimer`). Popovers ancrés SOUS leur bouton.
 function RowsEdit({
   edit, m, periodeTxt, ouvertPop, openPop, popStyle, setOuvertPop, setEdit, motifs, popRef, enCours,
-  onEnregistrer, onSupprimer, onAnnuler,
+  onEnregistrer, onSupprimer, onAnnuler, libelleAnnuler = "Annuler",
 }: {
   edit: Edition;
   m: Motif | null | undefined;
@@ -402,6 +410,7 @@ function RowsEdit({
   onEnregistrer: () => void;
   onSupprimer?: () => void;
   onAnnuler: () => void;
+  libelleAnnuler?: string;
 }) {
   const trigger: React.CSSProperties = { width: "100%", margin: 0, padding: "4px 8px", fontSize: 13, border: "1px solid var(--border)", borderRadius: 7, textAlign: "left", cursor: "pointer" };
   return (
@@ -462,11 +471,13 @@ function RowsEdit({
         {onSupprimer && (
           <button type="button" className="iconbtn del" disabled={enCours} onClick={onSupprimer} title="Supprimer"><TrashIcon /></button>
         )}
-        <button type="button" className="iconbtn ghost" onClick={onAnnuler} title="Annuler">✕</button>
+        <button type="button" className="iconbtn ghost" onClick={onAnnuler} title={libelleAnnuler}>✕</button>
       </td>
     </tr>
   );
 }
+
+const BROUILLON_VIDE: Edition = { mode: "new", motif_absence_id: "", debut: "", fin: "", commentaire: "" };
 
 const cell: React.CSSProperties = { padding: "4px 6px", borderBottom: "1px solid #f1f5f9" };
 const hd: React.CSSProperties = { textAlign: "left", padding: "4px 6px", borderBottom: "1px solid var(--border)" };

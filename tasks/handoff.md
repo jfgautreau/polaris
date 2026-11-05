@@ -414,9 +414,13 @@ pas de troisième** : la fiche d'une personne est une modale du Suivi.
   globale des rapports (`td { padding: 1.5px 6px !important }`) rendait les rangées imprimées plus
   basses que la mesure écran → marge blanche en bas des pages denses. Impression en A4 : même
   rapport largeur/hauteur que l'A3, Chrome réduit la page entière (×0,71) si l'échelle est « par défaut ».
-- **Roster** (2026-11-05) : personnes du service d'affectation **+** toute personne ayant au
-  moins une affectation sur un poste du service pendant la fenêtre (une seule lecture des
-  placements du site, nom joint). Une personne prêtée figure sur deux plannings.
+- **Roster** (2026-11-05, révisé le même jour) : **seules** les personnes ayant au moins une
+  affectation sur un poste du service pendant la fenêtre (une seule lecture des placements du
+  site, nom joint) — le service de la fiche Personnel ne compte plus ; sans affectation (absent,
+  non planifié) = affiché nulle part. Une personne prêtée figure sur deux plannings. Elle est
+  dans **chaque** section (Matin / Après-midi / Nuit) où elle a une affectation sur ce service ;
+  sa ligne montre toute la semaine. **Nouveaux** : « ★ » + nom bleu si `date_arrivee` ≥ aujourd'hui
+  − 14 jours (`NOUVEAU_JOURS`).
   Les ids reçus ne font que **filtrer** la liste des services du site. Chaque service garde
   son lien **« Écran TV »** (`/affichage/atelier/[id]`, un service). Mise à jour **économe** depuis le 2026-10-14 :
   version des données vérifiée toutes les 5 min (une lecture), rechargement seulement si

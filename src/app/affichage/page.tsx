@@ -1,6 +1,7 @@
 import { getAdminClient } from "@/lib/supabase-server";
 import { requireModule } from "@/lib/permissions";
 import { getCurrentSite } from "@/lib/current-site";
+import Link from "next/link";
 import SelectionServices from "./SelectionServices";
 
 // Index des affichages couloir. Reserve aux droits "affichage". Deux usages :
@@ -26,7 +27,30 @@ export default async function AffichageIndex() {
 
   return (
     <div className="container">
-      <h1>Affichage couloir</h1>
+      {/* Écran sans menu : retour à l'accueil de Polaris sans le bouton
+          Précédent du navigateur (2026-11-05). */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <h1>Affichage couloir</h1>
+        <Link
+          href="/"
+          prefetch={false}
+          title="Revenir à l'accueil de Polaris"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "8px 14px",
+            background: "#fff",
+            color: "#1d4ed8",
+            border: "1px solid var(--border)",
+            borderRadius: 9,
+            fontWeight: 600,
+            textDecoration: "none",
+          }}
+        >
+          <span aria-hidden="true" style={{ fontSize: 18, lineHeight: 1 }}>&lsaquo;</span> Retour à Polaris
+        </Link>
+      </div>
       <p className="muted">Cochez les services à imprimer ensemble, ou ouvrez l&apos;écran TV d&apos;un service.</p>
       <div className="card">
         <SelectionServices ateliers={ateliers} />

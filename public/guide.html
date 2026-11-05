@@ -949,7 +949,7 @@
               <tr><td><strong>Équipe</strong></td><td>L'équipe habituelle (sa couleur). Une personne peut être placée ailleurs ponctuellement : c'est seulement le réglage par défaut des filtres.</td></tr>
               <tr><td><strong>Service</strong></td><td>Le service d'affectation, éventuellement précisé par un regroupement de lignes (« Condi — Thermo »). Il décide de la TV sur laquelle la personne apparaît et de la plupart des filtres.</td></tr>
               <tr><td><strong>Livret</strong></td><td>La date de remise du livret d'accueil signé. Pour un intérimaire, elle sert de départ à l'alerte des 18 mois.</td></tr>
-              <tr><td><strong>Abs.</strong></td><td>La fenêtre des absences de la personne.</td></tr>
+              <tr><td><strong>Abs.</strong></td><td>La fenêtre des absences de la personne : la ligne de saisie est ouverte d'office en haut (motif, période, commentaire, disquette pour enregistrer), l'historique vient dessous.</td></tr>
               <tr><td><strong>⚠ 18m</strong></td><td>Pour un intérimaire actif : la date des 18 mois (livret + 18 mois). <span style="background:#fef08a;color:#854d0e;padding:0 4px;border-radius:3px">Jaune</span> entre 3 et 5 mois d'ancienneté, <span style="background:#fed7aa;color:#7c2d12;padding:0 4px;border-radius:3px">orange</span> à partir de 17 mois, <span style="background:#fecaca;color:#7f1d1d;padding:0 4px;border-radius:3px">rouge</span> au-delà de 18 mois. Le calcul part du livret, sans tenir compte des interruptions : le détail des contrats reste géré dans le logiciel RH.</td></tr>
               <tr><td><strong>Point.</strong></td><td>La pointure, pour préparer les accueils (bottes, EPI).</td></tr>
               <tr><td><strong>TP</strong></td><td>Le temps partiel (voir plus bas). « TP » coloré = un temps partiel est réglé.</td></tr>
@@ -1701,10 +1701,14 @@
           <li><strong>La fenêtre affichée</strong> (par exemple de la veille à quatre jours devant) se règle dans Param. RH.</li>
           <li><strong>Légende</strong> : <span style="background:#fde68a;padding:0 5px">intérimaire</span> en jaune,
             <span style="background:#dcfce7;padding:0 5px">aujourd'hui</span> en vert, horaires en bleu, absence en rouge,
-            TP en violet, « (Service X) » en orange = ce jour-là, la personne travaille dans un autre service.</li>
-          <li>Une personne apparaît sur la TV de son <strong>service d'affectation</strong> (fiche Personnel) <strong>et</strong> sur
-            celle de tout service où elle a au moins une affectation sur la période affichée : une personne prêtée figure
-            donc sur deux plannings.</li>
+            TP en violet, « (Service X) » en orange = ce jour-là, la personne travaille dans un autre service,
+            <span style="color:#1e40af;font-weight:700">★ nom en bleu</span> = nouveau (arrivé depuis moins de 2 semaines).</li>
+          <li>Une personne apparaît sur la TV de chaque service où elle a <strong>au moins une affectation</strong> sur la
+            période affichée, quel que soit son service à la fiche Personnel : quelqu'un du Condi affecté en FAB toute la
+            semaine n'apparaît qu'en FAB. Sans aucune affectation (absent toute la semaine, pas encore planifié), il
+            n'apparaît nulle part.</li>
+          <li>Elle figure dans <strong>chaque section</strong> où elle travaille dans ce service : en Matin en début de semaine
+            puis de Nuit, elle est sur la page Matin <strong>et</strong> sur la page Nuit, avec à chaque fois toute sa semaine.</li>
           <li><strong>Impression</strong> (A3 portrait) : une page par section — Matin, puis Après-midi, puis Nuit —, chacune
             ajustée pour remplir la feuille sans grossir le texte au-delà du lisible, avec le <strong>numéro de semaine</strong> en gros en haut de chaque
             page. Une section vide n'est pas imprimée.</li>
@@ -1723,7 +1727,7 @@
         <p>
           Le menu <strong>Affichage</strong> liste les services avec une case à cocher. Cochez ceux à imprimer (ou tous),
           choisissez au besoin une date, puis imprimez : chaque service s'imprime en A3 portrait, une page par section (Matin, Après-midi, Nuit).
-          Le lien <strong>Écran TV</strong> de chaque ligne ouvre la page d'un seul service. Sur la page d'impression comme sur l'écran TV, un bouton « ‹ » ramène au choix des services. La <strong>date de référence</strong>
+          Le lien <strong>Écran TV</strong> de chaque ligne ouvre la page d'un seul service. Sur la page d'impression comme sur l'écran TV, un bouton « ‹ » ramène au choix des services ; sur le choix des services, « ‹ Retour à Polaris » ramène à l'accueil. La <strong>date de référence</strong>
           (vide = aujourd'hui) choisit la semaine imprimée. Depuis le Planning, le bouton 📺
           ouvre directement la TV du service filtré.
         </p>
