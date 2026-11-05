@@ -25,7 +25,7 @@ type Poste = {
   actif: boolean;
 };
 type Ligne = { id: string; nom: string; actif: boolean; ordre_affichage: number; regroupement: string | null; couleur: string | null; poste: Poste[] };
-type Atelier = { id: string; nom: string; actif: boolean; ordre_affichage: number; ligne: Ligne[] };
+type Atelier = { id: string; nom: string; actif: boolean; ordre_affichage: number; couleur: string | null; ligne: Ligne[] };
 type Quart = { code: string; libelle: string };
 type Comp = { id: string; nom: string; a_recycler: boolean };
 
@@ -38,7 +38,7 @@ export default async function ReferentielPage() {
   // TOUTE la requête imbriquée (L19) et viderait l'écran. On réessaie sans la
   // colonne la plus récente, puis sans les deux (défauts : false, true).
   const posteEmbed = (extra: string) =>
-    `id, nom, actif, ordre_affichage, ligne(id, nom, actif, ordre_affichage, regroupement, couleur, poste(id, nom, nom_court, categorie, effectif_requis, difficulte_formation, niveau_min_requis, ordre_affichage, numero_rotation, remplacable${extra}, actif))`;
+    `id, nom, actif, ordre_affichage, couleur, ligne(id, nom, actif, ordre_affichage, regroupement, couleur, poste(id, nom, nom_court, categorie, effectif_requis, difficulte_formation, niveau_min_requis, ordre_affichage, numero_rotation, remplacable${extra}, actif))`;
   const lireAteliers = async () => {
     const colonneAbsente = (e: { code?: string } | null) => !!e && (e.code === "42703" || e.code === "PGRST204");
     const avec = await supabase.from("atelier").select(posteEmbed(", imprimable, zone_attente")).order("ordre_affichage").order("nom").returns<Atelier[]>();

@@ -443,6 +443,14 @@ pas de troisième** : la fiche d'une personne est une modale du Suivi.
 partagé, styles `.kpi / .report-* / .navcard / .barrow` + `@media print` (PDF).
 `OrdoMonthNav` (navigation mensuelle), `ReportAtelierFilter` (filtre atelier).
 
+- **Excel intérim des Synthèses** (2026-11-05, migration 0093) : case = horaire + service (plus
+  de poste), fond pastel du service (`atelier.couleur`), plus de colonne « Service d'affectation ».
+  Titre horodaté ; nom de fichier = `parametre_rh.interim_nom_fichier` (balises, `nom-fichier-interim.ts`).
+  « Excel agence » : POST `/api/syntheses/extraction-interim` (droit bilans + rapport non masqué) lit la
+  dernière photo (agence, semaine), enregistre la nouvelle, purge > 8 semaines, rend les retirés nommés ;
+  le navigateur surligne en jaune fluo (`xlsxInterim(…, { comparaison })`). Échec réseau → fichier sans
+  surlignage + message. L'Excel global n'est ni comparé ni photographié.
+
 ## Plateforme multi-site (`/platform`)
 Réservé aux `app_user.est_super_admin`. Layout dédié (fond gris, header noir, sans
 AppHeader), défense en profondeur (middleware + revalidation dans le layout). Doc

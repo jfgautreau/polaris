@@ -5,6 +5,7 @@ import { getCurrentProfile } from "@/lib/current-user";
 import { canWriteModule } from "@/lib/permissions";
 import { ATELIERS_TAG, REFERENTIEL_TAG } from "@/lib/refdata";
 import { couleurLibre, estCouleurLigne } from "@/lib/ligne-couleurs";
+import { estCouleurService } from "@/lib/service-couleurs";
 import { NUMERO_ROTATION_MAX } from "@/lib/numeros-rotation";
 
 // POST /api/referentiel  { op, ... }
@@ -175,7 +176,7 @@ async function traiter(req: NextRequest) {
         const { data, error } = await supabase
           .from("atelier")
           .insert({ nom, site_id, ordre_affichage })
-          .select("id, nom, actif, ordre_affichage")
+          .select("id, nom, actif, ordre_affichage, couleur")
           .single();
         if (error) throw error;
         // Cache refdata ateliers invalide (audit P2) : le nouveau apparait
@@ -228,6 +229,11 @@ async function traiter(req: NextRequest) {
         const patch: Record<string, unknown> = {};
         if (body.nom !== undefined) patch.nom = s(body.nom);
         if (body.ordre_affichage !== undefined) patch.ordre_affichage = Math.max(0, Math.floor(Number(body.ordre_affichage) || 0));
+        // Couleur pastel du service (0093) : palette fermée, null = aucune.
+        if (body.couleur !== undefined) {
+          if (body.couleur !== null && !estCouleurService(body.couleur)) return NextResponse.json({ error: "Couleur hors palette." }, { status: 400 });
+          patch.couleur = body.couleur === null ? null : (body.couleur as string).toLowerCase();
+        }
         if (Object.keys(patch).length === 0) return NextResponse.json({ error: "Rien à modifier" }, { status: 400 });
         const { error } = await supabase.from("atelier").update(patch).eq("id", s(body.id)).eq("site_id", site_id);
         if (error) throw error;

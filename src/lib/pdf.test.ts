@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { documentPdf, couperTexte, largeurTexte, normaliserTexte } from "./pdf";
-import { pdfInterim, xlsxInterim, pdfAbsences, xlsxAbsences, texteCaseInterim } from "./syntheses-export";
+import { pdfInterim, xlsxInterim, pdfAbsences, xlsxAbsences, texteCaseInterim, texteCaseExcel, photoInterim, JAUNE_FLUO, LIBELLE_RETIRE } from "./syntheses-export";
+import { nomFichierInterim } from "./nom-fichier-interim";
+import { estCouleurService, couleurDeService } from "./service-couleurs";
 import { classeurXlsx, nomsOnglets } from "./xlsx";
 import { placeInterimaire, type GroupeAgence, type Absences4 } from "./synthese-data";
 
@@ -80,7 +82,7 @@ const G: GroupeAgence[] = [
         nom: "DUPONT",
         prenom: "Jean",
         atelierNom: "Condi",
-        cells: { "2026-10-19": [{ posteNom: "Palettisation", atelierNom: "Condi", distant: false, horaire: "06:00-14:00" }], "2026-10-20": [] },
+        cells: { "2026-10-19": [{ posteNom: "Palettisation", atelierNom: "Condi", atelierCouleur: "#dcfce7", distant: false, horaire: "06:00-14:00" }], "2026-10-20": [] },
       },
     ],
     sansAffectation: [{ personneId: "p2", nom: "MARTIN", prenom: "Léa" }],
@@ -104,13 +106,75 @@ describe("exports Synthèses", () => {
     verifierXref(lire(documentPdf(d)));
     expect(pdfInterim([G[0]], J, "S43").sousTitre).toContain("Agence A");
   });
-  it("Excel intérim : une ligne par intérimaire, sans affectation compris", () => {
-    const [f] = xlsxInterim(G, J, "S43 · 19/10 → 25/10");
+  it("Excel intérim : une ligne par intérimaire, sans le poste, couleur du service", () => {
+    expect(texteCaseExcel(G[0].lignes[0], "2026-10-19")).toBe("06:00-14:00\nCondi");
+    const [f] = xlsxInterim(G, J, "S43 · 19/10 → 25/10", { maintenant: new Date(2026, 10, 5, 14, 7) });
     expect(f.nom).toBe("Intérim S43");
+    expect(f.titres?.[1]).toBe("Extrait le 05/11/2026 à 14:07");
+    expect(f.colonnes.map((c) => c.titre)).toEqual(["Agence", "Nom", "Prénom", "Lun 19/10", "Mar 20/10", "Jours placés", "Observation"]);
     expect(f.lignes).toHaveLength(3);
-    expect(f.lignes[0]).toEqual(["Agence A", "DUPONT", "Jean", "Condi", "06:00-14:00\nPalettisation\nCondi", "", 1, ""]);
+    expect(f.lignes[0]).toEqual(["Agence A", "DUPONT", "Jean", { texte: "06:00-14:00\nCondi", fond: "#dcfce7" }, "", 1, ""]);
     expect(f.lignes[1].slice(-2)).toEqual([0, "Sans affectation cette semaine"]);
-    expect(lire(classeurXlsx(xlsxInterim(G, J, "S43")))).toContain('wrapText="1"');
+    const x = lire(classeurXlsx(xlsxInterim(G, J, "S43")));
+    expect(x).toContain('wrapText="1"');
+    // Mise en page d'impression : paysage, une page de large, en-tête répété.
+    expect(x).toContain('orientation="landscape" fitToWidth="1" fitToHeight="0"');
+    expect(x).toContain("'Intérim S43'!$4:$4");
+    expect(x).toContain("_xlnm.Print_Area");
+  });
+  it("Excel agence : cases changées en jaune fluo, nouveaux et retirés", () => {
+    const g = G[0];
+    const avant = photoInterim(g, J);
+    // Première extraction : rien de surligné, pas de colonne Agence.
+    const [f0] = xlsxInterim([g], J, "S43", { comparaison: { etat: "ok", precedente: null, retires: [] } });
+    expect(f0.colonnes[0].titre).toBe("Nom");
+    expect(f0.titres).toContain("Première extraction de cette agence pour cette semaine : rien à comparer.");
+    expect(JSON.stringify(f0.lignes)).not.toContain(JAUNE_FLUO);
+    // Horaire changé lundi, mardi ajouté, p9 retiré ; MARTIN inchangée.
+    const apres = {
+      ...g,
+      lignes: [
+        {
+          ...g.lignes[0],
+          cells: {
+            "2026-10-19": [{ posteNom: "P", atelierNom: "Condi", atelierCouleur: "#dcfce7", distant: false, horaire: "07:00-15:00" }],
+            "2026-10-20": [{ posteNom: "P", atelierNom: "Fab", atelierCouleur: null, distant: false, horaire: "06:00-14:00" }],
+          },
+        },
+      ],
+    };
+    avant.lignes.p9 = { cases: { "2026-10-19": "14:00-22:00\nFab" }, jours: 1, obs: "" };
+    const [f] = xlsxInterim([apres], J, "S43", {
+      comparaison: { etat: "ok", precedente: { le: "2026-11-04T16:20:00", photo: avant }, retires: [{ personneId: "p9", nom: "LEROY", prenom: "Anne" }] },
+    });
+    expect(f.titres?.[2]).toBe("Cases en jaune fluo : modifiées depuis l'extraction du 04/11/2026 à 16:20.");
+    const [dupont, martin, leroy] = f.lignes;
+    expect(dupont.slice(0, 2)).toEqual(["DUPONT", "Jean"]);
+    expect(dupont[2]).toEqual({ texte: "07:00-15:00\nCondi", fond: JAUNE_FLUO });
+    expect(dupont[3]).toEqual({ texte: "06:00-14:00\nFab", fond: JAUNE_FLUO });
+    expect(dupont[4]).toEqual({ texte: "2", fond: JAUNE_FLUO });
+    expect(martin).toEqual(["MARTIN", "Léa", "", "", 0, "Sans affectation cette semaine"]);
+    expect(leroy[0]).toEqual({ texte: "LEROY", fond: JAUNE_FLUO, barre: true });
+    expect(leroy[2]).toEqual({ texte: "14:00-22:00\nFab", fond: JAUNE_FLUO, barre: true });
+    expect(leroy[leroy.length - 1]).toEqual({ texte: LIBELLE_RETIRE, fond: JAUNE_FLUO });
+    expect(lire(classeurXlsx([f]))).toContain("<strike/>");
+  });
+  it("Excel agence : comparaison indisponible annoncée, rien surligné", () => {
+    const [f] = xlsxInterim([G[0]], J, "S43", { comparaison: { etat: "indisponible" } });
+    expect(f.titres?.[2]).toContain("indisponible");
+    expect(JSON.stringify(f.lignes)).not.toContain(JAUNE_FLUO);
+  });
+  it("nom du fichier intérim : balises, défaut, caractères interdits", () => {
+    const c = { agence: "Adecco", semaine: 6, annee: 2026, site: "Le Bignon", maintenant: new Date(2026, 1, 3, 9, 5) };
+    expect(nomFichierInterim(null, c)).toBe("Planning intérim Adecco S06 2026 - 2026-02-03 09h05.xlsx");
+    expect(nomFichierInterim("{site} / {AGENCE} : S{semaine}", c)).toBe("Le Bignon - Adecco - S06.xlsx");
+    expect(nomFichierInterim("   ", c)).toBe("Planning intérim Adecco S06 2026 - 2026-02-03 09h05.xlsx");
+  });
+  it("couleurs de service : palette fermée", () => {
+    expect(estCouleurService("#DBEAFE")).toBe(true);
+    expect(estCouleurService("#ff0000")).toBe(false);
+    expect(couleurDeService("#dcfce7")?.nom).toBe("Vert");
+    expect(couleurDeService(null)).toBeNull();
   });
   it("absences : PDF et Excel (deux onglets, fonds de motif)", () => {
     const abs: Absences4 = {

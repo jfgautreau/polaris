@@ -167,7 +167,9 @@ export async function chargerAbsences4Semaines(
 // Planning previsionnel des interimaires, par agence
 // ---------------------------------------------------------------------------
 
-export type CelluleInterim = { posteNom: string; atelierNom: string; distant: boolean; horaire: string };
+// atelierCouleur : couleur pastel du service du poste (atelier.couleur, 0093),
+// pour l'Excel agence ; null = pas de couleur.
+export type CelluleInterim = { posteNom: string; atelierNom: string; atelierCouleur: string | null; distant: boolean; horaire: string };
 export type LigneInterim = {
   personneId: string;
   nom: string;
@@ -235,7 +237,7 @@ export async function chargerHorairesInterim(
         .returns<{ personne_id: string; date_debut: string | null; date_fin: string | null }[]>()
     ),
     supabase.from("ligne").select("id, atelier_id, poste(id, nom)").returns<{ id: string; atelier_id: string | null; poste: { id: string; nom: string }[] }[]>(),
-    supabase.from("atelier").select("id, nom").returns<{ id: string; nom: string }[]>(),
+    supabase.from("atelier").select("id, nom, couleur").returns<{ id: string; nom: string; couleur: string | null }[]>(),
     fetchAll<{ poste_id: string; quart_code: string; jour: number; debut: string | null; fin: string | null; debut_apres_nuit: string | null; fin_apres_nuit: string | null }>(() =>
       supabase
         .from("horaire_poste")
@@ -270,6 +272,7 @@ export async function chargerHorairesInterim(
   const posteInfo = new Map<string, { nom: string; atelierId: string | null }>();
   for (const l of lignesSiteD ?? []) for (const p of l.poste ?? []) posteInfo.set(p.id, { nom: p.nom, atelierId: l.atelier_id });
   const atNom = new Map((atD ?? []).map((a) => [a.id, a.nom]));
+  const atCouleur = new Map((atD ?? []).map((a) => [a.id, a.couleur]));
 
   // Maps de resolution d'horaire (cf. src/lib/horaires.ts).
   const horMap = new Map<string, HM>();
@@ -314,6 +317,7 @@ export async function chargerHorairesInterim(
     arr.push({
       posteNom: info?.nom ?? "?",
       atelierNom: info?.atelierId ? atNom.get(info.atelierId) ?? "—" : "—",
+      atelierCouleur: info?.atelierId ? atCouleur.get(info.atelierId) ?? null : null,
       distant: !!info && info.atelierId !== affId && affId !== null,
       horaire: horaireTxt(maps, quarts, r.personne_id, r.poste_id, r.quart_code, r.jour, r.numero_rotation),
     });

@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import ModaleDeplacable from "@/components/ModaleDeplacable";
 import ToggleSwitch from "@/components/ToggleSwitch";
 import CouleurLigne from "./CouleurLigne";
+import ChoixCouleur from "./ChoixCouleur";
+import { SERVICE_COULEURS, couleurDeService } from "@/lib/service-couleurs";
 import { parseNumeros, NUMERO_ROTATION_MAX } from "@/lib/numeros-rotation";
 
 // Info-bulle du N° rot : montre le découpage réel en places, pour qu'un nom
@@ -31,7 +33,7 @@ type Poste = {
   actif: boolean;
 };
 type Ligne = { id: string; nom: string; actif: boolean; ordre_affichage: number; regroupement: string | null; couleur: string | null; poste: Poste[] };
-type Atelier = { id: string; nom: string; actif: boolean; ordre_affichage: number; ligne: Ligne[] };
+type Atelier = { id: string; nom: string; actif: boolean; ordre_affichage: number; couleur: string | null; ligne: Ligne[] };
 type Quart = { code: string; libelle: string };
 type Comp = { id: string; nom: string; a_recycler: boolean };
 
@@ -283,6 +285,12 @@ export default function ReferentielEditor({
   }
   // Couleur des PDF du Placement (0082) : enregistrée aussitôt ; refus -> retour
   // à la valeur précédente (le message s'affiche dans le bandeau).
+  // Couleur pastel du service (Excel intérim, 0093) ; refus serveur = retour à l'ancienne.
+  async function couleurService(aid: string, couleur: string | null, avant: string | null) {
+    setAtelier(aid, (a) => ({ ...a, couleur }));
+    const j = await post("update-atelier", { id: aid, couleur });
+    if (!j) setAtelier(aid, (a) => ({ ...a, couleur: avant }));
+  }
   async function couleurLigne(aid: string, lid: string, couleur: string, avant: string | null) {
     setLigne(aid, lid, (l) => ({ ...l, couleur }));
     const j = await post("update-ligne", { id: lid, couleur });
@@ -478,6 +486,14 @@ export default function ReferentielEditor({
                 style={{ width: 60 }}
               />
             </label>
+            <ChoixCouleur
+              libelle="Couleur"
+              titre="Couleur du service dans l'Excel intérim des Synthèses"
+              palette={SERVICE_COULEURS}
+              actuelle={couleurDeService(a.couleur)}
+              aucune
+              onChange={(c) => void couleurService(a.id, c, a.couleur)}
+            />
             <ToggleSwitch on={a.actif} onChange={(v) => toggleAtelier(a.id, v)} title="Activer / désactiver le service" />
             <button type="button" style={ADD_BTN} onClick={() => addLigne(a.id, "")} title="Ajouter une ligne (à compléter ensuite)">
               ＋ Ajouter une ligne

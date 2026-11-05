@@ -33,7 +33,8 @@ L'historique des décisions est dans git et dans l'en-tête de chaque migration.
    Pour de la *donnée* seulement, un script Node lisant `SUPABASE_SERVICE_ROLE_KEY` de
    `.env.local` est acceptable (simulation d'abord, écriture après accord).
    Projet Supabase : ref `stcxlsmmnplxpirrnefm`, eu-west-3.
-   **Dernière migration appliquée : `0092`** (durcissement sécurité, audit du 2026-11-03). Toute nouvelle policy RLS s'écrit
+   **Dernière migration appliquée : `0092`** (durcissement sécurité, audit du 2026-11-03) ; **`0093`**
+   (`export_interim` : atelier.couleur, parametre_rh, export_interim_photo) écrite le 2026-11-05, à exécuter. Toute nouvelle policy RLS s'écrit
    `site_id = (select public.current_site_id())` (forme InitPlan, calculée une fois par
    requête) — idem pour `is_admin()`, `has_role('x')`, `auth.uid()`.
    **Toute nouvelle table** (`create table` dans `public`, migration 0091+) porte dans la même
@@ -426,7 +427,8 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   `src/lib/noms-comptes.ts` (service_role borné au site).
 - **Référentiel** (`src/app/admin/referentiel/`, `/api/referentiel`) : N° aff. par service (`atelier.ordre_affichage`, 0085 — tout écran classe les services par ce numéro puis par nom) ; colonnes N° rot,
   Habil. requises, Rempl. (PTR/PTNR), Impr., Attente (`zone_attente`, 0077), Titulaire, effectif par quart (vide « – » / 0 /
-  N), Ouvre / Ferme le, Regroup., Couleur de ligne (PDF du Placement, `PastillesCouleur` / `CouleurLigne`).
+  N), Ouvre / Ferme le, Regroup., Couleur de ligne (PDF du Placement, `CouleurLigne`), Couleur du service
+  (`atelier.couleur`, 0093, Excel intérim ; « aucune » possible) — sélecteur commun `ChoixCouleur`.
   Noms de poste / nom court / ligne **uniques par site**
   parmi les actifs (409) ; erreurs en toast fixe bas-centre.
 - **Absences** (module `absences`, `src/app/absences-specifiques/`) : périodes reconstruites
@@ -444,7 +446,15 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   sur la relève globale). Synthèses (absences sur 4 semaines, intérim par agence ; liste
   « Sans affectation cette semaine » = aucune ligne `placement` de la semaine ET un contrat qui
   couvre au moins un jour, `placeInterimaire()` ; JNT / absence seuls = nulle part ; exports
-  PDF / Excel par `src/lib/syntheses-export.ts`, global et par agence). **PDF = vrai fichier**
+  PDF / Excel par `src/lib/syntheses-export.ts`, global et par agence). **Excel intérim** (2026-11-05,
+  0093) : case = horaire + service, SANS poste, fond = `atelier.couleur` (pastel, `service-couleurs.ts`,
+  choisie au Référentiel) ; plus de colonne « Service d'affectation » ; horodaté (titre + nom de fichier,
+  forme `parametre_rh.interim_nom_fichier` réglée dans Param. RH, `nom-fichier-interim.ts`) ; week-end
+  seulement s'il porte quelque chose. **Excel agence** : `/api/syntheses/extraction-interim` mémorise une
+  photo (`export_interim_photo`, personne_id → texte des cases, sans nom, purge 8 semaines) et rend la
+  précédente de la même agence et de la même semaine → cases changées en jaune fluo, retirés barrés en bas.
+  `xlsx.ts` : lignes de titre, barré, mise en page (A4 paysage, 1 page de large, en-tête répété, zone
+  d'impression, quadrillage, « Page n / N ») pour TOUS les Excel. **PDF = vrai fichier**
   (2026-10-20, `src/lib/pdf.ts`, générateur maison sans dépendance : titres, textes, tableaux
   paginés, Helvetica WinAnsi) via `BoutonPdf` / `BoutonExcel` (`src/app/bilans/BoutonsExport.tsx`,
   `telechargerFichier`) ; `ReportActions showPdf={false}` masque l'ancien bouton qui ouvrait
@@ -484,7 +494,7 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   régimes, déclencheurs (quarts / postes / habilitations / motifs), catalogue, alertes —
   **séparé de Param. RH**, ce sont deux métiers.
 - **Param. RH** (`/admin/motifs`, droit `motifs`) : motifs (code GT, planifié ou non, affiché sur le « PDF pour Affich. »),
-  agences, types de contrat (`avec_agence`), fenêtre d'affichage TV, import des absences RH
+  agences, nom du fichier Excel intérim (`parametre_rh`, 0093), types de contrat (`avec_agence`), fenêtre d'affichage TV, import des absences RH
   (`src/lib/import-absences-rh.ts`).
 - **Journal** (`src/app/journal/`, droit `journal`, règles pures `src/lib/journal.ts`) : lu en
   service_role borné au site (la matrice décide, pas la RLS d'audit_log à rôles en dur) ;

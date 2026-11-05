@@ -849,6 +849,8 @@
         <ul>
           <li><strong>N° aff.</strong> — l'ordre d'affichage : des services dans tous les filtres, le Placement,
             la TV et les bilans ; des lignes et des postes sur la TV et les feuilles imprimées.</li>
+          <li><strong>Couleur</strong> (service) — une teinte pastel, qui colore dans l'Excel intérim des Synthèses
+            chaque case d'un jour passé dans ce service. Peut rester vide.</li>
           <li><strong>Regroup.</strong> (ligne) — une étiquette libre pour regrouper des lignes dans les bilans
             (« Thermo », « Vrac »…). Elle est aussi proposée comme « Service » dans la fiche Personnel.</li>
           <li><strong>Ouvre le / Ferme le</strong> (ligne) — une ligne neuve ou qui s'arrête à une date connue :
@@ -1645,7 +1647,7 @@
           <table class="data">
             <thead><tr><th style="width:210px">Rapport</th><th>Ce qu'il montre</th></tr></thead>
             <tbody>
-              <tr><td><strong>📋 Synthèses hebdomadaires</strong></td><td>Deux vues. <strong>Absences</strong> : les absences des 4 semaines à venir (hors intérim), avec un récapitulatif par motif. <strong>Intérim</strong> : le planning de la semaine des intérimaires, par agence, avec le poste, le service et l'horaire de chaque jour ; puis, par agence, les intérimaires <strong>sans affectation cette semaine</strong> (aucune ligne au Planning : ni poste, ni JNT, ni absence) et sous contrat — ceux à ne pas faire venir. Les boutons <strong>PDF</strong> et <strong>Excel</strong> téléchargent directement le fichier ; chaque agence a aussi les siens, pour lui envoyer son planning.</td></tr>
+              <tr><td><strong>📋 Synthèses hebdomadaires</strong></td><td>Deux vues. <strong>Absences</strong> : les absences des 4 semaines à venir (hors intérim), avec un récapitulatif par motif. <strong>Intérim</strong> : le planning de la semaine des intérimaires, par agence, avec le poste, le service et l'horaire de chaque jour (dans l'Excel : l'horaire et le service seulement, la case aux couleurs du service) ; puis, par agence, les intérimaires <strong>sans affectation cette semaine</strong> (aucune ligne au Planning : ni poste, ni JNT, ni absence) et sous contrat — ceux à ne pas faire venir. Les boutons <strong>PDF</strong> et <strong>Excel</strong> téléchargent directement le fichier ; chaque agence a aussi les siens, pour lui envoyer son planning. L'Excel est <strong>horodaté</strong> (nom réglé dans Param. RH) et s'imprime proprement (A4 paysage, une page de large). L'<strong>Excel agence</strong> se compare à la dernière extraction de la même agence pour la même semaine : les cases qui ont changé sont en <strong>jaune fluo</strong>, une personne retirée reste en bas, barrée.</td></tr>
               <tr><td><strong>👥 Personnel</strong></td><td>Effectif et contrats (CDI, CDD, intérim), répartition par équipe et par service, fins de contrat à 90 jours, absentéisme du mois par motif, entrées et sorties du mois (hors intérim).</td></tr>
               <tr><td><strong>🌡️ Absentéisme</strong></td><td>Tendance sur 12 mois glissants, planifié / non planifié ; facteur de Bradford (absences courtes et répétées) ; taux non planifié par équipe.</td></tr>
               <tr><td><strong>🎯 Polyvalence &amp; compétences</strong></td><td>En quatre temps : <strong>constat</strong> (polyvalence moyenne par service, personnes à développer), <strong>postes</strong> (couverture et fragilité : combien de personnes tiennent vraiment chaque poste, niveau et habilitation compris ; postes critiques, fragiles ; PTNR à part), <strong>risques</strong> (personnes clés sur le départ, habilitations à échéance), <strong>qui former</strong> sur quel poste (écart actuel → cible).</td></tr>
@@ -1858,6 +1860,9 @@
             <strong>non planifié</strong> (compte dans l'absentéisme non planifié et le facteur de Bradford), <strong>PDF pour Affich.</strong>
             (le motif apparaît dans la colonne des absents de la feuille du couloir), actif.</li>
           <li><strong>Agences d'intérim</strong> : la liste proposée à la saisie d'un contrat.</li>
+          <li><strong>Nom du fichier Excel intérim</strong> : la forme du nom des fichiers Excel des Synthèses intérim,
+            avec des balises ({agence}, {semaine}, {annee}, {date}, {heure}, {site}) ; l'exemple se met à jour à la frappe.
+            Vide = « Planning intérim {agence} S{semaine} {annee} - {date} {heure} ».</li>
           <li><strong>Types de contrat</strong> : CDI, CDD, intérim… ; un type marqué « avec agence » fait apparaître le champ Agence
             et le surlignage jaune.</li>
           <li><strong>Fenêtre d'affichage du planning</strong> : les jours montrés par l'écran TV.</li>
@@ -1931,6 +1936,8 @@
               <tr><td><svg class="mark" width="18" height="18" style="display:inline;vertical-align:middle"><use href="#habv"/></svg> <svg class="mark" width="18" height="18" style="display:inline;vertical-align:middle"><use href="#habo"/></svg> <svg class="mark" width="18" height="18" style="display:inline;vertical-align:middle"><use href="#habr"/></svg></td><td>Habilitations</td><td>Valable · moins de 90 jours · expirée. Blanc : jamais passée ; grisé : supprimée.</td></tr>
               <tr><td><svg class="mark" width="18" height="18" style="display:inline;vertical-align:middle"><use href="#n3-1"/></svg> <svg class="mark" width="18" height="18" style="display:inline;vertical-align:middle"><use href="#n3-2"/></svg> <svg class="mark" width="18" height="18" style="display:inline;vertical-align:middle"><use href="#n3-3"/></svg></td><td>Matrice</td><td>Niveaux 1, 2, 3 (camembert qui se remplit).</td></tr>
               <tr><td>Couleur du motif</td><td>Planning, Placement, Absences</td><td>Absence (CP, maladie…), selon Param. RH.</td></tr>
+              <tr><td>Couleur du service</td><td>Excel intérim</td><td>Service du poste tenu ce jour-là, selon le Référentiel.</td></tr>
+              <tr><td><span style="background:#ffff00;padding:1px 6px;border-radius:4px">Jaune fluo</span></td><td>Excel agence</td><td>Case modifiée depuis la dernière extraction de l'agence pour la même semaine ; une personne barrée a été retirée.</td></tr>
               <tr><td>Couleur de l'équipe</td><td>Partout</td><td>Pastille devant les noms, filtres.</td></tr>
               <tr><td><span style="background:#f59e0b;color:#fff;border-radius:50%;padding:0 5px;font-weight:700">!</span> orange</td><td>Personnel, Matrice</td><td>Fiche incomplète ; personne sans aucune compétence.</td></tr>
               <tr><td>Rouge dans un compteur</td><td>Placement, bilans</td><td>Il manque du monde.</td></tr>

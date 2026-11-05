@@ -12,6 +12,8 @@ import {
 import AjoutModal from "./AjoutModal";
 import BandeauErreur from "@/components/BandeauErreur";
 import FenetreAffichageInline from "./FenetreAffichageInline";
+import NomFichierInterimInline from "./NomFichierInterimInline";
+import { getCurrentSite } from "@/lib/current-site";
 import ImportAbsences from "./ImportAbsences";
 import { CheckIcon, EditIcon } from "@/components/icons";
 import PastillesCouleur from "@/components/PastillesCouleur";
@@ -39,11 +41,14 @@ export default async function MotifsPage({
 
   const sp = await searchParams;
   const supabase = await getServerClient();
-  const [motifsR, agencesR, typesR, fenR] = await Promise.all([
+  const [motifsR, agencesR, typesR, fenR, paramRhR, site] = await Promise.all([
     supabase.from("motif_absence").select("id, libelle, code_court, couleur, actif, non_planifie, code_gt, visible_operateurs").order("libelle").returns<Motif[]>(),
     supabase.from("agence_interim").select("id, nom, actif").order("nom").returns<Agence[]>(),
     supabase.from("type_contrat").select("code, libelle, actif, ordre, avec_agence").order("ordre").returns<TypeContrat[]>(),
     supabase.from("parametre_affichage").select("mode, jours_avant, jours_apres, nb_semaines").maybeSingle<FenetreAffichage>(),
+    // Réglages RH du site (0093, RLS : ligne du site courant).
+    supabase.from("parametre_rh").select("interim_nom_fichier").maybeSingle<{ interim_nom_fichier: string | null }>(),
+    getCurrentSite(),
   ]);
   // Replis en cascade : code_gt (0066) puis non_planifie (0060) peuvent manquer
   // tant que la migration correspondante n'est pas jouée.
@@ -279,6 +284,17 @@ export default async function MotifsPage({
             </div>
           </>
         )}
+
+        {/* ---------------- Nom du fichier Excel intérim (0093) ---------------- */}
+        <h2 style={{ marginTop: 32, marginBottom: 4 }}>Nom du fichier Excel intérim</h2>
+        <p className="muted" style={{ marginBottom: 16 }}>
+          Nom donné aux fichiers Excel des Synthèses intérim (Bilans → Synthèses hebdomadaires),
+          par agence ou toutes agences. Vide = forme par défaut. La date et l&apos;heure de
+          l&apos;extraction distinguent deux fichiers du même jour. Enregistrement automatique.
+        </p>
+        <div className="card" style={{ marginBottom: 24 }}>
+          <NomFichierInterimInline initial={paramRhR.data?.interim_nom_fichier ?? null} site={site.nom} />
+        </div>
 
         {/* ---------------- Types de contrat (0040) ---------------- */}
         <h2 style={{ marginTop: 32, marginBottom: 4 }}>Types de contrat</h2>

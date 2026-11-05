@@ -8,7 +8,8 @@ import { parseMonday, weekDays, isoWeekNumber, isoDate } from "@/lib/week";
 import { chargerAbsences4Semaines, chargerHorairesInterim, type Absences4 } from "@/lib/synthese-data";
 import { INTERIM_BG } from "@/lib/interim";
 import SyntheseFilters from "./SyntheseFilters";
-import ExportSyntheses, { ExportAgence } from "./ExportSyntheses";
+import ExportSyntheses, { ExportAgence, type ContexteFichierInterim } from "./ExportSyntheses";
+import { getCurrentSite } from "@/lib/current-site";
 import { LIBELLE_SANS_AFFECTATION, PRECISION_SANS_AFFECTATION } from "@/lib/syntheses-export";
 
 export const dynamic = "force-dynamic";
@@ -59,6 +60,22 @@ export default async function SynthesesPage({
   // Vue Absences = tout l'effectif SAUF ces codes ; vue Intérim = ces codes.
   const agenceCodes = await getTypesAgenceC();
 
+  // Nom des fichiers Excel intérim : forme réglée dans Param. RH (parametre_rh,
+  // 0093, ligne du site sous RLS), semaine ISO et son année (celle du jeudi).
+  const [paramRhR, site] = await Promise.all([
+    supabase.from("parametre_rh").select("interim_nom_fichier").maybeSingle<{ interim_nom_fichier: string | null }>(),
+    getCurrentSite(),
+  ]);
+  const jeudi = new Date(monday);
+  jeudi.setDate(monday.getDate() + 3);
+  const fichier: ContexteFichierInterim = {
+    forme: paramRhR.data?.interim_nom_fichier ?? null,
+    site: site.nom,
+    semaine: isoWeekNumber(monday),
+    annee: jeudi.getFullYear(),
+    lundi: mondayIso,
+  };
+
   let abs: Absences4 = { lignes: [], recap: [] };
   let groupes: Awaited<ReturnType<typeof chargerHorairesInterim>> = [];
   if (vue === "absences") {
@@ -95,7 +112,7 @@ export default async function SynthesesPage({
           </div>
           <ReportActions showPdf={false}>
             {vue === "interim" ? (
-              <ExportSyntheses vue="interim" groupes={groupes} jours={joursExport} semaineLabel={semaineLabel} />
+              <ExportSyntheses vue="interim" groupes={groupes} jours={joursExport} semaineLabel={semaineLabel} fichier={fichier} />
             ) : (
               <ExportSyntheses vue="absences" abs={abs} colonnes={colonnesExport} rangeLabel={rangeLabel} filtres={filtresTxt} />
             )}
@@ -237,7 +254,7 @@ export default async function SynthesesPage({
                             {g.sansAffectation.length > 0 ? ` · ${g.sansAffectation.length} sans affectation` : ""} · semaine {semaineLabel}
                           </span>
                         </h2>
-                        <ExportAgence groupe={g} jours={joursExport} semaineLabel={semaineLabel} />
+                        <ExportAgence groupe={g} jours={joursExport} semaineLabel={semaineLabel} fichier={fichier} />
                       </div>
 
                       {g.lignes.length > 0 && (
