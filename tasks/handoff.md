@@ -410,6 +410,10 @@ pas de troisième** : la fiche d'une personne est une modale du Suivi.
   `L/w = H/h` (remplit largeur ET hauteur ; une liste de largeurs fixes laissait des marges).
   Section courte : largeur jamais sous 260 + 120 px par jour (sinon noms de poste hachés puis
   agrandis = illisibles), échelle ≤ 1,25, et ce sont les **rangées qui s'étirent** (≤ 1,8×).
+  ⚠️ Retraits des cellules posés en `.aff-zoom td { … !important }` : la règle d'impression
+  globale des rapports (`td { padding: 1.5px 6px !important }`) rendait les rangées imprimées plus
+  basses que la mesure écran → marge blanche en bas des pages denses. Impression en A4 : même
+  rapport largeur/hauteur que l'A3, Chrome réduit la page entière (×0,71) si l'échelle est « par défaut ».
 - **Roster** (2026-11-05) : personnes du service d'affectation **+** toute personne ayant au
   moins une affectation sur un poste du service pendant la fenêtre (une seule lecture des
   placements du site, nom joint). Une personne prêtée figure sur deux plannings.

@@ -583,6 +583,16 @@ export default async function AtelierPlanning({
           l'échelle par FeuillesImpression ; en-tête (semaine en gros, service,
           section) et pied (légende) à taille fixe, hors zone mise à l'échelle. */}
       <style>{`
+        /* Retraits des cellules : ici et en !important, pour que la règle
+           d'impression globale des rapports (globals.css, « td { padding: 1.5px
+           6px !important } ») ne les écrase pas sur papier. Sinon chaque rangée
+           imprimée était plus basse que la mesure faite à l'écran, et une page
+           dense gardait une marge blanche en bas (2026-11-05). */
+        .aff-zoom th { padding: 8px 6px !important; }
+        .aff-zoom td { padding: 4px 6px !important; }
+        .aff-zoom th.aff-nom { padding: 8px 10px !important; }
+        .aff-zoom td.aff-nom { padding: 5px 10px !important; }
+        .aff-zoom td.aff-vide { padding: 10px !important; }
         @media print {
           @page { size: A3 portrait; margin: 10mm; }
           .aff-feuille {
@@ -645,13 +655,12 @@ export default async function AtelierPlanning({
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 16, tableLayout: "fixed" }}>
                   <thead>
                     <tr>
-                      <th style={{ width: 260, border: cellBorder, background: teinte, color: "#fff", padding: "8px 10px" }}></th>
+                      <th className="aff-nom" style={{ width: 260, border: cellBorder, background: teinte, color: "#fff" }}></th>
                       {shownDays.map((d) => (
                         <th
                           key={d.iso}
                           style={{
                             border: cellBorder,
-                            padding: "8px 6px",
                             textAlign: "center",
                             fontSize: 20,
                             background: colBg(d.iso) ?? teinte,
@@ -669,13 +678,13 @@ export default async function AtelierPlanning({
                       const interim = agenceSet.has(p.type_contrat);
                       return (
                         <tr key={p.id}>
-                          <td style={{ border: cellBorder, padding: "5px 10px", fontWeight: 600, whiteSpace: "nowrap" }}>
+                          <td className="aff-nom" style={{ border: cellBorder, fontWeight: 600, whiteSpace: "nowrap" }}>
                             <span style={{ background: interim ? INTERIM_BG : undefined, padding: interim ? "0 4px" : 0, borderRadius: 3 }}>
                               {p.nom} {p.prenom}
                             </span>
                           </td>
                           {shownDays.map((d) => (
-                            <td key={d.iso} style={{ border: cellBorder, padding: "4px 6px", verticalAlign: "top", overflowWrap: "anywhere", wordBreak: "break-word" }}>
+                            <td key={d.iso} style={{ border: cellBorder, verticalAlign: "top", overflowWrap: "anywhere", wordBreak: "break-word" }}>
                               {cellNom(p.id, d.iso)}
                             </td>
                           ))}
@@ -684,7 +693,7 @@ export default async function AtelierPlanning({
                     })}
                     {liste.length === 0 && (
                       <tr>
-                        <td colSpan={shownDays.length + 1} className="muted" style={{ padding: 10 }}>Aucune affectation {titre.toLowerCase()} sur la période affichée.</td>
+                        <td colSpan={shownDays.length + 1} className="muted aff-vide">Aucune affectation {titre.toLowerCase()} sur la période affichée.</td>
                       </tr>
                     )}
                   </tbody>
