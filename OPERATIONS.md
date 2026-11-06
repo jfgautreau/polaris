@@ -18,7 +18,8 @@
   (Supabase ne l'ouvre plus d'office à l'API depuis le 2026-10-30 ; test `migrations-sql`).
   ⚠️ Un futur « grant … on all tables » doit être suivi du `revoke insert, update, delete
   on public.app_user from authenticated` de la 0092. Une table qui porte `site_id` et des
-  FK vers d'autres tables du site : rejouer le bloc DO de la 0092 (trigger `verifier_site_fk`).
+  FK vers d'autres tables du site : rejouer le bloc DO de la 0092 (trigger `verifier_site_fk`),
+  ou poser le trigger directement comme la 0094 (`verifier_site_fk('atelier_id', 'atelier', 'id', 'uuid')`).
 - **Vérifier qu'elle est passée** : sonder un de ses objets (colonne, fonction) plutôt que
   se fier à la doc. Une erreur de syntaxe fait rejeter TOUT le script (la 0086, écrite avec
   `$` au lieu de `$$`, n'a été appliquée que cinq jours après « son » déploiement).

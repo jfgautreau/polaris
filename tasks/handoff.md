@@ -6,6 +6,8 @@
 > Historique des sessions et des migrations : `git log` et `ARCHITECTURE.md`.
 
 ## Placement (`/placement`)
+- **Prénoms** (2026-11-05) : tuiles du plan et 3 PDF en « NOM Prénom » complet (`NomPrenom`, prénom
+  insécable qui passe à la ligne d'un bloc) ; la pastille `.chip` n'est plus `nowrap` (rayon 10 px).
 - **Mise en page des PDF** (2026-11-05, migration 0094, droit `placement_pdf`) : éditeur
   `/admin/mise-en-page-pdf` (`MiseEnPageEditor`, pointer events, grille 15 × 15, enregistrement explicite,
   « Copier depuis… » un autre PDF du service, « Revenir à l'automatique » = DELETE). Route
@@ -165,6 +167,10 @@ réelles sur les semaines chargées (jour de TP éventuellement déplacé), repl
 Priorité d'affichage de l'horaire (TV) : **exception ponctuelle > temps partiel > standard**.
 
 ## Planning (`/planning`)
+- **Bilan, ligne « poste au choix »** (2026-11-05) : menu déroulant des postes de la grille (rangés par
+  ligne), présents / effectif requis du poste sur le quart du jour (0 si sa ligne est fermée), rouge si
+  manque ; choix gardé dans `localStorage planning.bilanPoste`. Rangée sticky n° 6, Alertes passe en 7
+  (`STICK_TOP`). Compilateur React toujours actif sur `PlanningGrid` (vérifié après build).
 - Filtres, dans l'ordre : **Quart / Atelier / Équipe**. Choisir un quart auto-sélectionne
   l'équipe de la rotation de la semaine (`rotationForWeek()` depuis `rotation_reference`,
   sinon `equipe.quart_fixe`) ; le filtre Équipe force une autre équipe. Aucune équipe
@@ -369,6 +375,10 @@ pas de troisième** : la fiche d'une personne est une modale du Suivi.
   réécrit avec sa liste d'ANCI (effacer puis poser `visite_anci`).
 
 ## Absences (`/absences-specifiques`, module `absences`)
+- **Fenêtre Absences du Personnel** (`AbsencesModal`, 2026-11-05, maquette A retenue) : plus de bouton
+  « Déclarer une absence » — la ligne de saisie (`RowsEdit`, brouillon `BROUILLON_VIDE`) est toujours
+  ouverte en tête du tableau, puis une rangée d'espace de 32 px, puis l'historique. Le popover suit la
+  rangée qui l'a ouvert (`popLigne` : haut / ligne en modification). L'écran Absences garde son bouton.
 - Périodes **reconstruites depuis les jours** d'absence (`src/lib/absences-periodes.ts`) ;
   édition inline, crayon / corbeille.
 - Filtres (2026-10-09) : nom, période, et en un clic **Service** et **Équipe** (boutons avec
@@ -427,6 +437,8 @@ pas de troisième** : la fiche d'une personne est une modale du Suivi.
   globale des rapports (`td { padding: 1.5px 6px !important }`) rendait les rangées imprimées plus
   basses que la mesure écran → marge blanche en bas des pages denses. Impression en A4 : même
   rapport largeur/hauteur que l'A3, Chrome réduit la page entière (×0,71) si l'échelle est « par défaut ».
+- **Boutons de retour** (2026-11-05) : « ‹ Services » sur l’écran TV, « ‹ Choix des services » sur
+  l’impression, « ‹ Retour à Polaris » (lien vers `/`) sur le choix des services — écrans sans menu.
 - **Roster** (2026-11-05, révisé le même jour) : **seules** les personnes ayant au moins une
   affectation sur un poste du service pendant la fenêtre (une seule lecture des placements du
   site, nom joint) — le service de la fiche Personnel ne compte plus ; sans affectation (absent,

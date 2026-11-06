@@ -98,6 +98,10 @@ L'historique des décisions est dans git et dans l'en-tête de chaque migration.
   de comptes se lit en service_role bornée au site, après la garde du module.
 - Les écrans de réglage s'ouvrent en **lecture** (`<LectureSeule>` = `fieldset disabled`) ;
   seul Placement exige `write`.
+- **Droits ajoutés le 2026-11-05** : `placement_pdf` (écran Mise en page PDF, à personne par défaut) ;
+  sous-droits `habfam:<famille>` (module de `role_permission`, niveau `none` = refus d'actualiser cette
+  famille d'habilitations, cf. Habilitations) — hors `MODULE_KEYS`, ignorés par `getPermissions`, lus par
+  `getFamillesRefusees`.
 - Rôles intégrés : `admin`, `chef_equipe`, `ordo`, `rh`, `codir`, `planning`. Rôles
   personnalisés (`role_custom`, `getAllRoles()`) : naissent sans aucun droit.
 - Routes publiques (`src/proxy.ts`) : `/login`, `/forgot`, `/reset`, `/auth/*`. **Plus
@@ -535,7 +539,10 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   (avertissement sans motif), `journal` (règles de l'écran Journal) et `journal-contexte`
   (en-têtes auteur / lot), `nuit-avant` (+ `-data`), `planning-recopie`, `ligne-couleurs`,
   `noms-comptes`, `personne-reflets` (reflets du contrat sur la fiche), `echeances-habilitations`
-  (recalcul des échéances), `redirection` (`cheminInterne`).
+  (recalcul des échéances), `redirection` (`cheminInterne`), `service-couleurs` (pastels de service),
+  `nom-fichier-interim` (nom de l'Excel intérim), `syntheses-export` (PDF / Excel des Synthèses, photo et
+  comparaison des extractions), `habilitations-familles` (+ `-server`, sous-droits par famille),
+  `mise-en-page-pdf` (grille, validation, cases des postes).
 - `src/components/` : `AppHeader`, `MainNav`, `GardeCacheNavigation`, `icons`,
   `ModaleDeplacable`, `InfoBulle`, `usePersonGrid`, `persongrid.module.css`,
   `PastillesCouleur`, composants partagés listés plus haut.

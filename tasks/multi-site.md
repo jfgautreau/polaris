@@ -162,7 +162,11 @@ résilientes (repli 4 / 2 / échelle historique tant que la colonne manque). **A
 générique `verifier_site_fk` sur toute FK à une colonne entre deux tables portant `site_id`
 (hors `site` / `app_user`) — une référence vers une ligne d'un autre site est refusée, même
 en service_role ; `app_user` fermé en écriture à `authenticated` (lecture RLS : sa ligne +
-l'admin du site) ; une nouvelle table est couverte en rejouant le bloc DO de la 0092.
+l'admin du site) ; une nouvelle table est couverte en rejouant le bloc DO de la 0092. ·
+`0093` (2026-11-05) : `atelier.couleur`, `parametre_rh` (PK `site_id`), `export_interim_photo`
+(`site_id NOT NULL`, aucune lecture sous RLS, service_role borné au site) · `0094` (2026-11-05) :
+`placement_mise_en_page` (PK site × service × PDF, lecture RLS du site, trigger `verifier_site_fk`
+posé directement sur `atelier_id`). **Appliquées.**
 
 ## 5 bis. Incident 2026-08-23 (deux régressions en chaîne après 0055)
 Après application de 0055, prod HS puis écritures sur le mauvais site. À retenir :

@@ -1,6 +1,6 @@
 # Reste à faire — Polaris
 
-> État au 2026-11-04. Migrations appliquées jusqu'à **0092**.
+> État au 2026-11-06. Migrations appliquées jusqu'à **0094**.
 > Ce fichier ne garde que ce qui reste ouvert ; le détail de ce qui est fait est dans
 > `git log` (et l'en-tête de chaque migration).
 
@@ -34,7 +34,25 @@
       fichier mais parties dans Polaris ont reçu leurs habilitations — statut à confirmer
       par les RH (liste dans le rapport hors dépôt, jamais dans le repo).
 
+## À vérifier sur le terrain (lot du 2026-11-05)
+- [ ] **TV** : un planning de service ne montre que les personnes affectées dans ce service ; une
+      personne matin puis nuit figure dans les deux sections ; « ★ » sur les arrivées < 14 jours.
+      Impression A3 (et A4) : une page par section, numéro de semaine en tête.
+- [ ] **Excel agence** : choisir la couleur de chaque service au Référentiel, régler le nom du
+      fichier dans Param. RH, puis extraire deux fois la même agence / semaine avec un changement
+      entre les deux → cases en jaune fluo, retiré barré ; contrôler l'aperçu d'impression.
+- [ ] **Mise en page PDF** : enregistrer une mise en page (cadres, postes en cases, cases vides),
+      imprimer le PDF correspondant un jour chargé → postes à leur case, étirement sur les cases
+      vides, page réduite si besoin ; une ligne non placée qui tourne s'imprime sous la grille.
+- [ ] **Sous-droits des habilitations** : fermer une famille à un rôle dans Droits, vérifier le
+      cadenas dans la grille et le refus à l'enregistrement.
+- [ ] **Placement** : prénoms complets sur les tuiles et les PDF ; noms très longs.
+
 ## Base de données
+- [ ] Table `import_absence_personne` inutilisée depuis le retrait de l'import des absences RH
+      (2026-11-05) : la supprimer par une migration une fois le retrait confirmé.
+- [ ] Commentaire de la migration 0094 : il décrit encore une grille 0-11 et un champ `postes` ;
+      le format réel (grille 15 × 15, `places`) est dans `src/lib/mise-en-page-pdf.ts`.
 - [ ] RLS `audit_log` : `can_read_audit()` nomme encore admin + codir. L'écran Journal ne
       s'en sert plus (lecture service_role après la garde de module) ; l'aligner sur la
       matrice ou la laisser comme simple filet.
