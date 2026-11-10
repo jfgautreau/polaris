@@ -126,14 +126,15 @@ export default async function SiteDetail({
           « {NOM_APPLICATION_DEFAUT} ».
         </p>
         {migration0095 ? (
-          <form action={changerNomApplication} style={{ display: "flex", gap: 8 }}>
+          <form action={changerNomApplication} style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <input type="hidden" name="id" value={site.id} />
             <input
               name="nom_application"
               defaultValue={nomApplication}
               placeholder={NOM_APPLICATION_DEFAUT}
               maxLength={NOM_APPLICATION_MAX}
-              style={{ flex: 1, maxWidth: 360, padding: "6px 10px", border: "1px solid #cbd5e1", borderRadius: 6 }}
+              aria-label="Nom de l'application"
+              style={{ flex: "0 1 360px", minWidth: 0, padding: "6px 10px", border: "1px solid #cbd5e1", borderRadius: 6 }}
             />
             <button type="submit" style={btn("#2563eb")}>Enregistrer</button>
           </form>
@@ -265,7 +266,10 @@ function StatutButton({ id, target, label, color }: { id: string; target: string
 
 const boxStyle: React.CSSProperties = { background: "#fff", padding: 16, borderRadius: 8, marginBottom: 16, boxShadow: "0 1px 2px rgba(0,0,0,0.05)" };
 const h2Style: React.CSSProperties = { margin: "0 0 10px", fontSize: 16, fontWeight: 700 };
+// Le style global `button` impose width: 100% et margin-top: 18px (cf. CLAUDE.md) :
+// annulés ici, sinon le bouton écrase la case de saisie posée à côté.
 const btn = (color: string): React.CSSProperties => ({
   background: color, color: "#fff", padding: "6px 14px", border: 0, borderRadius: 6,
   fontWeight: 600, cursor: "pointer", fontSize: 13,
+  width: "auto", margin: 0, flexShrink: 0, whiteSpace: "nowrap",
 });
