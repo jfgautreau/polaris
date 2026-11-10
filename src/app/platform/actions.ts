@@ -11,6 +11,8 @@ import { messageErreur } from "@/lib/erreurs";
 import { MODULE_KEYS } from "@/lib/permissions";
 import { CLES_MASQUABLES_EXTRA, MODULES_MASQUES_TAG } from "@/lib/site-modules";
 import { CLES_RAPPORTS_BILAN } from "@/lib/bilans-rapports";
+import { validerNomApplication } from "@/lib/nom-application";
+import { NOM_APPLICATION_TAG } from "@/lib/nom-application-server";
 
 // Server actions du back-office plateforme. Toutes revérifient que
 // l'appelant est bien super_admin — défense en profondeur en plus du
@@ -372,6 +374,29 @@ export async function changerStatut(fd: FormData): Promise<void> {
   revalidatePath("/platform");
   revalidatePath(`/platform/${id}`);
   redirect(`/platform/${id}?ok=1`);
+}
+
+// -------------------- Nom de l'application (0095) --------------------
+// Nom affiché par l'application pour ce site (onglet, en-tête, accueil, TV,
+// guide, pied des PDF). Vide = nom par défaut.
+export async function changerNomApplication(fd: FormData): Promise<void> {
+  const { admin } = await requireSuperAdmin();
+  const id = String(fd.get("id") ?? "");
+  if (!id) redirect("/platform");
+  const v = validerNomApplication(String(fd.get("nom_application") ?? ""));
+  if (!v.ok) redirect(`/platform/${id}?err=${encodeURIComponent(v.erreur)}`);
+
+  const { error } = await admin
+    .from("site")
+    .update({ nom_application: v.valeur })
+    .eq("id", id);
+  if (error) {
+    redirect(`/platform/${id}?err=${encodeURIComponent(messageErreur(error) ?? "Erreur")}`);
+  }
+
+  updateTag(NOM_APPLICATION_TAG);
+  revalidatePath(`/platform/${id}`);
+  redirect(`/platform/${id}?ok=nom`);
 }
 
 // -------------------- Impersonation : entrer dans un site --------------------

@@ -10,10 +10,13 @@ export default function UserMenu({
   name,
   email,
   guideVisible = true,
+  lienGuide = "/guide.html",
 }: {
   name: string;
   email: string;
   guideVisible?: boolean;
+  // Porte le nom de l'application du site (?app=…), que le guide affiche.
+  lienGuide?: string;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -100,7 +103,7 @@ export default function UserMenu({
               Masquable par site depuis /platform (prop guideVisible). */}
           {guideVisible && (
             <a
-              href="/guide.html"
+              href={lienGuide}
               target="_blank"
               rel="noopener"
               onClick={() => setOpen(false)}

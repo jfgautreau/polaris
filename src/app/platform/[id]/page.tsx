@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getAdminClient } from "@/lib/supabase-server";
-import { changerStatut, entrerDansLeSite, sortirDuMode } from "../actions";
+import { changerNomApplication, changerStatut, entrerDansLeSite, sortirDuMode } from "../actions";
+import { NOM_APPLICATION_DEFAUT, NOM_APPLICATION_MAX } from "@/lib/nom-application";
 import { getImpersonationPayload } from "@/lib/impersonation";
 import { MODULES } from "@/lib/permissions";
 import { MASQUABLES_EXTRA } from "@/lib/site-modules";
@@ -44,7 +45,7 @@ export default async function SiteDetail({
     );
   }
 
-  const [{ data: users }, { data: pers }, { data: audits }, { data: sm }] = await Promise.all([
+  const [{ data: users }, { data: pers }, { data: audits }, { data: sm }, nomApp] = await Promise.all([
     admin.from("app_user").select("email, role, is_active").eq("site_id", id).returns<{ email: string; role: string; is_active: boolean }[]>(),
     admin.from("personne").select("statut").eq("site_id", id).returns<{ statut: string }[]>(),
     admin.from("audit_impersonation")
@@ -54,7 +55,12 @@ export default async function SiteDetail({
       .limit(10)
       .returns<AuditRow[]>(),
     admin.from("site_module").select("module_key").eq("site_id", id).returns<{ module_key: string }[]>(),
+    // Lu à part : avant la migration 0095, la colonne n'existe pas et la page
+    // doit rester utilisable (le formulaire l'annonce).
+    admin.from("site").select("nom_application").eq("id", id).maybeSingle<{ nom_application: string | null }>(),
   ]);
+  const migration0095 = !nomApp.error;
+  const nomApplication = nomApp.data?.nom_application ?? "";
 
   const masques = new Set((sm ?? []).map((r) => r.module_key));
   const modulesToggle = [
@@ -92,7 +98,9 @@ export default async function SiteDetail({
         <div style={{ background: "#fee2e2", color: "#991b1b", padding: "10px 14px", borderRadius: 6, marginBottom: 16 }}>{sp.err}</div>
       )}
       {sp.ok && (
-        <div style={{ background: "#dcfce7", color: "#166534", padding: "10px 14px", borderRadius: 6, marginBottom: 16 }}>Statut mis à jour.</div>
+        <div style={{ background: "#dcfce7", color: "#166534", padding: "10px 14px", borderRadius: 6, marginBottom: 16 }}>
+          {sp.ok === "nom" ? "Nom de l'application enregistré." : "Statut mis à jour."}
+        </div>
       )}
       {sp.created && sp.lien && (
         <div style={{ background: "#dbeafe", color: "#1e40af", padding: "10px 14px", borderRadius: 6, marginBottom: 16 }}>
@@ -109,6 +117,32 @@ export default async function SiteDetail({
         <Kpi label="Personnes actives" value={(pers ?? []).filter((p) => p.statut === "ACTIF").length} />
         <Kpi label="Utilisateurs total" value={(users ?? []).length} />
       </div>
+
+      <section style={boxStyle}>
+        <h2 style={h2Style}>Nom de l&apos;application</h2>
+        <p style={{ margin: "0 0 12px", fontSize: 13, color: "#64748b" }}>
+          Nom affiché aux utilisateurs de ce site : onglet du navigateur, en-tête, accueil,
+          affichage TV, guide utilisateur et pied des PDF. Laissez vide pour garder
+          « {NOM_APPLICATION_DEFAUT} ».
+        </p>
+        {migration0095 ? (
+          <form action={changerNomApplication} style={{ display: "flex", gap: 8 }}>
+            <input type="hidden" name="id" value={site.id} />
+            <input
+              name="nom_application"
+              defaultValue={nomApplication}
+              placeholder={NOM_APPLICATION_DEFAUT}
+              maxLength={NOM_APPLICATION_MAX}
+              style={{ flex: 1, maxWidth: 360, padding: "6px 10px", border: "1px solid #cbd5e1", borderRadius: 6 }}
+            />
+            <button type="submit" style={btn("#2563eb")}>Enregistrer</button>
+          </form>
+        ) : (
+          <p style={{ margin: 0, color: "#92400e" }}>
+            Migration 0095 à exécuter dans Supabase avant de pouvoir régler le nom.
+          </p>
+        )}
+      </section>
 
       <section style={boxStyle}>
         <h2 style={h2Style}>Cycle de vie</h2>

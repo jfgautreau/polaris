@@ -33,6 +33,7 @@ L'historique des décisions est dans git et dans l'en-tête de chaque migration.
    Pour de la *donnée* seulement, un script Node lisant `SUPABASE_SERVICE_ROLE_KEY` de
    `.env.local` est acceptable (simulation d'abord, écriture après accord).
    Projet Supabase : ref `stcxlsmmnplxpirrnefm`, eu-west-3.
+   **`0095`** (`site_nom_application`, 2026-11-10) écrite, **à exécuter** (le code tolère son absence).
    **Dernière migration appliquée : `0094`** (`placement_mise_en_page`, 2026-11-05) ; avant elle `0093`
    (`export_interim` : atelier.couleur, parametre_rh, export_interim_photo) et `0092` (durcissement sécurité, audit du 2026-11-03). Toute nouvelle policy RLS s'écrit
    `site_id = (select public.current_site_id())` (forme InitPlan, calculée une fois par
@@ -526,7 +527,12 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   nom…) ; créations / suppressions sans colonnes techniques ; une écriture sans effet n'est
   plus journalisée. Noms des éléments résolus par dictionnaires du site (pas de liste d'ids).
 - **Plateforme** (super_admin, `src/app/platform/`) : sites, impersonation, masquage par
-  site (`site_module` : menus, `guide`, rapports `bilan:<slug>`).
+  site (`site_module` : menus, `guide`, rapports `bilan:<slug>`). **Nom de l’application par site**
+  (2026-11-10, 0095, `site.nom_application`, vide = « Polaris ») : onglet, en-tête, accueil, TV,
+  guide (`?app=` lu par un script de `guide.html`), pied des PDF des Synthèses — toujours via
+  `getNomApplication()` (`nom-application-server.ts`, cache `NOM_APPLICATION_TAG`), jamais « Polaris »
+  en dur dans une chaîne visible. « Polaris » reste le nom technique (dépôt, docs, cookies
+  `polaris-*`, en-tête `x-polaris-auteur` lu par la base : ne pas renommer).
 
 ## Carte des fichiers (socle)
 - `src/lib/` : `permissions`, `roles(-server)`, `current-user`, `current-site`,

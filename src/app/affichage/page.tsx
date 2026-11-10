@@ -1,6 +1,7 @@
 import { getAdminClient } from "@/lib/supabase-server";
 import { requireModule } from "@/lib/permissions";
 import { getCurrentSite } from "@/lib/current-site";
+import { getNomApplication } from "@/lib/nom-application-server";
 import Link from "next/link";
 import SelectionServices from "./SelectionServices";
 
@@ -13,7 +14,7 @@ type Atelier = { id: string; nom: string };
 
 export default async function AffichageIndex() {
   await requireModule("affichage", "read");
-  const site = await getCurrentSite();
+  const [site, nomApp] = await Promise.all([getCurrentSite(), getNomApplication()]);
   const admin = getAdminClient();
   // MULTI-SITE : borne par site_id (service_role bypass la RLS).
   const { data } = await admin
@@ -27,14 +28,14 @@ export default async function AffichageIndex() {
 
   return (
     <div className="container">
-      {/* Écran sans menu : retour à l'accueil de Polaris sans le bouton
+      {/* Écran sans menu : retour à l'accueil de l'application sans le bouton
           Précédent du navigateur (2026-11-05). */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <h1>Affichage couloir</h1>
         <Link
           href="/"
           prefetch={false}
-          title="Revenir à l'accueil de Polaris"
+          title={`Revenir à l'accueil de ${nomApp}`}
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -48,7 +49,7 @@ export default async function AffichageIndex() {
             textDecoration: "none",
           }}
         >
-          <span aria-hidden="true" style={{ fontSize: 18, lineHeight: 1 }}>&lsaquo;</span> Retour à Polaris
+          <span aria-hidden="true" style={{ fontSize: 18, lineHeight: 1 }}>&lsaquo;</span> Retour à {nomApp}
         </Link>
       </div>
       <p className="muted">Cochez les services à imprimer ensemble, ou ouvrez l&apos;écran TV d&apos;un service.</p>

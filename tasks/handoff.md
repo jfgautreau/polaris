@@ -438,7 +438,7 @@ pas de troisième** : la fiche d'une personne est une modale du Suivi.
   basses que la mesure écran → marge blanche en bas des pages denses. Impression en A4 : même
   rapport largeur/hauteur que l'A3, Chrome réduit la page entière (×0,71) si l'échelle est « par défaut ».
 - **Boutons de retour** (2026-11-05) : « ‹ Services » sur l’écran TV, « ‹ Choix des services » sur
-  l’impression, « ‹ Retour à Polaris » (lien vers `/`) sur le choix des services — écrans sans menu.
+  l’impression, « ‹ Retour à <nom de l’application> » (lien vers `/`) sur le choix des services — écrans sans menu.
 - **Roster** (2026-11-05, révisé le même jour) : **seules** les personnes ayant au moins une
   affectation sur un poste du service pendant la fenêtre (une seule lecture des placements du
   site, nom joint) — le service de la fiche Personnel ne compte plus ; sans affectation (absent,
@@ -456,7 +456,7 @@ pas de troisième** : la fiche d'une personne est une modale du Suivi.
   Absences → Matrice → Habilitations → Visites méd. (cyan) → Ordonnancement → Planning →
   Placement → Bilans. Une entrée n'apparaît que si le module est lisible (Placement :
   inscriptible) et non masqué pour le site.
-- Logo « Polaris » (+ pastille `site.nom` en multi-site) → `/` (accueil).
+- Logo + nom de l’application du site (`site.nom_application`, 0095, réglé dans la Plateforme, défaut « Polaris ») (+ pastille `site.nom` en multi-site) → `/` (accueil).
 - **Engrenage** (`SettingsMenu`) : tout module de `MODULES` hors `MAIN_ORDER` — Équipes,
   Compétences, Param. Habilitation, Param. RH, Param. Visites, Horaires, Utilisateurs,
   RGPD…

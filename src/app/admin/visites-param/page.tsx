@@ -92,7 +92,7 @@ export default async function VisitesParamPage() {
         <p className="muted" style={{ marginBottom: 16, maxWidth: "80ch" }}>
           Ce que vous réglez ici décide, pour chaque personne, du <strong>régime de suivi</strong> et
           de la <strong>date de la prochaine visite</strong>. Rien n&apos;est saisi personne par
-          personne : Polaris déduit le régime des quarts, des postes tenus et des habilitations
+          personne : l&apos;application déduit le régime des quarts, des postes tenus et des habilitations
           détenues. Enregistrement automatique.
         </p>
         <LectureSeule actif={!canWrite(perms, "visites_param")}>

@@ -2122,5 +2122,21 @@
   </div>
 </div>
 
+<script>
+// Nom de l'application propre au site (réglé dans la Plateforme, 0095) : le lien
+// du menu utilisateur le passe dans l'adresse (?app=…) et il remplace « Polaris »
+// partout à l'affichage (textes, titre de l'onglet, textes alternatifs).
+(function () {
+  var nom = new URLSearchParams(location.search).get("app");
+  if (!nom) return;
+  nom = nom.trim().slice(0, 40);
+  if (!nom || nom === "Polaris") return;
+  var remplacer = function (t) { return t.split("Polaris").join(nom); };
+  var w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT), n;
+  while ((n = w.nextNode())) if (n.nodeValue.indexOf("Polaris") >= 0) n.nodeValue = remplacer(n.nodeValue);
+  document.querySelectorAll("[alt*='Polaris']").forEach(function (e) { e.alt = remplacer(e.alt); });
+  document.title = remplacer(document.title);
+})();
+</script>
 </body>
 </html>

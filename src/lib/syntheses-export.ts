@@ -7,6 +7,7 @@ import type { FeuilleXlsx, CelluleXlsx } from "@/lib/xlsx";
 import type { Absences4, GroupeAgence, InterimDispo, LigneInterim } from "@/lib/synthese-data";
 import { INTERIM_BG } from "@/lib/interim";
 import { couleurDeService } from "@/lib/service-couleurs";
+import { NOM_APPLICATION_DEFAUT } from "@/lib/nom-application";
 
 export type JourExport = { iso: string; nom: string; num: string };
 
@@ -22,14 +23,15 @@ export function texteCaseInterim(p: LigneInterim, iso: string): string {
   return (p.cells[iso] ?? []).map((c) => [c.horaire, c.posteNom, c.atelierNom].filter(Boolean).join("\n")).join("\n\n");
 }
 
-export function edition(maintenant = new Date()): string {
+// `nomApp` : nom de l'application du site (0095), défaut « Polaris ».
+export function edition(maintenant = new Date(), nomApp = NOM_APPLICATION_DEFAUT): string {
   const d = (n: number) => String(n).padStart(2, "0");
-  return `Polaris · édité le ${d(maintenant.getDate())}/${d(maintenant.getMonth() + 1)}/${maintenant.getFullYear()} à ${d(maintenant.getHours())}:${d(maintenant.getMinutes())}`;
+  return `${nomApp} · édité le ${d(maintenant.getDate())}/${d(maintenant.getMonth() + 1)}/${maintenant.getFullYear()} à ${d(maintenant.getHours())}:${d(maintenant.getMinutes())}`;
 }
 
 // ── Vue Intérim ──────────────────────────────────────────────────────────────
 
-export function pdfInterim(groupes: GroupeAgence[], jours: JourExport[], semaineLabel: string, maintenant?: Date): DocumentPdf {
+export function pdfInterim(groupes: GroupeAgence[], jours: JourExport[], semaineLabel: string, maintenant?: Date, nomApp?: string): DocumentPdf {
   const blocs: BlocPdf[] = [];
   groupes.forEach((g, i) => {
     const sansAff = g.sansAffectation.length ? ` · ${g.sansAffectation.length} sans affectation` : "";
@@ -52,7 +54,7 @@ export function pdfInterim(groupes: GroupeAgence[], jours: JourExport[], semaine
   return {
     titre: "Planning prévisionnel des intérimaires",
     sousTitre: `Semaine ${semaineLabel}${agence}`,
-    edition: edition(maintenant),
+    edition: edition(maintenant, nomApp),
     blocs,
   };
 }
@@ -213,7 +215,7 @@ export type ColonneAbsence = JourExport & { premierDeSemaine: boolean; weekNo: n
 const JOURS_COURTS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 const jourCourt = (c: ColonneAbsence, i: number) => JOURS_COURTS[i % 5] ?? c.nom.slice(0, 3);
 
-export function pdfAbsences(abs: Absences4, colonnes: ColonneAbsence[], rangeLabel: string, filtres: string, maintenant?: Date): DocumentPdf {
+export function pdfAbsences(abs: Absences4, colonnes: ColonneAbsence[], rangeLabel: string, filtres: string, maintenant?: Date, nomApp?: string): DocumentPdf {
   const blocs: BlocPdf[] = [
     {
       type: "tableau",
@@ -247,7 +249,7 @@ export function pdfAbsences(abs: Absences4, colonnes: ColonneAbsence[], rangeLab
   return {
     titre: "Absences à venir — 4 semaines (hors intérim)",
     sousTitre: `${rangeLabel}${filtres ? ` · ${filtres}` : ""}`,
-    edition: edition(maintenant),
+    edition: edition(maintenant, nomApp),
     blocs,
   };
 }

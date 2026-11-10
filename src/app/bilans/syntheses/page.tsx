@@ -10,6 +10,7 @@ import { INTERIM_BG } from "@/lib/interim";
 import SyntheseFilters from "./SyntheseFilters";
 import ExportSyntheses, { ExportAgence, type ContexteFichierInterim } from "./ExportSyntheses";
 import { getCurrentSite } from "@/lib/current-site";
+import { getNomApplication } from "@/lib/nom-application-server";
 import { LIBELLE_SANS_AFFECTATION, PRECISION_SANS_AFFECTATION } from "@/lib/syntheses-export";
 
 export const dynamic = "force-dynamic";
@@ -62,9 +63,10 @@ export default async function SynthesesPage({
 
   // Nom des fichiers Excel intérim : forme réglée dans Param. RH (parametre_rh,
   // 0093, ligne du site sous RLS), semaine ISO et son année (celle du jeudi).
-  const [paramRhR, site] = await Promise.all([
+  const [paramRhR, site, nomApp] = await Promise.all([
     supabase.from("parametre_rh").select("interim_nom_fichier").maybeSingle<{ interim_nom_fichier: string | null }>(),
     getCurrentSite(),
+    getNomApplication(),
   ]);
   const jeudi = new Date(monday);
   jeudi.setDate(monday.getDate() + 3);
@@ -112,9 +114,9 @@ export default async function SynthesesPage({
           </div>
           <ReportActions showPdf={false}>
             {vue === "interim" ? (
-              <ExportSyntheses vue="interim" groupes={groupes} jours={joursExport} semaineLabel={semaineLabel} fichier={fichier} />
+              <ExportSyntheses nomApp={nomApp} vue="interim" groupes={groupes} jours={joursExport} semaineLabel={semaineLabel} fichier={fichier} />
             ) : (
-              <ExportSyntheses vue="absences" abs={abs} colonnes={colonnesExport} rangeLabel={rangeLabel} filtres={filtresTxt} />
+              <ExportSyntheses nomApp={nomApp} vue="absences" abs={abs} colonnes={colonnesExport} rangeLabel={rangeLabel} filtres={filtresTxt} />
             )}
           </ReportActions>
         </div>
@@ -254,7 +256,7 @@ export default async function SynthesesPage({
                             {g.sansAffectation.length > 0 ? ` · ${g.sansAffectation.length} sans affectation` : ""} · semaine {semaineLabel}
                           </span>
                         </h2>
-                        <ExportAgence groupe={g} jours={joursExport} semaineLabel={semaineLabel} fichier={fichier} />
+                        <ExportAgence nomApp={nomApp} groupe={g} jours={joursExport} semaineLabel={semaineLabel} fichier={fichier} />
                       </div>
 
                       {g.lignes.length > 0 && (

@@ -30,6 +30,9 @@ const WHITELIST = new Set<string>([
   // Lit la table `site` (globale, jamais site-scopée) et rien d'autre
   // via admin client.
   join("src", "lib", "current-site.ts"),
+  // Lit `site.nom_application` (0095) de la ligne `site` du site courant
+  // (`.eq("id", site)`) : même table globale, rien d'autre.
+  join("src", "lib", "nom-application-server.ts"),
   // Lit `site.statut` de l'utilisateur courant pour bloquer un site
   // suspendu ou archivé. Cette lecture est LÉGITIMEMENT cross-site :
   // on interroge sur l'id d'app_user, unique global.

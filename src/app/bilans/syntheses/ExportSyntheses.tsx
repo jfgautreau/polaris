@@ -23,16 +23,18 @@ export type ContexteFichierInterim = { forme: string | null; site: string; semai
 
 // Boutons PDF / Excel des Synthèses : fichiers construits dans le navigateur à
 // partir des données déjà affichées (filtres compris).
-type Props =
+// `nomApp` : nom de l'application du site (0095), imprimé au pied des PDF.
+type Props = { nomApp: string } & (
   | { vue: "interim"; groupes: GroupeAgence[]; jours: JourExport[]; semaineLabel: string; fichier: ContexteFichierInterim }
-  | { vue: "absences"; abs: Absences4; colonnes: ColonneAbsence[]; rangeLabel: string; filtres: string };
+  | { vue: "absences"; abs: Absences4; colonnes: ColonneAbsence[]; rangeLabel: string; filtres: string }
+);
 
 const nomExcel = (f: ContexteFichierInterim, agence: string, maintenant: Date) =>
   nomFichierInterim(f.forme, { agence, semaine: f.semaine, annee: f.annee, site: f.site, maintenant });
 
 export default function ExportSyntheses(props: Props) {
   if (props.vue === "interim") {
-    const { groupes, jours, semaineLabel, fichier } = props;
+    const { groupes, jours, semaineLabel, fichier, nomApp } = props;
     const sem = nomFichierSur(semaineLabel.split(" ")[0]);
     const vide = groupes.length === 0;
     return (
@@ -40,7 +42,7 @@ export default function ExportSyntheses(props: Props) {
         <BoutonPdf
           disabled={vide}
           title="Télécharger le PDF de toutes les agences (une agence par page)"
-          onClick={() => telechargerFichier(documentPdf(pdfInterim(groupes, jours, semaineLabel)), `interim-${sem}.pdf`, TYPE_PDF)}
+          onClick={() => telechargerFichier(documentPdf(pdfInterim(groupes, jours, semaineLabel, undefined, nomApp)), `interim-${sem}.pdf`, TYPE_PDF)}
         />
         <BoutonExcel
           disabled={vide}
@@ -53,7 +55,7 @@ export default function ExportSyntheses(props: Props) {
       </>
     );
   }
-  const { abs, colonnes, rangeLabel, filtres } = props;
+  const { abs, colonnes, rangeLabel, filtres, nomApp } = props;
   const nom = `absences-${nomFichierSur(rangeLabel.replace("→", "a"))}`;
   const vide = abs.lignes.length === 0;
   return (
@@ -61,7 +63,7 @@ export default function ExportSyntheses(props: Props) {
       <BoutonPdf
         disabled={vide}
         title="Télécharger le PDF des absences sur 4 semaines"
-        onClick={() => telechargerFichier(documentPdf(pdfAbsences(abs, colonnes, rangeLabel, filtres)), `${nom}.pdf`, TYPE_PDF)}
+        onClick={() => telechargerFichier(documentPdf(pdfAbsences(abs, colonnes, rangeLabel, filtres, undefined, nomApp)), `${nom}.pdf`, TYPE_PDF)}
       />
       <BoutonExcel
         disabled={vide}
@@ -94,11 +96,13 @@ export function ExportAgence({
   jours,
   semaineLabel,
   fichier,
+  nomApp,
 }: {
   groupe: GroupeAgence;
   jours: JourExport[];
   semaineLabel: string;
   fichier: ContexteFichierInterim;
+  nomApp: string;
 }) {
   const [enCours, setEnCours] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -125,7 +129,7 @@ export function ExportAgence({
         compact
         libelle="PDF agence"
         title={`Télécharger le PDF de l'agence ${groupe.agence}`}
-        onClick={() => telechargerFichier(documentPdf(pdfInterim([groupe], jours, semaineLabel)), `${nomPdf}.pdf`, TYPE_PDF)}
+        onClick={() => telechargerFichier(documentPdf(pdfInterim([groupe], jours, semaineLabel, undefined, nomApp)), `${nomPdf}.pdf`, TYPE_PDF)}
       />
       <BoutonExcel
         compact

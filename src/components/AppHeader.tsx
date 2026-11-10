@@ -7,6 +7,8 @@ import { getImpersonationPayload } from "@/lib/impersonation";
 import { sortirDuMode } from "@/app/platform/actions";
 import { MODULES, getPermissions, canRead, canWrite } from "@/lib/permissions";
 import { getModulesMasquesC } from "@/lib/site-modules";
+import { getNomApplication } from "@/lib/nom-application-server";
+import { lienGuide } from "@/lib/nom-application";
 import { getAlertesHabilitationsC } from "@/lib/refdata";
 import { COOKIE_QUART } from "@/lib/filtres-session";
 import MainNav from "@/components/MainNav";
@@ -35,13 +37,14 @@ export default async function AppHeader({
   // bandeau rouge permanent. Compteur d'alertes habilitations (<= 90 j, cache
   // 60 s par site, cf. refdata). Modules MASQUÉS pour ce site (0056). Aucune de
   // ces lectures ne doit casser l'en-tête (login, /affichage) : replis vides.
-  const [perms, profile, siteNom, impersonation, alertCount, masques] = await Promise.all([
+  const [perms, profile, siteNom, impersonation, alertCount, masques, nomApp] = await Promise.all([
     getPermissions(role),
     getCurrentProfile(),
     getCurrentSite().then((s) => s.nom).catch(() => ""),
     getImpersonationPayload(),
     getAlertesHabilitationsC().catch(() => 0),
     getModulesMasquesC().catch(() => new Set<string>()),
+    getNomApplication(),
   ]);
 
   // Quart mémorisé pour la session (cf. src/lib/filtres-session.ts) : transmis au
@@ -120,7 +123,7 @@ export default async function AppHeader({
       <nav className="appnav">
         <Link href="/" className="brand" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 9 }}>
           <Logo size={26} id="header" />
-          Polaris
+          {nomApp}
           {siteNom && (
             <span
               title={`Site : ${siteNom}`}
@@ -176,7 +179,7 @@ export default async function AppHeader({
           )}
         </Link>
         )}
-        <UserMenu name={profile?.name ?? ""} email={profile?.email ?? ""} guideVisible={!masques.has("guide")} />
+        <UserMenu name={profile?.name ?? ""} email={profile?.email ?? ""} guideVisible={!masques.has("guide")} lienGuide={lienGuide(nomApp)} />
       </div>
     </header>
     </>

@@ -127,7 +127,7 @@ export default function AffichageBarre({
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
-            // Meme gabarit que le logo Polaris a cote.
+            // Meme gabarit que le logo a cote.
             width: TAILLE,
             height: TAILLE,
             padding: 0,
@@ -151,7 +151,7 @@ export default function AffichageBarre({
 
         <Link
           href="/"
-          title="Revenir à Polaris"
+          title="Revenir à l'accueil"
           aria-label="Revenir à l'application"
           style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }}
         >
