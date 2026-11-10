@@ -33,8 +33,8 @@ L'historique des décisions est dans git et dans l'en-tête de chaque migration.
    Pour de la *donnée* seulement, un script Node lisant `SUPABASE_SERVICE_ROLE_KEY` de
    `.env.local` est acceptable (simulation d'abord, écriture après accord).
    Projet Supabase : ref `stcxlsmmnplxpirrnefm`, eu-west-3.
-   **`0095`** (`site_nom_application`, 2026-11-10) écrite, **à exécuter** (le code tolère son absence).
-   **Dernière migration appliquée : `0094`** (`placement_mise_en_page`, 2026-11-05) ; avant elle `0093`
+   **Dernière migration appliquée : `0095`** (`site_nom_application`, 2026-11-10) ; avant elle `0094`
+   (`placement_mise_en_page`, 2026-11-05) et `0093`
    (`export_interim` : atelier.couleur, parametre_rh, export_interim_photo) et `0092` (durcissement sécurité, audit du 2026-11-03). Toute nouvelle policy RLS s'écrit
    `site_id = (select public.current_site_id())` (forme InitPlan, calculée une fois par
    requête) — idem pour `is_admin()`, `has_role('x')`, `auth.uid()`.
