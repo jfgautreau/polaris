@@ -31,11 +31,16 @@
     tr { border:1px solid var(--rule); border-radius:6px; margin-bottom:10px; overflow:hidden; }
     td { border:0; border-bottom:1px solid var(--rule); } td::before { content:attr(data-l); display:block; font-size:12px; font-weight:600; color:var(--ink-2); }
   }
+  .backbar { border-bottom:1px solid var(--rule); background:var(--paper-2); }
+  .backbar a { display:block; max-width:1100px; margin:0 auto; padding:10px 16px; color:var(--ink-2); text-decoration:none; font-size:.9rem; }
+  .backbar a:hover { color:var(--accent); }
+  @media print { .backbar { display:none; } }
   @media print { @page { size:A4 portrait; margin:12mm; } body { background:#fff; color:#000; font-size:11px; } nav { display:none; }
     h2 { break-after:avoid; } h3 { break-after:avoid; } tr { break-inside:avoid; } }
 </style>
 </head>
 <body>
+<div class="backbar"><a href="/">&larr;&nbsp; Retour à <span id="nom-app">Polaris</span></a></div>
 <main>
 <h1>BigPlann — Qui fait quoi</h1>
 <p class="date">10 novembre 2026</p>
@@ -126,5 +131,13 @@
 <tr><td data-l="Activité">Désactiver le compte d'un utilisateur qui part</td><td data-l="Qui">Administrateur BigPlann</td><td data-l="Où">Utilisateurs</td><td data-l="Quand">Le jour du départ</td></tr>
 <tr><td data-l="Activité">Accorder ou retirer des droits à un rôle</td><td data-l="Qui">Administrateur BigPlann</td><td data-l="Où">Droits</td><td data-l="Quand">Sur décision de la direction</td></tr></tbody></table></div>
 </main>
+<script>
+// Nom de l'application propre au site (0095) : le lien du menu utilisateur le
+// passe dans l'adresse (?app=…), comme pour le guide.
+(function () {
+  var nom = (new URLSearchParams(location.search).get("app") || "").trim().slice(0, 40);
+  if (nom) document.getElementById("nom-app").textContent = nom;
+})();
+</script>
 </body>
 </html>

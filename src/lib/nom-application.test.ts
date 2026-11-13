@@ -30,5 +30,6 @@ describe("lienGuide", () => {
   it("passe le nom au guide, sauf le nom par défaut", () => {
     expect(lienGuide(NOM_APPLICATION_DEFAUT)).toBe("/guide.html");
     expect(lienGuide("Big Plann")).toBe("/guide.html?app=Big%20Plann");
+    expect(lienGuide("Big Plann", "/qui-fait-quoi.html")).toBe("/qui-fait-quoi.html?app=Big%20Plann");
   });
 });

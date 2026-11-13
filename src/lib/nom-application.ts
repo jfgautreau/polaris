@@ -23,8 +23,8 @@ export function validerNomApplication(
   return { ok: true, valeur: v };
 }
 
-// Lien du guide utilisateur (document statique public/guide.html) : le nom
-// voyage dans l'adresse, le guide le substitue à l'affichage.
-export function lienGuide(nom: string): string {
-  return nom === NOM_APPLICATION_DEFAUT ? "/guide.html" : `/guide.html?app=${encodeURIComponent(nom)}`;
+// Lien d'une page statique du guide (public/guide.html, public/qui-fait-quoi.html) :
+// le nom voyage dans l'adresse, la page le substitue à l'affichage.
+export function lienGuide(nom: string, page = "/guide.html"): string {
+  return nom === NOM_APPLICATION_DEFAUT ? page : `${page}?app=${encodeURIComponent(nom)}`;
 }

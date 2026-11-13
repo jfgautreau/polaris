@@ -13,6 +13,7 @@ export default function UserMenu({
   guideVisible = true,
   quiFaitQuoiVisible = true,
   lienGuide = "/guide.html",
+  lienQuiFaitQuoi = "/qui-fait-quoi.html",
 }: {
   name: string;
   email: string;
@@ -20,6 +21,7 @@ export default function UserMenu({
   quiFaitQuoiVisible?: boolean;
   // Porte le nom de l'application du site (?app=…), que le guide affiche.
   lienGuide?: string;
+  lienQuiFaitQuoi?: string;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -122,7 +124,7 @@ export default function UserMenu({
               guide, masquable par site depuis /platform (clé quifaitquoi). */}
           {quiFaitQuoiVisible && (
             <a
-              href="/qui-fait-quoi.html"
+              href={lienQuiFaitQuoi}
               target="_blank"
               rel="noopener"
               onClick={() => setOpen(false)}
