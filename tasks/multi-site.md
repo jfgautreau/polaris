@@ -21,7 +21,7 @@
 | Verrouillage | Tests statiques cross-site (`routes-multi-site`, `refdata-cache`, `admin-client`, `isolation-site`) ; `userAdminGuard` borné par site ; `create user` pose `site_id` | — |
 | Site courant | « Site courant » = `getCurrentProfile().siteId`, conscient de l'impersonation (cookie) ; `getCurrentSite()` en dérive. Correctif incident (cf. §5bis) | 0055 |
 | Étanchéité écrans | `app_user`/`audit_log` scopés au site courant (retrait `OR is_super_admin()`) | 0055 |
-| Éléments par site | Masquage par site depuis `/platform` (`site_module`) : **menus** (blocage réel nav+route) + **extras hors nav** (`MASQUABLES_EXTRA` : `guide` = lien Guide utilisateur du `UserMenu`). `src/lib/site-modules.ts` | 0056 |
+| Éléments par site | Masquage par site depuis `/platform` (`site_module`) : **menus** (blocage réel nav+route) + **extras hors nav** (`MASQUABLES_EXTRA` : `guide` = lien Guide utilisateur du `UserMenu`, `quifaitquoi` = lien « Qui fait quoi ? », masqué à La Vraie Croix). `src/lib/site-modules.ts` | 0056 |
 
 **✅ Résolution du site par le compte connecté** (2026-08-23) : multi-site
 **pleinement fonctionnel sur `bigplann.vercel.app`, sans sous-domaine ni DNS**. Le

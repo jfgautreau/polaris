@@ -527,9 +527,9 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   nom…) ; créations / suppressions sans colonnes techniques ; une écriture sans effet n'est
   plus journalisée. Noms des éléments résolus par dictionnaires du site (pas de liste d'ids).
 - **Plateforme** (super_admin, `src/app/platform/`) : sites, impersonation, masquage par
-  site (`site_module` : menus, `guide`, rapports `bilan:<slug>`). **Nom de l’application par site**
+  site (`site_module` : menus, `guide`, `quifaitquoi`, rapports `bilan:<slug>`). **Nom de l’application par site**
   (2026-11-10, 0095, `site.nom_application`, vide = « Polaris ») : onglet, en-tête, accueil, TV,
-  guide (`?app=` lu par un script de `guide.html`), pied des PDF des Synthèses — toujours via
+  guide et « Qui fait quoi ? » (`?app=` lu par un script de la page, `lienGuide(nom, page)`), pied des PDF des Synthèses — toujours via
   `getNomApplication()` (`nom-application-server.ts`, cache `NOM_APPLICATION_TAG`), jamais « Polaris »
   en dur dans une chaîne visible. « Polaris » reste le nom technique (dépôt, docs, cookies
   `polaris-*`, en-tête `x-polaris-auteur` lu par la base : ne pas renommer).
@@ -552,7 +552,9 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
 - `src/components/` : `AppHeader`, `MainNav`, `GardeCacheNavigation`, `icons`,
   `ModaleDeplacable`, `InfoBulle`, `usePersonGrid`, `persongrid.module.css`,
   `PastillesCouleur`, composants partagés listés plus haut.
-- Guide utilisateur : `public/guide.html` (lien dans `UserMenu`).
+- Guide utilisateur : `public/guide.html` ; « Qui fait quoi ? » : `public/qui-fait-quoi.html`
+  (organisation du Bignon, masqué ailleurs). Liens dans `UserMenu`, **même onglet** (pas de
+  `target="_blank"`, décision du 2026-11-13) ; chaque page a un bandeau « ← Retour à … ».
 
 ## Tests (Vitest)
 Règles pures (`src/lib/*.test.ts`) + tests statiques de garde : `routes-gardees` (toute route

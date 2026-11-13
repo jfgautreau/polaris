@@ -104,32 +104,28 @@ export default function UserMenu({
           </Link>
 
           {/* Guide utilisateur : document autonome (public/guide.html), ouvert dans
-              un onglet a part pour ne pas faire perdre une saisie en cours.
+              le même onglet (son bandeau « ← Retour à … » ramène à l'application).
               Masquable par site depuis /platform (prop guideVisible). */}
           {guideVisible && (
             <a
               href={lienGuide}
-              target="_blank"
-              rel="noopener"
               onClick={() => setOpen(false)}
               style={item}
-              title="Ouvrir le guide utilisateur dans un nouvel onglet"
+              title="Ouvrir le guide utilisateur"
             >
               📘&nbsp; Guide utilisateur
             </a>
           )}
 
           {/* « Qui fait quoi ? » : répartition des saisies par métier, propre à
-              l'organisation d'un site (public/qui-fait-quoi.html). Sous-entrée du
-              guide, masquable par site depuis /platform (clé quifaitquoi). */}
+              l'organisation d'un site (public/qui-fait-quoi.html), même onglet,
+              juste sous le guide ; masquable par site depuis /platform (clé quifaitquoi). */}
           {quiFaitQuoiVisible && (
             <a
               href={lienQuiFaitQuoi}
-              target="_blank"
-              rel="noopener"
               onClick={() => setOpen(false)}
-              style={{ ...item, paddingLeft: 30 }}
-              title="Qui saisit quoi, et quand : ouvrir dans un nouvel onglet"
+              style={item}
+              title="Qui saisit quoi, et quand"
             >
               👥&nbsp; Qui fait quoi ?
             </a>

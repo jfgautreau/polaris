@@ -79,9 +79,15 @@
 
 ## Documentation utilisateur
 - **Guide utilisateur** : accessible depuis la bulle du profil (avatar en haut à droite),
-  sous « Changer le mot de passe ». Document autonome `public/guide.html`, ouvert dans un
-  onglet séparé pour ne pas perdre une saisie en cours. Il reste derrière l'authentification.
-- Pour le modifier : éditer `public/guide.html` (HTML statique, aucune dépendance) et pousser.
+  sous « Changer le mot de passe ». Document autonome `public/guide.html`, ouvert dans le
+  même onglet (bandeau « ← Retour à <nom de l'application> » en tête). Il reste derrière
+  l'authentification.
+- **Qui fait quoi ?** (2026-11-13) : juste sous le guide dans la même bulle, `public/qui-fait-quoi.html`
+  — qui saisit quoi et quand, par métier (organisation du Bignon, prénoms compris, choix assumé du
+  2026-11-13 malgré le dépôt public). Généré depuis le .docx « BigPlann - Qui fait quoi » ; masqué
+  pour La Vraie Croix (`site_module` clé `quifaitquoi`). Même bandeau de retour.
+- Pour les modifier : éditer le HTML statique (aucune dépendance) et pousser. Si le .docx change,
+  regénérer la page.
 
 ## RGPD
 - Fiche personne (`/personnel/[id]`) : **Exporter** (JSON, sans le dossier médical),
