@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BigPlann — Qui fait quoi</title>
+<style>
+  /* « Qui fait quoi » : répartition des saisies par métier (document de
+     l'organisation du site, 10 novembre 2026). Page autonome, même palette que le guide. */
+  :root { --paper:#fbfbfc; --paper-2:#f2f4f8; --ink:#131b26; --ink-2:#4d5a6b; --rule:#dde2ea; --accent:#1d4ed8; --accent-bg:#dbeafe;
+    --font-display:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --font-body:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; }
+  @media (prefers-color-scheme: dark) { :root { --paper:#0e141c; --paper-2:#161f2b; --ink:#e8edf4; --ink-2:#a3b0c2; --rule:#26303e; --accent:#7aa2ff; --accent-bg:#16243d; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--paper); color:var(--ink); font:15px/1.55 var(--font-body); }
+  main { max-width:1100px; margin:0 auto; padding:32px 16px 64px; }
+  h1 { font:600 34px/1.2 var(--font-display); margin:0 0 4px; }
+  .date { color:var(--ink-2); margin:0 0 20px; }
+  h2 { font:600 24px/1.3 var(--font-display); margin:40px 0 10px; padding-bottom:6px; border-bottom:2px solid var(--accent); }
+  h3 { font-size:17px; margin:28px 0 8px; color:var(--accent); scroll-margin-top:12px; }
+  .principe { background:var(--accent-bg); border-left:4px solid var(--accent); padding:12px 16px; border-radius:6px; }
+  nav { display:flex; flex-wrap:wrap; gap:6px 14px; margin:16px 0 0; font-size:14px; }
+  nav a { color:var(--accent); text-decoration:none; } nav a:hover { text-decoration:underline; }
+  .tw { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; background:var(--paper); }
+  th, td { text-align:left; vertical-align:top; padding:7px 10px; border:1px solid var(--rule); }
+  th { background:var(--paper-2); font-weight:600; }
+  tbody tr:nth-child(even) td { background:var(--paper-2); }
+  @media (max-width:700px) {
+    thead { display:none; } table, tbody, tr, td { display:block; width:100%; }
+    tr { border:1px solid var(--rule); border-radius:6px; margin-bottom:10px; overflow:hidden; }
+    td { border:0; border-bottom:1px solid var(--rule); } td::before { content:attr(data-l); display:block; font-size:12px; font-weight:600; color:var(--ink-2); }
+  }
+  @media print { @page { size:A4 portrait; margin:12mm; } body { background:#fff; color:#000; font-size:11px; } nav { display:none; }
+    h2 { break-after:avoid; } h3 { break-after:avoid; } tr { break-inside:avoid; } }
+</style>
+</head>
+<body>
+<main>
+<h1>BigPlann — Qui fait quoi</h1>
+<p class="date">10 novembre 2026</p>
+<p class="principe"><strong>Principe :</strong> le planning de S+1 est bouclé le mercredi à 16 h, et chacun saisit dans BigPlann la part qui relève de son métier.</p>
+<nav><a href="#s1">Personnel et contrats</a>
+<a href="#s2">Accueil et intégration</a>
+<a href="#s3">Matrice de polyvalence</a>
+<a href="#s4">Habilitations et formations</a>
+<a href="#s5">Ordonnancement</a>
+<a href="#s6">Planning et placement</a>
+<a href="#s7">Absences</a>
+<a href="#s8">Intérim</a>
+<a href="#s9">Paramétrage de BigPlann</a></nav>
+<h2>La semaine type</h2>
+<p>Chaque étape s'appuie sur la précédente : si l'une glisse, toute la chaîne glisse.</p>
+<div class="tw"><table><thead><tr><th>Quand</th><th>Qui</th><th>Quoi</th><th>Où dans BigPlann</th></tr></thead><tbody><tr><td data-l="Quand">Chaque semaine</td><td data-l="Qui">Ordo : Karine</td><td data-l="Quoi">Prévision des ouvertures de lignes sur 8 à 12 semaines (vision indicative, pas de planification fine à cet horizon)</td><td data-l="Où dans BigPlann">Ordonnancement</td></tr>
+<tr><td data-l="Quand">Mardi</td><td data-l="Qui">Ordo : Karine</td><td data-l="Quoi">Ouvertures de lignes de S+1 affinées et arrêtées</td><td data-l="Où dans BigPlann">Ordonnancement</td></tr>
+<tr><td data-l="Quand">Mercredi, avant 16 h</td><td data-l="Qui">Condi : Julien / Régis</td><td data-l="Quoi">Pré-planning de S+1</td><td data-l="Où dans BigPlann">Planning (bouton « TP + pré-affectation », puis saisie)</td></tr>
+<tr><td data-l="Quand">Mercredi, avant 16 h</td><td data-l="Qui">Condi : chefs d'équipe</td><td data-l="Quoi">Placement fin, poste par poste</td><td data-l="Où dans BigPlann">Placement</td></tr>
+<tr><td data-l="Quand">Mercredi, avant 16 h</td><td data-l="Qui">Fab / MP : Jérôme et Fabrice</td><td data-l="Quoi">Planning de S+1</td><td data-l="Où dans BigPlann">Planning</td></tr>
+<tr><td data-l="Quand">Mercredi soir</td><td data-l="Qui">Hélène</td><td data-l="Quoi">Relevé des besoins et envoi aux agences d'intérim</td><td data-l="Où dans BigPlann">Bilans › Synthèses (Excel intérim, global ou par agence)</td></tr>
+<tr><td data-l="Quand">Jeudi</td><td data-l="Qui">Hélène</td><td data-l="Quoi">Retours des agences, ajustements si besoin</td><td data-l="Où dans BigPlann">Personnel (intérimaires) · Bilans › Synthèses</td></tr>
+<tr><td data-l="Quand">Jeudi et vendredi</td><td data-l="Qui">Hélène</td><td data-l="Quoi">Saisie des contrats et des motifs</td><td data-l="Où dans BigPlann">Peopulse (hors BigPlann)</td></tr></tbody></table></div>
+<p>Au jeudi, le nouvel Excel d'une agence surligne en jaune ce qui a changé depuis l'envoi précédent : l'agence voit d'un coup d'œil les ajustements.</p>
+<h2>Qui fait quoi, activité par activité</h2>
+<h3 id="s1">Personnel et contrats</h3>
+<div class="tw"><table><thead><tr><th>Activité</th><th>Qui</th><th>Où</th><th>Quand</th></tr></thead><tbody><tr><td data-l="Activité">Créer la fiche d'un salarié (CDI, CDD, apprenti)</td><td data-l="Qui">Hélène</td><td data-l="Où">Personnel</td><td data-l="Quand">Avant le premier jour</td></tr>
+<tr><td data-l="Activité">Créer la fiche d'un intérimaire, avec son agence</td><td data-l="Qui">Hélène</td><td data-l="Où">Personnel</td><td data-l="Quand">Jeudi, au retour des agences</td></tr>
+<tr><td data-l="Activité">Reporter les dates de contrat dans BigPlann (début, fin, prolongation)</td><td data-l="Qui">Hélène</td><td data-l="Où">Personnel › Cycle de vie</td><td data-l="Quand">En même temps que Peopulse</td></tr>
+<tr><td data-l="Activité">Rattacher la personne à son service et à son équipe</td><td data-l="Qui">Hélène en accord avec la production</td><td data-l="Où">Personnel</td><td data-l="Quand">À la création, puis à chaque mutation</td></tr>
+<tr><td data-l="Activité">Déclarer un temps partiel (jours, demi-journées, horaires)</td><td data-l="Qui">Hélène</td><td data-l="Où">Personnel</td><td data-l="Quand">Lors d'une modification de rythme de travail</td></tr>
+<tr><td data-l="Activité">Nommer le titulaire d'un poste (poste fixe)</td><td data-l="Qui">Responsables d'atelier/ adjoint</td><td data-l="Où">Personnel ou Référentiel</td><td data-l="Quand">À chaque changement</td></tr>
+<tr><td data-l="Activité">Saisir une fin de contrat ou un départ, retirer les affectations qui suivent</td><td data-l="Qui">Hélène</td><td data-l="Où">Personnel › Cycle de vie</td><td data-l="Quand">Dès que la date est connue</td></tr></tbody></table></div>
+<h3 id="s2">Accueil et intégration</h3>
+<div class="tw"><table><thead><tr><th>Activité</th><th>Qui</th><th>Où</th><th>Quand</th></tr></thead><tbody><tr><td data-l="Activité">Préparer les documents et le kit d'accueil</td><td data-l="Qui">Hélène</td><td data-l="Où">Hors BigPlann</td><td data-l="Quand">Avant l'arrivée</td></tr>
+<tr><td data-l="Activité">Noter la date de remise du livret d'accueil (point de départ des 18 mois d'intérim)</td><td data-l="Qui">Hélène</td><td data-l="Où">Personnel</td><td data-l="Quand">Le jour de l'accueil</td></tr>
+<tr><td data-l="Activité">Accueillir sur le terrain</td><td data-l="Qui">RA adjoints (MP, Condi, Fab)</td><td data-l="Où">Hors BigPlann</td><td data-l="Quand">Premier jour</td></tr>
+<tr><td data-l="Activité">Former au poste</td><td data-l="Qui">Chefs d'équipe et adjoints</td><td data-l="Où">Hors BigPlann</td><td data-l="Quand">Premières semaines</td></tr>
+<tr><td data-l="Activité">Saisir les premiers niveaux de compétence</td><td data-l="Qui">Adjoints</td><td data-l="Où">Matrice</td><td data-l="Quand">Après l'accueil</td></tr>
+<tr><td data-l="Activité">Saisir les habilitations détenues à l'arrivée</td><td data-l="Qui">Qualité / SSE</td><td data-l="Où">Habilitations</td><td data-l="Quand">Après réception des justificatifs</td></tr>
+<tr><td data-l="Activité">Saisie des documents FERH09 et FERH12</td><td data-l="Qui">RH</td><td data-l="Où">Outil RH</td><td data-l="Quand">Après réception des docs</td></tr></tbody></table></div>
+<h3 id="s3">Matrice de polyvalence</h3>
+<div class="tw"><table><thead><tr><th>Activité</th><th>Qui</th><th>Où</th><th>Quand</th></tr></thead><tbody><tr><td data-l="Activité">Saisir le niveau d'un nouvel arrivant sur chaque poste appris</td><td data-l="Qui">Chefs d'équipe ou RA adjoint</td><td data-l="Où">Matrice</td><td data-l="Quand">Après l'accueil</td></tr>
+<tr><td data-l="Activité">Mettre à jour un niveau quand la personne progresse</td><td data-l="Qui">Chefs d'équipe ou RA adjoint ou RA</td><td data-l="Où">Matrice</td><td data-l="Quand">À chaque progression</td></tr>
+<tr><td data-l="Activité">Fixer le niveau cible (objectif de formation)</td><td data-l="Qui">Responsable d'atelier avec le responsable de production</td><td data-l="Où">Matrice</td><td data-l="Quand">Lors de la revue de polyvalence – à organiser</td></tr>
+<tr><td data-l="Activité">Revoir la polyvalence de l'équipe</td><td data-l="Qui">RA et RA adjoint</td><td data-l="Où">Matrice · Bilans</td><td data-l="Quand">Fréquence à fixer</td></tr>
+<tr><td data-l="Activité">Traiter les personnes « sans compétence » (pastille dans la Matrice)</td><td data-l="Qui">RA adjoint</td><td data-l="Où">Matrice</td><td data-l="Quand">Chaque semaine</td></tr>
+<tr><td data-l="Activité">Définir les niveaux et ce qu'ils veulent dire</td><td data-l="Qui">Responsable de production avec RA</td><td data-l="Où">Compétences</td><td data-l="Quand">Une fois, puis si besoin</td></tr>
+<tr><td data-l="Activité">Repérer les postes fragiles (trop peu de personnes formées)</td><td data-l="Qui">Responsable de production avec RA</td><td data-l="Où">Bilans › Polyvalence &amp; compétences</td><td data-l="Quand">Fréquence à fixer</td></tr></tbody></table></div>
+<h3 id="s4">Habilitations et formations</h3>
+<div class="tw"><table><thead><tr><th>Activité</th><th>Qui</th><th>Où</th><th>Quand</th></tr></thead><tbody><tr><td data-l="Activité">Saisir une habilitation obtenue, avec sa date</td><td data-l="Qui">SSE / Qualité</td><td data-l="Où">Habilitations</td><td data-l="Quand">À réception de l'attestation</td></tr>
+<tr><td data-l="Activité">Renouveler une habilitation après recyclage</td><td data-l="Qui">SSE / Qualité</td><td data-l="Où">Habilitations</td><td data-l="Quand">À réception de l'attestation</td></tr>
+<tr><td data-l="Activité">Suivre les échéances (rouge à moins de 30 jours)</td><td data-l="Qui">SSE / Qualité</td><td data-l="Où">Bilans › Recyclages à prévoir</td><td data-l="Quand">Chaque mois</td></tr>
+<tr><td data-l="Activité">Organiser les sessions de formation et de recyclage</td><td data-l="Qui">SSE / Qualité</td><td data-l="Où">Hors BigPlann</td><td data-l="Quand">Selon les échéances</td></tr>
+<tr><td data-l="Activité">Tenir le catalogue : durée de validité, familles, à recycler ou non</td><td data-l="Qui">SSE / Qualité</td><td data-l="Où">Param. Habilitation</td><td data-l="Quand">Une fois, puis si besoin</td></tr>
+<tr><td data-l="Activité">Définir les habilitations exigées par poste</td><td data-l="Qui">Responsable de production et RA avec SSE et qualité</td><td data-l="Où">Référentiel</td><td data-l="Quand">A l'initialisation</td></tr></tbody></table></div>
+<h3 id="s5">Ordonnancement</h3>
+<div class="tw"><table><thead><tr><th>Activité</th><th>Qui</th><th>Où</th><th>Quand</th></tr></thead><tbody><tr><td data-l="Activité">Prévoir les ouvertures de lignes sur 8 à 12 semaines</td><td data-l="Qui">Ordo</td><td data-l="Où">Ordonnancement</td><td data-l="Quand">Chaque semaine</td></tr>
+<tr><td data-l="Activité">Arrêter les ouvertures de S+1</td><td data-l="Qui">Ordo</td><td data-l="Où">Ordonnancement</td><td data-l="Quand">Mardi</td></tr>
+<tr><td data-l="Activité">Ouvrir ou fermer un quart sur un jour (jour sans production)</td><td data-l="Qui">Ordo</td><td data-l="Où">Ordonnancement › Activation</td><td data-l="Quand">Mardi, puis si besoin</td></tr>
+<tr><td data-l="Activité">Fermer une ligne sur un quart (besoin ramené à 0)</td><td data-l="Qui">Ordo</td><td data-l="Où">Ordonnancement</td><td data-l="Quand">Mardi, puis si besoin</td></tr>
+<tr><td data-l="Activité">Changer une ligne le jour même (ex : changement de ligne th3 au lieu de Th2) prévenir le chef d'équipe, car BigPlann propose de retirer les personnes déjà affectées</td><td data-l="Qui">Ordo / RP / RA / RA Adjoint</td><td data-l="Où">Ordonnancement</td><td data-l="Quand">Exceptionnel</td></tr></tbody></table></div>
+<h3 id="s6">Planning et placement</h3>
+<div class="tw"><table><thead><tr><th>Activité</th><th>Qui</th><th>Où</th><th>Quand</th></tr></thead><tbody><tr><td data-l="Activité">Pré-remplir la semaine : temps partiels et titulaires</td><td data-l="Qui">Responsables d'atelier et RA adjoint</td><td data-l="Où">Planning › « TP + pré-affectation »</td><td data-l="Quand">Mercredi matin</td></tr>
+<tr><td data-l="Activité">Pré-planning Condi de S+1</td><td data-l="Qui">Julien, Régis</td><td data-l="Où">Planning</td><td data-l="Quand">Mercredi, avant 16 h</td></tr>
+<tr><td data-l="Activité">Placement fin Condi, poste par poste</td><td data-l="Qui">Chefs d'équipe</td><td data-l="Où">Placement</td><td data-l="Quand">Mercredi, avant 16 h</td></tr>
+<tr><td data-l="Activité">Planning Fab / MP de S+1</td><td data-l="Qui">Jérôme, Fabrice</td><td data-l="Où">Planning</td><td data-l="Quand">Mercredi, avant 16 h</td></tr>
+<tr><td data-l="Activité">Placer les intérimaires confirmés par les agences</td><td data-l="Qui">RA adjoint, RA, Chefs d'équipe</td><td data-l="Où">Planning · Placement</td><td data-l="Quand">Jeudi</td></tr>
+<tr><td data-l="Activité">Ajuster en cours de semaine : remplacements, imprévus</td><td data-l="Qui">RA adjoint, RA, Chefs d'équipe</td><td data-l="Où">Planning · Placement</td><td data-l="Quand">Au quotidien</td></tr>
+<tr><td data-l="Activité">Saisir un horaire exceptionnel ou un commentaire du jour</td><td data-l="Qui">Chefs d'équipe / RA adjoint, RA</td><td data-l="Où">Planning (pendule)</td><td data-l="Quand">Au quotidien</td></tr>
+<tr><td data-l="Activité">Imprimer et afficher les PDF du placement</td><td data-l="Qui">Chefs d'équipe</td><td data-l="Où">Placement</td><td data-l="Quand">La veille ou le matin</td></tr>
+<tr><td data-l="Activité">Mettre à jour affichage couloir</td><td data-l="Qui">RA adjoint / Chefs d'équipe</td><td data-l="Où">Affichage</td><td data-l="Quand">S-1</td></tr></tbody></table></div>
+<h3 id="s7">Absences</h3>
+<div class="tw"><table><thead><tr><th>Activité</th><th>Qui</th><th>Où</th><th>Quand</th></tr></thead><tbody><tr><td data-l="Activité">Saisir une absence longue (maladie, congés, formation…)</td><td data-l="Qui">Hélène</td><td data-l="Où">Absences</td><td data-l="Quand">Dès qu'elle est connue</td></tr>
+<tr><td data-l="Activité">Saisir une absence constatée le jour même</td><td data-l="Qui">Hélène</td><td data-l="Où">Planning (bouton absence)</td><td data-l="Quand">Le jour même</td></tr>
+<tr><td data-l="Activité">Ajouter le commentaire d'une formation (imprimé sur le PDF pour affichage)</td><td data-l="Qui">RA adjoint / CE</td><td data-l="Où">Planning</td><td data-l="Quand">À la saisie</td></tr></tbody></table></div>
+<h3 id="s8">Intérim</h3>
+<div class="tw"><table><thead><tr><th>Activité</th><th>Qui</th><th>Où</th><th>Quand</th></tr></thead><tbody><tr><td data-l="Activité">Relever les besoins et les envoyer aux agences</td><td data-l="Qui">Hélène</td><td data-l="Où">Bilans › Synthèses (Excel par agence)</td><td data-l="Quand">Mercredi soir</td></tr>
+<tr><td data-l="Activité">Traiter les retours des agences et renvoyer l'Excel corrigé (changements en jaune)</td><td data-l="Qui">Hélène</td><td data-l="Où">Bilans › Synthèses</td><td data-l="Quand">Jeudi</td></tr>
+<tr><td data-l="Activité">Vérifier les intérimaires sous contrat sans affectation</td><td data-l="Qui">Hélène</td><td data-l="Où">Bilans › Synthèses</td><td data-l="Quand">Jeudi</td></tr>
+<tr><td data-l="Activité">Surveiller la limite des 18 mois d'intérim</td><td data-l="Qui">Hélène</td><td data-l="Où">Personnel (alerte)</td><td data-l="Quand">Chaque mois</td></tr></tbody></table></div>
+<h3 id="s9">Paramétrage de BigPlann</h3>
+<div class="tw"><table><thead><tr><th>Activité</th><th>Qui</th><th>Où</th><th>Quand</th></tr></thead><tbody><tr><td data-l="Activité">Lignes, postes, effectifs par quart, places numérotées, dates d'ouverture et de fermeture</td><td data-l="Qui">Responsable de production / RA / RA adjoint</td><td data-l="Où">Référentiel</td><td data-l="Quand">À chaque changement d'organisation</td></tr>
+<tr><td data-l="Activité">Équipes, chefs et adjoints de chaque équipe, rotation des quarts</td><td data-l="Qui">Responsable de production</td><td data-l="Où">Équipes</td><td data-l="Quand">À chaque changement</td></tr>
+<tr><td data-l="Activité">Horaires des postes et des places</td><td data-l="Qui">Responsable de production / RA / RA adjoint</td><td data-l="Où">Horaires</td><td data-l="Quand">À chaque changement</td></tr>
+<tr><td data-l="Activité">Motifs d'absence, nom du fichier Excel intérim, fenêtre de l'affichage TV</td><td data-l="Qui">Administrateur BigPlann</td><td data-l="Où">Param. RH</td><td data-l="Quand">Si besoin</td></tr>
+<tr><td data-l="Activité">Créer un compte, envoyer le lien de mot de passe</td><td data-l="Qui">Administrateur BigPlann</td><td data-l="Où">Utilisateurs</td><td data-l="Quand">À l'arrivée d'un utilisateur</td></tr>
+<tr><td data-l="Activité">Désactiver le compte d'un utilisateur qui part</td><td data-l="Qui">Administrateur BigPlann</td><td data-l="Où">Utilisateurs</td><td data-l="Quand">Le jour du départ</td></tr>
+<tr><td data-l="Activité">Accorder ou retirer des droits à un rôle</td><td data-l="Qui">Administrateur BigPlann</td><td data-l="Où">Droits</td><td data-l="Quand">Sur décision de la direction</td></tr></tbody></table></div>
+</main>
+</body>
+</html>

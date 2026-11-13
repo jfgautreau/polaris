@@ -9,6 +9,7 @@ import { getCurrentSite } from "@/lib/current-site";
 // menu utilisateur. Défaut = visible ; une ligne site_module(guide) = masqué.
 export const MASQUABLES_EXTRA = [
   { key: "guide", label: "Guide utilisateur" },
+  { key: "quifaitquoi", label: "Qui fait quoi ? (menu utilisateur)" },
 ] as const;
 export const CLES_MASQUABLES_EXTRA: string[] = MASQUABLES_EXTRA.map((m) => m.key);
 

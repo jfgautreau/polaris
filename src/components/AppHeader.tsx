@@ -179,7 +179,7 @@ export default async function AppHeader({
           )}
         </Link>
         )}
-        <UserMenu name={profile?.name ?? ""} email={profile?.email ?? ""} guideVisible={!masques.has("guide")} lienGuide={lienGuide(nomApp)} />
+        <UserMenu name={profile?.name ?? ""} email={profile?.email ?? ""} guideVisible={!masques.has("guide")} quiFaitQuoiVisible={!masques.has("quifaitquoi")} lienGuide={lienGuide(nomApp)} />
       </div>
     </header>
     </>

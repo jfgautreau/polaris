@@ -6,15 +6,18 @@ import { useEffect, useRef, useState } from "react";
 // Avatar rond (initiale) + menu : mes informations, mot de passe, deconnexion.
 // `guideVisible` : le lien « Guide utilisateur » est affiché sauf si le
 // super_admin l'a masqué pour ce site (cf. /platform, site_module clé `guide`).
+// `quiFaitQuoiVisible` : idem pour « Qui fait quoi ? » (clé `quifaitquoi`).
 export default function UserMenu({
   name,
   email,
   guideVisible = true,
+  quiFaitQuoiVisible = true,
   lienGuide = "/guide.html",
 }: {
   name: string;
   email: string;
   guideVisible?: boolean;
+  quiFaitQuoiVisible?: boolean;
   // Porte le nom de l'application du site (?app=…), que le guide affiche.
   lienGuide?: string;
 }) {
@@ -111,6 +114,22 @@ export default function UserMenu({
               title="Ouvrir le guide utilisateur dans un nouvel onglet"
             >
               📘&nbsp; Guide utilisateur
+            </a>
+          )}
+
+          {/* « Qui fait quoi ? » : répartition des saisies par métier, propre à
+              l'organisation d'un site (public/qui-fait-quoi.html). Sous-entrée du
+              guide, masquable par site depuis /platform (clé quifaitquoi). */}
+          {quiFaitQuoiVisible && (
+            <a
+              href="/qui-fait-quoi.html"
+              target="_blank"
+              rel="noopener"
+              onClick={() => setOpen(false)}
+              style={{ ...item, paddingLeft: 30 }}
+              title="Qui saisit quoi, et quand : ouvrir dans un nouvel onglet"
+            >
+              👥&nbsp; Qui fait quoi ?
             </a>
           )}
 
