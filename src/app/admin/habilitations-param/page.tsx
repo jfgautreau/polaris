@@ -2,7 +2,6 @@ import Link from "next/link";
 import { getServerClient } from "@/lib/supabase-server";
 import AppHeader from "@/components/AppHeader";
 import { requireModule , canWrite } from "@/lib/permissions";
-import LectureSeule from "@/components/LectureSeule";
 import HabilitationsParamEditor from "./HabilitationsParamEditor";
 
 type Row = {
@@ -40,9 +39,7 @@ export default async function HabilitationsParamPage() {
           par <strong>catégorie</strong> puis <strong>groupe</strong>. Le suivi par personne se
           fait dans le module <strong>Habilitations</strong>.
         </p>
-        <LectureSeule actif={!canWrite(perms, "habilitations_param")}>
-          <HabilitationsParamEditor initial={data ?? []} />
-        </LectureSeule>
+        <HabilitationsParamEditor initial={data ?? []} lecture={!canWrite(perms, "habilitations_param")} />
       </div>
     </>
   );

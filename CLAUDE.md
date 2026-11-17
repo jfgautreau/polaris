@@ -176,7 +176,11 @@ L'historique des décisions est dans git et dans l'en-tête de chaque migration.
   la saisie : afficher avec repli `addMonthsIso(date_obtention, duree)`
   (`src/lib/habilitations.ts`). Changer la durée d'une formation (Param. Habilitation,
   Compétences) recalcule les échéances déjà saisies (`recalculerEcheances`,
-  `src/lib/echeances-habilitations.ts`, une ligne de lot au Journal) — 2026-11-04. Rouge < 30 j · orange 30-90 j · vert > 90 j.
+  `src/lib/echeances-habilitations.ts`, une ligne de lot au Journal) — 2026-11-04. La durée
+  s'enregistre **en quittant la case**, jamais à la frappe (chaque recalcul écrit une ligne dans
+  l'historique de chaque titulaire). Historique d'une formation (icône horloge, Param. Habilitation,
+  2026-11-17) : relu dans `audit_log` (table `competence`), recalculs rattachés par le libellé du LOT
+  (`src/lib/historique-formation.ts`, route `/api/habilitations-param/historique`). Rouge < 30 j · orange 30-90 j · vert > 90 j.
   Exigences d'un poste : `poste_competence_requise` ; placer sans elles demande
   confirmation (forçage tracé `placement.forcage_*`), le rouge est recalculé à l'affichage.
 - **Poste** : `categorie` ∈ manager/conducteur/operateur (source des bilans ;
