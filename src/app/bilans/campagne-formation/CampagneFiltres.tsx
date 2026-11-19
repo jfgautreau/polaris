@@ -71,7 +71,7 @@ export default function CampagneFiltres({
           style={{ width: "auto", margin: 0 }}
           title="L'état de chaque habilitation est jugé à cette date"
         />
-        <span className="muted" style={{ fontWeight: 600, marginLeft: 12 }}>Intérimaires :</span>
+        <span className="muted" style={{ fontWeight: 600, marginLeft: 12 }}>Avec intérimaires :</span>
         <div className="segments">
           <button type="button" className={interim ? "seg active" : "seg"} onClick={() => go({ interim: "oui" })}>Oui</button>
           <button type="button" className={!interim ? "seg active" : "seg"} onClick={() => go({ interim: "" })}>Non</button>
