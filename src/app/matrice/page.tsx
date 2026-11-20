@@ -97,11 +97,15 @@ export default async function MatricePage({
   // Ordre du referentiel : lignes puis postes par ordre_affichage (fallback nom).
   const byOrdre = <T extends { ordre_affichage?: number; nom: string }>(a: T, b: T) =>
     (a.ordre_affichage ?? 0) - (b.ordre_affichage ?? 0) || a.nom.localeCompare(b.nom);
+  // Services d'abord, dans l'ordre du Référentiel (N° aff. du service, 0085 —
+  // getAteliersC les rend déjà triés) ; un service inconnu / inactif passe en fin.
+  const rangAtelier = new Map(ateliers.map((a, i) => [a.id, i]));
   const groups = (lignesData ?? [])
     .map((l) => ({
       ligneId: l.id,
       ligneNom: l.nom,
       ligneOrdre: l.ordre_affichage ?? 0,
+      atelierRang: rangAtelier.get(l.atelier_id) ?? Number.MAX_SAFE_INTEGER,
       // Postes « en attente » (zone_attente, ex. CDT) exclus : ce sont des zones de
       // répartition du planning, pas des postes où l'on mesure une compétence.
       postes: [...(l.poste ?? [])]
@@ -116,7 +120,7 @@ export default async function MatricePage({
         })),
     }))
     .filter((g) => g.postes.length > 0)
-    .sort((a, b) => a.ligneOrdre - b.ligneOrdre || a.ligneNom.localeCompare(b.ligneNom));
+    .sort((a, b) => a.atelierRang - b.atelierRang || a.ligneOrdre - b.ligneOrdre || a.ligneNom.localeCompare(b.ligneNom));
 
   const posteIds = groups.flatMap((g) => g.postes.map((p) => p.id));
 

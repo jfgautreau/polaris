@@ -425,7 +425,7 @@ export default function AbsencesEditor({
           <input
             value={edit.commentaire}
             onChange={(e) => setEdit((s) => s ? { ...s, commentaire: e.target.value } : s)}
-            placeholder="Commentaire — pas d'info médicale"
+            placeholder="Commentaire"
             style={{ width: "100%", fontSize: 13, padding: "2px 6px" }}
           />
         </td>
