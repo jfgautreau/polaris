@@ -129,6 +129,46 @@ export async function toggleAgence(fd: FormData) {
   done(error);
 }
 
+// ----- Accueils des nouveaux (0096) -----
+// Libellés des colonnes « Accueil » du Personnel (Hélène y valide chaque accueil
+// réalisé). Désactiver masque la colonne sans effacer les OK déjà posés.
+
+const libelleAccueil = (fd: FormData) => s(fd, "libelle").slice(0, 20);
+const ordreAccueil = (fd: FormData) => Math.max(0, Math.floor(Number(s(fd, "ordre")) || 0));
+
+export async function createAccueil(fd: FormData) {
+  const supabase = await requireModuleWrite("motifs");
+  const site = await getCurrentSite();
+  const libelle = libelleAccueil(fd);
+  if (!libelle) done();
+  const { error } = await supabase.from("accueil").insert({ libelle, ordre: ordreAccueil(fd), site_id: site.id });
+  done(error);
+}
+
+export async function updateAccueil(fd: FormData) {
+  const supabase = await requireModuleWrite("motifs");
+  const site = await getCurrentSite();
+  const libelle = libelleAccueil(fd);
+  if (!libelle) done();
+  const { error } = await supabase
+    .from("accueil")
+    .update({ libelle, ordre: ordreAccueil(fd) })
+    .eq("id", s(fd, "id"))
+    .eq("site_id", site.id);
+  done(error);
+}
+
+export async function toggleAccueil(fd: FormData) {
+  const supabase = await requireModuleWrite("motifs");
+  const site = await getCurrentSite();
+  const { error } = await supabase
+    .from("accueil")
+    .update({ actif: fd.get("actif") === "true" })
+    .eq("id", s(fd, "id"))
+    .eq("site_id", site.id);
+  done(error);
+}
+
 // ----- Types de contrat (migration 0040) -----
 // Alimente le menu Contrat dans Personnel et dans les periodes de contrat. Le
 // `code` est le texte stocke dans `personne.type_contrat` : ajouter un code ici,

@@ -48,7 +48,10 @@ type Row = {
   date_depart_prevu: string | null;
   motif_depart: string | null;
   poste_fixe_id: string | null;
+  // Accueils des nouveaux (0096) : accueil_id -> date du OK (AAAA-MM-JJ).
+  accueils: Record<string, string> | null;
 };
+type Accueil = { id: string; libelle: string };
 type Equipe = { id: string; nom: string; couleur?: string | null; quart_fixe?: string | null };
 type Atelier = { id: string; nom: string };
 type PosteOpt = { id: string; nom: string; atelierNom: string };
@@ -87,7 +90,7 @@ function SexePill({ sexe }: { sexe: string | null }) {
 
 type ColKey =
   | "type_contrat" | "matricule" | "numero_badge" | "nom" | "prenom" | "sexe"
-  | "equipe" | "atelier" | "date_livret_accueil" | "absences" | "alerte" | "pointure" | "tp" | "statut" | "commentaire";
+  | "equipe" | "atelier" | "date_livret_accueil" | "absences" | "alerte" | "accueil" | "pointure" | "tp" | "statut" | "commentaire";
 // ⚠️ Largeurs (%) resserrees pour loger la colonne Commentaire : tout est reduit
 // SAUF Nom/Prenom. `table-layout: fixed` normalise les % a la largeur du tableau,
 // c'est donc le rapport entre colonnes qui compte. Libelles longs raccourcis pour
@@ -109,6 +112,22 @@ const COLS: { key: ColKey; label: string; w: number; search?: boolean }[] = [
   { key: "statut", label: "Statut", w: 5 },
   { key: "commentaire", label: "Commentaire", w: 17.5 },
 ];
+// Colonne « Accueil » (0096) : présente seulement si Param. RH définit au moins un
+// accueil actif, entre « ⚠ 18m » et « Point. ». Une pastille de 30 px par accueil ;
+// la place est reprise sur Commentaire et Livret (table-layout fixed normalise le reste).
+const AUCUN_ACCUEIL: Accueil[] = [];
+function colonnes(nbAccueils: number) {
+  if (nbAccueils === 0) return COLS;
+  const out: typeof COLS = [];
+  for (const c of COLS) {
+    if (c.key === "commentaire") out.push({ ...c, w: 14.5 });
+    else if (c.key === "date_livret_accueil") out.push({ ...c, w: 6.5 });
+    else out.push(c);
+    if (c.key === "alerte") out.push({ key: "accueil", label: "Accueil", w: Math.max(3, nbAccueils * 2.3) });
+  }
+  return out;
+}
+
 // Colonnes dont le contenu est centre (Commentaire reste aligne a gauche).
 const CENTER = new Set<ColKey>(["type_contrat", "matricule", "numero_badge", "sexe", "equipe", "atelier", "tp", "pointure", "absences"]);
 // Colonnes a padding lateral reduit (contenu compact : icone / chip) — resserre
@@ -164,12 +183,45 @@ function BoutonAbsences({ row, onOpen }: { row: Row; onOpen: () => void }) {
   );
 }
 
+// Pastilles « Accueil » d'une ligne : vide = à faire, verte « OK » = fait (date au
+// survol). Clic = bascule (droit Personnel en écriture), sinon simple lecture.
+const pastilleAccueil: React.CSSProperties = {
+  width: 30, height: 20, margin: 0, padding: 0, boxSizing: "border-box", lineHeight: 1,
+  display: "inline-flex", alignItems: "center", justifyContent: "center",
+  borderRadius: 5, fontSize: 9, fontWeight: 700,
+};
+function PastillesAccueil({ r, accueils, onBascule }: { r: Row; accueils: Accueil[]; onBascule?: (accueilId: string, ok: boolean) => void }) {
+  return (
+    <div style={{ display: "flex", gap: 3, justifyContent: "center" }}>
+      {accueils.map((a) => {
+        const date = r.accueils ? r.accueils[a.id] : undefined;
+        const ok = !!date;
+        const style: React.CSSProperties = {
+          ...pastilleAccueil,
+          background: ok ? "#16a34a" : "#fff",
+          color: ok ? "#fff" : "#94a3b8",
+          border: `1px solid ${ok ? "#16a34a" : "var(--border)"}`,
+          cursor: onBascule ? "pointer" : "default",
+        };
+        const titre = ok
+          ? `Accueil ${a.libelle} fait le ${fmtDate(date ?? null)}${onBascule ? " — cliquer pour retirer" : ""}`
+          : `Accueil ${a.libelle} à faire${onBascule ? " — cliquer pour valider" : ""}`;
+        return onBascule ? (
+          <button key={a.id} type="button" style={style} title={titre} aria-label={titre} onClick={() => onBascule(a.id, !ok)}>{ok ? "OK" : ""}</button>
+        ) : (
+          <span key={a.id} style={style} title={titre}>{ok ? "OK" : ""}</span>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Appels réseau (niveau module) ────────────────────────────────────────────
 // Sortis du composant : le React Compiler ne sait pas encore traiter un
 // `try/catch` contenant des opérateurs conditionnels (`??`, `?.`, `||`…) et
 // renonçait alors à tout PersonnelEditor. Ces fonctions ne lèvent JAMAIS : elles
 // rendent un résultat que le composant interprète.
-type ReponsePersonnel = { ok?: boolean; row?: Row };
+type ReponsePersonnel = { ok?: boolean; row?: Row; accueils?: Record<string, string> };
 async function appelApiPersonnel(
   op: string,
   payload: Record<string, unknown>,
@@ -212,6 +264,7 @@ type ActionsLigne = {
   ouvrirTp: (r: Row) => void;
   ouvrirFiche: (r: Row) => void;
   basculerSel: (id: string) => void;
+  basculerAccueil: (id: string, accueilId: string, ok: boolean) => void;
 };
 
 const AUCUN_REGROUPEMENT: Record<string, string[]> = {};
@@ -277,6 +330,7 @@ const LignePersonne = memo(function LignePersonne({
   types,
   actions,
   nouveau,
+  accueils,
 }: {
   r: Row;
   today: string;
@@ -292,6 +346,8 @@ const LignePersonne = memo(function LignePersonne({
   actions: ActionsLigne;
   // Fiche tout juste créée : surlignée quelques secondes (cf. `nouveauId`).
   nouveau: boolean;
+  // Accueils actifs du site (0096) : vide = pas de colonne.
+  accueils: Accueil[];
 }) {
   "use memo"; // React Compiler (mode opt-in, cf. next.config.ts)
   const a18 = alerte18(r, today);
@@ -437,6 +493,7 @@ const LignePersonne = memo(function LignePersonne({
               </span>
             )}
           </td>
+          {accueils.length > 0 && <td style={{ ...tightPad }}><PastillesAccueil r={r} accueils={accueils} onBascule={(aid, ok) => actions.basculerAccueil(r.id, aid, ok)} /></td>}
           <td><input value={r.pointure ?? ""} maxLength={5} onChange={(e) => actions.field(r.id, "pointure", e.target.value)} style={{ ...inp, ...C("pointure") }} /></td>
           <td style={{ textAlign: "center" }}>
             {r.temps_partiel ? (
@@ -494,6 +551,7 @@ const LignePersonne = memo(function LignePersonne({
               </span>
             )}
           </td>
+          {accueils.length > 0 && <td style={{ ...tightPad }}><PastillesAccueil r={r} accueils={accueils} /></td>}
           <td style={{ textAlign: "center" }}>{r.pointure || "-"}</td>
           <td style={{ textAlign: "center" }}>{r.temps_partiel ? <span className="sexe-pill" style={{ background: "#e0e7ff", color: "#3730a3" }}>TP</span> : <span className="muted">—</span>}</td>
           <td style={{ textAlign: "center", ...tightPad }}>{statutChip(r)}</td>
@@ -527,6 +585,7 @@ export default function PersonnelEditor({
   types = CONTRATS_FALLBACK,
   agences = [],
   agenceCodes = ["INTERIM"],
+  accueils = AUCUN_ACCUEIL,
   erreur,
 }: {
   initial: Row[];
@@ -554,6 +613,8 @@ export default function PersonnelEditor({
   // Codes de contrat pilotés par agence (drapeau avec_agence, 0072) : activent
   // le champ Agence à la création et le surlignage jaune.
   agenceCodes?: string[];
+  // Accueils des nouveaux actifs (0096, Param. RH) : une pastille chacun.
+  accueils?: Accueil[];
   // Message des server actions RGPD, repasse par l URL (cf. BandeauErreur).
   erreur?: string;
 }) {
@@ -717,6 +778,15 @@ export default function PersonnelEditor({
     setRow(id, (r) => ({ ...r, ...patch }));
     schedule(`${id}:svc`, () => post("update", { id, patch }), instant ? 0 : 500);
   }
+  // Accueil (0096) : bascule optimiste, retour à l'état précédent si refus.
+  async function basculerAccueil(id: string, accueilId: string, ok: boolean) {
+    const avant = rows.find((x) => x.id === id)?.accueils ?? {};
+    const apres: Record<string, string> = { ...avant };
+    if (ok) apres[accueilId] = today; else delete apres[accueilId];
+    setRow(id, (r) => ({ ...r, accueils: apres }));
+    const j = await post("accueil", { id, accueil_id: accueilId, ok });
+    setRow(id, (r) => ({ ...r, accueils: j ? j.accueils ?? apres : avant }));
+  }
   // Rafraichissement initial du cache statut : rattrape les bascules
   // automatiques du jour (A_VENIR -> ACTIF a l'arrivee, ACTIF -> PARTI le
   // lendemain du depart). Idempotent, no-op si tout est deja a jour.
@@ -785,6 +855,7 @@ export default function PersonnelEditor({
         agenceManquante: agenceSet.has(contrat) && !agenceSaisie,
         commentaire: null, temps_partiel: false, tp_type: null, tp_config: null,
         date_depart_prevu: null, motif_depart: null, poste_fixe_id: null,
+        accueils: {},
       };
       setRows((rs) => [...rs, created].sort(sortRows));
       setNom(""); setPrenom(""); setSexe(""); setMatricule(""); setBadge("");
@@ -877,9 +948,10 @@ export default function PersonnelEditor({
   const saveColor = save === "error" ? "var(--danger)" : save === "saved" ? "var(--ok)" : "var(--muted)";
   const interimStyle = (t: string) => (agenceSet.has(t) ? { background: "#fde68a", color: "#92400e", fontWeight: 600 } : {});
 
+  const cols = colonnes(accueils.length);
   const Cols = () => (
     <colgroup>
-      {COLS.map((c) => <col key={c.key} style={{ width: `${c.w}%` }} />)}
+      {cols.map((c) => <col key={c.key} style={{ width: `${c.w}%` }} />)}
       {(canEdit || canRgpd) && <col style={{ width: "5.5%" }} />}
     </colgroup>
   );
@@ -900,6 +972,7 @@ export default function PersonnelEditor({
       ouvrirTp: (r) => setTpFor(r),
       ouvrirFiche: (r) => setDetailFor(r),
       basculerSel: toggleSel,
+      basculerAccueil: (id, aid, ok) => void basculerAccueil(id, aid, ok),
     };
   });
   // `useState` à initialiseur (et non `useMemo(…, [])`) : identité garantie
@@ -912,6 +985,7 @@ export default function PersonnelEditor({
     ouvrirTp: (r) => implRef.current?.ouvrirTp(r),
     ouvrirFiche: (r) => implRef.current?.ouvrirFiche(r),
     basculerSel: (id) => implRef.current?.basculerSel(id),
+    basculerAccueil: (id, aid, ok) => implRef.current?.basculerAccueil(id, aid, ok),
   }));
 
   // Nombre de fiches incompletes parmi les ACTIVES (les A_VENIR peuvent
@@ -1056,7 +1130,14 @@ export default function PersonnelEditor({
           <Cols />
           <thead>
             <tr>
-              {COLS.map((c) => <th key={c.key} style={{ whiteSpace: "nowrap", ...(TIGHT.has(c.key) ? tightPad : {}) }}>{c.label}</th>)}
+              {cols.map((c) => c.key === "accueil" ? (
+                <th key={c.key} style={{ ...tightPad, lineHeight: 1.15, verticalAlign: "bottom" }} title={`Accueil des nouveaux : ${accueils.map((a) => a.libelle).join(", ")}`}>
+                  <div style={{ textAlign: "center", fontSize: 9, fontWeight: 500 }}>Accueil</div>
+                  <div style={{ display: "flex", gap: 3, justifyContent: "center", textTransform: "none", letterSpacing: 0 }}>
+                    {accueils.map((a) => <span key={a.id} style={{ width: 30, fontSize: 9, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.libelle}</span>)}
+                  </div>
+                </th>
+              ) : <th key={c.key} style={{ whiteSpace: "nowrap", ...(TIGHT.has(c.key) ? tightPad : {}) }}>{c.label}</th>)}
               {(canEdit || canRgpd) && <th />}
             </tr>
           </thead>
@@ -1083,11 +1164,12 @@ export default function PersonnelEditor({
                 agenceSet={agenceSet}
                 types={types}
                 actions={actions}
+                accueils={accueils}
                 nouveau={r.id === nouveauId}
               />
             ))}
             {filtered.length === 0 && (
-              <tr><td colSpan={(canEdit || canRgpd) ? COLS.length + 1 : COLS.length} className="muted" style={{ padding: 10 }}>Aucun résultat.</td></tr>
+              <tr><td colSpan={(canEdit || canRgpd) ? cols.length + 1 : cols.length} className="muted" style={{ padding: 10 }}>Aucun résultat.</td></tr>
             )}
           </tbody>
         </table>

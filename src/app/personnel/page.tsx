@@ -44,13 +44,15 @@ type Row = {
   tp_type: string | null;
   tp_config: TpConfig | null;
   poste_fixe_id: string | null;
+  // Accueils des nouveaux (0096) : accueil_id -> date du OK.
+  accueils: Record<string, string> | null;
 };
 type HMap = Record<string, { debut: string; fin: string }>;
 type TpConfig = { demi?: { mode: string; source: string; matin?: HMap; aprem?: HMap }; off?: Record<string, string[]>; horaires?: HMap };
 
 const COLS_PERSONNE =
   "id, matricule, nom, prenom, equipe_id, atelier_id, regroupement, sexe, numero_badge, date_livret_accueil, " +
-  "type_contrat, agence_interim, date_debut, date_fin, pointure, commentaire, statut, temps_partiel, tp_type, tp_config, poste_fixe_id";
+  "type_contrat, agence_interim, date_debut, date_fin, pointure, commentaire, statut, temps_partiel, tp_type, tp_config, poste_fixe_id, accueils";
 
 export default async function PersonnelPage({
   searchParams,
@@ -90,6 +92,7 @@ export default async function PersonnelPage({
     typesR,
     { data: agencesData },
     agenceCodesArr,
+    { data: accueilsData },
   ] = await Promise.all([
     supabase.from("equipe").select("id, nom, couleur, quart_fixe").order("nom").returns<Equipe[]>(),
     supabase.from("atelier").select("id, nom").eq("actif", true).order("ordre_affichage").order("nom").returns<Atelier[]>(),
@@ -117,6 +120,8 @@ export default async function PersonnelPage({
     // Codes de contrat pilotés par agence (0072) : conditionnent le champ Agence
     // (création) et le surlignage jaune ; source de la fiche « Incomplète » agence.
     getTypesAgenceC(),
+    // Accueils des nouveaux (0096, Param. RH) : une pastille par accueil actif.
+    supabase.from("accueil").select("id, libelle").eq("actif", true).order("ordre").order("libelle").returns<{ id: string; libelle: string }[]>(),
   ]);
   const agenceCodesSet = new Set(agenceCodesArr);
   const agences = (agencesData ?? []).map((a) => a.nom);
@@ -216,6 +221,7 @@ export default async function PersonnelPage({
           types={types}
           agences={agences}
           agenceCodes={agenceCodesArr}
+          accueils={accueilsData ?? []}
         />
       </div>
     </>

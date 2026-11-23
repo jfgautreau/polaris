@@ -12,7 +12,7 @@ import { syncPersonneFromPeriodes, syncPersonneTP } from "@/lib/personne-reflets
 
 // POST /api/personnel { op, ... }
 // Saisie inline du personnel. Ecriture admin (RLS personne).
-// Ops : create | update | refresh-statuts | hors-contrat-list | hors-contrat-retirer
+// Ops : create | update | accueil | refresh-statuts | hors-contrat-list | hors-contrat-retirer
 //       | periode-list | periode-create | periode-update | periode-delete
 //
 // NOTE cycle de vie (migrations 0049 + 0050) : `statut` n'est plus editable
@@ -255,6 +255,29 @@ export async function POST(req: NextRequest) {
       const { error } = await supabase.from("personne").update(patch).eq("id", id).eq("site_id", site_id);
       if (error) throw error;
       return NextResponse.json({ ok: true });
+    }
+
+    // Accueil des nouveaux (0096) : pose ou retire le « OK » d'un accueil.
+    // personne.accueils = { "<accueil_id>": "AAAA-MM-JJ" } (date du OK).
+    if (op === "accueil") {
+      const id = s(body.id);
+      const accueilId = s(body.accueil_id);
+      if (!id || !accueilId) return NextResponse.json({ error: "Requête invalide" }, { status: 400 });
+      const [accR, persR] = await Promise.all([
+        supabase.from("accueil").select("id").eq("id", accueilId).eq("site_id", site_id).maybeSingle(),
+        supabase.from("personne").select("accueils").eq("id", id).eq("site_id", site_id).maybeSingle<{ accueils: Record<string, string> | null }>(),
+      ]);
+      if (accR.error) throw accR.error;
+      if (persR.error) throw persR.error;
+      if (!accR.data) return NextResponse.json({ error: "Accueil inconnu sur ce site." }, { status: 400 });
+      if (!persR.data) return NextResponse.json({ error: "Personne introuvable." }, { status: 404 });
+      const accueils: Record<string, string> = { ...(persR.data.accueils ?? {}) };
+      const date = body.ok === true ? new Date().toISOString().slice(0, 10) : null;
+      if (date) accueils[accueilId] = date;
+      else delete accueils[accueilId];
+      const { error } = await supabase.from("personne").update({ accueils }).eq("id", id).eq("site_id", site_id);
+      if (error) throw error;
+      return NextResponse.json({ ok: true, accueils });
     }
 
     // Rafraichit le cache statut de toutes les personnes du site : appelable au

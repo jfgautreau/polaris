@@ -428,7 +428,10 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   contrat ou agence manquante ; **reflets du contrat** (`type_contrat`, agence, dates) recalculés
   par `src/lib/personne-reflets.ts` — toute écriture de `contrat_periode` hors de
   `/api/personnel` (fusion de doublons…) doit l'appeler (`statut` seul est un trigger, L62) ; engrenage unique (commentaire, poste fixe, RGPD) ;
-  recherche multi-colonnes ; filtres dans l'URL.
+  recherche multi-colonnes ; filtres dans l'URL. **Colonne Accueil** (0096, 2026-11-23) : une
+  pastille par accueil actif de Param. RH (table `accueil`, libellés libres, aucun lien avec les
+  services), entre « ⚠ 18m » et « Point. » ; OK = `personne.accueils[accueil_id] = date`, op `accueil`
+  de `/api/personnel` ; absente si le site n'a aucun accueil (La Vraie Croix).
 - **Matrice** (`src/app/matrice/`) : charge tout l'effectif, `displayedIds` = sous-ensemble
   par défaut, la recherche balaie tout ; colonnes bornées au service. Cible qui suit
   l'actuel si elle y collait, sinon `cible ≥ actuel`. Pastille « sans compétence » (aucun
@@ -516,7 +519,7 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   régimes, déclencheurs (quarts / postes / habilitations / motifs), catalogue, alertes —
   **séparé de Param. RH**, ce sont deux métiers.
 - **Param. RH** (`/admin/motifs`, droit `motifs`) : motifs (code GT, planifié ou non, affiché sur le « PDF pour Affich. »),
-  agences, nom du fichier Excel intérim (`parametre_rh`, 0093), types de contrat (`avec_agence`), fenêtre d'affichage TV. L'import des absences du logiciel RH a été **retiré**
+  agences, accueils des nouveaux (0096), nom du fichier Excel intérim (`parametre_rh`, 0093), types de contrat (`avec_agence`), fenêtre d'affichage TV. L'import des absences du logiciel RH a été **retiré**
   le 2026-11-05 (écran, route, règles ; la table `import_absence_personne` reste en base, inutilisée).
 - **Journal** (`src/app/journal/`, droit `journal`, règles pures `src/lib/journal.ts`) : lu en
   service_role borné au site (la matrice décide, pas la RLS d'audit_log à rôles en dur) ;

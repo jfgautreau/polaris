@@ -7,6 +7,7 @@ import ActifCheckbox from "@/components/ActifCheckbox";
 import {
   createMotif, updateMotif, toggleMotif, toggleNonPlanifie, toggleVisibleOperateurs,
   createAgence, updateAgence, toggleAgence,
+  createAccueil, updateAccueil, toggleAccueil,
   createTypeContrat, updateTypeContrat, toggleTypeContrat, toggleTypeContratAgence,
 } from "./actions";
 import AjoutModal from "./AjoutModal";
@@ -19,6 +20,7 @@ import PastillesCouleur from "@/components/PastillesCouleur";
 
 type Motif = { id: string; libelle: string; code_court: string; couleur: string; actif: boolean; non_planifie: boolean; code_gt: string | null; visible_operateurs: boolean };
 type Agence = { id: string; nom: string; actif: boolean };
+type Accueil = { id: string; libelle: string; ordre: number; actif: boolean };
 type TypeContrat = { code: string; libelle: string; actif: boolean; ordre: number; avec_agence: boolean };
 type FenetreAffichage = { mode?: "relatif" | "absolu"; jours_avant: number; jours_apres: number; nb_semaines?: number };
 
@@ -40,7 +42,7 @@ export default async function MotifsPage({
 
   const sp = await searchParams;
   const supabase = await getServerClient();
-  const [motifsR, agencesR, typesR, fenR, paramRhR, site] = await Promise.all([
+  const [motifsR, agencesR, typesR, fenR, paramRhR, site, accueilsR] = await Promise.all([
     supabase.from("motif_absence").select("id, libelle, code_court, couleur, actif, non_planifie, code_gt, visible_operateurs").order("libelle").returns<Motif[]>(),
     supabase.from("agence_interim").select("id, nom, actif").order("nom").returns<Agence[]>(),
     supabase.from("type_contrat").select("code, libelle, actif, ordre, avec_agence").order("ordre").returns<TypeContrat[]>(),
@@ -48,7 +50,11 @@ export default async function MotifsPage({
     // Réglages RH du site (0093, RLS : ligne du site courant).
     supabase.from("parametre_rh").select("interim_nom_fichier").maybeSingle<{ interim_nom_fichier: string | null }>(),
     getCurrentSite(),
+    // Accueils des nouveaux (0096, RLS : lignes du site courant).
+    supabase.from("accueil").select("id, libelle, ordre, actif").order("ordre").order("libelle").returns<Accueil[]>(),
   ]);
+  const accueils = accueilsR.data ?? [];
+  const accueilsIndispo = !!accueilsR.error;
   // Replis en cascade : code_gt (0066) puis non_planifie (0060) peuvent manquer
   // tant que la migration correspondante n'est pas jouée.
   let motifs = motifsR.data ?? [];
@@ -278,6 +284,86 @@ export default async function MotifsPage({
                     )
                   )}
                   {agences.length === 0 && (<tr><td colSpan={3} className="muted">Aucune agence.</td></tr>)}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+
+        {/* ---------------- Accueils des nouveaux (0096) ---------------- */}
+        <h2 style={{ marginTop: 32, marginBottom: 4 }}>Accueils des nouveaux</h2>
+        <p className="muted" style={{ marginBottom: 16 }}>
+          Chaque accueil actif devient une pastille de la colonne <strong>Accueil</strong> du
+          Personnel, dans l&apos;ordre du N°, pour noter « OK » quand la personne l&apos;a fait.
+          Libellé court (20 caractères au plus). Désactiver masque la pastille sans effacer les
+          OK déjà posés.
+        </p>
+
+        {accueilsIndispo ? (
+          <div className="card" style={{ marginBottom: 24 }}>
+            <p className="muted" style={{ margin: 0 }}>
+              La table des accueils n&apos;existe pas encore : exécutez la migration{" "}
+              <strong>0096_accueil_nouveaux.sql</strong> dans le SQL Editor.
+            </p>
+          </div>
+        ) : (
+          <>
+            <AjoutModal libelle="Ajouter un accueil" titre="Ajouter un accueil">
+              <form action={createAccueil} autoComplete="off" className="inline-form">
+                <div className="field">
+                  <span>N°</span>
+                  <input name="ordre" type="number" min={0} defaultValue={accueils.length + 1} style={{ width: 70 }} />
+                </div>
+                <div className="field">
+                  <span>Libellé</span>
+                  <input name="libelle" placeholder="Ex. MP" maxLength={20} required />
+                </div>
+                <button type="submit" className="btn-sm">Ajouter</button>
+              </form>
+            </AjoutModal>
+
+            <div className="card" style={{ marginBottom: 24 }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th style={{ width: 70 }}>N°</th>
+                    <th>Accueil</th>
+                    <th style={{ width: 90 }}></th>
+                    <th style={{ width: 60, textAlign: "center" }}>Actif</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {accueils.map((a) =>
+                    sp.edit === `accueil:${a.id}` ? (
+                      <tr key={a.id} style={{ background: "#fefce8" }}>
+                        <td>
+                          <form id={`ed-accueil-${a.id}`} action={updateAccueil} autoComplete="off" />
+                          <input form={`ed-accueil-${a.id}`} type="hidden" name="id" value={a.id} />
+                          <input form={`ed-accueil-${a.id}`} name="ordre" type="number" min={0} defaultValue={a.ordre} style={{ width: 60 }} />
+                        </td>
+                        <td>
+                          <input form={`ed-accueil-${a.id}`} name="libelle" defaultValue={a.libelle} maxLength={20} autoFocus required style={{ width: "100%" }} />
+                        </td>
+                        <td style={{ whiteSpace: "nowrap", textAlign: "center" }}>
+                          <button form={`ed-accueil-${a.id}`} type="submit" title="Valider" className="iconbtn ok"><CheckIcon /></button>
+                          <Link href="/admin/motifs" className="iconbtn ghost" scroll={false} title="Annuler">✕</Link>
+                        </td>
+                        <td style={{ textAlign: "center" }}><ActifCheckbox id={a.id} actif={a.actif} action={toggleAccueil} /></td>
+                      </tr>
+                    ) : (
+                      <tr key={a.id} style={{ opacity: a.actif ? 1 : 0.55 }}>
+                        <td>{a.ordre}</td>
+                        <td>{a.libelle}</td>
+                        <td style={{ whiteSpace: "nowrap", textAlign: "center" }}>
+                          <Link href={`/admin/motifs?edit=accueil:${a.id}`} className="iconbtn edit" scroll={false} prefetch={false} title="Modifier"><EditIcon /></Link>
+                        </td>
+                        <td style={{ textAlign: "center" }}>
+                          <ActifCheckbox id={a.id} actif={a.actif} action={toggleAccueil} />
+                        </td>
+                      </tr>
+                    )
+                  )}
+                  {accueils.length === 0 && (<tr><td colSpan={4} className="muted">Aucun accueil : pas de colonne Accueil au Personnel.</td></tr>)}
                 </tbody>
               </table>
             </div>
