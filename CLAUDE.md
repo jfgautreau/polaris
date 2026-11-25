@@ -502,7 +502,7 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   (vivier interne, couplage sans double compte `affecterVivier`) / à recruter. **Dérivations** (décision
   utilisateur) : titulaire = `personne.poste_fixe_id`, niveau = matrice sur ce poste (référent = niveau max,
   « en cours de formation » = sous `niveau_min_requis`), vivier = personnes SANS poste fixe au niveau requis ;
-  intérim (types `avec_agence`) exclu ; toutes catégories ; postes `zone_attente` exclus. Absentéisme subi =
+  intérim (types `avec_agence`) exclu ; toutes catégories ; **PTNR** (`remplacable=false`) : coefficient 1, besoin réel = théorique (2026-11-25) ; postes `zone_attente` exclus. Absentéisme subi =
   absences non planifiées des 12 derniers mois par service (÷ effectif ÷ 5 = semaines). **Pas de date de
   naissance** : la retraite se saisit en départ prévu (`gpec_depart`, nominatif ou sans nom sur un poste,
   AUCUNE lecture sous RLS — service_role borné au site). Ligne du Référentiel non rattachée = organisation

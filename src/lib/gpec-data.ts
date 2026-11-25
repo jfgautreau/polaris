@@ -70,6 +70,8 @@ export type LignePoste = PosteCalcul & {
   atelierId: string;
   atelierNom: string;
   categorie: string;
+  ptnr: boolean; // poste non remplaçable : besoin réel = besoin théorique (pas de coefficient d’absence)
+  parQuart: string; // détail du besoin théorique, ex. « Matin 2 · Après-midi 2 »
   capaNom: string | null; // null = ligne non rattachée (organisation actuelle)
   palier: Palier | null;
   vivier: number; // personnes sans poste fixe qui tiennent le poste
@@ -270,12 +272,18 @@ export async function chargerGpec(supabase: SupabaseClient, siteId: string, anne
         const e = etatQuart(pq, p.id, q.code, p.effectif_requis ?? 0);
         if (e.tourne) effectifParQuart[q.code] = e.effectif;
       }
+      const ptnr = p.remplacable === false;
+      const parQuart = quarts
+        .filter((q) => q.code in effectifParQuart && (!ouverts || ouverts.has(q.code)))
+        .map((q) => `${q.libelle} ${effectifParQuart[q.code]}`)
+        .join(" · ");
       const min = Math.max(1, p.niveau_min_requis ?? 0);
       const tit = titulaires.get(p.id) ?? [];
       const calc = calculerPoste({
         id: p.id,
         besoinTheorique: besoinTheorique(effectifParQuart, ouverts),
-        coef,
+        // PTNR : personne ne le remplace pendant ses absences, on ne « coefficiente » donc pas.
+        coef: ptnr ? 1 : coef,
         niveauMin: min,
         nbNiveaux,
         titulaires: tit.map((t) => ({ id: t.id, niveau: niveau.get(`${t.id}:${p.id}`) ?? 0 })),
@@ -290,7 +298,7 @@ export async function chargerGpec(supabase: SupabaseClient, siteId: string, anne
       bruts.push({
         min,
         candidats,
-        ligne: { ...calc, nom: p.nom, ligne: l.nom, atelierId: l.atelier_id, atelierNom: atelierNom.get(l.atelier_id) ?? "Sans service", categorie: p.categorie ?? "operateur", capaNom: capa?.nom ?? null, palier, vivier: candidats.length, enCible, aFormer: 0, aRecruter: 0 },
+        ligne: { ...calc, nom: p.nom, ligne: l.nom, atelierId: l.atelier_id, atelierNom: atelierNom.get(l.atelier_id) ?? "Sans service", categorie: p.categorie ?? "operateur", ptnr, parQuart, capaNom: capa?.nom ?? null, palier, vivier: candidats.length, enCible, aFormer: 0, aRecruter: 0 },
       });
     }
   }

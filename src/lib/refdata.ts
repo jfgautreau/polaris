@@ -354,6 +354,7 @@ export type PosteRef = {
   categorie: string | null;
   imprimable: boolean;
   zone_attente: boolean;
+  remplacable: boolean; // false = PTNR
 };
 // TOUTES les lignes du site (actives ou non) avec TOUS leurs postes : à
 // l'appelant de filtrer (service, actif), comme le faisaient ses requêtes.
@@ -371,7 +372,7 @@ const getLignesPostesBySite = unstable_cache(
     const { data, error } = await getAdminClient()
       .from("ligne")
       .select(
-        "id, nom, actif, ordre_affichage, atelier_id, couleur, poste(id, nom, nom_court, actif, effectif_requis, niveau_min_requis, ordre_affichage, numero_rotation, categorie, imprimable, zone_attente)"
+        "id, nom, actif, ordre_affichage, atelier_id, couleur, poste(id, nom, nom_court, actif, effectif_requis, niveau_min_requis, ordre_affichage, numero_rotation, categorie, imprimable, zone_attente, remplacable)"
       )
       .eq("site_id", site)
       .order("nom")

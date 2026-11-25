@@ -119,8 +119,8 @@ export default async function ProjectionEffectifsReport({ searchParams }: { sear
     {
       nom: "Postes",
       titres: titres("détail par poste"),
-      colonnes: [{ titre: "Service", largeur: 18 }, { titre: "Ligne", largeur: 18 }, { titre: "Poste", largeur: 28 }, { titre: "Catégorie", largeur: 14 }, { titre: "Ligne capacitaire", largeur: 16 }, { titre: "Palier", largeur: 8 }, ...colsBilan.filter((c) => c.titre !== "Couverture (%)"), { titre: "Référents", largeur: 10 }, { titre: "Vivier interne", largeur: 12 }, { titre: "Cible posée (matrice)", largeur: 14 }],
-      lignes: postes.map((p): CelluleXlsx[] => [p.atelierNom, p.ligne, p.nom, cat(p.categorie), p.capaNom ?? "Organisation actuelle", p.palier, p.besoinTheorique, Math.round(p.besoinReel * 10) / 10, p.departs, Math.round(p.besoinTotal * 10) / 10, p.disponibilite, p.enFormation, p.deficit, p.aFormer, p.aRecruter, p.referents, p.vivier, p.enCible]),
+      colonnes: [{ titre: "Service", largeur: 18 }, { titre: "Ligne", largeur: 18 }, { titre: "Poste", largeur: 28 }, { titre: "Catégorie", largeur: 14 }, { titre: "PTNR", largeur: 8 }, { titre: "Effectif par quart", largeur: 30 }, { titre: "Ligne capacitaire", largeur: 16 }, { titre: "Palier", largeur: 8 }, ...colsBilan.filter((c) => c.titre !== "Couverture (%)"), { titre: "Référents", largeur: 10 }, { titre: "Vivier interne", largeur: 12 }, { titre: "Cible posée (matrice)", largeur: 14 }],
+      lignes: postes.map((p): CelluleXlsx[] => [p.atelierNom, p.ligne, p.nom, cat(p.categorie), p.ptnr ? "PTNR" : "", p.parQuart, p.capaNom ?? "Organisation actuelle", p.palier, p.besoinTheorique, Math.round(p.besoinReel * 10) / 10, p.departs, Math.round(p.besoinTotal * 10) / 10, p.disponibilite, p.enFormation, p.deficit, p.aFormer, p.aRecruter, p.referents, p.vivier, p.enCible]),
     },
     {
       nom: "Recrutements",
@@ -152,8 +152,9 @@ export default async function ProjectionEffectifsReport({ searchParams }: { sear
     <tr key={p.id}>
       <td className="muted">{p.atelierNom}</td>
       <td className="muted">{p.ligne}</td>
-      <td style={{ fontWeight: 600 }}>{p.nom}</td>
+      <td style={{ fontWeight: 600 }}>{p.nom}{p.ptnr ? <span className="rbadge warn" style={{ marginLeft: 6 }} title="Poste non remplaçable : pas de coefficient d’absence, besoin réel = besoin théorique">PTNR</span> : null}</td>
       <td className="muted">{cat(p.categorie)}</td>
+      <td className="muted" style={{ fontSize: 12 }}>{p.parQuart || "—"}</td>
       <td style={centre}>{p.palier ? <span style={{ padding: "1px 8px", borderRadius: 999, background: COULEUR_PALIER[p.palier] }} title={p.capaNom ?? ""}>{p.palier}</span> : <span className="muted" title="Ligne non rattachée à une ligne capacitaire : organisation actuelle du Référentiel">—</span>}</td>
       <td style={droite}>{p.besoinTheorique}</td>
       <td style={droite}>{n1(p.besoinReel)}</td>
@@ -285,7 +286,8 @@ export default async function ProjectionEffectifsReport({ searchParams }: { sear
             </table>
           )}
           <p className="muted" style={{ marginTop: 8, fontSize: 12 }}>
-            <strong>Besoin réel</strong> = postes × 52 ÷ (52 − semaines d&apos;absence programmée et subie). <strong>Disponibilité</strong> = titulaires (poste fixe), hors intérim.
+            <strong>Besoin théorique</strong> = somme, sur les postes du service et de la catégorie, de l&apos;effectif du Référentiel sur chaque quart ouvert (détail dans le tableau par poste).
+            {" "}<strong>Besoin réel</strong> = postes × 52 ÷ (52 − semaines d&apos;absence programmée et subie) ; un poste <strong>PTNR</strong> n&apos;est pas remplacé pendant les absences, son besoin réel reste égal au théorique. <strong>Disponibilité</strong> = titulaires (poste fixe), hors intérim.
             {" "}<strong>Postes en déficit</strong> = manque arrondi à l&apos;entier supérieur sur chaque poste : un excédent ici ne compense pas un manque là, la couverture peut donc dépasser 100 % avec des postes en déficit.
             {" "}<strong>À former</strong> = part du déficit couverte par le vivier interne (personnes sans poste fixe qui tiennent le poste, chacune comptée une seule fois) ; <strong>à recruter</strong> = le reste.
           </p>
@@ -405,7 +407,7 @@ export default async function ProjectionEffectifsReport({ searchParams }: { sear
           <table>
             <thead>
               <tr>
-                <th>Service</th><th>Ligne</th><th>Poste</th><th>Catégorie</th><th style={centre}>Palier</th>
+                <th>Service</th><th>Ligne</th><th>Poste</th><th>Catégorie</th><th title="Effectif du Référentiel sur chaque quart ouvert : leur somme est le besoin théorique">Effectif par quart</th><th style={centre}>Palier</th>
                 <th style={droite}>Besoin théorique</th><th style={droite}>Besoin réel</th><th style={droite}>Départs</th><th style={droite}>Besoin total</th>
                 <th style={droite}>Disponibilité</th><th style={droite}>Déficit</th><th style={droite}>À former</th><th style={droite}>À recruter</th>
                 <th style={droite}>Référents</th><th style={droite} title="Non-titulaires dont la cible de la Matrice vise ce poste">Cible posée</th>
