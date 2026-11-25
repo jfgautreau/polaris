@@ -44,6 +44,10 @@ export const MODULES: { key: string; label: string; href: string; admin: boolean
   // Mise en page des PDF du Placement (0094) : droit dédié, accordé à personne
   // par défaut (l’admin l’a par la matrice).
   { key: "placement_pdf", label: "Mise en page PDF", href: "/admin/mise-en-page-pdf", admin: true },
+  // GPEC (0097) : hypothèses de la projection des effectifs (volumes, capacités,
+  // départs prévus — nominatifs) ET lecture du rapport « Projection des
+  // effectifs » de Bilans. Droit dédié, accordé à personne par défaut.
+  { key: "gpec", label: "Param. GPEC", href: "/admin/gpec", admin: true },
   { key: "utilisateurs", label: "Utilisateurs", href: "/admin/users", admin: true },
   { key: "rgpd", label: "RGPD", href: "/admin/rgpd", admin: true },
 ];

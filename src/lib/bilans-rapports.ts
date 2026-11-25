@@ -19,7 +19,7 @@ export type RapportBilan = {
   ic: string;
   t: string;
   d: string;
-  garde: "bilans" | "matrice" | "habilitations";
+  garde: "bilans" | "matrice" | "habilitations" | "gpec";
 };
 
 export const RAPPORTS_BILAN: RapportBilan[] = [
@@ -32,6 +32,7 @@ export const RAPPORTS_BILAN: RapportBilan[] = [
   { key: "bilan:recyclages", slug: "recyclages", href: "/bilans/recyclages", ic: "🔁", t: "Recyclages à prévoir", d: "Par formation, les personnes actives dont l'habilitation expire (ou a expiré) : dernier passage, date d'expiration, jours restants. Réglementaires ou internes, horizon au choix, fins de contrat signalées — extraction Excel.", garde: "habilitations" },
   { key: "bilan:campagne-formation", slug: "campagne-formation", href: "/bilans/campagne-formation", ic: "🎓", t: "Campagne de formation", d: "Pour une formation et une date de session : les personnes formées (à recycler, à recycler de préférence, valides) et le vivier des non formées — déjà formées autrefois, absentes ou en temps partiel ce jour-là. Intérimaires au choix — extraction Excel.", garde: "habilitations" },
   { key: "bilan:feuille-route", slug: "feuille-route", href: "/bilans/feuille-route", ic: "🗺️", t: "Projection de compétences — feuille de route", d: "Sur 24 semaines : par service et catégorie, nombre de personnes au niveau MAX (Niv 1..N) et Total opérationnel titulaires / intérim (tiennent ≥ 1 poste : niveau ≥ min). Besoin actualisé par l'ordonnancement (semaine initialisée), Total titulaires vert/rouge selon le besoin. Absences pleine semaine, expirations d'habilitation et fins de contrat déduites. Navigation temporelle ; bascule habilitations strictes / ignorées.", garde: "matrice" },
+  { key: "bilan:projection-effectifs", slug: "projection-effectifs", href: "/bilans/projection-effectifs", ic: "🔭", t: "Projection des effectifs (GPEC)", d: "Pour l'année à venir : volumes → saturation des lignes → besoin en postes → besoin réel absences comprises, comparé aux titulaires. Postes en déficit, à former depuis le vivier interne, à recruter, départs prévus — extraction Excel.", garde: "gpec" },
 ];
 
 export const CLES_RAPPORTS_BILAN: string[] = RAPPORTS_BILAN.map((r) => r.key);

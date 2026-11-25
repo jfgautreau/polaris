@@ -3,7 +3,7 @@ import { getServerClient } from "@/lib/supabase-server";
 import AppHeader from "@/components/AppHeader";
 import PageTitle from "@/components/PageTitle";
 import PrintButton from "@/components/PrintButton";
-import { requireModule } from "@/lib/permissions";
+import { requireModule, canRead } from "@/lib/permissions";
 import { getModulesMasquesC } from "@/lib/site-modules";
 import { getSeuilCompetentC, getAteliersC, getQuartsC } from "@/lib/refdata";
 import { RAPPORTS_BILAN } from "@/lib/bilans-rapports";
@@ -31,7 +31,7 @@ export default async function CockpitPage({
 }: {
   searchParams: Promise<{ atelier?: string; quart?: string }>;
 }) {
-  const { profile } = await requireModule("bilans", "read");
+  const { profile, perms } = await requireModule("bilans", "read");
 
   // Filtres REPRIS de l'écran d'où l'on vient (report contextuel du menu, cf.
   // MainNav) : service + quart, transmis aux rapports détaillés. Le Cockpit
@@ -127,7 +127,9 @@ export default async function CockpitPage({
   // Rapports masqués pour ce site (piloté depuis /platform, même mécanisme que
   // les menus). Une carte masquée disparaît du Cockpit ; sa page redirige.
   const masques = await getModulesMasquesC();
-  const categories = RAPPORTS_BILAN.filter((r) => !masques.has(r.key)).map((r) => ({
+  // Un rapport à droit dédié (GPEC) n’apparaît qu’à qui peut l’ouvrir : les autres
+  // gardes (bilans, matrice, habilitations) gardent leur comportement historique.
+  const categories = RAPPORTS_BILAN.filter((r) => !masques.has(r.key) && (r.garde !== "gpec" || canRead(perms, r.garde))).map((r) => ({
     href: r.href + suffixe,
     ic: r.ic,
     t: r.t,

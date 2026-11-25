@@ -40,6 +40,8 @@ const TABLES_SITE_SCOPEES = new Set<string>([
   "contrat_periode", "agence_interim", "parametre_affichage",
   // 0049 / 0052
   "tp_periode",
+  // 0097 — GPEC
+  "gpec_hypothese", "gpec_ligne_capa", "gpec_depart",
   // 0053
   "motif_absence", "type_contrat", "role_custom", "role_permission",
   "competence", "competence_niveau_libelle", "quart",

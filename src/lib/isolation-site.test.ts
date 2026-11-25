@@ -46,6 +46,8 @@ const TABLES_SITE_SCOPEES = new Set<string>([
   // Visites médicales (0076) : lues en service_role seulement depuis 0092.
   "visite", "visite_anci", "personne_suivi", "contrainte_affectation",
   "visite_parametre", "visite_regime", "visite_type", "visite_anci_usage",
+  // GPEC (0097) : hypothèses, lignes capacitaires, départs prévus.
+  "gpec_hypothese", "gpec_ligne_capa", "gpec_depart",
 ]);
 
 // Accès cross-site LÉGITIMES (identique à admin-client.test.ts).

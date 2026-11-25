@@ -33,6 +33,7 @@ L'historique des décisions est dans git et dans l'en-tête de chaque migration.
    Pour de la *donnée* seulement, un script Node lisant `SUPABASE_SERVICE_ROLE_KEY` de
    `.env.local` est acceptable (simulation d'abord, écriture après accord).
    Projet Supabase : ref `stcxlsmmnplxpirrnefm`, eu-west-3.
+   **Migration `0097` (`gpec`, 2026-11-25) écrite, PAS ENCORE appliquée** (trois tables nouvelles `gpec_*`, aucune table existante modifiée).
    **Dernière migration appliquée : `0096`** (`accueil_nouveaux`, 2026-11-23) ; avant elle `0095`
    (`site_nom_application`, 2026-11-10) et `0094`
    (`placement_mise_en_page`, 2026-11-05) et `0093`
@@ -490,6 +491,24 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   l'horizon (expirées comprises), type = `competence.categorie` (réglementaire / interne / non
   classée) ; extraction Excel par `src/lib/xlsx.ts` (générateur .xlsx maison, sans dépendance —
   réutiliser pour toute autre extraction).
+- **GPEC — projection des effectifs** (2026-11-25, 0097, droit dédié `gpec` accordé à personne par défaut ;
+  règles pures `src/lib/gpec.ts`, lectures `src/lib/gpec-data.ts`) : reprise de l’outil Excel GPEC sans rien
+  ressaisir. Deux écrans : **Param. GPEC** (`/admin/gpec`, route `/api/gpec`) = hypothèses de l’année
+  (jours ouvrés, congés, modulation, seuils des paliers, lignes capacitaires = volume annuel ou 12 mois +
+  capacité/jour + lignes du Référentiel rattachées + quarts ouverts par palier, absentéisme subi forcé, motifs
+  exclus, départs prévus) et le rapport **Projection des effectifs** (`/bilans/projection-effectifs`, garde
+  `gpec`, carte du Cockpit masquée sans ce droit). Chaîne : volume ÷ (capacité × jours) = saturation → palier →
+  quarts ouverts → besoin théorique = effectif du Référentiel (`poste_quart`) sur ces quarts → besoin réel =
+  × 52 ÷ (52 − semaines d’absence) → + départs → déficit arrondi au supérieur POSTE PAR POSTE → à former
+  (vivier interne, couplage sans double compte `affecterVivier`) / à recruter. **Dérivations** (décision
+  utilisateur) : titulaire = `personne.poste_fixe_id`, niveau = matrice sur ce poste (référent = niveau max,
+  « en cours de formation » = sous `niveau_min_requis`), vivier = personnes SANS poste fixe au niveau requis ;
+  intérim (types `avec_agence`) exclu ; toutes catégories ; postes `zone_attente` exclus. Absentéisme subi =
+  absences non planifiées des 12 derniers mois par service (÷ effectif ÷ 5 = semaines). **Pas de date de
+  naissance** : la retraite se saisit en départ prévu (`gpec_depart`, nominatif ou sans nom sur un poste,
+  AUCUNE lecture sous RLS — service_role borné au site). Ligne du Référentiel non rattachée = organisation
+  actuelle. Le besoin suit le palier ANNUEL ; les mois sont affichés pour information. Habilitations exigées
+  non vérifiées (V1). Pas de plan d’action suivi : listes simples (recrutements, à former, départs) + Excel.
 - **Affichage TV** (`src/app/affichage/`, droit `affichage`, compte requis depuis le 2026-11-03 :
   pages et server action `versionDonnees` gardées, site = celui du compte) : **seules** les personnes
   affectées au moins une fois sur un poste du service dans la fenêtre, quel que soit leur service à la fiche
@@ -556,7 +575,7 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   (recalcul des échéances), `redirection` (`cheminInterne`), `service-couleurs` (pastels de service),
   `nom-fichier-interim` (nom de l'Excel intérim), `syntheses-export` (PDF / Excel des Synthèses, photo et
   comparaison des extractions), `habilitations-familles` (+ `-server`, sous-droits par famille),
-  `mise-en-page-pdf` (grille, validation, cases des postes).
+  `mise-en-page-pdf` (grille, validation, cases des postes), `gpec` (+ `-data`, projection des effectifs).
 - `src/components/` : `AppHeader`, `MainNav`, `GardeCacheNavigation`, `icons`,
   `ModaleDeplacable`, `InfoBulle`, `usePersonGrid`, `persongrid.module.css`,
   `PastillesCouleur`, composants partagés listés plus haut.
