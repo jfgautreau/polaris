@@ -5,8 +5,7 @@ import { grilleMois, moisSuivant, moisPrecedent, libelleMois, JOURS_COURTS, isoA
 import s from "./placement.module.css";
 
 // Navigation par jour du Placement :
-//  - les flèches ◀ / ▶ SAUTENT les jours sans ligne ouverte (elles vont au jour
-//    ouvert précédent / suivant ; à défaut, ±1 jour pour ne jamais bloquer) ;
+//  - les flèches ‹ / › de part et d'autre du jour vont au jour −1 / +1 ;
 //  - le calendrier déroulant GRISE (désactive) les jours sans ligne ouverte.
 // « Jour ouvert » = jour fourni par le serveur dans `openDays` (au moins une
 // ligne de l'atelier ouverte sur le quart courant), calculé sur une fenêtre
@@ -79,12 +78,29 @@ export default function JourNav({
     setOpen(false);
   };
 
+  // Jour −1 / +1 (flèches remises le 2026-11-27, à la demande) : strictement le
+  // jour d'avant / d'après, borné à la fenêtre du calendrier. Un jour sans
+  // production s'ouvre quand même, avec son message côté grille.
+  const veille = addDaysIso(jour, -1);
+  const lendemain = addDaysIso(jour, 1);
+  const pasAvant = veille < winStart;
+  const pasApres = lendemain > winEnd;
+  const aller = (iso: string) => {
+    setOpen(false);
+    onPick(iso);
+  };
+
   return (
     <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 4 }}>
-      {/* Flèches ◀ ▶ retirées (2026-09-09) — le calendrier suffit à naviguer.
-          Bouton « Aujourd'hui » déplacé sous le calendrier (2026-09-09). */}
+      {/* Bouton « Aujourd'hui » sous le calendrier (2026-09-09). */}
+      <button type="button" className={s.navbtn} onClick={() => aller(veille)} disabled={pasAvant} aria-label="Jour précédent" title="Jour précédent" style={flecheStyle(pasAvant)}>
+        ‹
+      </button>
       <button type="button" className={s.navbtn} onClick={ouvrir} title="Choisir un jour" style={{ minWidth: 132, fontWeight: 600 }}>
         {fmtCourt(jour)}
+      </button>
+      <button type="button" className={s.navbtn} onClick={() => aller(lendemain)} disabled={pasApres} aria-label="Jour suivant" title="Jour suivant" style={flecheStyle(pasApres)}>
+        ›
       </button>
 
       {open && (
@@ -167,6 +183,16 @@ export default function JourNav({
     </div>
   );
 }
+
+const flecheStyle = (dis: boolean): React.CSSProperties => ({
+  width: 28,
+  padding: "4px 0",
+  fontSize: 16,
+  fontWeight: 700,
+  lineHeight: 1.15,
+  color: dis ? "#cbd5e1" : "#334155",
+  cursor: dis ? "default" : "pointer",
+});
 
 const mBtn = (dis: boolean): React.CSSProperties => ({
   width: 28,
