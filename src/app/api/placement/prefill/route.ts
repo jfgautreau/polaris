@@ -43,10 +43,11 @@ import { isoDate, addDays } from "@/lib/week";
 // MODE « JOUR » (2026-11-27, bouton du Placement) : { jour, atelierId, quart }.
 // Seuls les titulaires d'un poste fixe de CE service dont le quart, ce jour-là,
 // est CE quart sont placés, sur ce seul jour (lundi→vendredi comme la semaine).
-// Le temps partiel n'est PAS matérialisé et le marqueur `tp_charge` n'est pas
-// posé (il vaut pour la semaine entière : le poser pour un jour éteindrait le TP
-// calculé des autres jours) ; un jour de TP reste respecté — lignes réelles si la
-// semaine est déjà chargée, sinon calcul — et le titulaire n'y est pas placé.
+// Temps partiel : le marqueur `tp_charge` vaut pour la SEMAINE entière (le poser
+// en n'écrivant qu'un jour éteindrait le TP calculé des autres jours). Le premier
+// jour pré-affecté d'une semaine pas encore chargée pose donc les TP de TOUTE la
+// semaine, pour tout le site, et le marqueur ; ensuite (semaine déjà chargée) le
+// TP n'est plus touché : les lignes réelles font foi.
 //
 // Les deux passes insèrent en `ignoreDuplicates` (onConflict personne,jour) :
 // jamais d'écrasement. Faire le TP D'ABORD garantit qu'un jour de TP d'une
@@ -93,12 +94,13 @@ async function traiterPOST(req: NextRequest) {
   // Tous les jours (lundi→dimanche) de chaque semaine, + jours ouvrés seuls pour
   // les postes fixes. Le TP peut tomber n'importe quel jour de la semaine.
   const semaines = mondays.map((m) => {
-    // Mode jour : la « semaine » se réduit au jour demandé.
-    const jours = weekDays(parseMonday(m)).filter((j) => !jourSeul || j.iso === jourSeul);
+    const jours = weekDays(parseMonday(m));
     return {
       monday: m,
       isosTous: jours.map((j) => j.iso),
-      isosOuvres: jours.filter((j) => dowMon(j.iso) <= 4).map((j) => j.iso),
+      // Mode jour : les postes fixes ne concernent que le jour demandé (le TP, lui,
+      // se pose sur la semaine entière).
+      isosOuvres: jours.filter((j) => dowMon(j.iso) <= 4 && (!jourSeul || j.iso === jourSeul)).map((j) => j.iso),
     };
   });
   const allIsos = [...new Set(semaines.flatMap((s) => s.isosTous))];
@@ -261,8 +263,8 @@ async function traiterPOST(req: NextRequest) {
   }
 
   // Mode jour : semaine déjà « chargée » ? Alors les TP réels (déjà dans `occ`)
-  // font foi et l'on ne recalcule rien ; sinon le TP calculé du jour bloque la
-  // case sans être écrit.
+  // font foi et l'on ne recalcule rien ; sinon c'est le premier jour initialisé de
+  // la semaine : ses TP sont posés en entier, comme au Planning.
   let semaineChargee = false;
   if (jourSeul) {
     const { data: tcD, error: tcErr } = await supabase
@@ -503,9 +505,7 @@ async function traiterPOST(req: NextRequest) {
   }
 
   // Insertions (jamais d'écrasement) : TP puis postes fixes.
-  // Mode jour : le TP calculé n'a servi qu'à bloquer la case, il n'est pas écrit.
-  const tpEcrits = jourSeul ? [] : tpRows;
-  const rows = [...tpEcrits, ...posteRows];
+  const rows = [...tpRows, ...posteRows];
   if (rows.length) {
     const { error } = await supabase
       .from("placement")
@@ -533,7 +533,8 @@ async function traiterPOST(req: NextRequest) {
 
   // Marqueur « TP chargés » de chaque semaine : coupe le calcul virtuel, ce qui
   // rend les TP déplaçables/supprimables sans qu'ils soient recréés.
-  const { error: mErr } = jourSeul
+  // Mode jour sur une semaine déjà chargée : le marqueur existe, on n'y touche pas.
+  const { error: mErr } = semaineChargee
     ? { error: null }
     : await supabase
     .from("tp_charge")
@@ -553,14 +554,14 @@ async function traiterPOST(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     crees: rows.length,
-    tp: tpEcrits.length,
+    tp: tpRows.length,
     fixe: posteRows.length,
     nonPlaces,
     numerotes,
     completes: majNumeros.reduce((n, m) => n + m.jours.length, 0),
     sansNumero,
     site: siteId,
-    marqueur: jourSeul ? "sans objet" : mErr ? `ignoré (${mErr.message})` : "posé",
+    marqueur: semaineChargee ? "déjà posé" : mErr ? `ignoré (${mErr.message})` : "posé",
   });
   } catch (e) {
     // Toute exception non prévue est renvoyée en clair : sans ça, le bouton

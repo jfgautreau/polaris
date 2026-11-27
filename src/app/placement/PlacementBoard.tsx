@@ -158,8 +158,8 @@ export default function PlacementBoard({
   const [saving, setSaving] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [msg, setMsg] = useState<string | null>(null);
   // « Pré-affectation » de la VUE affichée (2026-11-27) : ce jour, ce service, ce
-  // quart seulement — les titulaires d'un poste fixe y sont placés. La semaine
-  // entière (TP compris) se charge au Planning (cf. src/lib/prefill-semaine.ts).
+  // quart seulement — les titulaires d'un poste fixe y sont placés ; au premier
+  // jour initialisé d'une semaine, ses TP sont posés en entier (cf. src/lib/prefill-semaine.ts).
   const [prefillEnCours, setPrefillEnCours] = useState(false);
   // Comme la semaine du Planning : du lundi au vendredi.
   const jourOuvre = dowMon(jour) <= 4;
@@ -1038,7 +1038,7 @@ export default function PlacementBoard({
               className={s.navbtn}
               disabled={prefillEnCours || !jourOuvre}
               onClick={preAffecterLeJour}
-              title={jourOuvre ? `Placer sur leur poste fixe les titulaires de ${vueLabel} — ce jour, ce service et ce quart seulement, sans écraser ce qui est déjà saisi. La semaine entière (temps partiel compris) se charge au Planning.` : "La pré-affectation se fait du lundi au vendredi"}
+              title={jourOuvre ? `Placer sur leur poste fixe les titulaires de ${vueLabel} — ce jour, ce service et ce quart seulement, sans écraser ce qui est déjà saisi. Au premier jour initialisé d'une semaine, les temps partiels de toute la semaine sont posés aussi.` : "La pré-affectation se fait du lundi au vendredi"}
               style={{ display: "inline-flex", alignItems: "center", gap: 6, opacity: prefillEnCours || !jourOuvre ? 0.6 : 1 }}
             >
               <FillIcon size={15} /> {prefillEnCours ? "…" : "Pré-affectation du jour"}

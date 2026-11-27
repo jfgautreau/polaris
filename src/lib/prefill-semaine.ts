@@ -1,7 +1,8 @@
 // Pré-remplissage côté navigateur, autour de /api/placement/prefill :
 //  - Planning : « TP + pré-affectation » d'une SEMAINE (tout le site) ;
 //  - Placement : « Pré-affectation » du JOUR affiché, pour le service et le quart
-//    affichés seulement (2026-11-27) — sans matérialiser le temps partiel.
+//    affichés seulement (2026-11-27) ; au premier jour initialisé d'une semaine,
+//    les TP de toute la semaine sont posés aussi.
 // Mêmes messages (non placés, sans numéro) dans les deux cas.
 // Aucune de ces fonctions ne lève (le React Compiler renonce sur un try/finally
 // ou un throw dans un composant : le réseau reste ici, hors composant).
@@ -69,7 +70,9 @@ export async function chargerSemaine(monday: string, label: string): Promise<"er
 /** Question posée avant de pré-affecter le jour affiché au Placement. */
 export function confirmerPrefillJour(label: string): boolean {
   return window.confirm(
-    `Pré-affecter ${label} ?\n\nChaque personne à poste fixe de ce service, dont l'équipe est sur ce quart ce jour-là, est placée sur son poste (place numérotée : son dernier numéro s'il est libre).\n\nRien d'autre n'est touché : ni les autres jours, ni les autres services, ni les autres quarts. Les cases déjà remplies (absence, temps partiel, autre poste) ne sont jamais écrasées.`,
+    `Pré-affecter ${label} ?\n\nChaque personne à poste fixe de ce service, dont l'équipe est sur ce quart ce jour-là, est placée sur son poste (place numérotée : son dernier numéro s'il est libre).\n\nSi la semaine n'a pas encore été chargée, les temps partiels de toute la semaine sont posés au passage (déplaçables ensuite).
+
+Aucun autre poste fixe n'est placé : ni les autres jours, ni les autres services, ni les autres quarts. Les cases déjà remplies (absence, temps partiel, autre poste) ne sont jamais écrasées.`,
   );
 }
 
