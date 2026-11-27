@@ -13,14 +13,16 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 //
 // Règle : on retient l'heure de chaque page vue et l'heure de la dernière écriture
 // (toute requête non-GET : routes API ET server actions). Une navigation vers une
-// page dont la version en cache est ANTÉRIEURE à la dernière écriture et encore
-// dans la fenêtre de 30 s devient un chargement complet — donc frais. Toutes les
-// autres navigations profitent du cache. Couvre les liens (clic) et les
+// page vue AVANT la dernière écriture devient un chargement complet — donc frais.
+// Toutes les autres navigations profitent du cache.
+// Pas de limite de durée (2026-11-27) : on supposait le cache de Next expiré 30 s
+// après la vue, mais une page revue plus tard ressortait encore périmée (Planning :
+// affectation retirée sur Matin, passage par Après-midi, retour sur Matin →
+// l'affectation réapparaissait jusqu'au rechargement). Un chargement complet vide
+// ces repères : seules les pages vues depuis sont concernées. Couvre les liens (clic) et les
 // navigations programmées (`router.push` / `router.replace` des filtres).
 // Ne change rien au retour arrière du navigateur, que Next sert toujours depuis
 // son cache (comportement antérieur inchangé).
-const FENETRE_MS = 30_000; // = staleTimes.dynamic
-
 const vues = new Map<string, number>();
 let derniereEcriture = 0;
 let installe = false;
@@ -37,7 +39,7 @@ function cachePerime(href: string): boolean {
   const k = cle(href);
   if (!k) return false;
   const vue = vues.get(k);
-  return vue !== undefined && vue <= derniereEcriture && Date.now() - vue < FENETRE_MS;
+  return vue !== undefined && vue <= derniereEcriture;
 }
 
 export default function GardeCacheNavigation() {
