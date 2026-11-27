@@ -618,7 +618,7 @@ export default function PlanningGrid({
   /** Recherche initiale (portee par l'URL, pour survivre a la navigation). */
   initialSearch?: string;
   /** Boutons d'action rendus à droite de la barre de recherche (2026-09-10) :
-   *  raccourci TV, Horaires spécifiques, Absences spécifiques, Conducteurs. */
+   *  raccourci TV, Conducteurs. */
   actions?: React.ReactNode;
   /** Rendu à GAUCHE de la recherche : bascule Par nom / Par poste. */
   gauche?: React.ReactNode;

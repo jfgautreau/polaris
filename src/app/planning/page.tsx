@@ -1014,7 +1014,7 @@ export default async function PlanningPage({
   if (filtreConducteurs) extra.cond = "1";
   if (vuePoste) extra.par = "poste";
 
-  // Raccourcis à droite de la recherche (TV, horaires, absences), communs aux
+  // Raccourci à droite de la recherche (TV), commun aux
   // deux vues ; le filtre Conducteurs ne sert qu'à la vue Par nom.
   const raccourcis = (
     <>
@@ -1032,28 +1032,6 @@ export default async function PlanningPage({
           <TvIcon size={18} />
         </Link>
       )}
-      <Link
-        href="/horaires-specifiques"
-        title="Horaires spécifiques"
-        aria-label="Horaires spécifiques"
-        style={{ width: 30, height: 30, boxSizing: "border-box", flex: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", padding: 0, lineHeight: 1, fontSize: 15, border: "1px solid var(--border)", borderRadius: 8, background: "#fff", textDecoration: "none" }}
-      >
-        🕐
-      </Link>
-      <Link
-        href={(() => {
-          const p = new URLSearchParams();
-          if (atelier) p.set("atelier", atelier);
-          if (searchParam) p.set("search", searchParam);
-          const qs = p.toString();
-          return qs ? `/absences-specifiques?${qs}` : "/absences-specifiques";
-        })()}
-        title="Absences spécifiques"
-        aria-label="Absences spécifiques"
-        style={{ width: 30, height: 30, boxSizing: "border-box", flex: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", padding: 0, lineHeight: 1, fontSize: 15, border: "1px solid var(--border)", borderRadius: 8, background: "#fff", textDecoration: "none" }}
-      >
-        🤒
-      </Link>
     </>
   );
 
