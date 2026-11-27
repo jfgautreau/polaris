@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { documentPdf, pagesPdf, couperTexte, largeurTexte, normaliserTexte } from "./pdf";
-import { pdfInterim, xlsxInterim, pdfAbsences, xlsxAbsences, texteCaseInterim, texteCaseExcel, photoInterim, JAUNE_FLUO, LIBELLE_RETIRE } from "./syntheses-export";
+import { casesDifferentes, pdfInterim, xlsxInterim, pdfAbsences, xlsxAbsences, texteCaseInterim, texteCaseExcel, photoInterim, JAUNE_FLUO, LIBELLE_RETIRE } from "./syntheses-export";
 import { nomFichierInterim } from "./nom-fichier-interim";
 import { estCouleurService, couleurDeService } from "./service-couleurs";
 import { classeurXlsx, nomsOnglets } from "./xlsx";
@@ -106,7 +106,14 @@ describe("exports Synthèses", () => {
     verifierXref(lire(documentPdf(d)));
     expect(pdfInterim([G[0]], J, "S43").sousTitre).toContain("Agence A");
   });
-  it("PDF agence : week-end vide retiré, réduit pour tenir sur une page", () => {
+  it("cases différentes : celles qui sortent de l'ordinaire de la semaine, jamais un jour vide", () => {
+    expect(casesDifferentes(["A", "A", "A", "A", "B"])).toEqual([false, false, false, false, true]);
+    expect(casesDifferentes(["A", "", "A", "", ""])).toEqual([false, false, false, false, false]);
+    expect(casesDifferentes(["B", "A", "A", "", "C"])).toEqual([true, false, false, false, true]);
+    expect(casesDifferentes(["A", "B"])).toEqual([false, true]); // égalité : la première fait référence
+    expect(casesDifferentes([])).toEqual([]);
+  });
+  it("PDF agence : week-end vide retiré, jamais réduit (plusieurs pages), nom sans fond, écart en gras", () => {
     const sem = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"].map((nom, i) => ({ iso: `2026-10-${19 + i}`, nom, num: `${19 + i}/10` }));
     const cell = [{ posteNom: "Palettisation", atelierNom: "Condi", atelierCouleur: null, distant: false, horaire: "06:00-14:00" }];
     const ligne = (n: number, samedi: boolean) => ({ personneId: `i${n}`, nom: `NOM${n}`, prenom: "P", cells: Object.fromEntries(sem.slice(0, samedi ? 6 : 5).map((j) => [j.iso, cell])) });
@@ -114,11 +121,17 @@ describe("exports Synthèses", () => {
     expect(colonnes([ligne(1, false)])).toBe(6); // nom + lundi → vendredi
     expect(colonnes([ligne(1, true)])).toBe(7); // samedi travaillé : colonne gardée
     const grand = pdfInterim([{ agence: "A", lignes: Array.from({ length: 45 }, (_, n) => ligne(n, false)), sansAffectation: [] }] as never, sem, "S43");
-    expect(grand.unePage).toBe(true);
-    expect(pagesPdf(grand)).toBeGreaterThan(1); // à taille normale : deux pages
+    expect(pagesPdf(grand)).toBeGreaterThan(1); // taille fixe : le tableau continue page suivante
     const pdf = lire(documentPdf(grand));
-    expect(pdf).toContain("/Count 1 ");
+    expect(pdf).not.toContain("/Count 1 ");
     verifierXref(pdf);
+    const autre = [{ ...cell[0], horaire: "14:00-22:00" }];
+    const p = ligne(1, false);
+    p.cells[sem[4].iso] = autre;
+    const t = pdfInterim([{ agence: "A", lignes: [p], sansAffectation: [] }] as never, sem, "S43").blocs.find((b) => b.type === "tableau") as { lignes: unknown[][] };
+    expect(t.lignes[0][0]).toEqual({ texte: "NOM1 P", gras: true });
+    expect(t.lignes[0][1]).toBe("Condi : 06:00-14:00");
+    expect(t.lignes[0][5]).toEqual({ texte: "Condi : 14:00-22:00", gras: true });
   });
   it("Excel intérim : une ligne par intérimaire, sans le poste, couleur du service", () => {
     expect(texteCaseExcel(G[0].lignes[0], "2026-10-19")).toBe("06:00-14:00\nCondi");
@@ -165,7 +178,7 @@ describe("exports Synthèses", () => {
     const [dupont, martin, leroy] = f.lignes;
     expect(dupont.slice(0, 2)).toEqual(["DUPONT", "Jean"]);
     expect(dupont[2]).toEqual({ texte: "07:00-15:00\nCondi", fond: JAUNE_FLUO });
-    expect(dupont[3]).toEqual({ texte: "06:00-14:00\nFab", fond: JAUNE_FLUO });
+    expect(dupont[3]).toEqual({ texte: "06:00-14:00\nFab", fond: JAUNE_FLUO, gras: true });
     expect(dupont[4]).toEqual({ texte: "2", fond: JAUNE_FLUO });
     expect(martin).toEqual(["MARTIN", "Léa", "", "", 0, "Sans affectation cette semaine"]);
     expect(leroy[0]).toEqual({ texte: "LEROY", fond: JAUNE_FLUO, barre: true });

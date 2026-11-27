@@ -6,12 +6,11 @@ import { requireRapportBilan } from "@/lib/permissions";
 import { getQuartsC, getTypesAgenceC } from "@/lib/refdata";
 import { parseMonday, weekDays, isoWeekNumber, isoDate } from "@/lib/week";
 import { chargerAbsences4Semaines, chargerHorairesInterim, type Absences4 } from "@/lib/synthese-data";
-import { INTERIM_BG } from "@/lib/interim";
 import SyntheseFilters from "./SyntheseFilters";
 import ExportSyntheses, { ExportAgence, type ContexteFichierInterim } from "./ExportSyntheses";
 import { getCurrentSite } from "@/lib/current-site";
 import { getNomApplication } from "@/lib/nom-application-server";
-import { LIBELLE_SANS_AFFECTATION, PRECISION_SANS_AFFECTATION } from "@/lib/syntheses-export";
+import { LIBELLE_SANS_AFFECTATION, PRECISION_SANS_AFFECTATION, casesDifferentes, texteCaseInterim } from "@/lib/syntheses-export";
 
 export const dynamic = "force-dynamic";
 
@@ -243,7 +242,7 @@ export default async function SynthesesPage({
             ) : (
               <>
                 <p className="muted noprint" style={{ marginTop: -4, marginBottom: 14 }}>
-                  {nbPlaces} placé{nbPlaces > 1 ? "s" : ""} · {nbSansAffectation} sans affectation · {groupes.length} agence{groupes.length > 1 ? "s" : ""}. Chaque agence s'exporte séparément (boutons « PDF agence » et « Excel agence »).
+                  {nbPlaces} placé{nbPlaces > 1 ? "s" : ""} · {nbSansAffectation} sans affectation · {groupes.length} agence{groupes.length > 1 ? "s" : ""}. Chaque agence s'exporte séparément (« PDF agence », imprimante, « Excel agence »). En gras : les jours qui diffèrent du reste de la semaine.
                 </p>
                 {groupes.map((g) => {
                   return (
@@ -273,13 +272,17 @@ export default async function SynthesesPage({
                               </tr>
                             </thead>
                             <tbody>
-                              {g.lignes.map((p) => (
+                              {g.lignes.map((p) => {
+                                // En gras : les jours qui sortent de l'ordinaire de la semaine.
+                                const gras = casesDifferentes(joursSem.map((j) => texteCaseInterim(p, j.iso)));
+                                return (
                                 <tr key={p.personneId}>
                                   <td style={{ position: "sticky", left: 0, background: "#fff", fontWeight: 600, whiteSpace: "nowrap" }}>
-                                    <span style={{ background: INTERIM_BG, borderRadius: 3, padding: "0 4px" }}>{p.nom} {p.prenom}</span>
+                                    {p.nom} {p.prenom}
                                   </td>
-                                  {joursSem.map((j) => {
+                                  {joursSem.map((j, k) => {
                                     const cells = p.cells[j.iso] ?? [];
+                                    const fort = gras[k];
                                     return (
                                       <td key={j.iso} style={{ verticalAlign: "top", padding: "4px 6px", textAlign: "center" }}>
                                         {cells.length === 0 ? (
@@ -287,9 +290,9 @@ export default async function SynthesesPage({
                                         ) : (
                                           cells.map((c, i) => (
                                             <div key={i} style={{ lineHeight: 1.25, marginBottom: i < cells.length - 1 ? 5 : 0 }}>
-                                              {c.horaire && <div style={{ color: "#1d4ed8", fontWeight: 600, fontSize: 13 }}>{c.horaire}</div>}
-                                              <div style={{ fontSize: 12 }}>{c.posteNom}</div>
-                                              <div className="muted" style={{ fontSize: 11 }}>{c.atelierNom}</div>
+                                              {c.horaire && <div style={{ color: "#1d4ed8", fontWeight: fort ? 800 : 600, fontSize: 13 }}>{c.horaire}</div>}
+                                              <div style={{ fontSize: 12, fontWeight: fort ? 700 : undefined }}>{c.posteNom}</div>
+                                              <div className={fort ? undefined : "muted"} style={{ fontSize: 11, fontWeight: fort ? 700 : undefined }}>{c.atelierNom}</div>
                                             </div>
                                           ))
                                         )}
@@ -297,7 +300,8 @@ export default async function SynthesesPage({
                                     );
                                   })}
                                 </tr>
-                              ))}
+                                );
+                              })}
                             </tbody>
                           </table>
                         </div>

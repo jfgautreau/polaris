@@ -18,6 +18,8 @@ const CSP = [
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
   `connect-src 'self' ${supabase} ${supabaseWs}${dev ? " ws: wss:" : ""}`,
+  // Impression d'un PDF construit dans le navigateur (cadre caché, cf. imprimerPdf).
+  "frame-src 'self' blob:",
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",

@@ -5,7 +5,6 @@
 import type { DocumentPdf, BlocPdf, CellulePdf } from "@/lib/pdf";
 import type { FeuilleXlsx, CelluleXlsx } from "@/lib/xlsx";
 import type { Absences4, GroupeAgence, InterimDispo, LigneInterim } from "@/lib/synthese-data";
-import { INTERIM_BG } from "@/lib/interim";
 import { couleurDeService } from "@/lib/service-couleurs";
 import { NOM_APPLICATION_DEFAUT } from "@/lib/nom-application";
 
@@ -23,6 +22,19 @@ export function texteCaseInterim(p: LigneInterim, iso: string): string {
   return (p.cells[iso] ?? [])
     .map((c) => [c.atelierNom === "—" ? "" : c.atelierNom, c.horaire].filter(Boolean).join(" : "))
     .join("\n");
+}
+
+// Cases à mettre en GRAS dans la semaine d'un intérimaire (2026-11-27) : celles
+// qui diffèrent de sa case « normale » — le texte le plus fréquent de la ligne
+// (le premier en cas d'égalité). Un jour vide n'est jamais une différence ; une
+// semaine uniforme n'a aucune case en gras.
+export function casesDifferentes(textes: string[]): boolean[] {
+  const nb = new Map<string, number>();
+  for (const t of textes) if (t) nb.set(t, (nb.get(t) ?? 0) + 1);
+  let normale = "";
+  let max = 0;
+  for (const [t, n] of nb) if (n > max) [normale, max] = [t, n];
+  return textes.map((t) => t !== "" && t !== normale);
 }
 
 // `nomApp` : nom de l'application du site (0095), défaut « Polaris ».
@@ -46,10 +58,13 @@ export function pdfInterim(groupes: GroupeAgence[], jours: JourExport[], semaine
       blocs.push({
         type: "tableau",
         colonnes: [{ titre: "Intérimaire", largeur: 1.5 }, ...jours.map((j) => ({ titre: `${j.nom.slice(0, 3)} ${j.num}`, largeur: 1, align: "c" as const }))],
-        lignes: g.lignes.map((p): CellulePdf[] => [
-          { texte: `${p.nom} ${p.prenom}`, fond: INTERIM_BG, gras: true },
-          ...jours.map((j) => texteCaseInterim(p, j.iso)),
-        ]),
+        // Nom sans fond jaune (illisible à l'impression) ; en gras, les cases qui
+        // sortent de l'ordinaire de la semaine (cf. casesDifferentes).
+        lignes: g.lignes.map((p): CellulePdf[] => {
+          const textes = jours.map((j) => texteCaseInterim(p, j.iso));
+          const gras = casesDifferentes(textes);
+          return [{ texte: `${p.nom} ${p.prenom}`, gras: true }, ...textes.map((t, k): CellulePdf => (gras[k] ? { texte: t, gras: true } : t))];
+        }),
       });
     }
     if (g.sansAffectation.length) {
@@ -61,9 +76,6 @@ export function pdfInterim(groupes: GroupeAgence[], jours: JourExport[], semaine
     titre: "Planning prévisionnel des intérimaires",
     sousTitre: `Semaine ${semaineLabel}${agence}`,
     edition: edition(maintenant, nomApp),
-    // PDF d'UNE agence : réduit jusqu'à tenir sur une page (le PDF global garde
-    // une page par agence).
-    unePage: groupes.length === 1,
     blocs,
   };
 }
@@ -133,10 +145,11 @@ export function xlsxInterim(
     (!!avant && Object.values(avant).some((l) => !!l.cases[iso]));
   const joursX = jours.filter((j, i) => i < 5 || occupe(j.iso));
 
-  const surligne = (texte: string, change: boolean, fond?: string | null, extra: { barre?: boolean } = {}): CelluleXlsx => {
-    if (change) return { texte, fond: JAUNE_FLUO, ...extra };
-    if (fond && texte) return { texte, fond, ...extra };
-    return extra.barre ? { texte, barre: true } : texte;
+  const surligne = (texte: string, change: boolean, fond?: string | null, gras = false): CelluleXlsx => {
+    const g = gras ? { gras: true } : {};
+    if (change) return { texte, fond: JAUNE_FLUO, ...g };
+    if (fond && texte) return { texte, fond, ...g };
+    return gras ? { texte, gras: true } : texte;
   };
   const nombre = (n: number, change: boolean): CelluleXlsx => (change ? { texte: String(n), fond: JAUNE_FLUO } : n);
 
@@ -148,6 +161,7 @@ export function xlsxInterim(
       const nouveau = !!avant && !prec;
       const cases = joursX.map((j) => texteCaseExcel(p, j.iso));
       const nb = jours.filter((j) => (p.cells[j.iso] ?? []).length > 0).length;
+      const gras = casesDifferentes(cases); // cases qui sortent de l'ordinaire de la semaine
       lignes.push([
         ...col0,
         surligne(p.nom, nouveau),
@@ -155,7 +169,7 @@ export function xlsxInterim(
         ...cases.map((t, i) => {
           const iso = joursX[i].iso;
           const change = !!avant && (nouveau ? !!t : (prec?.cases[iso] ?? "") !== t);
-          return surligne(t, change, couleurDeService(p.cells[iso]?.[0]?.atelierCouleur)?.code);
+          return surligne(t, change, couleurDeService(p.cells[iso]?.[0]?.atelierCouleur)?.code, gras[i]);
         }),
         nombre(nb, !!avant && (nouveau || prec?.jours !== nb)),
         surligne("", !!avant && !nouveau && (prec?.obs ?? "") !== ""),

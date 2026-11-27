@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { documentPdf } from "@/lib/pdf";
 import { classeurXlsx } from "@/lib/xlsx";
-import { nomFichierSur, telechargerFichier, TYPE_PDF, TYPE_XLSX } from "@/lib/telecharger";
+import { imprimerPdf, nomFichierSur, telechargerFichier, TYPE_PDF, TYPE_XLSX } from "@/lib/telecharger";
 import {
   pdfAbsences,
   pdfInterim,
@@ -16,7 +16,7 @@ import {
 } from "@/lib/syntheses-export";
 import { nomFichierInterim } from "@/lib/nom-fichier-interim";
 import type { Absences4, GroupeAgence } from "@/lib/synthese-data";
-import { BoutonExcel, BoutonPdf } from "@/app/bilans/BoutonsExport";
+import { BoutonExcel, BoutonImprimer, BoutonPdf } from "@/app/bilans/BoutonsExport";
 
 // Contexte du nom des fichiers Excel intérim (forme réglée dans Param. RH, 0093).
 export type ContexteFichierInterim = { forme: string | null; site: string; semaine: number; annee: number; lundi: string };
@@ -130,6 +130,11 @@ export function ExportAgence({
         libelle="PDF agence"
         title={`Télécharger le PDF de l'agence ${groupe.agence}`}
         onClick={() => telechargerFichier(documentPdf(pdfInterim([groupe], jours, semaineLabel, undefined, nomApp)), `${nomPdf}.pdf`, TYPE_PDF)}
+      />
+      <BoutonImprimer
+        compact
+        title={`Imprimer le PDF de l'agence ${groupe.agence}`}
+        onClick={() => imprimerPdf(documentPdf(pdfInterim([groupe], jours, semaineLabel, undefined, nomApp)), `${nomPdf}.pdf`)}
       />
       <BoutonExcel
         compact

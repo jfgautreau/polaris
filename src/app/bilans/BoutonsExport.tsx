@@ -44,6 +44,27 @@ export function BoutonPdf({ onClick, disabled = false, libelle = "PDF", title, c
   );
 }
 
+// Imprimante (icône seule) : envoie le PDF du bloc à l'imprimante.
+export function BoutonImprimer({ onClick, disabled = false, title, compact = false }: Omit<Props, "libelle">) {
+  return (
+    <button
+      type="button"
+      className="noprint"
+      onClick={onClick}
+      disabled={disabled}
+      title={title ?? "Imprimer"}
+      aria-label={title ?? "Imprimer"}
+      style={{ ...base(compact, disabled), padding: compact ? "0 9px" : "0 11px", border: "1px solid var(--border)", background: "#fff", color: "#334155" }}
+    >
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M6 9V3h12v6" />
+        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+        <path d="M6 14h12v7H6z" />
+      </svg>
+    </button>
+  );
+}
+
 export function BoutonExcel({ onClick, disabled = false, libelle = "Excel", title, compact = false }: Props) {
   return (
     <button
