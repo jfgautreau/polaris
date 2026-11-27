@@ -30,7 +30,7 @@ export default async function AffichageAtelier({
   // `?semaine=<jour>` (2026-11-27, lien TV du Planning) : SEMAINE ENTIÈRE, lundi →
   // dimanche, quelle que soit la fenêtre réglée pour les écrans de couloir ; la
   // barre navigue alors de semaine en semaine et propose le retour au Planning.
-  const semaine = sp.semaine && /^d{4}-d{2}-d{2}$/.test(sp.semaine) ? isoDate(parseMonday(sp.semaine)) : null;
+  const semaine = sp.semaine && /^\d{4}-\d{2}-\d{2}$/.test(sp.semaine) ? isoDate(parseMonday(sp.semaine)) : null;
   // Filtres du Planning à rendre au retour (quart, équipe, vue…) : seules des clés
   // connues sont reprises, le chemin de retour reste /planning.
   const retourQs = new URLSearchParams();
