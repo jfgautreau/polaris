@@ -629,6 +629,7 @@ export default async function PlacementPage({
         placeInit={placeInit}
         autreQuart={autreQuart}
         horsPlan={horsPlan}
+        canPrefill={fullWrite}
         matrice={matrice}
         motifs={motifs.map((m) => ({ id: m.id, code: m.code_court, libelle: m.libelle, couleur: m.couleur, operateurs: m.visible_operateurs === true }))}
         equipesParQuart={parQuart}

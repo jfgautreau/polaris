@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { isoDate, addDays } from "@/lib/week";
+import { isoDate, addDays, mondayOf, isoWeekNumber } from "@/lib/week";
+import { confirmerPrefill, chargerSemaine } from "@/lib/prefill-semaine";
 import { habValable, habManqueTxt } from "@/lib/habilitations";
 import { parseNumeros, libellePlace } from "@/lib/numeros-rotation";
 import { styleInterim, estAvecAgence } from "@/lib/interim";
 import SlideSwitch from "@/components/SlideSwitch";
 import ModaleDeplacable from "@/components/ModaleDeplacable";
-import { PrintIcon, OperateurIcon } from "@/components/icons";
+import { PrintIcon, OperateurIcon, FillIcon } from "@/components/icons";
 import { couleurDeLigne } from "@/lib/ligne-couleurs";
 import { GRILLE, feuille, hauteursDisponibles, pdfDuMode, placerPostes, type Bloc, type MiseEnPage, type PdfPlacement } from "@/lib/mise-en-page-pdf";
 import JourNav from "./JourNav";
@@ -93,6 +94,7 @@ export default function PlacementBoard({
   conducteurIds = [],
   agenceCodes = ["INTERIM"],
   quartBandeau,
+  canPrefill = false,
 }: {
   title?: ReactNode;
   jour: string;
@@ -144,6 +146,9 @@ export default function PlacementBoard({
   // (migration 0068). Rendu pré-calculé côté serveur et passé en prop, comme le
   // Planning — le board ne lit pas quart.couleur lui-même.
   quartBandeau?: ReactNode;
+  // Écriture complète (droit Planning ou Placement, jamais le chef d'équipe) :
+  // affiche le bouton « TP + pré-affectation » de la semaine du jour affiché.
+  canPrefill?: boolean;
 }) {
   const router = useRouter();
   const [place, setPlace] = useState<Record<string, string>>(placeInit);
@@ -152,6 +157,21 @@ export default function PlacementBoard({
   const [autreQuart, setAutreQuart] = useState<Record<string, string>>(autreQuartInit);
   const [saving, setSaving] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [msg, setMsg] = useState<string | null>(null);
+  // Chargement « TP + pré-affectation » de la semaine du jour affiché (même
+  // action que le bouton par semaine du Planning, cf. src/lib/prefill-semaine.ts).
+  const [prefillEnCours, setPrefillEnCours] = useState(false);
+  const lundiDuJour = mondayOf(new Date(jour + "T00:00"));
+  const semaineLabel = `S${isoWeekNumber(lundiDuJour)}`;
+  async function chargerLaSemaine() {
+    if (prefillEnCours) return;
+    if (!confirmerPrefill(semaineLabel)) return;
+    setPrefillEnCours(true);
+    const res = await chargerSemaine(isoDate(lundiDuJour), semaineLabel);
+    // Le board garde son état local (useState des props) : on recharge la page
+    // pour montrer les affectations créées.
+    if (res === "charge") window.location.reload();
+    else setPrefillEnCours(false);
+  }
   // Recherche et equipe PORTEES PAR L'URL (?search= / ?equipe=, 2026-09-28) : elles
   // survivent au changement de jour / quart / plan (le board est remonte, cf. `key`
   // dans page.tsx) et voyagent avec le menu (report contextuel, cf. MainNav).
@@ -1010,6 +1030,18 @@ export default function PlacementBoard({
           >
             Copier…
           </button>
+          {canPrefill && (
+            <button
+              type="button"
+              className={s.navbtn}
+              disabled={prefillEnCours}
+              onClick={chargerLaSemaine}
+              title={`Charger la semaine ${semaineLabel} (celle du jour affiché) : poser les TP puis pré-remplir les postes fixes, sans écraser ce qui est déjà saisi`}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, opacity: prefillEnCours ? 0.6 : 1 }}
+            >
+              <FillIcon size={15} /> {prefillEnCours ? "…" : `TP + pré-affectation ${semaineLabel}`}
+            </button>
+          )}
           <button
             type="button"
             className={s.navbtn}

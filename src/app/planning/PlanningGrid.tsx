@@ -7,6 +7,7 @@ import { habValable } from "@/lib/habilitations";
 import { INTERIM_BG } from "@/lib/interim";
 import ModaleDeplacable from "@/components/ModaleDeplacable";
 import { FillIcon } from "@/components/icons";
+import { confirmerPrefill, chargerSemaine } from "@/lib/prefill-semaine";
 import { texteSurCouleur } from "./QuartBandeau";
 import { planRecopie, compteRendu, estPoste, estRecopiable, type CaseCible } from "@/lib/planning-recopie";
 
@@ -72,45 +73,6 @@ async function envoyerDeplacement(body: Record<string, unknown>): Promise<Result
     return { ok: false, refus: null };
   } catch {
     return { ok: false, refus: null };
-  }
-}
-type NonPlace = { personne: string; poste: string; semaine: string; raison: string };
-type ReponsePrefill = {
-  crees?: number;
-  tp?: number;
-  fixe?: number;
-  nonPlaces?: NonPlace[];
-  completes?: number;
-  sansNumero?: NonPlace[];
-  site?: string;
-  marqueur?: string;
-  error?: string;
-};
-// Titulaires que le pré-remplissage n'a PAS placés : le cycle du poste (quarts
-// où il tourne) ne contient pas le quart de leur équipe (cf. quartPourPosteFixe).
-const texteNonPlaces = (np: NonPlace[] | undefined): string =>
-  np && np.length
-    ? "\n\nNon placé(s) — le poste ne tourne pas sur le quart de l'équipe, à placer à la main ou à corriger au Référentiel :\n" +
-      np.map((n) => `• ${n.personne} — ${n.poste} : ${n.raison}`).join("\n")
-    : "";
-// Titulaires posés sans place numérotée (plus de titulaires que de numéros libres).
-const texteSansNumero = (sn: NonPlace[] | undefined): string =>
-  sn && sn.length
-    ? "\n\nSans numéro de rotation (toutes les places du poste sont prises) :\n" +
-      sn.map((n) => `• ${n.personne} — ${n.poste} : ${n.raison}`).join("\n")
-    : "";
-// `reseau` : la requête n'a pas abouti (exception) ; sinon `ok` + corps décodé.
-async function envoyerPrefill(monday: string): Promise<{ reseau: true } | { reseau: false; ok: boolean; j: ReponsePrefill }> {
-  try {
-    const r = await fetch("/api/placement/prefill", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ semaines: [monday] }),
-    });
-    const j = (await r.json().catch(() => ({}))) as ReponsePrefill;
-    return { reseau: false, ok: r.ok, j };
-  } catch {
-    return { reseau: true };
   }
 }
 type Motif = { id: string; code: string; couleur: string; libelle?: string };
@@ -1030,40 +992,17 @@ export default function PlanningGrid({
   // recharge la vue au succès pour voir les nouvelles cases.
   async function prefillWeek(monday: string, label: string) {
     if (prefillWk) return;
-    if (!window.confirm(`Charger la semaine ${label} ?\n\n1. Temps partiel : les jours de TP sont posés (déplaçables ensuite au glisser-déposer).\n2. Postes fixes : chaque personne à poste fixe est placée sur son poste, au quart de son équipe, sur une place numérotée (son dernier numéro s'il est libre).\n\nLes cases déjà remplies (absence, autre poste) ne sont jamais écrasées.`)) return;
+    if (!confirmerPrefill(label)) return;
     setPrefillWk(monday);
     setSaving("saving");
-    const r = await envoyerPrefill(monday);
-    if (r.reseau) {
-      setSaving("error");
-      setPrefillWk(null);
-      setTimeout(() => setSaving("idle"), 3000);
+    const res = await chargerSemaine(monday, label);
+    if (res === "charge") {
+      window.location.reload();
       return;
     }
-    const j = r.j;
-    if (!r.ok) {
-      setSaving("error");
-      setPrefillWk(null);
-      window.alert(`Chargement impossible : ${j.error ?? "erreur inconnue"}`);
-      setTimeout(() => setSaving("idle"), 3000);
-      return;
-    }
-    const alertes = texteNonPlaces(j.nonPlaces) + texteSansNumero(j.sansNumero);
-    if ((j.crees ?? 0) === 0 && (j.completes ?? 0) === 0) {
-      setSaving("saved");
-      setPrefillWk(null);
-      // Rien créé : on explique pourquoi (souvent : cases déjà remplies).
-      window.alert(`Semaine ${label} : rien à créer (TP ${j.tp ?? 0}, postes fixes ${j.fixe ?? 0}). Cases déjà remplies non écrasées. Marqueur TP : ${j.marqueur ?? "?"}.${alertes}`);
-      setTimeout(() => setSaving("idle"), 2000);
-      return; // rien à ajouter (déjà rempli) : pas besoin de recharger
-    }
-    // Des titulaires non placés : on le dit AVANT de recharger la vue.
-    const completes = j.completes ?? 0;
-    if (alertes !== "" || completes > 0)
-      window.alert(
-        `Semaine ${label} chargée.${completes > 0 ? `\n\n${completes} affectation(s) déjà posée(s) complétée(s) d'un numéro de rotation.` : ""}${alertes}`,
-      );
-    window.location.reload();
+    setPrefillWk(null);
+    setSaving(res === "rien" ? "saved" : "error");
+    setTimeout(() => setSaving("idle"), res === "rien" ? 2000 : 3000);
   }
 
   async function change(pid: string, iso: string, equipe_id: string | null, value: string, forcer = false) {
