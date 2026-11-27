@@ -33,7 +33,7 @@ L'historique des décisions est dans git et dans l'en-tête de chaque migration.
    Pour de la *donnée* seulement, un script Node lisant `SUPABASE_SERVICE_ROLE_KEY` de
    `.env.local` est acceptable (simulation d'abord, écriture après accord).
    Projet Supabase : ref `stcxlsmmnplxpirrnefm`, eu-west-3.
-   **Dernière migration appliquée : `0098`** (`motif_masque_affichage`, 2026-11-27 : `motif_absence.masque_affichage`, défaut true) ; avant elle `0097` (`gpec`, 2026-11-25 : trois tables nouvelles `gpec_*`, aucune table existante modifiée) ; avant elle `0096` (`accueil_nouveaux`, 2026-11-23) ; avant elle `0095`
+   **Migration `0099` (`motif_couleur_texte`, écrite le 2026-11-27 : `motif_absence.couleur_texte`, NULL = automatique) À APPLIQUER par l'utilisateur — le code la tolère absente.** Dernière migration appliquée : `0098` (`motif_masque_affichage`, 2026-11-27 : `motif_absence.masque_affichage`, défaut true) ; avant elle `0097` (`gpec`, 2026-11-25 : trois tables nouvelles `gpec_*`, aucune table existante modifiée) ; avant elle `0096` (`accueil_nouveaux`, 2026-11-23) ; avant elle `0095`
    (`site_nom_application`, 2026-11-10) et `0094`
    (`placement_mise_en_page`, 2026-11-05) et `0093`
    (`export_interim` : atelier.couleur, parametre_rh, export_interim_photo) et `0092` (durcissement sécurité, audit du 2026-11-03). Toute nouvelle policy RLS s'écrit
@@ -291,6 +291,7 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   `src/lib/filtres-session.ts`) : dernier quart, dernier plan de Placement — toujours
   revalidés contre le site. Bilans : le Cockpit transmet service + quart avec un bandeau
   « Filtres repris ».
+- **Texte sur fond de motif** : `texteSur(fond, choisie)` (`src/lib/couleur-texte.ts`) — couleur choisie dans Param. RH (`motif_absence.couleur_texte`, 0099, composant `CouleursMotif` avec aperçu du code) ou, à défaut, noir / blanc selon le fond. Jamais de couleur de texte en dur sur un fond de motif.
 - **Composants partagés** : `SlideSwitch` (entre deux vues, largeur fixe) ≠ `ToggleSwitch`
   (actif/inactif) · `AtelierEquipeFiltres` · `LectureSeule` · `PageTitle` · `PrintButton` ·
   `DateRangePicker` (logique `src/lib/calendrier.ts`) · `BandeauErreur` · `InfoBulle` ·
@@ -392,7 +393,7 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   Conducteurs (`?cond=1`). Pendule 🕐 (horaire + commentaire, `horaire_exception` ; son `»`
   recopie l'horaire sur les mêmes jours cibles que `»`, jours postés → postés, Formation →
   Formation, remplace après confirmation, op `save-many`),
-  recopie `»` (règles `src/lib/planning-recopie.ts` : postes et NT seulement, écrasent les affectations (poste, NT) mais jamais une absence ni un TP ;
+  recopie `»` (règles `src/lib/planning-recopie.ts` : postes, NT et — par le `»` d'UNE personne seulement, 2026-11-27 — absences ; écrasent les affectations (poste, NT) mais jamais une AUTRE absence ni un TP ; le `»` d'un jour reste postes + NT ;
   `»` sur case vide = vider la suite sauf absences / TP ; `»` du jour en en-tête = membres affichés de l'équipe choisie, masqué en AUTO / Toutes), glisser-déposer, croix de survol. Le bouton de pré-remplissage recharge la vue.
   Bascule **Par nom / Par poste** (`?par=poste`, `PlanningParPoste.tsx`, règles pures
   `src/lib/planning-par-poste.ts`, spec `tasks/planning-par-poste.md`) : une rangée par place

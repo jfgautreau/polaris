@@ -121,6 +121,7 @@ const CHAMP_FR: Record<string, string> = {
   forcage_at: "Forcé le",
   visible_operateurs: "PDF pour Affich.",
   masque_affichage: "Motif masqué (Affichage)",
+  couleur_texte: "Couleur du texte",
   non_planifie: "Non planifié",
   avec_agence: "Avec agence",
 };

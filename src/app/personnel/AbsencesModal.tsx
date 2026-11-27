@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { texteSur } from "@/lib/couleur-texte";
 import { libellePeriode, type PeriodeAbsence } from "@/lib/absences-periodes";
 import DateRangePicker from "@/components/DateRangePicker";
 import ModaleDeplacable from "@/components/ModaleDeplacable";
 import { SaveIcon, TrashIcon, EditIcon } from "@/components/icons";
 
-type Motif = { id: string; code_court: string; libelle: string; couleur: string };
+type Motif = { id: string; code_court: string; libelle: string; couleur: string; couleur_texte?: string | null };
 type Periode = PeriodeAbsence & { commentaire: string };
 
 // Etat d'edition d'une ligne : brouillon (nouvelle) ou modification (existante).
@@ -339,7 +340,7 @@ export default function AbsencesModal({
               return (
                 <tr key={`${p.debut}-${p.motif_absence_id}-${i}`}>
                   <td style={cell}>
-                    <span className="sexe-pill" style={{ background: mo?.couleur ?? "#e5e7eb", color: "#1f2937", fontWeight: 600 }} title={p.declaree ? "Période déclarée" : "Saisie au planning, jour par jour"}>
+                    <span className="sexe-pill" style={{ background: mo?.couleur ?? "#e5e7eb", color: texteSur(mo?.couleur ?? "#e5e7eb", mo?.couleur_texte), fontWeight: 600 }} title={p.declaree ? "Période déclarée" : "Saisie au planning, jour par jour"}>
                       {mo?.code_court ?? "?"}
                     </span>{" "}
                     {mo?.libelle ?? "Motif supprimé"}
@@ -417,7 +418,7 @@ function RowsEdit({
     <tr style={{ background: "#fefce8" }}>
       <td style={cell}>
         <button type="button" onClick={(e) => openPop("motif", e)} onMouseDown={(e) => e.stopPropagation()}
-          style={{ ...trigger, background: m?.couleur ?? "#f1f5f9", color: "#1f2937", fontWeight: 600 }} title="Choisir le motif">
+          style={{ ...trigger, background: m?.couleur ?? "#f1f5f9", color: texteSur(m?.couleur ?? "#f1f5f9", m?.couleur_texte), fontWeight: 600 }} title="Choisir le motif">
           {m ? <><strong>{m.code_court}</strong> · {m.libelle}</> : <span style={{ color: "#94a3b8" }}>Motif…</span>} ▾
         </button>
         {ouvertPop === "motif" && (

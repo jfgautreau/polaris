@@ -9,7 +9,7 @@ import ModaleDeplacable from "@/components/ModaleDeplacable";
 import { FillIcon } from "@/components/icons";
 import { confirmerPrefill, chargerSemaine } from "@/lib/prefill-semaine";
 import { texteSurCouleur } from "./QuartBandeau";
-import { planRecopie, compteRendu, estPoste, estRecopiable, type CaseCible } from "@/lib/planning-recopie";
+import { planRecopie, compteRendu, estPoste, estRecopiable, estAbsence, type CaseCible } from "@/lib/planning-recopie";
 
 // `wi` : index de la semaine affichée (0..2) ; `quart` : quart affiché ce jour-là —
 // le même partout en « Suivre le quart », celui de l'équipe en « Suivre l'équipe ».
@@ -75,7 +75,8 @@ async function envoyerDeplacement(body: Record<string, unknown>): Promise<Result
     return { ok: false, refus: null };
   }
 }
-type Motif = { id: string; code: string; couleur: string; libelle?: string };
+// `texte` : couleur du texte sur le fond du motif (calculée par la page, cf. couleur-texte.ts).
+type Motif = { id: string; code: string; couleur: string; texte?: string; libelle?: string };
 type Personne = { id: string; label: string; equipe_id: string | null; editable: boolean; color?: string; interim?: boolean };
 
 const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
@@ -100,6 +101,7 @@ type ContexteGrille = {
   habComp: Record<string, string>;
   habPers: Record<string, string>;
   motifColor: Record<string, string>;
+  motifTexte: Record<string, string>;
   motifs: Motif[];
   tpBlocked: Record<string, boolean>;
   horsEffectif: Record<string, boolean>;
@@ -277,9 +279,9 @@ const LignePlanning = memo(function LignePlanning({
         // TP materialise (jeton "TP") : vraie ligne, deplacable, effacable.
         const vTP = v === "TP";
         const bloque = (tpb && !tpAbsence) || hors;
-        // » : seulement sur une case qui se recopie (poste, NT) ou vide (vide la
-        // suite) — jamais sur une absence ni un TP (cf. src/lib/planning-recopie.ts).
-        const showFill = pers.editable && !ctx.otherByCell[key(pers.id, d.iso)] && !bloque && (v === "" || estRecopiable(v));
+        // » : sur une case qui se recopie (poste, NT, absence depuis le 2026-11-27)
+        // ou vide (vide la suite) — jamais sur un TP (cf. src/lib/planning-recopie.ts).
+        const showFill = pers.editable && !ctx.otherByCell[key(pers.id, d.iso)] && !bloque && (v === "" || estRecopiable(v) || estAbsence(v));
         const other = v === "" ? ctx.otherByCell[key(pers.id, d.iso)] : undefined;
         // Glisser-deposer. Source draggable : poste, NT ou TP reel (jamais
         // une absence, jamais le vide). Cible d'un depot : case VIDE,
@@ -340,6 +342,8 @@ const LignePlanning = memo(function LignePlanning({
                 : d.iso === todayIso
                 ? "#eff6ff"
                 : undefined,
+              // Texte lisible sur le fond du motif (noir sur noir sinon).
+              color: !hors && !vTP && !(tpb && !tpAbsence) && ctx.motifTexte[v] ? ctx.motifTexte[v] : undefined,
               padding: 0,
               position: "relative",
               outline: isOver ? "2px dashed #4f46e5" : undefined,
@@ -401,8 +405,8 @@ const LignePlanning = memo(function LignePlanning({
                       ? "Vider la fin de cette semaine (absences et TP conservés)"
                       : "Vider la semaine suivante (absences et TP conservés)"
                     : dowMon(d.iso) < 4
-                      ? "Recopier jusqu'à la fin de cette semaine (remplace les affectations, garde absences et TP)"
-                      : "Recopier sur la semaine suivante (remplace les affectations, garde absences et TP)"
+                      ? `Recopier ${estAbsence(v) ? "cette absence " : ""}jusqu'à la fin de cette semaine (remplace les affectations, garde les autres absences et les TP)`
+                      : `Recopier ${estAbsence(v) ? "cette absence " : ""}sur la semaine suivante (remplace les affectations, garde les autres absences et les TP)`
                 }
                 onClick={() => actions.recopier(pers, i)}
               >
@@ -817,6 +821,11 @@ export default function PlanningGrid({
     for (const x of motifs) m[`m:${x.id}`] = x.couleur;
     return m;
   }, [motifs]);
+  const motifTexte = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const x of motifs) if (x.texte) m[`m:${x.id}`] = x.texte;
+    return m;
+  }, [motifs]);
 
   // Index de semaine par colonne (pour le remplissage de semaine)
   const weekIdx = useMemo(() => {
@@ -1124,20 +1133,21 @@ export default function PlanningGrid({
     setTimeout(() => setRecopieTxt((x) => (x === txt ? "" : x)), 5000);
   }
 
-  // » d'une personne : recopie un poste ou un NT en écrasant les affectations
+  // » d'une personne : recopie un poste, un NT ou une absence en écrasant les affectations
   // (postes, NT — confirmation si une est remplacée), jamais une absence ni un
   // TP ; une case vide recopiée vide la suite (postes et NT, après confirmation).
   async function fillWeek(pers: Personne, dayIndex: number) {
     const source = vals[key(pers.id, days[dayIndex].iso)] ?? "";
     const vider = source === "";
-    const plan = planRecopie(source, ciblesDe(pers.id, source, joursCibles(dayIndex)), true);
+    // Absence comprise (2026-11-27) : seulement ici, pas dans le » d'un jour.
+    const plan = planRecopie(source, ciblesDe(pers.id, source, joursCibles(dayIndex)), true, true);
     if (plan.ecrire.length === 0) {
       annoncer(compteRendu(0, plan.laissees, plan.horsCycle, 0, vider));
       return;
     }
     if (vider && !window.confirm(`Vider ${plan.ecrire.length} case(s) de ${pers.label} sur la suite ?
 Les absences et les temps partiels sont conservés.`)) return;
-    const libSource = source === "X" ? "NT" : (posteLabel[source] ?? posteLabelAll[source] ?? "le poste");
+    const libSource = source === "X" ? "NT" : estAbsence(source) ? (motifs.find((mo) => `m:${mo.id}` === source)?.code ?? "l'absence") : (posteLabel[source] ?? posteLabelAll[source] ?? "le poste");
     if (!vider && plan.remplacees > 0 && !window.confirm(`Recopier ${libSource} sur ${plan.ecrire.length} case(s) de ${pers.label} ?
 ${plan.remplacees} affectation(s) déjà posée(s) seront remplacée(s). Les absences et les temps partiels sont conservés.`)) return;
     const refus = await appliquerRecopie(plan.ecrire.map((e) => ({ pid: pers.id, equipe: pers.equipe_id, ...e })));
@@ -1309,11 +1319,11 @@ ${ecritures.length} case(s) seront écrites (postes et NT)${remplacees ? `, dont
   // seulement si l'une d'elles change (jamais pendant la saisie).
   const ctx = useMemo<ContexteGrille>(
     () => ({
-      matrice, niveauMin, effectif, habPoste, habComp, habPers, motifColor, motifs,
+      matrice, niveauMin, effectif, habPoste, habComp, habPers, motifColor, motifTexte, motifs,
       tpBlocked, horsEffectif, otherByCell, otherPosteByCell, quartLabel, horaireStd, horaireApresNuit, horaireCase,
       formationMotifId, posteLabel, posteLabelAll, posteTitreAll,
     }),
-    [matrice, niveauMin, effectif, habPoste, habComp, habPers, motifColor, motifs,
+    [matrice, niveauMin, effectif, habPoste, habComp, habPers, motifColor, motifTexte, motifs,
      tpBlocked, horsEffectif, otherByCell, otherPosteByCell, quartLabel, horaireStd, horaireApresNuit, horaireCase,
      formationMotifId, posteLabel, posteLabelAll, posteTitreAll],
   );
@@ -1703,7 +1713,7 @@ ${ecritures.length} case(s) seront écrites (postes et NT)${remplacees ? `, dont
       </div>
 
       <p className="muted" style={{ margin: "6px 12px 0", fontSize: 11 }}>
-        Survolez une case et cliquez sur &raquo; pour recopier sa valeur (y compris « non-affecté ») :
+        Survolez une case et cliquez sur &raquo; pour recopier sa valeur (poste, NT, absence, ou « non-affecté ») :
         du lundi au jeudi sur la fin de la semaine en cours, à partir du vendredi sur la semaine suivante ;
         elle remplace les affectations déjà posées, jamais une absence ni un TP.{" "}
         <span style={{ display: "inline-block", width: 12, height: 12, verticalAlign: "-2px", background: "#fef2f2", border: "1px solid #fca5a5" }} />{" "}
@@ -1959,7 +1969,7 @@ ${ecritures.length} case(s) seront écrites (postes et NT)${remplacees ? `, dont
                           key={mo.id}
                           type="button"
                           className={`pick-chip${on ? " on" : ""}`}
-                          style={{ borderColor: mo.couleur, background: on ? mo.couleur : undefined, color: on ? "#fff" : undefined }}
+                          style={{ borderColor: mo.couleur, background: on ? mo.couleur : undefined, color: on ? (mo.texte ?? "#fff") : undefined }}
                           onClick={() => choose(`m:${mo.id}`)}
                         >
                           {mo.code}

@@ -55,7 +55,7 @@ type Accueil = { id: string; libelle: string };
 type Equipe = { id: string; nom: string; couleur?: string | null; quart_fixe?: string | null };
 type Atelier = { id: string; nom: string };
 type PosteOpt = { id: string; nom: string; atelierNom: string };
-type Motif = { id: string; code_court: string; libelle: string; couleur: string };
+type Motif = { id: string; code_court: string; libelle: string; couleur: string; couleur_texte?: string | null };
 
 type TypeContrat = { code: string; libelle: string };
 const CONTRATS_FALLBACK: TypeContrat[] = [

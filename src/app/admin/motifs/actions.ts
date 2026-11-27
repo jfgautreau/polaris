@@ -6,9 +6,14 @@ import { requireModuleWrite } from "@/lib/permissions";
 import { getCurrentSite } from "@/lib/current-site";
 import { messageErreur, urlAvecErreur, type ErreurPg } from "@/lib/erreurs";
 import { MOTIFS_TAG, TYPES_AGENCE_TAG } from "@/lib/refdata";
+import { couleurTexteValide } from "@/lib/couleur-texte";
 
 const PATH = "/admin/motifs";
 const s = (fd: FormData, k: string) => String(fd.get(k) ?? "").trim();
+// Couleur du texte d'un motif (0099) : le champ n'est posté que si la colonne
+// existe (cf. CouleursMotif) ; vide = automatique (NULL).
+const texteMotif = (fd: FormData): { couleur_texte?: string | null } =>
+  fd.has("couleur_texte") ? { couleur_texte: couleurTexteValide(s(fd, "couleur_texte")) } : {};
 
 // Fin d'action. `err` non nul -> le message repart dans l'URL et la page
 // l'affiche (BandeauErreur) : sans cela, un code court en double se solde par un
@@ -45,6 +50,7 @@ export async function createMotif(fd: FormData) {
     code_court,
     code_gt: s(fd, "code_gt") || null,
     couleur: s(fd, "couleur") || "#e5e7eb",
+    ...texteMotif(fd),
     site_id: site.id,
   });
   done(error);
@@ -60,6 +66,7 @@ export async function updateMotif(fd: FormData) {
       code_court: s(fd, "code_court"),
       code_gt: s(fd, "code_gt") || null,
       couleur: s(fd, "couleur") || "#e5e7eb",
+      ...texteMotif(fd),
     })
     .eq("id", s(fd, "id"))
     .eq("site_id", site.id);

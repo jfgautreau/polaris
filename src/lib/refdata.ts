@@ -118,17 +118,20 @@ type MotifRow = {
   libelle: string;
   couleur: string;
   visible_operateurs: boolean;
+  // Couleur du texte choisie (0099) ; null = automatique (cf. couleur-texte.ts).
+  couleur_texte: string | null;
 };
 
 const getMotifsBySite = unstable_cache(
   async (site: string) => {
-    const { data } = await getAdminClient()
-      .from("motif_absence")
-      .select("id, code_court, libelle, couleur, visible_operateurs")
-      .eq("actif", true)
-      .eq("site_id", site)
-      .order("libelle");
-    return (data ?? []) as MotifRow[];
+    const lire = (colonnes: string) =>
+      getAdminClient().from("motif_absence").select(colonnes).eq("actif", true).eq("site_id", site).order("libelle");
+    const r = await lire("id, code_court, libelle, couleur, visible_operateurs, couleur_texte");
+    if (!r.error) return (r.data ?? []) as unknown as MotifRow[];
+    // Colonne couleur_texte (0099) pas encore en base : mêmes motifs, texte automatique.
+    const r2 = await lire("id, code_court, libelle, couleur, visible_operateurs");
+    if (r2.error) throw new Error(`motif_absence : ${r2.error.message}`); // jamais mémorisée
+    return ((r2.data ?? []) as unknown as Omit<MotifRow, "couleur_texte">[]).map((m) => ({ ...m, couleur_texte: null }));
   },
   ["refdata-motifs"],
   { ...OPTS, tags: [MOTIFS_TAG] }

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { texteSur } from "@/lib/couleur-texte";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import ModaleDeplacable from "@/components/ModaleDeplacable";
@@ -10,7 +11,7 @@ import { SaveIcon, TrashIcon, EditIcon } from "@/components/icons";
 
 type Personne = { id: string; nom: string; prenom: string; atelier_id: string | null };
 type Atelier = { id: string; nom: string };
-type Motif = { id: string; code_court: string; libelle: string; couleur: string };
+type Motif = { id: string; code_court: string; libelle: string; couleur: string; couleur_texte?: string | null };
 
 // Période affichée : reconstruite server-side depuis les jours (cf. page.tsx).
 // `absence_id` non nul = période déclarée (éditable en place) ; null = jours
@@ -329,7 +330,7 @@ export default function AbsencesEditor({
     const m = motifById.get(id);
     if (!m) return <span className="muted">—</span>;
     return (
-      <span className="sexe-pill" style={{ background: m.couleur || "#e5e7eb", color: "#1f2937", fontWeight: 600 }} title={m.libelle}>
+      <span className="sexe-pill" style={{ background: m.couleur || "#e5e7eb", color: texteSur(m.couleur || "#e5e7eb", m.couleur_texte), fontWeight: 600 }} title={m.libelle}>
         {m.code_court}
       </span>
     );
@@ -382,7 +383,7 @@ export default function AbsencesEditor({
         </td>
         <td style={cellStyle}>
           <button type="button" onClick={(e) => openPop("motif", e)} onMouseDown={(e) => e.stopPropagation()}
-            style={{ ...trig, background: m?.couleur ?? "#f1f5f9", color: "#1f2937", fontWeight: 600 }} title="Choisir le motif">
+            style={{ ...trig, background: m?.couleur ?? "#f1f5f9", color: texteSur(m?.couleur ?? "#f1f5f9", m?.couleur_texte), fontWeight: 600 }} title="Choisir le motif">
             {m ? <><strong>{m.code_court}</strong> · {m.libelle}</> : <span style={{ color: "#94a3b8" }}>Motif…</span>} ▾
           </button>
           {ouvertPop === "motif" && (

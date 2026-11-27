@@ -2,13 +2,13 @@ import { getServerClient } from "@/lib/supabase-server";
 import AppHeader from "@/components/AppHeader";
 import { requireModule, canWrite } from "@/lib/permissions";
 import { fetchAll } from "@/lib/fetch-all";
-import { getEquipesC } from "@/lib/refdata";
+import { getEquipesC, getMotifsC } from "@/lib/refdata";
 import { grouperAbsences, type JourAbsence } from "@/lib/absences-periodes";
 import { isoDate, addDays } from "@/lib/week";
 import AbsencesEditor, { type PeriodeVue } from "./AbsencesEditor";
 
 type Personne = { id: string; nom: string; prenom: string; atelier_id: string | null; equipe_id: string | null };
-type Motif = { id: string; code_court: string; libelle: string; couleur: string };
+type Motif = { id: string; code_court: string; libelle: string; couleur: string; couleur_texte?: string | null };
 type Atelier = { id: string; nom: string };
 
 // Écran « Absences spécifiques » (menu Planning). Comme la modale Personnel, la
@@ -48,7 +48,8 @@ export default async function AbsencesSpecifiquesPage({
     // afficher « ? » sur une absence dont la personne a changé de statut.
     // fetchAll : partis compris, l'effectif approche les 1000 lignes (troncature muette).
     fetchAll<Personne>(() => supabase.from("personne").select("id, nom, prenom, atelier_id, equipe_id").order("nom").order("id").returns<Personne[]>()),
-    supabase.from("motif_absence").select("id, code_court, libelle, couleur").eq("actif", true).order("libelle").returns<Motif[]>(),
+    // Motifs actifs du site, en cache (refdata) : portent aussi la couleur du texte (0099).
+    getMotifsC().then((data): { data: Motif[] } => ({ data })),
     supabase.from("atelier").select("id, nom").eq("actif", true).order("ordre_affichage").order("nom").returns<Atelier[]>(),
     // Jours d'absence (depuis la limite, ou tous), dédoublonnés par (personne,
     // jour). fetchAll : la table dépasse 1000 lignes (cf. CLAUDE.md L8).

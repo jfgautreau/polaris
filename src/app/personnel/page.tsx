@@ -2,13 +2,13 @@ import { getServerClient } from "@/lib/supabase-server";
 import AppHeader from "@/components/AppHeader";
 import { requireModule, canWrite } from "@/lib/permissions";
 import PersonnelEditor from "./PersonnelEditor";
-import { getRotationRefsC, getTypesAgenceC } from "@/lib/refdata";
+import { getRotationRefsC, getTypesAgenceC, getMotifsC } from "@/lib/refdata";
 import { fetchAll } from "@/lib/fetch-all";
 
 type Equipe = { id: string; nom: string; couleur: string | null; quart_fixe: string | null };
 type Quart = { code: string; libelle: string; creneau: string | null };
 type Atelier = { id: string; nom: string };
-type Motif = { id: string; code_court: string; libelle: string; couleur: string };
+type Motif = { id: string; code_court: string; libelle: string; couleur: string; couleur_texte?: string | null };
 type Row = {
   id: string;
   matricule: string | null;
@@ -111,7 +111,8 @@ export default async function PersonnelPage({
     supabase.from("quart").select("code, libelle, creneau").order("ordre").returns<Quart[]>(),
     getRotationRefsC(),
     // Motifs d absence : alimentent la declaration depuis la modale Absences.
-    supabase.from("motif_absence").select("id, code_court, libelle, couleur").eq("actif", true).order("libelle").returns<Motif[]>(),
+    // Motifs actifs du site, en cache (refdata) : portent aussi la couleur du texte (0099).
+    getMotifsC().then((data): { data: Motif[] } => ({ data })),
     // Types de contrat parametrables (migration 0040). Best-effort : si la
     // table n'existe pas encore, on retombe sur les 3 codes historiques.
     supabase.from("type_contrat").select("code, libelle").eq("actif", true).order("ordre").returns<{ code: string; libelle: string }[]>(),

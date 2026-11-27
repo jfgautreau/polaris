@@ -4,8 +4,10 @@
 // Valeurs d'une case : "" vide · "X" non travaillé · "TP" temps partiel posé ·
 // "m:<id>" absence · sinon l'identifiant d'un poste.
 //
-//  - Seuls un POSTE et le NON TRAVAILLÉ se recopient. Une absence ou un TP sont
-//    des périodes, gérées ailleurs : on ne les prolonge jamais par recopie.
+//  - Un POSTE et le NON TRAVAILLÉ se recopient. Une ABSENCE se recopie aussi,
+//    mais seulement par le » d'UNE personne (2026-11-27, `absences`) — jamais par
+//    le » d'un jour, qui prolongerait d'un clic les absences de toute une équipe.
+//    Un TP ne se recopie jamais.
 //  - Une recopie ÉCRASE les affectations déjà posées (poste, NT) — 2026-10-15 —
 //    mais ne touche JAMAIS une absence ni un TP.
 //  - Recopier une case VIDE (bouton » d'une personne seulement) vide la suite :
@@ -35,12 +37,14 @@ export type PlanRecopie = {
 export const estPoste = (v: string) => v !== "" && v !== "X" && v !== "TP" && !v.startsWith("m:");
 /** Valeur qui se recopie : un poste ou le non travaillé. */
 export const estRecopiable = (v: string) => estPoste(v) || v === "X";
+export const estAbsence = (v: string) => v.startsWith("m:");
 
-export function planRecopie(source: string, cibles: CaseCible[], viderPermis: boolean): PlanRecopie {
+/** `absences` : une absence en source se recopie aussi (» d'une personne). */
+export function planRecopie(source: string, cibles: CaseCible[], viderPermis: boolean, absences = false): PlanRecopie {
   const plan: PlanRecopie = { ecrire: [], laissees: 0, remplacees: 0, horsCycle: 0 };
   const vider = source === "";
   if (vider && !viderPermis) return plan;
-  if (!vider && !estRecopiable(source)) return plan;
+  if (!vider && !estRecopiable(source) && !(absences && estAbsence(source))) return plan;
   for (const c of cibles) {
     if (c.bloquee) continue;
     if (vider) {
@@ -48,11 +52,11 @@ export function planRecopie(source: string, cibles: CaseCible[], viderPermis: bo
       else if (c.valeur !== "") plan.laissees++; // absence ou TP : protégés
       continue;
     }
+    if (c.valeur === source) continue; // déjà la bonne valeur
     if (c.valeur !== "" && !estRecopiable(c.valeur)) {
-      plan.laissees++; // absence ou TP : protégés
+      plan.laissees++; // autre absence ou TP : protégés
       continue;
     }
-    if (c.valeur === source) continue; // déjà la bonne valeur
     if (estPoste(source) && c.horsCycle) {
       plan.horsCycle++;
       continue;

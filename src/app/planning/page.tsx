@@ -21,6 +21,7 @@ import AtelierFilter from "./AtelierFilter";
 import QuartSelector from "./QuartSelector";
 import ConducteurToggle from "./ConducteurToggle";
 import { TvIcon } from "@/components/icons";
+import { texteSur } from "@/lib/couleur-texte";
 import QuartBandeau from "./QuartBandeau";
 import PlanningGrid from "./PlanningGrid";
 import PlanningParPoste from "./PlanningParPoste";
@@ -87,7 +88,7 @@ type Placement = {
 type MatRow = { personne_id: string; poste_id: string; niveau_actuel: number };
 type PcrRow = { poste_id: string; competence_id: string; competence: { nom: string; duree_validite_mois: number | null } | null };
 type PcDetRow = { personne_id: string; competence_id: string; date_obtention: string | null; date_expiration: string | null };
-type Motif = { id: string; code_court: string; libelle: string; couleur: string };
+type Motif = { id: string; code_court: string; libelle: string; couleur: string; couleur_texte?: string | null };
 
 export default async function PlanningPage({
   searchParams,
@@ -1134,7 +1135,7 @@ export default async function PlanningPage({
           allGroups={allGridGroups}
           openByIso={openByIso}
           openAllByIso={openAllByIso}
-          motifs={motifs.map((m) => ({ id: m.id, code: m.code_court, couleur: m.couleur, libelle: m.libelle }))}
+          motifs={motifs.map((m) => ({ id: m.id, code: m.code_court, couleur: m.couleur, texte: texteSur(m.couleur, m.couleur_texte), libelle: m.libelle }))}
           formationMotifId={motifs.find((m) => m.libelle.toLowerCase().includes("formation"))?.id ?? null}
           besoin={besoin}
           initial={initial}

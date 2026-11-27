@@ -16,7 +16,8 @@ import FenetreAffichageInline from "./FenetreAffichageInline";
 import NomFichierInterimInline from "./NomFichierInterimInline";
 import { getCurrentSite } from "@/lib/current-site";
 import { CheckIcon, EditIcon } from "@/components/icons";
-import PastillesCouleur from "@/components/PastillesCouleur";
+import CouleursMotif from "./CouleursMotif";
+import { texteSur } from "@/lib/couleur-texte";
 
 type Motif = { id: string; libelle: string; code_court: string; couleur: string; actif: boolean; non_planifie: boolean; code_gt: string | null; visible_operateurs: boolean };
 type Agence = { id: string; nom: string; actif: boolean };
@@ -42,7 +43,7 @@ export default async function MotifsPage({
 
   const sp = await searchParams;
   const supabase = await getServerClient();
-  const [motifsR, agencesR, typesR, fenR, paramRhR, site, accueilsR, masquesR] = await Promise.all([
+  const [motifsR, agencesR, typesR, fenR, paramRhR, site, accueilsR, masquesR, textesR] = await Promise.all([
     supabase.from("motif_absence").select("id, libelle, code_court, couleur, actif, non_planifie, code_gt, visible_operateurs").order("libelle").returns<Motif[]>(),
     supabase.from("agence_interim").select("id, nom, actif").order("nom").returns<Agence[]>(),
     supabase.from("type_contrat").select("code, libelle, actif, ordre, avec_agence").order("ordre").returns<TypeContrat[]>(),
@@ -55,7 +56,11 @@ export default async function MotifsPage({
     // Motif masqué sur l'Affichage (0098) : lu À PART, pour qu'une migration pas
     // encore jouée ne fasse pas tomber les autres colonnes des motifs.
     supabase.from("motif_absence").select("id, masque_affichage").returns<{ id: string; masque_affichage: boolean }[]>(),
+    // Couleur du texte (0099) : lue à part, pour la même raison.
+    supabase.from("motif_absence").select("id, couleur_texte").returns<{ id: string; couleur_texte: string | null }[]>(),
   ]);
+  const texteDispo = !textesR.error;
+  const textes = new Map((textesR.data ?? []).map((m) => [m.id, m.couleur_texte]));
   const masqueDispo = !masquesR.error;
   const masques = new Map((masquesR.data ?? []).map((m) => [m.id, m.masque_affichage]));
   const accueils = accueilsR.data ?? [];
@@ -130,6 +135,14 @@ export default async function MotifsPage({
           toujours tous les motifs.
         </p>
         <p className="muted" style={{ marginTop: -8, marginBottom: 16 }}>
+          <strong>Couleurs</strong> : la couleur de la case et celle du texte se règlent avec le
+          crayon ; l&apos;aperçu montre le code tel qu&apos;il s&apos;affiche au Planning. Texte
+          « Auto » = noir ou blanc, selon la couleur de la case.
+          {!texteDispo && (
+            <> <strong style={{ color: "var(--danger)" }}>Exécutez la migration 0099</strong> dans le SQL Editor pour choisir la couleur du texte.</>
+          )}
+        </p>
+        <p className="muted" style={{ marginTop: -8, marginBottom: 16 }}>
           <strong>Motif masqué</strong> concerne l&apos;Affichage (plannings des écrans TV
           et leurs feuilles imprimées) : coché, la personne y est notée « Absence », sans
           motif ; décoché, le libellé du motif s&apos;affiche (« Formation »).
@@ -150,8 +163,8 @@ export default async function MotifsPage({
         <AjoutModal libelle="Ajouter un motif" titre="Ajouter un motif d'absence">
           <form action={createMotif} autoComplete="off" className="inline-form">
             <div className="field">
-              <span>Couleur</span>
-              <PastillesCouleur name="couleur" defaultValue="#e2e8f0" />
+              <span>Couleurs</span>
+              <CouleursMotif fondInitial="#e2e8f0" texteInitial={null} code="" avecTexte={texteDispo} />
             </div>
             <div className="field">
               <span>Libellé</span>
@@ -173,7 +186,7 @@ export default async function MotifsPage({
           <table>
             <thead>
               <tr>
-                <th>Couleur</th>
+                <th title="Couleur de la case, couleur du texte (« A » : automatique = noir ou blanc selon la case) et aperçu du code tel qu'il s'affiche au Planning. Se règlent avec le crayon." style={{ cursor: "help" }}>Couleurs</th>
                 <th>Libellé</th>
                 <th>Code</th>
                 <th style={{ width: 90 }}>Code GT</th>
@@ -195,7 +208,7 @@ export default async function MotifsPage({
                     <td>
                       <form id={`ed-motif-${m.id}`} action={updateMotif} autoComplete="off" />
                       <input form={`ed-motif-${m.id}`} type="hidden" name="id" value={m.id} />
-                      <PastillesCouleur form={`ed-motif-${m.id}`} name="couleur" defaultValue={m.couleur} />
+                      <CouleursMotif form={`ed-motif-${m.id}`} fondInitial={m.couleur} texteInitial={textes.get(m.id) ?? null} code={m.code_court} avecTexte={texteDispo} />
                     </td>
                     <td><input form={`ed-motif-${m.id}`} name="libelle" defaultValue={m.libelle} autoFocus required style={{ width: "100%" }} /></td>
                     <td><input form={`ed-motif-${m.id}`} name="code_court" defaultValue={m.code_court} maxLength={6} required style={{ width: 90 }} /></td>
@@ -217,7 +230,10 @@ export default async function MotifsPage({
                   </tr>
                 ) : (
                   <tr key={m.id} style={{ opacity: m.actif ? 1 : 0.55 }}>
-                    <td><span style={{ display: "inline-block", width: 20, height: 14, borderRadius: 3, background: m.couleur, border: "1px solid #cbd5e1" }} /></td>
+                    <td>
+                      {/* Aperçu : le code tel qu'il s'affiche au Planning (fond + texte). */}
+                      <span title="Aperçu du Planning" style={{ display: "inline-block", minWidth: 44, textAlign: "center", padding: "3px 8px", borderRadius: 4, background: m.couleur, color: texteSur(m.couleur, textes.get(m.id)), fontSize: 12, border: "1px solid #cbd5e1" }}>{m.code_court}</span>
+                    </td>
                     <td>{m.libelle}</td>
                     <td><strong>{m.code_court}</strong></td>
                     <td>{m.code_gt || <span className="muted">—</span>}</td>

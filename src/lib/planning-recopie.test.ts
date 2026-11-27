@@ -30,6 +30,13 @@ describe("recopie du Planning", () => {
   it("une absence ou un TP ne se recopient jamais", () => {
     expect(planRecopie("m:cp", [c("mar")], true).ecrire).toEqual([]);
     expect(planRecopie("TP", [c("mar")], true).ecrire).toEqual([]);
+    expect(planRecopie("TP", [c("mar")], true, true).ecrire).toEqual([]);
+  });
+  it("» d'une personne : une absence se recopie, remplace un poste, garde une autre absence et un TP", () => {
+    const p = planRecopie("m:jnt", [c("mar"), c("mer", "poste1"), c("jeu", "m:cp"), c("ven", "TP"), c("sam", "m:jnt"), c("dim", "", { bloquee: true })], true, true);
+    expect(p.ecrire).toEqual([{ iso: "mar", valeur: "m:jnt" }, { iso: "mer", valeur: "m:jnt" }]);
+    expect(p.remplacees).toBe(1);
+    expect(p.laissees).toBe(2);
   });
   it("case bloquée jamais touchée ; poste hors cycle signalé", () => {
     const p = planRecopie("poste1", [c("mar", "", { bloquee: true }), c("mer", "", { horsCycle: true }), c("jeu")], true);
