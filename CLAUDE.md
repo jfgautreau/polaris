@@ -364,8 +364,10 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
 - **Clés JWKS partagées** (`src/lib/jwks.ts`, 2026-10-16) : `getClaims(undefined, await
   optionsClaims())` (proxy, `getCurrentProfile`, auteur du journal) — mémoire 10 min + cache de
   données 1 h, repli sur la lecture de la bibliothèque. Tout nouvel appel à `getClaims` fait de même.
-- **Cache navigateur** : `staleTimes.dynamic = 30` + `GardeCacheNavigation` (après toute
-  écriture, une page mise en cache avant est rechargée complètement).
+- **Pas de cache de navigation côté navigateur** (2026-11-27) : `staleTimes` et `GardeCacheNavigation` retirés — le cache
+  de 30 s réaffichait l'état d'avant une saisie (Planning, bascule Matin / Après-midi) et le garde-fou ne voyait plus
+  `router.push` (Next 16 : `useRouter()` rend une copie par composant, la surcharger ne sert à rien). Chaque navigation
+  relit la page ; ne pas remettre `staleTimes.dynamic` sans invalidation à l'écriture, ni de `window.location` pour « rafraîchir ».
 - **React Compiler** en mode opt-in (`"use memo"`, `next.config.ts`) : actif sur
   Personnel (`PersonnelEditor` + `LignePersonne`) et Planning (`PlanningGrid` +
   `LignePlanning`). Motif : ligne extraite et `memo`, props stables (valeurs en chaînes,
@@ -582,7 +584,7 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   `nom-fichier-interim` (nom de l'Excel intérim), `syntheses-export` (PDF / Excel des Synthèses, photo et
   comparaison des extractions), `habilitations-familles` (+ `-server`, sous-droits par famille),
   `mise-en-page-pdf` (grille, validation, cases des postes), `gpec` (+ `-data`, projection des effectifs).
-- `src/components/` : `AppHeader`, `MainNav`, `GardeCacheNavigation`, `icons`,
+- `src/components/` : `AppHeader`, `MainNav`, `icons`,
   `ModaleDeplacable`, `InfoBulle`, `usePersonGrid`, `persongrid.module.css`,
   `PastillesCouleur`, composants partagés listés plus haut.
 - Guide utilisateur : `public/guide.html` ; « Qui fait quoi ? » : `public/qui-fait-quoi.html`

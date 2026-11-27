@@ -12,7 +12,6 @@ import { lienGuide } from "@/lib/nom-application";
 import { getAlertesHabilitationsC } from "@/lib/refdata";
 import { COOKIE_QUART } from "@/lib/filtres-session";
 import MainNav from "@/components/MainNav";
-import GardeCacheNavigation from "@/components/GardeCacheNavigation";
 import SettingsMenu from "@/components/SettingsMenu";
 import UserMenu from "@/components/UserMenu";
 import Logo from "@/components/Logo";
@@ -151,8 +150,6 @@ export default async function AppHeader({
             active={active}
             quartSession={quartSession}
           />
-          {/* Cache de navigation 30 s (P8) : jamais d'état antérieur à une saisie. */}
-          <GardeCacheNavigation />
         </Suspense>
       </nav>
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>

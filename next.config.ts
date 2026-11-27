@@ -49,14 +49,14 @@ const nextConfig: NextConfig = {
   // d'abord sur Personnel (PersonnelEditor + LignePersonne), à étendre écran par
   // écran après vérification. Nécessite babel-plugin-react-compiler (devDep).
   reactCompiler: { compilationMode: "annotation" },
-  experimental: {
-    // Perf P8 (2026-09-28) : une page déjà visitée est gardée 30 s dans le
-    // navigateur — y revenir par le menu est instantané. Contrepartie : les
-    // modifications faites par D'AUTRES postes peuvent mettre jusqu'à 30 s à
-    // apparaître sur un écran revisité. Les modifications faites sur CE poste ne
-    // sont jamais masquées : cf. src/components/GardeCacheNavigation.tsx.
-    staleTimes: { dynamic: 30 },
-  },
+  // PAS de `experimental.staleTimes` (retiré le 2026-11-27) : garder 30 s dans le
+  // navigateur une page déjà visitée réaffichait l'état d'AVANT une saisie
+  // (Planning : affectation posée ou retirée sur Matin, passage par Après-midi,
+  // retour sur Matin → ancienne version). Le garde-fou qui devait l'empêcher
+  // (GardeCacheNavigation, surcharge de router.push) ne voyait plus les filtres :
+  // depuis Next 16, useRouter() rend une COPIE du routeur à chaque composant.
+  // Par défaut (0 s) chaque navigation relit la page : toujours à jour, sans
+  // rechargement complet. Ne pas remettre ce cache sans invalidation à l'écriture.
 };
 
 export default nextConfig;

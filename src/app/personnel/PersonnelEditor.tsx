@@ -868,8 +868,8 @@ export default function PersonnelEditor({
       // masquent, la faire défiler jusqu'à l'écran et la surligner.
       setNouveauId(created.id);
       // Plus de router.refresh() : la ligne est déjà dans l'état (useState(initial)
-      // ne serait pas remplacé) et le retour sur /personnel après une écriture est
-      // rechargé par GardeCacheNavigation — le refresh relisait tout pour rien.
+      // ne serait pas remplacé) et toute navigation relit la page (aucun cache de
+      // navigation côté navigateur) — le refresh relisait tout pour rien.
     }
   }
 
