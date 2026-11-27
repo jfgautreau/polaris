@@ -21,41 +21,16 @@ import { BoutonExcel, BoutonImprimer, BoutonPdf } from "@/app/bilans/BoutonsExpo
 // Contexte du nom des fichiers Excel intérim (forme réglée dans Param. RH, 0093).
 export type ContexteFichierInterim = { forme: string | null; site: string; semaine: number; annee: number; lundi: string };
 
-// Boutons PDF / Excel des Synthèses : fichiers construits dans le navigateur à
-// partir des données déjà affichées (filtres compris).
+// Boutons PDF / Excel des absences (Synthèses) : fichiers construits dans le
+// navigateur à partir des données déjà affichées (filtres compris). L'intérim
+// n'a que des exports par agence (ExportAgence).
 // `nomApp` : nom de l'application du site (0095), imprimé au pied des PDF.
-type Props = { nomApp: string } & (
-  | { vue: "interim"; groupes: GroupeAgence[]; jours: JourExport[]; semaineLabel: string; fichier: ContexteFichierInterim }
-  | { vue: "absences"; abs: Absences4; colonnes: ColonneAbsence[]; rangeLabel: string; filtres: string }
-);
+type Props = { nomApp: string; abs: Absences4; colonnes: ColonneAbsence[]; rangeLabel: string; filtres: string };
 
 const nomExcel = (f: ContexteFichierInterim, agence: string, maintenant: Date) =>
   nomFichierInterim(f.forme, { agence, semaine: f.semaine, annee: f.annee, site: f.site, maintenant });
 
-export default function ExportSyntheses(props: Props) {
-  if (props.vue === "interim") {
-    const { groupes, jours, semaineLabel, fichier, nomApp } = props;
-    const sem = nomFichierSur(semaineLabel.split(" ")[0]);
-    const vide = groupes.length === 0;
-    return (
-      <>
-        <BoutonPdf
-          disabled={vide}
-          title="Télécharger le PDF de toutes les agences (une agence par page)"
-          onClick={() => telechargerFichier(documentPdf(pdfInterim(groupes, jours, semaineLabel, undefined, nomApp)), `interim-${sem}.pdf`, TYPE_PDF)}
-        />
-        <BoutonExcel
-          disabled={vide}
-          title="Télécharger le planning des intérimaires (toutes agences) au format Excel, horodaté"
-          onClick={() => {
-            const maintenant = new Date();
-            telechargerFichier(classeurXlsx(xlsxInterim(groupes, jours, semaineLabel, { maintenant })), nomExcel(fichier, "toutes agences", maintenant), TYPE_XLSX);
-          }}
-        />
-      </>
-    );
-  }
-  const { abs, colonnes, rangeLabel, filtres, nomApp } = props;
+export default function ExportSyntheses({ abs, colonnes, rangeLabel, filtres, nomApp }: Props) {
   const nom = `absences-${nomFichierSur(rangeLabel.replace("→", "a"))}`;
   const vide = abs.lignes.length === 0;
   return (

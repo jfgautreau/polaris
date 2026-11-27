@@ -111,13 +111,15 @@ export default async function SynthesesPage({
                 : "Planning prévisionnel des intérimaires, par agence — exports PDF et Excel."}
             </div>
           </div>
-          <ReportActions showPdf={false}>
-            {vue === "interim" ? (
-              <ExportSyntheses nomApp={nomApp} vue="interim" groupes={groupes} jours={joursExport} semaineLabel={semaineLabel} fichier={fichier} />
-            ) : (
-              <ExportSyntheses nomApp={nomApp} vue="absences" abs={abs} colonnes={colonnesExport} rangeLabel={rangeLabel} filtres={filtresTxt} />
-            )}
-          </ReportActions>
+          {/* Intérim : les exports sont par agence seulement (PDF agence, imprimante,
+              Excel agence dans chaque bloc) — aucun export global en tête. */}
+          {vue === "interim" ? (
+            <ReportActions showPrint={false} />
+          ) : (
+            <ReportActions showPdf={false}>
+              <ExportSyntheses nomApp={nomApp} abs={abs} colonnes={colonnesExport} rangeLabel={rangeLabel} filtres={filtresTxt} />
+            </ReportActions>
+          )}
         </div>
 
         <SyntheseFilters
