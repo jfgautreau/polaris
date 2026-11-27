@@ -476,7 +476,7 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   sur la relève globale). Synthèses (absences sur 4 semaines, intérim par agence ; liste
   « Sans affectation cette semaine » = aucune ligne `placement` de la semaine ET un contrat qui
   couvre au moins un jour, `placeInterimaire()` ; JNT / absence seuls = nulle part ; exports
-  PDF / Excel par `src/lib/syntheses-export.ts`, global et par agence). **Excel intérim** (2026-11-05,
+  PDF / Excel par `src/lib/syntheses-export.ts`, global et par agence). **PDF intérim** (2026-11-27) : case = « Service : horaire » sur une ligne, SANS poste ; samedi / dimanche seulement s'ils portent une affectation ; le PDF d'UNE agence est réduit pour tenir sur une page (`DocumentPdf.unePage`, échelle mini 0,6 dans `pdf.ts`). **Excel intérim** (2026-11-05,
   0093) : case = horaire + service, SANS poste, fond = `atelier.couleur` (pastel, `service-couleurs.ts`,
   choisie au Référentiel) ; plus de colonne « Service d'affectation » ; horodaté (titre + nom de fichier,
   forme `parametre_rh.interim_nom_fichier` réglée dans Param. RH, `nom-fichier-interim.ts`) ; week-end

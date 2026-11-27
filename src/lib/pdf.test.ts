@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { documentPdf, couperTexte, largeurTexte, normaliserTexte } from "./pdf";
+import { documentPdf, pagesPdf, couperTexte, largeurTexte, normaliserTexte } from "./pdf";
 import { pdfInterim, xlsxInterim, pdfAbsences, xlsxAbsences, texteCaseInterim, texteCaseExcel, photoInterim, JAUNE_FLUO, LIBELLE_RETIRE } from "./syntheses-export";
 import { nomFichierInterim } from "./nom-fichier-interim";
 import { estCouleurService, couleurDeService } from "./service-couleurs";
@@ -95,8 +95,8 @@ const J = [
 ];
 
 describe("exports Synthèses", () => {
-  it("case intérim : horaire, poste, service", () => {
-    expect(texteCaseInterim(G[0].lignes[0], "2026-10-19")).toBe("06:00-14:00\nPalettisation\nCondi");
+  it("case intérim du PDF : « service : horaire » sur une ligne, sans le poste", () => {
+    expect(texteCaseInterim(G[0].lignes[0], "2026-10-19")).toBe("Condi : 06:00-14:00");
     expect(texteCaseInterim(G[0].lignes[0], "2026-10-20")).toBe("");
   });
   it("PDF intérim : une agence par page, sans affectation listés", () => {
@@ -105,6 +105,20 @@ describe("exports Synthèses", () => {
     expect(d.blocs.some((b) => b.type === "texte" && b.texte.includes("MARTIN Léa"))).toBe(true);
     verifierXref(lire(documentPdf(d)));
     expect(pdfInterim([G[0]], J, "S43").sousTitre).toContain("Agence A");
+  });
+  it("PDF agence : week-end vide retiré, réduit pour tenir sur une page", () => {
+    const sem = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"].map((nom, i) => ({ iso: `2026-10-${19 + i}`, nom, num: `${19 + i}/10` }));
+    const cell = [{ posteNom: "Palettisation", atelierNom: "Condi", atelierCouleur: null, distant: false, horaire: "06:00-14:00" }];
+    const ligne = (n: number, samedi: boolean) => ({ personneId: `i${n}`, nom: `NOM${n}`, prenom: "P", cells: Object.fromEntries(sem.slice(0, samedi ? 6 : 5).map((j) => [j.iso, cell])) });
+    const colonnes = (g: unknown[]) => (pdfInterim([{ agence: "A", lignes: g, sansAffectation: [] }] as never, sem, "S43").blocs.find((b) => b.type === "tableau") as { colonnes: unknown[] }).colonnes.length;
+    expect(colonnes([ligne(1, false)])).toBe(6); // nom + lundi → vendredi
+    expect(colonnes([ligne(1, true)])).toBe(7); // samedi travaillé : colonne gardée
+    const grand = pdfInterim([{ agence: "A", lignes: Array.from({ length: 45 }, (_, n) => ligne(n, false)), sansAffectation: [] }] as never, sem, "S43");
+    expect(grand.unePage).toBe(true);
+    expect(pagesPdf(grand)).toBeGreaterThan(1); // à taille normale : deux pages
+    const pdf = lire(documentPdf(grand));
+    expect(pdf).toContain("/Count 1 ");
+    verifierXref(pdf);
   });
   it("Excel intérim : une ligne par intérimaire, sans le poste, couleur du service", () => {
     expect(texteCaseExcel(G[0].lignes[0], "2026-10-19")).toBe("06:00-14:00\nCondi");

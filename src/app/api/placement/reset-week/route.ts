@@ -43,6 +43,6 @@ export async function POST(req: NextRequest) {
   const profile = await getCurrentProfile();
   if (!profile) return traiterPOST(req);
   const b = (await req.clone().json().catch(() => null)) as { personne_ids?: string[]; jours?: string[] } | null;
-  const fr = (iso?: string) => (iso && /^d{4}-d{2}-d{2}$/.test(iso) ? iso.split("-").reverse().join("/") : iso ?? "");
+  const fr = (iso?: string) => (iso && /^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso.split("-").reverse().join("/") : iso ?? "");
   return avecLotJournal(profile.siteId, `Réinitialisation — ${b?.personne_ids?.length ?? 0} personne(s), ${b?.jours?.length ?? 0} jour(s)${b?.jours?.length ? ` à partir du ${fr([...b.jours].sort()[0])}` : ""}`, () => traiterPOST(req));
 }

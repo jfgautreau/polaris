@@ -183,6 +183,6 @@ export async function POST(req: NextRequest) {
   const profile = await getCurrentProfile();
   if (!profile) return traiterPOST(req);
   const b = (await req.clone().json().catch(() => null)) as Record<string, unknown> | null;
-  const fr = (iso?: string) => (iso && /^d{4}-d{2}-d{2}$/.test(iso) ? iso.split("-").reverse().join("/") : iso ?? "");
+  const fr = (iso?: string) => (iso && /^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso.split("-").reverse().join("/") : iso ?? "");
   return avecLotJournal(profile.siteId, `Absence — ${String(b?.op ?? "")}${b?.date_debut ? ` du ${fr(String(b.date_debut))}` : ""}${b?.date_fin ? ` au ${fr(String(b.date_fin))}` : ""}`, () => traiterPOST(req));
 }

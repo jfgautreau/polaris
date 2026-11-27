@@ -155,6 +155,6 @@ export async function POST(req: NextRequest) {
   const profile = await getCurrentProfile();
   if (!profile) return traiterPOST(req);
   const b = (await req.clone().json().catch(() => null)) as { source?: string; cible?: string; quart?: string; mode?: string } | null;
-  const fr = (iso?: string) => (iso && /^d{4}-d{2}-d{2}$/.test(iso) ? iso.split("-").reverse().join("/") : iso ?? "");
+  const fr = (iso?: string) => (iso && /^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso.split("-").reverse().join("/") : iso ?? "");
   return avecLotJournal(profile.siteId, `${b?.mode === "completer" ? "Copie (compléter)" : "Copie (écraser)"} des affectations du ${fr(b?.source)} vers le ${fr(b?.cible)}${b?.quart ? ` — quart ${b.quart}` : ""}`, () => traiterPOST(req));
 }

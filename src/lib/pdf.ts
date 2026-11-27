@@ -20,7 +20,10 @@ export type BlocPdf =
   | { type: "titre"; texte: string; nouvellePage?: boolean }
   | { type: "texte"; texte: string; couleur?: string; gras?: boolean }
   | { type: "tableau"; colonnes: ColonnePdf[]; lignes: CellulePdf[][] };
-export type DocumentPdf = { titre: string; sousTitre?: string; portrait?: boolean; edition?: string; blocs: BlocPdf[] };
+// `unePage` : le contenu est réduit (texte, interligne, retraits) jusqu'à tenir
+// sur une seule page, sans descendre sous ECHELLE_MIN (au-delà : plusieurs pages,
+// à cette taille minimale).
+export type DocumentPdf = { titre: string; sousTitre?: string; portrait?: boolean; edition?: string; unePage?: boolean; blocs: BlocPdf[] };
 
 // ── Métriques Helvetica (AFM Adobe, 1/1000 em), caractères 32 à 126 ─────────
 const L_REG = [
@@ -131,13 +134,28 @@ function rgb(c: string | undefined, def: [number, number, number]): string {
 
 // ── Mise en page ─────────────────────────────────────────────────────────────
 const MARGE = 28;
-const T_TABLE = 7.5;
-const INTERLIGNE = 9.2;
-const PAD = 3;
+const ECHELLE_MIN = 0.6; // 7,5 pt × 0,6 = 4,5 pt : limite de lisibilité à l'impression
 const NOIR: [number, number, number] = [0.12, 0.16, 0.22];
 const GRIS: [number, number, number] = [0.39, 0.45, 0.55];
 
 export function documentPdf(doc: DocumentPdf): Uint8Array {
+  if (!doc.unePage) return construire(doc, 1).octets;
+  let r = construire(doc, 1);
+  for (let k = 0.95; r.pages > 1 && k >= ECHELLE_MIN - 1e-9; k -= 0.05) r = construire(doc, k);
+  return r.octets;
+}
+
+/** Nombre de pages du document à l'échelle 1 (tests, diagnostics). */
+export function pagesPdf(doc: DocumentPdf): number {
+  return construire({ ...doc, unePage: false }, 1).pages;
+}
+
+// `k` : échelle du contenu (tableaux, titres et textes de bloc) ; l'en-tête et
+// le pied de page gardent leur taille.
+function construire(doc: DocumentPdf, k: number): { octets: Uint8Array; pages: number } {
+  const T_TABLE = 7.5 * k;
+  const INTERLIGNE = 9.2 * k;
+  const PAD = 3 * k;
   const W = doc.portrait ? 595.28 : 841.89;
   const H = doc.portrait ? 841.89 : 595.28;
   const largeurUtile = W - 2 * MARGE;
@@ -164,20 +182,20 @@ export function documentPdf(doc: DocumentPdf): Uint8Array {
     if (bloc.type === "titre") {
       // Un titre ne reste jamais seul en bas de page.
       if ((bloc.nouvellePage && y < HAUT) || y - 60 < BAS) nouvellePage();
-      const lignes = couperTexte(bloc.texte, largeurUtile, 11, true);
+      const lignes = couperTexte(bloc.texte, largeurUtile, 11 * k, true);
       for (const l of lignes) {
-        y -= 13;
-        texte(l, MARGE, y, 11, true, rgb(undefined, NOIR));
+        y -= 13 * k;
+        texte(l, MARGE, y, 11 * k, true, rgb(undefined, NOIR));
       }
-      y -= 6;
+      y -= 6 * k;
     } else if (bloc.type === "texte") {
-      const lignes = couperTexte(bloc.texte, largeurUtile, 8.5, !!bloc.gras);
+      const lignes = couperTexte(bloc.texte, largeurUtile, 8.5 * k, !!bloc.gras);
       for (const l of lignes) {
-        if (y - 11 < BAS) nouvellePage();
-        y -= 11;
-        texte(l, MARGE, y, 8.5, !!bloc.gras, rgb(bloc.couleur, GRIS));
+        if (y - 11 * k < BAS) nouvellePage();
+        y -= 11 * k;
+        texte(l, MARGE, y, 8.5 * k, !!bloc.gras, rgb(bloc.couleur, GRIS));
       }
-      y -= 6;
+      y -= 6 * k;
     } else {
       const total = bloc.colonnes.reduce((s, c) => s + c.largeur, 0) || 1;
       const larg = bloc.colonnes.map((c) => (c.largeur / total) * largeurUtile);
@@ -193,10 +211,10 @@ export function documentPdf(doc: DocumentPdf): Uint8Array {
           const fond = c.o.fond ?? (entete ? "#e2e8f0" : undefined);
           rect(xs[i], y - h, larg[i], h, fond);
           const align = c.o.align ?? bloc.colonnes[i].align ?? "g";
-          c.lignes.forEach((l, k) => {
+          c.lignes.forEach((l, rang) => {
             const lw = largeurTexte(l, T_TABLE, c.gras);
             const x = align === "c" ? xs[i] + (larg[i] - lw) / 2 : align === "d" ? xs[i] + larg[i] - PAD - lw : xs[i] + PAD;
-            texte(l, x, y - PAD - T_TABLE - k * INTERLIGNE + 1.5, T_TABLE, c.gras, rgb(c.o.couleur, NOIR));
+            texte(l, x, y - PAD - T_TABLE - rang * INTERLIGNE + 1.5 * k, T_TABLE, c.gras, rgb(c.o.couleur, NOIR));
           });
         });
         y -= h;
@@ -215,7 +233,7 @@ export function documentPdf(doc: DocumentPdf): Uint8Array {
         }
         dessinerRangee(m, h, false);
       }
-      y -= 10;
+      y -= 10 * k;
     }
   }
 
@@ -260,7 +278,7 @@ export function documentPdf(doc: DocumentPdf): Uint8Array {
   pdf += `xref\n0 ${objets.length}\n0000000000 65535 f \n`;
   for (let i = 1; i < objets.length; i++) pdf += `${String(offsets[i]).padStart(10, "0")} 00000 n \n`;
   pdf += `trailer\n<< /Size ${objets.length} /Root 1 0 R /Info 5 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
-  return new TextEncoder().encode(pdf);
+  return { octets: new TextEncoder().encode(pdf), pages: n };
 }
 
 // Chaîne d'information (titre du document) en UTF-16BE, hors contenu des pages.

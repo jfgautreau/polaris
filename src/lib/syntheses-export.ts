@@ -17,10 +17,12 @@ const pluriel = (n: number, mot: string) => `${n} ${mot}${n > 1 ? "s" : ""}`;
 export const LIBELLE_SANS_AFFECTATION = "Sans affectation cette semaine";
 export const PRECISION_SANS_AFFECTATION = "aucune ligne au Planning cette semaine : ni poste, ni JNT, ni absence";
 
-// Contenu d'une case intérim : horaire, poste, service — plusieurs affectations
-// le même jour séparées par une ligne vide.
+// Contenu d'une case intérim du PDF (2026-11-27) : « Service : horaire » sur UNE
+// ligne, SANS le poste (comme l'Excel) — une ligne par affectation du jour.
 export function texteCaseInterim(p: LigneInterim, iso: string): string {
-  return (p.cells[iso] ?? []).map((c) => [c.horaire, c.posteNom, c.atelierNom].filter(Boolean).join("\n")).join("\n\n");
+  return (p.cells[iso] ?? [])
+    .map((c) => [c.atelierNom === "—" ? "" : c.atelierNom, c.horaire].filter(Boolean).join(" : "))
+    .join("\n");
 }
 
 // `nomApp` : nom de l'application du site (0095), défaut « Polaris ».
@@ -33,6 +35,10 @@ export function edition(maintenant = new Date(), nomApp = NOM_APPLICATION_DEFAUT
 
 export function pdfInterim(groupes: GroupeAgence[], jours: JourExport[], semaineLabel: string, maintenant?: Date, nomApp?: string): DocumentPdf {
   const blocs: BlocPdf[] = [];
+  // Samedi et dimanche seulement s'ils portent une affectation (comme l'Excel) :
+  // les colonnes des jours ouvrés sont plus larges, les cases tiennent sur une ligne.
+  const occupe = (iso: string) => groupes.some((g) => g.lignes.some((p) => (p.cells[iso] ?? []).length > 0));
+  jours = jours.filter((j, i) => i < 5 || occupe(j.iso));
   groupes.forEach((g, i) => {
     const sansAff = g.sansAffectation.length ? ` · ${g.sansAffectation.length} sans affectation` : "";
     blocs.push({ type: "titre", texte: `${g.agence} — ${pluriel(g.lignes.length, "placé")}${sansAff}`, nouvellePage: i > 0 });
@@ -55,6 +61,9 @@ export function pdfInterim(groupes: GroupeAgence[], jours: JourExport[], semaine
     titre: "Planning prévisionnel des intérimaires",
     sousTitre: `Semaine ${semaineLabel}${agence}`,
     edition: edition(maintenant, nomApp),
+    // PDF d'UNE agence : réduit jusqu'à tenir sur une page (le PDF global garde
+    // une page par agence).
+    unePage: groupes.length === 1,
     blocs,
   };
 }
