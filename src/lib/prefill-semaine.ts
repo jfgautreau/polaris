@@ -1,6 +1,8 @@
-// Chargement d'une semaine « TP + pré-affectation » côté navigateur, partagé par
-// le Planning (bouton par semaine) et le Placement (bouton de la semaine du jour
-// affiché) : même question, même appel à /api/placement/prefill, mêmes messages.
+// Pré-remplissage côté navigateur, autour de /api/placement/prefill :
+//  - Planning : « TP + pré-affectation » d'une SEMAINE (tout le site) ;
+//  - Placement : « Pré-affectation » du JOUR affiché, pour le service et le quart
+//    affichés seulement (2026-11-27) — sans matérialiser le temps partiel.
+// Mêmes messages (non placés, sans numéro) dans les deux cas.
 // Aucune de ces fonctions ne lève (le React Compiler renonce sur un try/finally
 // ou un throw dans un composant : le réseau reste ici, hors composant).
 
@@ -32,12 +34,12 @@ const texteSansNumero = (sn: NonPlace[] | undefined): string =>
     : "";
 
 // `reseau` : la requête n'a pas abouti (exception) ; sinon `ok` + corps décodé.
-async function envoyerPrefill(monday: string): Promise<{ reseau: true } | { reseau: false; ok: boolean; j: ReponsePrefill }> {
+async function envoyerPrefill(corps: Record<string, unknown>): Promise<{ reseau: true } | { reseau: false; ok: boolean; j: ReponsePrefill }> {
   try {
     const r = await fetch("/api/placement/prefill", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ semaines: [monday] }),
+      body: JSON.stringify(corps),
     });
     const j = (await r.json().catch(() => ({}))) as ReponsePrefill;
     return { reseau: false, ok: r.ok, j };
@@ -61,7 +63,23 @@ export function confirmerPrefill(label: string): boolean {
  *               doit se recharger pour les montrer.
  */
 export async function chargerSemaine(monday: string, label: string): Promise<"erreur" | "rien" | "charge"> {
-  const r = await envoyerPrefill(monday);
+  return traiterReponse(await envoyerPrefill({ semaines: [monday] }), `Semaine ${label}`, false);
+}
+
+/** Question posée avant de pré-affecter le jour affiché au Placement. */
+export function confirmerPrefillJour(label: string): boolean {
+  return window.confirm(
+    `Pré-affecter ${label} ?\n\nChaque personne à poste fixe de ce service, dont l'équipe est sur ce quart ce jour-là, est placée sur son poste (place numérotée : son dernier numéro s'il est libre).\n\nRien d'autre n'est touché : ni les autres jours, ni les autres services, ni les autres quarts. Les cases déjà remplies (absence, temps partiel, autre poste) ne sont jamais écrasées.`,
+  );
+}
+
+/** Pré-affecte le seul jour `jour`, pour le service et le quart affichés (mêmes retours que `chargerSemaine`). */
+export async function chargerJour(jour: string, atelierId: string, quart: string, label: string): Promise<"erreur" | "rien" | "charge"> {
+  return traiterReponse(await envoyerPrefill({ jour, atelierId, quart }), label, true);
+}
+
+type Envoi = Awaited<ReturnType<typeof envoyerPrefill>>;
+function traiterReponse(r: Envoi, sujet: string, jourSeul: boolean): "erreur" | "rien" | "charge" {
   if (r.reseau) {
     window.alert("Chargement impossible : le serveur n'a pas répondu. Réessayez.");
     return "erreur";
@@ -75,13 +93,17 @@ export async function chargerSemaine(monday: string, label: string): Promise<"er
   const completes = j.completes ?? 0;
   if ((j.crees ?? 0) === 0 && completes === 0) {
     // Rien créé : on explique pourquoi (souvent : cases déjà remplies).
-    window.alert(`Semaine ${label} : rien à créer (TP ${j.tp ?? 0}, postes fixes ${j.fixe ?? 0}). Cases déjà remplies non écrasées. Marqueur TP : ${j.marqueur ?? "?"}.${alertes}`);
+    window.alert(
+      jourSeul
+        ? `${sujet} : personne à pré-affecter (aucun titulaire de ce service sur ce quart ce jour-là, ou cases déjà remplies).${alertes}`
+        : `${sujet} : rien à créer (TP ${j.tp ?? 0}, postes fixes ${j.fixe ?? 0}). Cases déjà remplies non écrasées. Marqueur TP : ${j.marqueur ?? "?"}.${alertes}`,
+    );
     return "rien";
   }
   // Des titulaires non placés : on le dit AVANT le rechargement de la vue.
   if (alertes !== "" || completes > 0)
     window.alert(
-      `Semaine ${label} chargée.${completes > 0 ? `\n\n${completes} affectation(s) déjà posée(s) complétée(s) d'un numéro de rotation.` : ""}${alertes}`,
+      `${sujet} : ${jourSeul ? "pré-affectation faite" : "chargée"}.${completes > 0 ? `\n\n${completes} affectation(s) déjà posée(s) complétée(s) d'un numéro de rotation.` : ""}${alertes}`,
     );
   return "charge";
 }

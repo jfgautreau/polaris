@@ -1019,8 +1019,10 @@ export default async function PlanningPage({
     <>
       {atelier && (
         <Link
-          href={`/affichage/atelier/${atelier}`}
-          target="_blank"
+          // Même onglet, calé sur la semaine affichée (2026-11-27) : l'écran s'ouvre
+          // en semaines entières, avec S−1 / S+1 et un retour au Planning.
+          href={`/affichage/atelier/${atelier}?semaine=${centerIso}`}
+          prefetch={false}
           title={`Affichage TV — ${ateliersMap.get(atelier) ?? "service"}`}
           aria-label="Affichage TV du service"
           style={{ width: 30, height: 30, boxSizing: "border-box", flex: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", padding: 0, lineHeight: 1, color: "#1d4ed8", border: "1px solid var(--border)", borderRadius: 8, background: "#fff", textDecoration: "none" }}

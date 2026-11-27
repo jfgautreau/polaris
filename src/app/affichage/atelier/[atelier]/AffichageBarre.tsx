@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import Logo from "@/components/Logo";
-import { addDays, isoDate } from "@/lib/week";
+import { addDays, isoDate, isoWeekNumber, mondayOf } from "@/lib/week";
 
 // Barre d'actions de l'ecran TV : retour au menu Affichage, choix de la semaine
 // affichee, impression PDF et retour a l'application. Masquee a l'impression
@@ -28,12 +28,18 @@ export default function AffichageBarre({
   debutIso,
   finIso,
   estCourant,
+  semaine = null,
+  retourPlanning = null,
 }: {
   cadreId: string;
   pivotIso: string;
   debutIso: string;
   finIso: string;
   estCourant: boolean;
+  // Mode « semaine entière » (ouvert depuis le Planning) : lundi affiché, et lien
+  // de retour vers le Planning sur cette semaine.
+  semaine?: string | null;
+  retourPlanning?: string | null;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -42,8 +48,13 @@ export default function AffichageBarre({
   // (cf. joursDeFenetre). ± 7 jours = semaine precedente / suivante ; « cette
   // semaine » retire le parametre (retour au pivot = aujourd'hui).
   const pivot = new Date(pivotIso + "T00:00");
-  const allerA = (iso: string | null) =>
-    router.push(iso ? `${pathname}?date=${iso}` : pathname);
+  // En mode semaine entière, on reste calé sur les lundis (`?semaine`) et l'on
+  // REMPLACE l'entrée d'historique : le bouton Précédent du navigateur ramène au
+  // Planning, pas à la semaine d'avant.
+  const allerA = (iso: string | null) => {
+    if (semaine) router.replace(`${pathname}?semaine=${iso ?? isoDate(mondayOf())}`);
+    else router.push(iso ? `${pathname}?date=${iso}` : pathname);
+  };
 
   return (
     <>
@@ -58,9 +69,9 @@ export default function AffichageBarre({
         {/* Retour à l'écran de base (choix des services), sans passer par le
             bouton Précédent du navigateur. */}
         <Link
-          href="/affichage"
+          href={retourPlanning ?? "/affichage"}
           prefetch={false}
-          title="Revenir au choix des services (menu Affichage)"
+          title={retourPlanning ? "Revenir au Planning, sur cette semaine" : "Revenir au choix des services (menu Affichage)"}
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -78,7 +89,7 @@ export default function AffichageBarre({
             whiteSpace: "nowrap",
           }}
         >
-          <span aria-hidden="true" style={{ fontSize: 20, lineHeight: 1 }}>&lsaquo;</span> Services
+          <span aria-hidden="true" style={{ fontSize: 20, lineHeight: 1 }}>&lsaquo;</span> {retourPlanning ? "Planning" : "Services"}
         </Link>
         {/* Selecteur de semaine : precedente / periode affichee / suivante. */}
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -93,7 +104,7 @@ export default function AffichageBarre({
           </button>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", lineHeight: 1.2, minWidth: 120 }}>
             <span style={{ fontSize: 15, fontWeight: 700, whiteSpace: "nowrap" }}>
-              {jjmm(debutIso)} → {jjmm(finIso)}
+              {semaine ? `S${isoWeekNumber(pivot)} · ` : ""}{jjmm(debutIso)} → {jjmm(finIso)}
             </span>
             {estCourant ? (
               <span style={{ fontSize: 11, color: "#16a34a", fontWeight: 600 }}>Semaine en cours</span>

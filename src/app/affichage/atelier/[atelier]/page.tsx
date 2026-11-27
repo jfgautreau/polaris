@@ -1,7 +1,7 @@
 import { getCurrentSite } from "@/lib/current-site";
 import { requireModule } from "@/lib/permissions";
 import { getQuartsC } from "@/lib/refdata";
-import { parseJour, isoDate, mondayOf } from "@/lib/week";
+import { parseJour, parseMonday, weekDays, isoDate, mondayOf } from "@/lib/week";
 import { getFenetreAffichage, joursDeFenetre } from "@/lib/parametres";
 import AffichageBarre from "./AffichageBarre";
 import AtelierPlanning from "./AtelierPlanning";
@@ -15,7 +15,7 @@ export default async function AffichageAtelier({
   searchParams,
 }: {
   params: Promise<{ atelier: string }>;
-  searchParams: Promise<{ date?: string }>;
+  searchParams: Promise<{ date?: string; semaine?: string }>;
 }) {
   // Compte requis (2026-11-03) : une TV se connecte avec un compte au droit
   // « affichage » ; le site affiché est celui de ce compte.
@@ -27,8 +27,12 @@ export default async function AffichageAtelier({
   // qui vient, pas a relire le lundi passe.
   // `?date` deplace le pivot (sans recalage sur le lundi).
   const fen = await getFenetreAffichage();
-  const pivot = parseJour(sp.date);
-  const days = joursDeFenetre(fen, pivot);
+  // `?semaine=<jour>` (2026-11-27, lien TV du Planning) : SEMAINE ENTIÈRE, lundi →
+  // dimanche, quelle que soit la fenêtre réglée pour les écrans de couloir ; la
+  // barre navigue alors de semaine en semaine et propose le retour au Planning.
+  const semaine = sp.semaine && /^d{4}-d{2}-d{2}$/.test(sp.semaine) ? isoDate(parseMonday(sp.semaine)) : null;
+  const pivot = semaine ? parseMonday(semaine) : parseJour(sp.date);
+  const days = semaine ? weekDays(pivot) : joursDeFenetre(fen, pivot);
   // Bornes affichées + comparaison au lundi de la semaine courante : servent au
   // sélecteur de semaine de la barre (choix de la semaine à afficher / imprimer).
   const pivotIso = isoDate(pivot);
@@ -50,7 +54,7 @@ export default async function AffichageAtelier({
     // Cadre de l'écran TV ; à l'impression, une feuille A3 par section (cf.
     // AtelierPlanning / FeuillesImpression).
     <div id="affichage-feuille" style={{ padding: "18px 24px" }}>
-      <MiseAJourEconome version={version} suitAujourdhui={!sp.date} />
+      <MiseAJourEconome version={version} suitAujourdhui={!sp.date && !semaine} />
       <AtelierPlanning
         atelierRef={param}
         site={site}
@@ -63,6 +67,8 @@ export default async function AffichageAtelier({
             debutIso={debutIso}
             finIso={finIso}
             estCourant={estCourant}
+            semaine={semaine}
+            retourPlanning={semaine ? `/planning?semaine=${semaine}&atelier=${encodeURIComponent(param)}` : null}
           />
         }
       />

@@ -5,7 +5,7 @@ import { requireModule, canWrite } from "@/lib/permissions";
 import LectureSeule from "@/components/LectureSeule";
 import ActifCheckbox from "@/components/ActifCheckbox";
 import {
-  createMotif, updateMotif, toggleMotif, toggleNonPlanifie, toggleVisibleOperateurs,
+  createMotif, updateMotif, toggleMotif, toggleNonPlanifie, toggleVisibleOperateurs, toggleMasqueAffichage,
   createAgence, updateAgence, toggleAgence,
   createAccueil, updateAccueil, toggleAccueil,
   createTypeContrat, updateTypeContrat, toggleTypeContrat, toggleTypeContratAgence,
@@ -42,7 +42,7 @@ export default async function MotifsPage({
 
   const sp = await searchParams;
   const supabase = await getServerClient();
-  const [motifsR, agencesR, typesR, fenR, paramRhR, site, accueilsR] = await Promise.all([
+  const [motifsR, agencesR, typesR, fenR, paramRhR, site, accueilsR, masquesR] = await Promise.all([
     supabase.from("motif_absence").select("id, libelle, code_court, couleur, actif, non_planifie, code_gt, visible_operateurs").order("libelle").returns<Motif[]>(),
     supabase.from("agence_interim").select("id, nom, actif").order("nom").returns<Agence[]>(),
     supabase.from("type_contrat").select("code, libelle, actif, ordre, avec_agence").order("ordre").returns<TypeContrat[]>(),
@@ -52,7 +52,12 @@ export default async function MotifsPage({
     getCurrentSite(),
     // Accueils des nouveaux (0096, RLS : lignes du site courant).
     supabase.from("accueil").select("id, libelle, ordre, actif").order("ordre").order("libelle").returns<Accueil[]>(),
+    // Motif masqué sur l'Affichage (0098) : lu À PART, pour qu'une migration pas
+    // encore jouée ne fasse pas tomber les autres colonnes des motifs.
+    supabase.from("motif_absence").select("id, masque_affichage").returns<{ id: string; masque_affichage: boolean }[]>(),
   ]);
+  const masqueDispo = !masquesR.error;
+  const masques = new Map((masquesR.data ?? []).map((m) => [m.id, m.masque_affichage]));
   const accueils = accueilsR.data ?? [];
   const accueilsIndispo = !!accueilsR.error;
   // Replis en cascade : code_gt (0066) puis non_planifie (0060) peuvent manquer
@@ -125,6 +130,14 @@ export default async function MotifsPage({
           toujours tous les motifs.
         </p>
         <p className="muted" style={{ marginTop: -8, marginBottom: 16 }}>
+          <strong>Motif masqué</strong> concerne l&apos;Affichage (plannings des écrans TV
+          et leurs feuilles imprimées) : coché, la personne y est notée « Absence », sans
+          motif ; décoché, le libellé du motif s&apos;affiche (« Formation »).
+          {!masqueDispo && (
+            <> <strong style={{ color: "var(--danger)" }}>Exécutez la migration 0098</strong> dans le SQL Editor pour activer cette colonne.</>
+          )}
+        </p>
+        <p className="muted" style={{ marginTop: -8, marginBottom: 16 }}>
           Le <strong>Code GT</strong> est le code du logiciel RH (« 00CLFA »,
           « 00MASH »…) rattaché à ce motif : il sert à l&apos;import automatique
           des absences (section plus bas). Un code inconnu à l&apos;import crée un
@@ -166,6 +179,7 @@ export default async function MotifsPage({
                 <th style={{ width: 90 }}>Code GT</th>
                 <th style={{ width: 90, textAlign: "center" }}>Non planifié</th>
                 <th style={{ width: 100, textAlign: "center" }} title="Coché : les personnes absentes pour ce motif figurent, avec le motif, sur le « PDF pour Affich. » du Placement. Décoché : elles n'y apparaissent pas.">PDF pour Affich.</th>
+                <th style={{ width: 100, textAlign: "center", cursor: "help" }} title="Affichage (plannings des écrans TV et feuilles imprimées). Coché : la personne absente pour ce motif est notée « Absence », sans motif. Décoché : le libellé du motif s'affiche à la place (exemple : « Formation »).">Motif masqué</th>
                 <th style={{ width: 90 }}></th>
                 <th style={{ width: 60, textAlign: "center" }}>Actif</th>
               </tr>
@@ -188,6 +202,13 @@ export default async function MotifsPage({
                     <td><input form={`ed-motif-${m.id}`} name="code_gt" defaultValue={m.code_gt ?? ""} maxLength={20} placeholder="00CLFA" style={{ width: 90 }} /></td>
                     <td style={{ textAlign: "center" }}><ActifCheckbox id={m.id} actif={m.non_planifie} action={toggleNonPlanifie} title={m.non_planifie ? "Repasser en planifié" : "Marquer non planifié"} /></td>
                     <td style={{ textAlign: "center" }}><ActifCheckbox id={m.id} actif={m.visible_operateurs} action={toggleVisibleOperateurs} title={m.visible_operateurs ? "Affiché sur le PDF pour Affich. — masquer" : "Masqué du PDF pour Affich. — afficher"} /></td>
+                    <td style={{ textAlign: "center" }}>
+                      {masqueDispo ? (
+                        <ActifCheckbox id={m.id} actif={masques.get(m.id) ?? true} action={toggleMasqueAffichage} title={(masques.get(m.id) ?? true) ? "Masqué : « Absence » sur l'Affichage — afficher le motif" : "Le motif s'affiche sur l'Affichage — le masquer"} />
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
+                    </td>
                     <td style={{ whiteSpace: "nowrap", textAlign: "center" }}>
                       <button form={`ed-motif-${m.id}`} type="submit" title="Valider" className="iconbtn ok"><CheckIcon /></button>
                       <Link href="/admin/motifs" className="iconbtn ghost" scroll={false} title="Annuler">✕</Link>
@@ -205,6 +226,13 @@ export default async function MotifsPage({
                     </td>
                     <td style={{ textAlign: "center" }}>
                       <ActifCheckbox id={m.id} actif={m.visible_operateurs} action={toggleVisibleOperateurs} title={m.visible_operateurs ? "Affiché sur le PDF pour Affich. — masquer" : "Masqué du PDF pour Affich. — afficher"} />
+                    </td>
+                    <td style={{ textAlign: "center" }}>
+                      {masqueDispo ? (
+                        <ActifCheckbox id={m.id} actif={masques.get(m.id) ?? true} action={toggleMasqueAffichage} title={(masques.get(m.id) ?? true) ? "Masqué : « Absence » sur l'Affichage — afficher le motif" : "Le motif s'affiche sur l'Affichage — le masquer"} />
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
                     </td>
                     <td style={{ whiteSpace: "nowrap", textAlign: "center" }}>
                       <Link href={`/admin/motifs?edit=motif:${m.id}`} className="iconbtn edit" scroll={false} prefetch={false} title="Modifier"><EditIcon /></Link>

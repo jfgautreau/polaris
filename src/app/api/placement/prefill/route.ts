@@ -40,6 +40,14 @@ import { isoDate, addDays } from "@/lib/week";
 //      posés sans numéro sont complétés (seul le numéro est écrit). Surnombre
 //      signalé (`sansNumero`).
 //
+// MODE « JOUR » (2026-11-27, bouton du Placement) : { jour, atelierId, quart }.
+// Seuls les titulaires d'un poste fixe de CE service dont le quart, ce jour-là,
+// est CE quart sont placés, sur ce seul jour (lundi→vendredi comme la semaine).
+// Le temps partiel n'est PAS matérialisé et le marqueur `tp_charge` n'est pas
+// posé (il vaut pour la semaine entière : le poser pour un jour éteindrait le TP
+// calculé des autres jours) ; un jour de TP reste respecté — lignes réelles si la
+// semaine est déjà chargée, sinon calcul — et le titulaire n'y est pas placé.
+//
 // Les deux passes insèrent en `ignoreDuplicates` (onConflict personne,jour) :
 // jamais d'écrasement. Faire le TP D'ABORD garantit qu'un jour de TP d'une
 // personne à poste fixe reste un TP (le poste fixe saute la case déjà prise).
@@ -52,13 +60,22 @@ async function traiterPOST(req: NextRequest) {
     return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
   }
 
-  const body = (await req.json().catch(() => null)) as { semaines?: unknown; semaine?: string } | null;
+  const body = (await req.json().catch(() => null)) as { semaines?: unknown; semaine?: string; jour?: unknown; atelierId?: unknown; quart?: unknown } | null;
   const siteId = profile.siteId;
   const supabase = getAdminClient();
   try {
 
   // Lundis demandés : la liste `semaines`, ou le singulier `semaine` (compat).
-  const brutes = Array.isArray(body?.semaines) && body.semaines.length ? body.semaines : [body?.semaine];
+  // Mode jour : un seul jour, un service, un quart (cf. en-tête).
+  const jourSeul = typeof body?.jour === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.jour) ? body.jour : null;
+  const atelierSeul = typeof body?.atelierId === "string" ? body.atelierId : null;
+  const quartSeul = typeof body?.quart === "string" ? body.quart : null;
+  if (jourSeul && (!atelierSeul || !quartSeul)) {
+    return NextResponse.json({ error: "Service et quart requis pour pré-affecter un jour." }, { status: 400 });
+  }
+  const brutes = jourSeul
+    ? [isoDate(parseMonday(jourSeul))]
+    : Array.isArray(body?.semaines) && body.semaines.length ? body.semaines : [body?.semaine];
   const mondays = [...new Set(brutes.filter((x): x is string => typeof x === "string" && /^\d{4}-\d{2}-\d{2}$/.test(x)))];
   if (!mondays.length) return NextResponse.json({ ok: true, crees: 0 });
 
@@ -66,6 +83,9 @@ async function traiterPOST(req: NextRequest) {
   const quartDefaut = quartParDefaut(quarts);
   const codeJournee = quartJournee(quarts);
   const quartCodes = quarts.map((q) => q.code);
+  if (jourSeul && !quartCodes.includes(quartSeul!)) {
+    return NextResponse.json({ error: "Quart inconnu sur ce site." }, { status: 400 });
+  }
   const libelleQuart = (code: string) => quarts.find((q) => q.code === code)?.libelle ?? code;
   const rotRefs = await getRotationRefsC();
   const rotByMonday = new Map(mondays.map((m) => [m, rotationForWeek(rotRefs, m)]));
@@ -73,7 +93,8 @@ async function traiterPOST(req: NextRequest) {
   // Tous les jours (lundi→dimanche) de chaque semaine, + jours ouvrés seuls pour
   // les postes fixes. Le TP peut tomber n'importe quel jour de la semaine.
   const semaines = mondays.map((m) => {
-    const jours = weekDays(parseMonday(m));
+    // Mode jour : la « semaine » se réduit au jour demandé.
+    const jours = weekDays(parseMonday(m)).filter((j) => !jourSeul || j.iso === jourSeul);
     return {
       monday: m,
       isosTous: jours.map((j) => j.iso),
@@ -172,12 +193,13 @@ async function traiterPOST(req: NextRequest) {
   // ---------- Passe 2 : POSTES FIXES (personnes + poste actif) ----------
   const { data: persFixe } = await supabase
     .from("personne")
-    .select("id, nom, prenom, equipe_id, poste_fixe_id, poste:poste_fixe_id(actif, nom, numero_rotation)")
+    .select("id, nom, prenom, equipe_id, poste_fixe_id, poste:poste_fixe_id(actif, nom, numero_rotation, ligne:ligne_id(atelier_id))")
     .eq("site_id", siteId)
     .not("poste_fixe_id", "is", null)
     .neq("statut", "PARTI")
-    .returns<{ id: string; nom: string; prenom: string; equipe_id: string | null; poste_fixe_id: string; poste: { actif: boolean; nom: string; numero_rotation: string | null } | null }[]>();
-  const cibles = (persFixe ?? []).filter((p) => p.poste?.actif !== false);
+    .returns<{ id: string; nom: string; prenom: string; equipe_id: string | null; poste_fixe_id: string; poste: { actif: boolean; nom: string; numero_rotation: string | null; ligne: { atelier_id: string } | null } | null }[]>();
+  // Mode jour : seuls les postes fixes du service affiché.
+  const cibles = (persFixe ?? []).filter((p) => p.poste?.actif !== false && (!jourSeul || p.poste?.ligne?.atelier_id === atelierSeul));
 
   // Cycle des postes fixes (quarts où ils tournent), borné au site.
   const pqFixe: PqMap = new Map();
@@ -238,9 +260,23 @@ async function traiterPOST(req: NextRequest) {
     for (const r of existD ?? []) occ.add(`${r.personne_id}:${r.jour}`);
   }
 
+  // Mode jour : semaine déjà « chargée » ? Alors les TP réels (déjà dans `occ`)
+  // font foi et l'on ne recalcule rien ; sinon le TP calculé du jour bloque la
+  // case sans être écrit.
+  let semaineChargee = false;
+  if (jourSeul) {
+    const { data: tcD, error: tcErr } = await supabase
+      .from("tp_charge")
+      .select("semaine_lundi")
+      .eq("site_id", siteId)
+      .in("semaine_lundi", mondays)
+      .returns<{ semaine_lundi: string }[]>();
+    semaineChargee = !tcErr && (tcD ?? []).length > 0;
+  }
+
   // Construire les lignes TP.
   const tpRows: Record<string, unknown>[] = [];
-  for (const persId of tpPersonIds) {
+  for (const persId of semaineChargee ? [] : tpPersonIds) {
     const eq = equipeDe.get(persId) ?? null;
     for (const sem of semaines) {
       for (const iso of sem.isosTous) {
@@ -326,6 +362,8 @@ async function traiterPOST(req: NextRequest) {
         continue;
       }
       const q = choix.quart;
+      // Mode jour : seulement le quart affiché (les autres quarts ont leur vue).
+      if (jourSeul && q !== quartSeul) continue;
       for (const iso of sem.isosOuvres) {
         if (occ.has(`${p.id}:${iso}`)) continue;
         if (!dansEffectif(p.id, iso)) continue;
@@ -422,7 +460,11 @@ async function traiterPOST(req: NextRequest) {
           if (r) quartLe.set(iso, String(r.quart_code));
         }
         const anciennes = (aCompleter.get(k) ?? []).filter((r) => lundiDe.get(r.jour) === sem.monday);
-        for (const r of anciennes) quartLe.set(r.jour, quartOuDefaut(r.quart_code, quarts));
+        for (const r of anciennes) {
+          const qa = quartOuDefaut(r.quart_code, quarts);
+          if (jourSeul && qa !== quartSeul) continue; // mode jour : le quart affiché seulement
+          quartLe.set(r.jour, qa);
+        }
         if (!quartLe.size) continue;
         const jours = [...quartLe.keys()].sort();
         const choix = numerosPourSemaine(
@@ -461,7 +503,9 @@ async function traiterPOST(req: NextRequest) {
   }
 
   // Insertions (jamais d'écrasement) : TP puis postes fixes.
-  const rows = [...tpRows, ...posteRows];
+  // Mode jour : le TP calculé n'a servi qu'à bloquer la case, il n'est pas écrit.
+  const tpEcrits = jourSeul ? [] : tpRows;
+  const rows = [...tpEcrits, ...posteRows];
   if (rows.length) {
     const { error } = await supabase
       .from("placement")
@@ -489,7 +533,9 @@ async function traiterPOST(req: NextRequest) {
 
   // Marqueur « TP chargés » de chaque semaine : coupe le calcul virtuel, ce qui
   // rend les TP déplaçables/supprimables sans qu'ils soient recréés.
-  const { error: mErr } = await supabase
+  const { error: mErr } = jourSeul
+    ? { error: null }
+    : await supabase
     .from("tp_charge")
     .upsert(
       mondays.map((m) => ({ site_id: siteId, semaine_lundi: m, charge_par: profile.authId })),
@@ -507,14 +553,14 @@ async function traiterPOST(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     crees: rows.length,
-    tp: tpRows.length,
+    tp: tpEcrits.length,
     fixe: posteRows.length,
     nonPlaces,
     numerotes,
     completes: majNumeros.reduce((n, m) => n + m.jours.length, 0),
     sansNumero,
     site: siteId,
-    marqueur: mErr ? `ignoré (${mErr.message})` : "posé",
+    marqueur: jourSeul ? "sans objet" : mErr ? `ignoré (${mErr.message})` : "posé",
   });
   } catch (e) {
     // Toute exception non prévue est renvoyée en clair : sans ça, le bouton
@@ -529,7 +575,11 @@ async function traiterPOST(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const profile = await getCurrentProfile();
   if (!profile) return traiterPOST(req);
-  const b = (await req.clone().json().catch(() => null)) as { semaines?: unknown; semaine?: string } | null;
-  const fr = (iso?: string) => (iso && /^d{4}-d{2}-d{2}$/.test(iso) ? iso.split("-").reverse().join("/") : iso ?? "");
+  const b = (await req.clone().json().catch(() => null)) as { semaines?: unknown; semaine?: string; jour?: unknown; quart?: unknown } | null;
+  const fr = (iso?: string) => (iso && /^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso.split("-").reverse().join("/") : iso ?? "");
+  if (typeof b?.jour === "string") {
+    const q = (await getQuartsC()).find((x) => x.code === b.quart)?.libelle ?? "";
+    return avecLotJournal(profile.siteId, `Pré-affectation du jour — ${fr(b.jour)}${q ? ` · ${q}` : ""}`, () => traiterPOST(req));
+  }
   return avecLotJournal(profile.siteId, `Pré-remplissage TP + pré-affectation — semaine${Array.isArray(b?.semaines) && b.semaines.length > 1 ? "s" : ""} du ${(Array.isArray(b?.semaines) && b.semaines.length ? b.semaines : [b?.semaine]).map((x) => fr(String(x ?? ""))).join(", ")}`, () => traiterPOST(req));
 }

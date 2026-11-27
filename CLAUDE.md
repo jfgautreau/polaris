@@ -33,7 +33,7 @@ L'historique des décisions est dans git et dans l'en-tête de chaque migration.
    Pour de la *donnée* seulement, un script Node lisant `SUPABASE_SERVICE_ROLE_KEY` de
    `.env.local` est acceptable (simulation d'abord, écriture après accord).
    Projet Supabase : ref `stcxlsmmnplxpirrnefm`, eu-west-3.
-   **Dernière migration appliquée : `0097`** (`gpec`, 2026-11-25 : trois tables nouvelles `gpec_*`, aucune table existante modifiée) ; avant elle `0096` (`accueil_nouveaux`, 2026-11-23) ; avant elle `0095`
+   **Migration `0098` (`motif_masque_affichage`, écrite le 2026-11-27 : `motif_absence.masque_affichage`, défaut true) À APPLIQUER par l'utilisateur — le code la tolère absente.** Dernière migration appliquée : `0097` (`gpec`, 2026-11-25 : trois tables nouvelles `gpec_*`, aucune table existante modifiée) ; avant elle `0096` (`accueil_nouveaux`, 2026-11-23) ; avant elle `0095`
    (`site_nom_application`, 2026-11-10) et `0094`
    (`placement_mise_en_page`, 2026-11-05) et `0093`
    (`export_interim` : atelier.couleur, parametre_rh, export_interim_photo) et `0092` (durcissement sécurité, audit du 2026-11-03). Toute nouvelle policy RLS s'écrit
@@ -405,8 +405,10 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
 - **Placement** (`src/app/placement/`, droit `placement`) : plan par ligne → postes → cases
   numérotées, rangs en 1 à 3 colonnes (au-delà de 10 par colonne). Bascule Plan /
   Absences. `JourNav` (calendrier grisant les jours sans quart actif ; flèches ‹ › = jour −1 / +1 strict, 2026-11-27).
-  Bouton **« TP + pré-affectation Sxx »** (2026-11-27) : charge la semaine du jour affiché, même action que le Planning
-  (`src/lib/prefill-semaine.ts`, partagé ; visible en écriture complète seulement, `canPrefill`). Filtres de la liste
+  Bouton **« Pré-affectation du jour »** (2026-11-27) : `/api/placement/prefill` en mode jour `{ jour, atelierId, quart }` —
+  seuls les titulaires d'un poste fixe du service affiché dont le quart est le quart affiché, ce seul jour (lundi→vendredi) ;
+  le TP n'est PAS matérialisé ni `tp_charge` posé (marqueur de semaine), mais un jour de TP (réel ou calculé) reste respecté.
+  La semaine entière (TP compris) se charge au Planning (`src/lib/prefill-semaine.ts`, partagé ; écriture complète seulement, `canPrefill`). Filtres de la liste
   (recherche, équipe) dans l'URL. Trois PDF : **PDF Manager** (A4 compact, paysage OU portrait selon ce qui imprime le plus grand — `ajusterFeuille`, page `plcA4P` —, absents / TP du jour,
   ex-« PDF CE ») et **PDF** « pour Affich. » (ex-« PDF opérateurs », A3 compact paysage OU portrait — page `plcA3P` —, codes d'alerte en noir, colonne « Absents du jour » limitée aux motifs `motif_absence.visible_operateurs`, 0083, cochés dans Param. RH), plus **PDF pour Affich. + heures** (= PDF pour Affich. + horaire de chacun, résolu par `src/lib/horaires.ts` côté `page.tsx`) ; sur les PDF pour Affich. (pas le Manager, qui garde le surnombre et le hors compétence seuls en couleur), les lignes qui tournent (≥ 1 personne placée) prennent la couleur fixe de leur ligne (`ligne.couleur`, 0082, choisie au Référentiel dans la palette fermée `src/lib/ligne-couleurs.ts`), celles à l'arrêt restent grisées (jamais une ligne d'encadrement, que des postes `manager`) ; en-tête service ·
   quart (pastille centrée) · date, hors zone mise à l'échelle ; numéros vides et commentaires du jour imprimés (sur les PDF pour Affich., aussi sous le nom d'un absent en **Formation** — motif repéré par libellé comme au Planning, jamais pour un autre motif ; pendule du Planning puis commentaire de la période saisi dans Absences, `absence.commentaire` lu pour les seules absences de Formation du jour) ; filtre
@@ -515,6 +517,8 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   affectées au moins une fois sur un poste du service dans la fenêtre, quel que soit leur service à la fiche
   (2026-11-05, deux plannings possibles ; sans affectation = nulle part) ; sections Matin / Après-midi / Nuit
   classées par `creneau`, une personne dans **chaque** section où elle est affectée ici (ligne = semaine entière) ;
+  absence = « Absence » sans motif, sauf motif démasqué dans Param. RH (colonne « Motif masqué », `motif_absence.masque_affichage`, 0098) : libellé du motif + commentaire de la pendule ;
+  `?semaine=<lundi>` (lien TV du Planning, même onglet, 2026-11-27) = semaine entière, flèches S−1 / S+1 en `router.replace`, bouton « ‹ Planning » ;
   « ★ » + nom bleu = arrivée (plus ancien `contrat_periode.date_debut` — `personne.date_arrivee` n’existe plus depuis 0050) depuis < 14 jours ; fenêtre relative ou absolue
   (`getFenetreAffichage`, `joursDeFenetre`) ; impression A3 portrait, **une feuille par section**
   mise à l'échelle séparément (`FeuillesImpression`), numéro de semaine en gros en tête de page. **Mise à jour
@@ -539,8 +543,8 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   visite de mi-carrière. Paramétrage (`/admin/visites-param`, droit `visites_param`) :
   régimes, déclencheurs (quarts / postes / habilitations / motifs), catalogue, alertes —
   **séparé de Param. RH**, ce sont deux métiers.
-- **Param. RH** (`/admin/motifs`, droit `motifs`) : motifs (code GT, planifié ou non, affiché sur le « PDF pour Affich. »),
-  agences, accueils des nouveaux (0096), nom du fichier Excel intérim (`parametre_rh`, 0093), types de contrat (`avec_agence`), fenêtre d'affichage TV. L'import des absences du logiciel RH a été **retiré**
+- **Param. RH** (`/admin/motifs`, droit `motifs`) : motifs (code GT, planifié ou non, affiché sur le « PDF pour Affich. »,
+  « Motif masqué » sur l'Affichage, 0098), agences, accueils des nouveaux (0096), nom du fichier Excel intérim (`parametre_rh`, 0093), types de contrat (`avec_agence`), fenêtre d'affichage TV. L'import des absences du logiciel RH a été **retiré**
   le 2026-11-05 (écran, route, règles ; la table `import_absence_personne` reste en base, inutilisée).
 - **Journal** (`src/app/journal/`, droit `journal`, règles pures `src/lib/journal.ts`) : lu en
   service_role borné au site (la matrice décide, pas la RLS d'audit_log à rôles en dur) ;

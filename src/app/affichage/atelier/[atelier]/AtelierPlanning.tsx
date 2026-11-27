@@ -22,6 +22,9 @@ type Personne = { nom: string; prenom: string; type_contrat: string };
 // contrat garde sa première arrivée : il n'est pas nouveau.
 const NOUVEAU_JOURS = 14;
 const NOUVEAU_COULEUR = "#1e40af";
+// Motif d'absence affiché en clair (démasqué dans Param. RH) : ni le rouge de
+// « Absence », ni le violet du TP.
+const MOTIF_COULEUR = "#0f766e";
 type PlacementRow = {
   poste_id: string | null;
   jour: string;
@@ -359,27 +362,40 @@ export default async function AtelierPlanning({
       .returns<{ personne_id: string; date_debut: string | null }[]>()
   ).catch(() => [] as { personne_id: string; date_debut: string | null }[]); // signal secondaire : un échec ne casse pas l’écran
 
-  // Absences (tous motifs) des personnes affichées -> une simple mention "Absence"
-  // (pas de detail du motif). fetchAll : L8 (troncature silencieuse > 1000 lignes).
-  const absByPerson = new Map<string, Set<string>>(); // personne_id -> jours (iso) absents
+  // Absences des personnes affichées. Par défaut une simple mention « Absence »,
+  // sans motif ; un motif que les RH ont DÉMASQUÉ (Param. RH, colonne « Motif
+  // masqué », 0098) s'affiche par son libellé (« Formation »). Colonne absente ou
+  // lecture en échec : tout reste masqué. fetchAll : L8 (troncature > 1000 lignes).
+  const absByPerson = new Map<string, Map<string, string | null>>(); // personne_id -> jour (iso) -> libellé affichable (null = masqué)
+  const pMotifsVisibles = admin
+    .from("motif_absence")
+    .select("id, libelle")
+    .eq("site_id", site.id)
+    .eq("masque_affichage", false)
+    .returns<{ id: string; libelle: string }[]>();
   if (personIds.length) {
     // Plus de liste des personnes dans l'URL (2026-10-14) : absences du site sur
     // la fenêtre, triées en mémoire.
     const personSet = new Set(personIds);
     const absPl = (
-      await fetchAll<{ personne_id: string; jour: string }>(() =>
+      await fetchAll<{ personne_id: string; jour: string; motif_absence_id: string | null }>(() =>
         admin
           .from("placement")
-          .select("personne_id, jour")
+          .select("personne_id, jour, motif_absence_id")
           .eq("site_id", site.id)
           .in("jour", isos)
           .not("motif_absence_id", "is", null)
           .order("id")
-          .returns<{ personne_id: string; jour: string }[]>()
+          .returns<{ personne_id: string; jour: string; motif_absence_id: string | null }[]>()
       )
     ).filter((r) => personSet.has(r.personne_id));
+    const { data: motifsVisibles } = await pMotifsVisibles;
+    const libelleVisible = new Map((motifsVisibles ?? []).map((m) => [m.id, m.libelle]));
     for (const r of absPl) {
-      (absByPerson.get(r.personne_id) ?? absByPerson.set(r.personne_id, new Set()).get(r.personne_id)!).add(r.jour);
+      (absByPerson.get(r.personne_id) ?? absByPerson.set(r.personne_id, new Map()).get(r.personne_id)!).set(
+        r.jour,
+        (r.motif_absence_id && libelleVisible.get(r.motif_absence_id)) || null,
+      );
     }
   }
 
@@ -406,7 +422,20 @@ export default async function AtelierPlanning({
     const rows = byPerson.get(`${personId}:${iso}`) ?? [];
     if (!rows.length) {
       // Aucune affectation poste : priorite absence > TP > vide.
-      if (absByPerson.get(personId)?.has(iso)) {
+      const abs = absByPerson.get(personId);
+      if (abs?.has(iso)) {
+        const motif = abs.get(iso);
+        // Motif démasqué par les RH : son libellé, et le commentaire du jour saisi
+        // au Planning (pendule) s'il y en a un — « Formation · CACES salle 2 ».
+        if (motif) {
+          const cmt = commentTxt(personId, iso);
+          return (
+            <div style={{ lineHeight: 1.2 }}>
+              <div style={{ color: MOTIF_COULEUR, fontWeight: 600 }}>{motif}</div>
+              {cmt && <div style={{ color: "#6b7280", fontStyle: "italic", fontSize: 12 }}>{cmt}</div>}
+            </div>
+          );
+        }
         return <span style={{ color: "#b91c1c" }}>Absence</span>;
       }
       if (tpSet.has(`${personId}:${iso}`)) {
@@ -520,6 +549,7 @@ export default async function AtelierPlanning({
       · <span style={{ background: AUJOURDHUI, padding: "0 6px" }}>Aujourd&apos;hui</span> · horaires en bleu ·{" "}
       <span style={{ color: "#b45309", fontStyle: "italic" }}>(Service X)</span> = affecté à un autre service ·{" "}
       <span style={{ color: "#b91c1c" }}>Absence</span>{" "}
+      · <span style={{ color: MOTIF_COULEUR, fontWeight: 600 }}>Formation…</span> (motif affiché en clair){" "}
       · <span style={{ color: "#3730a3" }}>TP</span> (temps partiel) ·{" "}
       <span style={{ color: NOUVEAU_COULEUR, fontWeight: 700 }}>★ Nouveau</span> (arrivé depuis moins de 2 semaines).
     </>

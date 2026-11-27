@@ -98,6 +98,18 @@ export async function toggleVisibleOperateurs(fd: FormData) {
   done(error);
 }
 
+// Motif masqué sur l'Affichage (plannings TV / A3, migration 0098) : coché = la
+// personne y est notée « Absence » sans motif ; décoché = le libellé du motif
+// s'affiche (« Formation »). Même convention : `actif` porte le NOUVEL état.
+export async function toggleMasqueAffichage(fd: FormData) {
+  const supabase = await requireModuleWrite("motifs");
+  const { error } = await supabase
+    .from("motif_absence")
+    .update({ masque_affichage: fd.get("actif") === "true" })
+    .eq("id", s(fd, "id"));
+  done(error);
+}
+
 // ----- Agences d'interim -----
 // Liste fermee alimentant le menu deroulant « Agence » des periodes de contrat
 // (cf. src/app/personnel/PeriodesEditor.tsx). Desactiver plutot que supprimer :

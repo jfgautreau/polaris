@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { isoDate, addDays, mondayOf, isoWeekNumber } from "@/lib/week";
-import { confirmerPrefill, chargerSemaine } from "@/lib/prefill-semaine";
+import { isoDate, addDays, dowMon } from "@/lib/week";
+import { confirmerPrefillJour, chargerJour } from "@/lib/prefill-semaine";
 import { habValable, habManqueTxt } from "@/lib/habilitations";
 import { parseNumeros, libellePlace } from "@/lib/numeros-rotation";
 import { styleInterim, estAvecAgence } from "@/lib/interim";
@@ -147,7 +147,7 @@ export default function PlacementBoard({
   // Planning — le board ne lit pas quart.couleur lui-même.
   quartBandeau?: ReactNode;
   // Écriture complète (droit Planning ou Placement, jamais le chef d'équipe) :
-  // affiche le bouton « TP + pré-affectation » de la semaine du jour affiché.
+  // affiche le bouton « Pré-affectation » du jour, du service et du quart affichés.
   canPrefill?: boolean;
 }) {
   const router = useRouter();
@@ -157,16 +157,18 @@ export default function PlacementBoard({
   const [autreQuart, setAutreQuart] = useState<Record<string, string>>(autreQuartInit);
   const [saving, setSaving] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [msg, setMsg] = useState<string | null>(null);
-  // Chargement « TP + pré-affectation » de la semaine du jour affiché (même
-  // action que le bouton par semaine du Planning, cf. src/lib/prefill-semaine.ts).
+  // « Pré-affectation » de la VUE affichée (2026-11-27) : ce jour, ce service, ce
+  // quart seulement — les titulaires d'un poste fixe y sont placés. La semaine
+  // entière (TP compris) se charge au Planning (cf. src/lib/prefill-semaine.ts).
   const [prefillEnCours, setPrefillEnCours] = useState(false);
-  const lundiDuJour = mondayOf(new Date(jour + "T00:00"));
-  const semaineLabel = `S${isoWeekNumber(lundiDuJour)}`;
-  async function chargerLaSemaine() {
+  // Comme la semaine du Planning : du lundi au vendredi.
+  const jourOuvre = dowMon(jour) <= 4;
+  const vueLabel = `${ateliers.find((a) => a.id === atelierId)?.nom ?? "ce service"} · ${quartLib[quart] ?? quart} · ${jour.split("-").reverse().join("/")}`;
+  async function preAffecterLeJour() {
     if (prefillEnCours) return;
-    if (!confirmerPrefill(semaineLabel)) return;
+    if (!confirmerPrefillJour(vueLabel)) return;
     setPrefillEnCours(true);
-    const res = await chargerSemaine(isoDate(lundiDuJour), semaineLabel);
+    const res = await chargerJour(jour, atelierId, quart, vueLabel);
     // Le board garde son état local (useState des props) : on recharge la page
     // pour montrer les affectations créées.
     if (res === "charge") window.location.reload();
@@ -1030,16 +1032,16 @@ export default function PlacementBoard({
           >
             Copier…
           </button>
-          {canPrefill && (
+          {canPrefill && !vueAbsences && (
             <button
               type="button"
               className={s.navbtn}
-              disabled={prefillEnCours}
-              onClick={chargerLaSemaine}
-              title={`Charger la semaine ${semaineLabel} (celle du jour affiché) : poser les TP puis pré-remplir les postes fixes, sans écraser ce qui est déjà saisi`}
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, opacity: prefillEnCours ? 0.6 : 1 }}
+              disabled={prefillEnCours || !jourOuvre}
+              onClick={preAffecterLeJour}
+              title={jourOuvre ? `Placer sur leur poste fixe les titulaires de ${vueLabel} — ce jour, ce service et ce quart seulement, sans écraser ce qui est déjà saisi. La semaine entière (temps partiel compris) se charge au Planning.` : "La pré-affectation se fait du lundi au vendredi"}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, opacity: prefillEnCours || !jourOuvre ? 0.6 : 1 }}
             >
-              <FillIcon size={15} /> {prefillEnCours ? "…" : `TP + pré-affectation ${semaineLabel}`}
+              <FillIcon size={15} /> {prefillEnCours ? "…" : "Pré-affectation du jour"}
             </button>
           )}
           <button
