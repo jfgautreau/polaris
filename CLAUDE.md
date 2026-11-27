@@ -33,7 +33,7 @@ L'historique des décisions est dans git et dans l'en-tête de chaque migration.
    Pour de la *donnée* seulement, un script Node lisant `SUPABASE_SERVICE_ROLE_KEY` de
    `.env.local` est acceptable (simulation d'abord, écriture après accord).
    Projet Supabase : ref `stcxlsmmnplxpirrnefm`, eu-west-3.
-   **Migration `0098` (`motif_masque_affichage`, écrite le 2026-11-27 : `motif_absence.masque_affichage`, défaut true) À APPLIQUER par l'utilisateur — le code la tolère absente.** Dernière migration appliquée : `0097` (`gpec`, 2026-11-25 : trois tables nouvelles `gpec_*`, aucune table existante modifiée) ; avant elle `0096` (`accueil_nouveaux`, 2026-11-23) ; avant elle `0095`
+   **Dernière migration appliquée : `0098`** (`motif_masque_affichage`, 2026-11-27 : `motif_absence.masque_affichage`, défaut true) ; avant elle `0097` (`gpec`, 2026-11-25 : trois tables nouvelles `gpec_*`, aucune table existante modifiée) ; avant elle `0096` (`accueil_nouveaux`, 2026-11-23) ; avant elle `0095`
    (`site_nom_application`, 2026-11-10) et `0094`
    (`placement_mise_en_page`, 2026-11-05) et `0093`
    (`export_interim` : atelier.couleur, parametre_rh, export_interim_photo) et `0092` (durcissement sécurité, audit du 2026-11-03). Toute nouvelle policy RLS s'écrit
@@ -518,7 +518,7 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
   (2026-11-05, deux plannings possibles ; sans affectation = nulle part) ; sections Matin / Après-midi / Nuit
   classées par `creneau`, une personne dans **chaque** section où elle est affectée ici (ligne = semaine entière) ;
   absence = « Absence » sans motif, sauf motif démasqué dans Param. RH (colonne « Motif masqué », `motif_absence.masque_affichage`, 0098) : libellé du motif + commentaire de la pendule ;
-  `?semaine=<lundi>` (lien TV du Planning, même onglet, 2026-11-27) = semaine entière, flèches S−1 / S+1 en `router.replace`, bouton « ‹ Planning » ;
+  `?semaine=<lundi>` (lien TV du Planning, même onglet, 2026-11-27) = semaine entière, flèches S−1 / S+1 en `router.replace`, bouton « ‹ Planning » qui rend les filtres reçus dans `retour` (quart, équipe, vue…) ;
   « ★ » + nom bleu = arrivée (plus ancien `contrat_periode.date_debut` — `personne.date_arrivee` n’existe plus depuis 0050) depuis < 14 jours ; fenêtre relative ou absolue
   (`getFenetreAffichage`, `joursDeFenetre`) ; impression A3 portrait, **une feuille par section**
   mise à l'échelle séparément (`FeuillesImpression`), numéro de semaine en gros en tête de page. **Mise à jour

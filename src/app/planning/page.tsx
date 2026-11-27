@@ -1021,7 +1021,8 @@ export default async function PlanningPage({
         <Link
           // Même onglet, calé sur la semaine affichée (2026-11-27) : l'écran s'ouvre
           // en semaines entières, avec S−1 / S+1 et un retour au Planning.
-          href={`/affichage/atelier/${atelier}?semaine=${centerIso}`}
+          // `retour` = filtres du Planning (quart, équipe, vue…), rendus au retour.
+          href={`/affichage/atelier/${atelier}?semaine=${centerIso}&retour=${encodeURIComponent(new URLSearchParams(extra).toString())}`}
           prefetch={false}
           title={`Affichage TV — ${ateliersMap.get(atelier) ?? "service"}`}
           aria-label="Affichage TV du service"

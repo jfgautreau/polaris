@@ -30,6 +30,7 @@ export default function AffichageBarre({
   estCourant,
   semaine = null,
   retourPlanning = null,
+  retourFiltres = "",
 }: {
   cadreId: string;
   pivotIso: string;
@@ -40,6 +41,8 @@ export default function AffichageBarre({
   // de retour vers le Planning sur cette semaine.
   semaine?: string | null;
   retourPlanning?: string | null;
+  // Filtres du Planning (quart, équipe…) à conserver en changeant de semaine.
+  retourFiltres?: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -52,7 +55,7 @@ export default function AffichageBarre({
   // REMPLACE l'entrée d'historique : le bouton Précédent du navigateur ramène au
   // Planning, pas à la semaine d'avant.
   const allerA = (iso: string | null) => {
-    if (semaine) router.replace(`${pathname}?semaine=${iso ?? isoDate(mondayOf())}`);
+    if (semaine) router.replace(`${pathname}?semaine=${iso ?? isoDate(mondayOf())}${retourFiltres ? `&retour=${encodeURIComponent(retourFiltres)}` : ""}`);
     else router.push(iso ? `${pathname}?date=${iso}` : pathname);
   };
 

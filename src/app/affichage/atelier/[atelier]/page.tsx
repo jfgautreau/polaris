@@ -15,7 +15,7 @@ export default async function AffichageAtelier({
   searchParams,
 }: {
   params: Promise<{ atelier: string }>;
-  searchParams: Promise<{ date?: string; semaine?: string }>;
+  searchParams: Promise<{ date?: string; semaine?: string; retour?: string }>;
 }) {
   // Compte requis (2026-11-03) : une TV se connecte avec un compte au droit
   // « affichage » ; le site affiché est celui de ce compte.
@@ -31,6 +31,17 @@ export default async function AffichageAtelier({
   // dimanche, quelle que soit la fenêtre réglée pour les écrans de couloir ; la
   // barre navigue alors de semaine en semaine et propose le retour au Planning.
   const semaine = sp.semaine && /^d{4}-d{2}-d{2}$/.test(sp.semaine) ? isoDate(parseMonday(sp.semaine)) : null;
+  // Filtres du Planning à rendre au retour (quart, équipe, vue…) : seules des clés
+  // connues sont reprises, le chemin de retour reste /planning.
+  const retourQs = new URLSearchParams();
+  if (semaine && sp.retour) {
+    const recu = new URLSearchParams(sp.retour);
+    for (const k of ["quart", "equipe", "vue", "search", "cond", "par"]) {
+      const v = recu.get(k);
+      if (v) retourQs.set(k, v.slice(0, 100));
+    }
+  }
+  const retourFiltres = retourQs.toString();
   const pivot = semaine ? parseMonday(semaine) : parseJour(sp.date);
   const days = semaine ? weekDays(pivot) : joursDeFenetre(fen, pivot);
   // Bornes affichées + comparaison au lundi de la semaine courante : servent au
@@ -68,7 +79,8 @@ export default async function AffichageAtelier({
             finIso={finIso}
             estCourant={estCourant}
             semaine={semaine}
-            retourPlanning={semaine ? `/planning?semaine=${semaine}&atelier=${encodeURIComponent(param)}` : null}
+            retourPlanning={semaine ? `/planning?semaine=${semaine}&atelier=${encodeURIComponent(param)}${retourFiltres ? `&${retourFiltres}` : ""}` : null}
+            retourFiltres={retourFiltres}
           />
         }
       />
