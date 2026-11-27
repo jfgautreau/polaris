@@ -1,6 +1,6 @@
 # Reste à faire — Polaris
 
-> État au 2026-11-06. Migrations appliquées jusqu'à **0094**.
+> État au 2026-11-27. Migrations appliquées jusqu'à **0099**.
 > Ce fichier ne garde que ce qui reste ouvert ; le détail de ce qui est fait est dans
 > `git log` (et l'en-tête de chaque migration).
 
@@ -47,6 +47,21 @@
 - [ ] **Sous-droits des habilitations** : fermer une famille à un rôle dans Droits, vérifier le
       cadenas dans la grille et le refus à l'enregistrement.
 - [ ] **Placement** : prénoms complets sur les tuiles et les PDF ; noms très longs.
+
+## À vérifier sur le terrain (lot du 2026-11-27)
+- [ ] **Imprimante par agence** (Synthèses → Intérim) : la fenêtre d'impression doit s'ouvrir
+      avec le PDF de l'agence ; si le navigateur ne sait pas (lecteur PDF intégré coupé), le
+      fichier se télécharge au bout de 4 s. À essayer sur les postes RH (Chrome / Edge).
+- [ ] **PDF agence** : texte à taille fixe, deuxième page si l'agence est nombreuse ; cases
+      en gras = jours différents du reste de la semaine (égalité : la première case fait référence).
+- [ ] **Couleur du texte des motifs** (Param. RH, bouton « A ») et aperçu du code ; AANP / AAP
+      lisibles au Planning.
+- [ ] **» sur une absence** (JNT, CP…) depuis la case d'UNE personne ; le » d'un jour reste
+      aux postes et NT.
+- [ ] **Pré-affectation du jour** (Placement) : le premier jour initialisé d'une semaine pose
+      aussi les TP de toute la semaine.
+- [ ] **Affichage** : motif démasqué (« Formation » + commentaire) ; lien TV du Planning en
+      semaine entière, retour au Planning avec quart et équipe.
 
 ## Base de données
 - [ ] Table `import_absence_personne` inutilisée depuis le retrait de l'import des absences RH
@@ -137,6 +152,14 @@ Reste, par ordre d'impact :
       (ligne principale). Alternative sans code : une ligne commune « Sortie A/B ».
       À trancher : option, règle du besoin (une / toutes), même service seulement ?,
       placement depuis le reflet, impression du reflet.
+
+- [ ] **Bascule Matin ↔ Après-midi instantanée au Planning** — depuis le retrait du cache de
+      navigation (2026-11-27), chaque bascule relit la page. Si c'est trop lent à l'usage :
+      charger les quarts d'un coup côté Planning (proposé, pas demandé).
+- [ ] **Écran TV depuis la page Affichage couloir** : semaine entière aussi, comme le lien TV
+      du Planning ? (question posée le 2026-11-27, sans réponse.)
+- [ ] **» des absences réservé à certains motifs** : possible par une case par motif dans
+      Param. RH (proposé le 2026-11-27 ; aujourd'hui ouvert à tous les motifs).
 
 ## Rappels
 - Tests et build avant chaque commit, en lisant leur **code de sortie** (pas de

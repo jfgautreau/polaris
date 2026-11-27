@@ -452,6 +452,9 @@ pas de troisième** : la fiche d'une personne est une modale du Suivi.
   elle change ou au changement de jour.
 
 ## Navigation (`AppHeader`)
+- **Aucun cache de navigation côté navigateur** (2026-11-27) : `staleTimes` et
+  `GardeCacheNavigation` retirés (cf. `lessons.md` L67) ; chaque changement de filtre ou
+  d'écran relit la page, sans rechargement complet.
 - **Menu principal** (`MAIN_ORDER`, pastille + icône) : Référentiel → Personnel →
   Absences → Matrice → Habilitations → Visites méd. (cyan) → Ordonnancement → Planning →
   Placement → Bilans. Une entrée n'apparaît que si le module est lisible (Placement :

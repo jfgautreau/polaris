@@ -52,6 +52,7 @@ L'historique des décisions est dans git et dans l'en-tête de chaque migration.
 6. **PowerShell 5.1** : message de commit multi-lignes via here-string `@'…'@` (le `'@`
    en colonne 0) ou `git commit -F`. **Jamais** `Get-Content`/`Set-Content`/`Out-File`
    pour éditer un fichier source accentué (mojibake + BOM) : outil Edit ou Node.
+   Une **expression régulière** (`d`…) ne s'écrit jamais par heredoc, `node -e` ou `sed` (la barre oblique se perd en silence, `lessons.md` L66) : outil Edit, ou script fichier en `String.raw`.
 7. **Toute lecture Supabase pouvant dépasser 1000 lignes passe par `fetchAll()`**
    (`src/lib/fetch-all.ts`) : PostgREST tronque à 1000 **sans erreur**. Concernées :
    `matrice`, `personne_competence`, `placement`, `ouverture_quart`, `contrat_periode`, et
@@ -367,7 +368,7 @@ Routes `/api/placement/{cell,move,copy,prefill,reset-week}` ; helpers partagés 
 - **Pas de cache de navigation côté navigateur** (2026-11-27) : `staleTimes` et `GardeCacheNavigation` retirés — le cache
   de 30 s réaffichait l'état d'avant une saisie (Planning, bascule Matin / Après-midi) et le garde-fou ne voyait plus
   `router.push` (Next 16 : `useRouter()` rend une copie par composant, la surcharger ne sert à rien). Chaque navigation
-  relit la page ; ne pas remettre `staleTimes.dynamic` sans invalidation à l'écriture, ni de `window.location` pour « rafraîchir ».
+  relit la page ; ne pas remettre `staleTimes.dynamic` sans invalidation à l'écriture, ni de `window.location` pour « rafraîchir » (`lessons.md` L67).
 - **React Compiler** en mode opt-in (`"use memo"`, `next.config.ts`) : actif sur
   Personnel (`PersonnelEditor` + `LignePersonne`) et Planning (`PlanningGrid` +
   `LignePlanning`). Motif : ligne extraite et `memo`, props stables (valeurs en chaînes,

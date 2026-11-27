@@ -991,3 +991,27 @@ le type passé à `.returns<>()` est déclaratif.
 **Règle** : avant d'ajouter une colonne à un `select`, vérifier qu'elle existe encore
 (`grep` des migrations : `add column` ET `drop column`) ; un signal secondaire (« nouveau »)
 se lit à part, avec repli, pour ne jamais faire tomber la lecture principale.
+
+## L66 — Un `d` écrit par heredoc ou `sed` perd sa barre oblique, en silence
+**Contexte** : 2026-11-27, `?semaine` de l'écran TV. La validation `/^d{4}-d{2}-d{2}$/`,
+écrite par un script en ligne, est arrivée dans le fichier sous la forme `/^d{4}-d{2}-d{2}$/` :
+expression valide, qui ne reconnaît plus aucune date → paramètre ignoré, le jour J restait en
+tête. Ni `tsc` ni le build ne le voient. La même faute dormait dans trois routes
+(`/api/absence`, `/api/placement/copy`, `/reset-week`).
+**Règle** : une expression régulière s'écrit avec l'outil Edit, ou par un script FICHIER en
+`String.raw` — jamais dans un heredoc non protégé, `node -e` ou `sed`. Après coup :
+`grep -rn "/^d{" src` doit rester vide.
+
+## L67 — `useRouter()` rend une COPIE du routeur : la surcharger ne garde rien
+**Contexte** : 2026-11-27, Planning. Affectation posée ou retirée sur Matin, passage par
+Après-midi, retour sur Matin → l'ancienne version. Le cache de navigation
+(`experimental.staleTimes.dynamic = 30`) ressortait la page d'avant la saisie ; le garde-fou
+`GardeCacheNavigation` surchargeait `router.push` / `router.replace`, mais depuis Next 16
+`useRouter()` rend à chaque composant un nouvel objet mémoïsé : seul l'exemplaire du garde-fou
+était modifié, les filtres (`router.push`) passaient à côté. Premier « correctif » (retirer la
+limite de 30 s du garde-fou) sans effet : il réglait un code qui ne s'exécutait plus.
+**Règle** : (1) ne jamais surcharger un objet rendu par un hook de bibliothèque — lire sa
+source dans `node_modules/next/dist` avant de s'appuyer dessus ; (2) pas de cache de navigation
+côté navigateur sans invalidation à l'écriture : `staleTimes` et le garde-fou sont retirés,
+chaque navigation relit la page ; (3) devant un symptôme « périmé puis juste après F5 »,
+vérifier que le garde-fou s'exécute réellement avant d'en changer les réglages.
