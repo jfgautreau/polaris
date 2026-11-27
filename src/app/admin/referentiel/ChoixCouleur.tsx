@@ -41,6 +41,8 @@ export default function ChoixCouleur({
     boxSizing: "border-box",
     width: taille,
     height: taille,
+    // `.refhead button` impose min-height: 28px : la pastille sortait ovale.
+    minHeight: taille,
     padding: 0,
     margin: 0,
     borderRadius: 5,

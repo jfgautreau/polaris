@@ -354,6 +354,14 @@ table {
 }
 .refpostes button,
 .refhead button { min-height: 28px; box-sizing: border-box; }
+/* Colonnes figées (colgroup) : la marge de 10 px de chaque côté des cellules
+   mangeait la place des listes (« Ou », « No », « PTN ») et faisait déborder le
+   tableau à droite (colonne « Actif » coupée). Marge réduite, listes à toute la
+   largeur de leur colonne, sans plancher. */
+.refpostes th,
+.refpostes td { padding: 4px 4px; }
+.refpostes th { white-space: normal; line-height: 1.15; vertical-align: bottom; }
+.refpostes select { width: 100%; min-width: 0; padding: 2px 4px; }
 
 th,
 td {

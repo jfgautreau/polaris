@@ -555,6 +555,8 @@ export default function ReferentielEditor({
                   decalait tout, tableau par tableau. `table-layout: fixed` + un
                   colgroup identique partout les remettent d'aplomb, et la cellule
                   des habilitations se replie sur plusieurs rangees. */}
+              {/* Écran étroit : le tableau défile dans sa carte au lieu d'être coupé. */}
+              <div style={{ overflowX: "auto" }}>
               <table className="rowh refpostes" style={{ width: "100%", tableLayout: "fixed" }}>
                 <colgroup>
                   <col style={{ width: 190 }} />{/* Poste */}
@@ -592,7 +594,7 @@ export default function ReferentielEditor({
                     <th title="Date de fermeture prévue du poste. À partir de cette date, le poste disparaît du planning. Vide = pas de fermeture prévue.">Ferme le</th>
                     {quarts.map((q) => (
                       <th key={q.code} title={`Effectif requis en ${q.libelle} — « – » (vide) = ne tourne pas, 0 = tourne à 0, N = N personnes`} style={{ fontSize: 11 }}>
-                        {q.libelle.slice(0, 4)}
+                        {q.libelle}
                       </th>
                     ))}
                     <th>Actif</th>
@@ -610,7 +612,7 @@ export default function ReferentielEditor({
                           value={p.nom_court ?? ""}
                           maxLength={6}
                           onChange={(e) => posteField(a.id, l.id, p.id, "nom_court", e.target.value)}
-                          style={{ width: 80 }}
+                          style={{ width: "100%", minWidth: 0 }}
                         />
                       </td>
                       <td>
@@ -683,7 +685,7 @@ export default function ReferentielEditor({
                           min={0}
                           value={num(p.ordre_affichage)}
                           onChange={(e) => posteField(a.id, l.id, p.id, "ordre_affichage", Number(e.target.value))}
-                          style={{ width: 60 }}
+                          style={{ width: "100%", minWidth: 0 }}
                         />
                       </td>
                       <td>
@@ -762,11 +764,12 @@ export default function ReferentielEditor({
                   ))}
                   {l.poste.length === 0 && (
                     <tr>
-                      <td colSpan={12 + quarts.length} className="muted">Aucun poste.</td>
+                      <td colSpan={14 + quarts.length} className="muted">Aucun poste.</td>
                     </tr>
                   )}
                 </tbody>
               </table>
+              </div>
             </div>
           ))}
         </div>

@@ -1101,9 +1101,7 @@
         <h3>Horaires spécifiques</h3>
         <p>
           Un horaire exceptionnel pour une personne, un jour donné (rendez-vous, formation, décalage…), avec un
-          motif facultatif. Il se saisit soit depuis la <strong>pendule 🕐</strong> d'une case du Planning, soit sur
-          l'écran <strong>Horaires spécifiques</strong> (bouton 🕐 en haut du Planning), qui les liste tous :
-          <strong>Ajouter / modifier</strong> (personne, date, début, fin, motif), 🗑️ pour supprimer.
+          motif facultatif. Il se saisit depuis la <strong>pendule 🕐</strong> d'une case du Planning.
         </p>
         <p>L'horaire affiché d'une personne (TV, feuilles, Synthèses) suit toujours cet ordre :</p>
         <ol>
@@ -1359,7 +1357,7 @@
           <ul class="annot2">
             <li><strong>Se déplacer dans le temps</strong>, en haut à gauche : l'année, le mois, la semaine (S40, S41…). <strong>‹ Aujourd'hui ›</strong>, à gauche de la grille, avance ou recule d'une semaine et ramène à la semaine en cours (bleue).</li>
             <li><strong>Quart, Service, Équipe</strong>, en haut à droite. En équipe <strong>Auto</strong>, on voit les équipes de ce quart cette semaine <em>et</em> toute personne réellement placée sur ce quart. <strong>Suivre le quart / Suivre l'équipe</strong> s'active quand une équipe tournante est choisie.</li>
-            <li><strong>Par nom / Par poste</strong>, la recherche, puis les raccourcis : écran TV, horaires spécifiques, absences, filtre Conducteurs.</li>
+            <li><strong>Par nom / Par poste</strong>, la recherche, puis les raccourcis : écran TV, filtre Conducteurs.</li>
             <li>Le bandeau « <strong>Vous éditez le quart MATIN</strong> », puis en tête de chaque semaine le quart (en couleur) et le bouton <strong>TP + pré-affectation</strong>.</li>
             <li><strong>+ Bilan</strong> déplie les lignes de besoin et d'alertes. Au pied de la grille, un rappel des couleurs et des gestes.</li>
           </ul>
@@ -1487,8 +1485,6 @@
         <h3>Les raccourcis en haut à droite</h3>
         <ul>
           <li><strong>📺</strong> — l'écran TV du service filtré ;</li>
-          <li><strong>🕐</strong> — l'écran des horaires spécifiques ;</li>
-          <li><strong>🤒</strong> — l'écran Absences, filtré sur le même service et la même recherche ;</li>
           <li><strong>l'icône de personne</strong> — le filtre Conducteurs (ne garde que les personnes compétentes sur un poste de conducteur).</li>
         </ul>
       </section>
@@ -1659,7 +1655,7 @@
           <table class="data">
             <thead><tr><th style="width:210px">Rapport</th><th>Ce qu'il montre</th></tr></thead>
             <tbody>
-              <tr><td><strong>📋 Synthèses hebdomadaires</strong></td><td>Deux vues. <strong>Absences</strong> : les absences des 4 semaines à venir (hors intérim), avec un récapitulatif par motif. <strong>Intérim</strong> : le planning de la semaine des intérimaires, par agence, avec le poste, le service et l'horaire de chaque jour (dans l'Excel : l'horaire et le service seulement, la case aux couleurs du service) ; puis, par agence, les intérimaires <strong>sans affectation cette semaine</strong> (aucune ligne au Planning : ni poste, ni JNT, ni absence) et sous contrat — ceux à ne pas faire venir. Les boutons <strong>PDF</strong> et <strong>Excel</strong> téléchargent directement le fichier ; chaque agence a aussi les siens, pour lui envoyer son planning, et une <strong>imprimante</strong> qui envoie son PDF directement à l'impression. Dans la semaine d'un intérimaire, les jours qui <strong>diffèrent du reste de la semaine</strong> (autre service ou autre horaire) sont en <strong>gras</strong>. Le PDF garde toujours la même taille de texte : une agence nombreuse s'imprime sur plusieurs pages. L'Excel est <strong>horodaté</strong> (nom réglé dans Param. RH) et s'imprime proprement (A4 paysage, une page de large). L'<strong>Excel agence</strong> se compare à la dernière extraction de la même agence pour la même semaine : les cases qui ont changé sont en <strong>jaune fluo</strong>, une personne retirée reste en bas, barrée.</td></tr>
+              <tr><td><strong>📋 Synthèses hebdomadaires</strong></td><td>Deux vues. <strong>Absences</strong> : les absences des 4 semaines à venir (hors intérim), avec un récapitulatif par motif. <strong>Intérim</strong> : le planning de la semaine des intérimaires, par agence, avec le poste, le service et l'horaire de chaque jour (dans l'Excel : l'horaire et le service seulement, la case aux couleurs du service) ; puis, par agence, les intérimaires <strong>sans affectation cette semaine</strong> (aucune ligne au Planning : ni poste, ni JNT, ni absence) et sous contrat — ceux à ne pas faire venir. Les exports se font <strong>par agence</strong>, dans le bloc de chacune : <strong>PDF agence</strong> et <strong>Excel agence</strong> téléchargent son planning pour le lui envoyer, l'<strong>imprimante</strong> envoie son PDF directement à l'impression (pas d'export « toutes agences »). Dans la semaine d'un intérimaire, les jours qui <strong>diffèrent du reste de la semaine</strong> (autre service ou autre horaire) sont en <strong>gras</strong>. Le PDF garde toujours la même taille de texte : une agence nombreuse s'imprime sur plusieurs pages. L'Excel est <strong>horodaté</strong> (nom réglé dans Param. RH) et s'imprime proprement (A4 paysage, une page de large). L'<strong>Excel agence</strong> se compare à la dernière extraction de la même agence pour la même semaine : les cases qui ont changé sont en <strong>jaune fluo</strong>, une personne retirée reste en bas, barrée.</td></tr>
               <tr><td><strong>👥 Personnel</strong></td><td>Effectif et contrats (CDI, CDD, intérim), répartition par équipe et par service, fins de contrat à 90 jours, absentéisme du mois par motif, entrées et sorties du mois (hors intérim).</td></tr>
               <tr><td><strong>🌡️ Absentéisme</strong></td><td>Tendance sur 12 mois glissants, planifié / non planifié ; facteur de Bradford (absences courtes et répétées) ; taux non planifié par équipe.</td></tr>
               <tr><td><strong>🎯 Polyvalence &amp; compétences</strong></td><td>En quatre temps : <strong>constat</strong> (polyvalence moyenne par service, personnes à développer), <strong>postes</strong> (couverture et fragilité : combien de personnes tiennent vraiment chaque poste, niveau et habilitation compris ; postes critiques, fragiles ; PTNR à part), <strong>risques</strong> (personnes clés sur le départ, habilitations à échéance), <strong>qui former</strong> sur quel poste (écart actuel → cible).</td></tr>
@@ -1674,7 +1670,7 @@
 
         <figure class="shot">
           <a href="guide/syntheses-interim.jpg" target="_blank" rel="noopener" title="Ouvrir la capture en taille réelle"><img src="guide/syntheses-interim.jpg" alt="Synthèses hebdomadaires, vue Intérim" loading="lazy"></a>
-          <figcaption>Les Synthèses en vue Intérim : par agence, le planning de la semaine de chaque intérimaire (horaire, poste, service), avec « PDF agence » et « Excel agence ».</figcaption>
+          <figcaption>Les Synthèses en vue Intérim : par agence, le planning de la semaine de chaque intérimaire (horaire, poste, service), avec, dans chaque bloc, « PDF agence », l'imprimante et « Excel agence ».</figcaption>
         </figure>
 
         <figure class="shot">
